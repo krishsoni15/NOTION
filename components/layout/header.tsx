@@ -6,13 +6,18 @@
  * Top navigation bar with user info, theme toggle, chat, and logout.
  */
 
+import Image from "next/image";
 import { useState } from "react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { UserMenu } from "./user-menu";
 import { ChatIcon } from "@/components/chat/chat-icon";
 import { ChatWindow } from "@/components/chat/chat-window";
+import { ResizableChatSheet } from "@/components/chat/resizable-chat-sheet";
+import { useChatWidth } from "@/components/chat/chat-width-provider";
 import { StickyNotesIcon } from "@/components/sticky-notes/sticky-notes-icon";
 import { StickyNotesWindow } from "@/components/sticky-notes/sticky-notes-window";
+import { FloatingStickyNotes } from "@/components/sticky-notes/floating-sticky-notes";
+import { ResizableStickyNotesSheet } from "@/components/sticky-notes/resizable-sticky-notes-sheet";
 import { Menu } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger, SheetTitle } from "@/components/ui/sheet";
@@ -27,9 +32,9 @@ interface HeaderProps {
 }
 
 export function Header({ userRole }: HeaderProps) {
-  const [chatOpen, setChatOpen] = useState(false);
-  const [stickyNotesOpen, setStickyNotesOpen] = useState(false);
   const currentUser = useQuery(api.users.getCurrentUser);
+  const { isChatOpen, setIsChatOpen, isStickyNotesOpen, setIsStickyNotesOpen } = useChatWidth();
+  const [logoError, setLogoError] = useState(false);
 
   return (
     <header className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -56,16 +61,67 @@ export function Header({ userRole }: HeaderProps) {
         <div className="hidden md:block" />
 
         {/* Mobile: Brand */}
-        <div className="md:hidden">
-          <h1 className="text-xl font-bold">NOTION</h1>
+        <div className="md:hidden flex items-center gap-2.5">
+          <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-primary/20 to-primary/10 flex items-center justify-center shrink-0 overflow-hidden p-1">
+            {logoError ? (
+              <span className="text-lg font-bold text-primary">N</span>
+            ) : (
+              <Image
+                src="/images/logos/Notion_Favicon-removebg-preview.png"
+                alt="Notion Logo"
+                width={28}
+                height={28}
+                className="object-contain"
+                onError={() => setLogoError(true)}
+              />
+            )}
+          </div>
+          <div className="h-10 relative flex items-center">
+            {logoError ? (
+              <span className="text-lg font-bold text-primary">NOTION</span>
+            ) : (
+              <Image
+                src="/images/logos/Notion_Logo-removebg-preview.png"
+                alt="Notion"
+                width={140}
+                height={40}
+                className="object-contain h-full"
+                onError={() => setLogoError(true)}
+              />
+            )}
+          </div>
         </div>
 
         {/* Right side: Sticky Notes + Chat + Theme toggle + Custom User Menu */}
         <div className="flex items-center gap-2 md:gap-4">
           {currentUser && (
             <>
-              <StickyNotesIcon onClick={() => setStickyNotesOpen(true)} />
-            <ChatIcon onClick={() => setChatOpen(true)} />
+              <StickyNotesIcon 
+                onClick={() => {
+                  if (isStickyNotesOpen) {
+                    // If open, close it
+                    setIsStickyNotesOpen(false);
+                  } else {
+                    // If closed, open it and close chat
+                    setIsStickyNotesOpen(true);
+                    setIsChatOpen(false);
+                  }
+                }}
+                isActive={isStickyNotesOpen}
+              />
+            <ChatIcon 
+              onClick={() => {
+                if (isChatOpen) {
+                  // If open, close it
+                  setIsChatOpen(false);
+                } else {
+                  // If closed, open it and close sticky notes
+                  setIsChatOpen(true);
+                  setIsStickyNotesOpen(false);
+                }
+              }}
+              isActive={isChatOpen}
+            />
             </>
           )}
           <ThemeToggle />
@@ -73,40 +129,31 @@ export function Header({ userRole }: HeaderProps) {
         </div>
       </div>
 
-      {/* Chat Sheet */}
+      {/* Chat Sheet with Resizable Left Border */}
       {currentUser && (
-        <Sheet open={chatOpen} onOpenChange={setChatOpen}>
-          <SheetContent 
-            side="right" 
-            className="p-0 w-full sm:w-[500px] md:w-[600px]"
-          >
-            <VisuallyHidden>
-              <SheetTitle>Chat</SheetTitle>
-            </VisuallyHidden>
-            <ChatWindow 
-              currentUserId={currentUser._id} 
-              onClose={() => setChatOpen(false)}
-            />
-          </SheetContent>
-        </Sheet>
+        <ResizableChatSheet open={isChatOpen} onOpenChange={setIsChatOpen}>
+          <ChatWindow 
+            currentUserId={currentUser._id} 
+            onClose={() => setIsChatOpen(false)}
+          />
+        </ResizableChatSheet>
       )}
 
-      {/* Sticky Notes Sheet */}
+      {/* Sticky Notes Sheet with Resizable Left Border */}
       {currentUser && (
-        <Sheet open={stickyNotesOpen} onOpenChange={setStickyNotesOpen}>
-          <SheetContent 
-            side="right" 
-            className="p-0 w-full max-w-full"
-          >
-            <VisuallyHidden>
-              <SheetTitle>Sticky Notes</SheetTitle>
-            </VisuallyHidden>
+        <>
+          <ResizableStickyNotesSheet open={isStickyNotesOpen} onOpenChange={setIsStickyNotesOpen}>
             <StickyNotesWindow 
               currentUserId={currentUser._id} 
-              onClose={() => setStickyNotesOpen(false)}
+              onClose={() => setIsStickyNotesOpen(false)}
             />
-          </SheetContent>
-        </Sheet>
+          </ResizableStickyNotesSheet>
+
+          {/* Floating Sticky Notes - Always visible if any notes have been dragged out */}
+          <FloatingStickyNotes
+            currentUserId={currentUser._id}
+          />
+        </>
       )}
     </header>
   );

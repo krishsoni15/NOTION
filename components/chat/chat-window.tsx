@@ -7,7 +7,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { ArrowLeft, Info, MessageCircle } from "lucide-react";
+import { ArrowLeft, Info, MessageCircle, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -96,22 +96,22 @@ export function ChatWindow({ currentUserId, onClose, className }: ChatWindowProp
   return (
     <div className={cn("flex flex-col h-full bg-gradient-to-br from-background via-background to-muted/20 overflow-hidden", className)}>
       {/* Header */}
-      <div className="flex items-center gap-3 p-5 sm:p-6 border-b border-border/50 bg-background/80 backdrop-blur-md shrink-0 shadow-sm">
+      <div className="relative flex items-center gap-2 sm:gap-3 py-3 sm:py-4 px-4 border-b border-border/50 bg-background/80 backdrop-blur-md shrink-0 shadow-sm">
         {/* Back Button (when in chat view) */}
         {view === "chat" && (
           <Button
             onClick={handleBack}
             size="icon"
             variant="ghost"
-            className="shrink-0 hover:bg-muted/80 rounded-lg"
+            className="shrink-0 h-8 w-8 hover:bg-muted/80 rounded-lg transition-colors"
           >
-            <ArrowLeft className="h-5 w-5" />
+            <ArrowLeft className="h-4 w-4" />
             <span className="sr-only">Back</span>
           </Button>
         )}
 
         {/* Title / User Info */}
-        <div className="flex-1 min-w-0">
+        <div className="flex-1 min-w-0 pr-2">
           {view === "conversations" && (
             <div className="flex items-center gap-3">
               <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-primary/20 to-primary/10 flex items-center justify-center">
@@ -156,6 +156,20 @@ export function ChatWindow({ currentUserId, onClose, className }: ChatWindowProp
             </button>
           )}
         </div>
+
+        {/* Close Button */}
+        {onClose && (
+          <Button
+            onClick={onClose}
+            size="icon"
+            variant="ghost"
+            className="h-8 w-8 shrink-0 hover:bg-muted/80 rounded-lg transition-colors"
+            title="Close chat"
+          >
+            <X className="h-4 w-4" />
+            <span className="sr-only">Close</span>
+          </Button>
+        )}
       </div>
 
       {/* Content */}

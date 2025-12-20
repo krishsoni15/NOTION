@@ -7,6 +7,8 @@
  */
 
 import Link from "next/link";
+import Image from "next/image";
+import { useState } from "react";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { Role, ROLES, ROLE_LABELS } from "@/lib/auth/roles";
@@ -43,12 +45,6 @@ const navigationItems: NavigationItem[] = [
     roles: [ROLES.SITE_ENGINEER],
   },
   {
-    label: "Chat",
-    href: "/dashboard/chat",
-    icon: MessageCircle,
-    roles: [ROLES.SITE_ENGINEER],
-  },
-  {
     label: "Inventory",
     href: "/dashboard/inventory",
     icon: Package,
@@ -72,12 +68,6 @@ const navigationItems: NavigationItem[] = [
     label: "User Management",
     href: "/dashboard/manager/users",
     icon: Users,
-    roles: [ROLES.MANAGER],
-  },
-  {
-    label: "Chat",
-    href: "/dashboard/chat",
-    icon: MessageCircle,
     roles: [ROLES.MANAGER],
   },
   {
@@ -124,12 +114,6 @@ const navigationItems: NavigationItem[] = [
     icon: Package,
     roles: [ROLES.PURCHASE_OFFICER],
   },
-  {
-    label: "Chat",
-    href: "/dashboard/chat",
-    icon: MessageCircle,
-    roles: [ROLES.PURCHASE_OFFICER],
-  },
 ];
 
 interface MobileSidebarProps {
@@ -138,6 +122,7 @@ interface MobileSidebarProps {
 
 export function MobileSidebar({ userRole }: MobileSidebarProps) {
   const pathname = usePathname();
+  const [logoError, setLogoError] = useState(false);
 
   // Filter navigation items based on user role
   const filteredItems = navigationItems.filter((item) =>
@@ -148,7 +133,36 @@ export function MobileSidebar({ userRole }: MobileSidebarProps) {
     <div className="flex flex-col h-full">
       {/* Brand */}
       <div className="p-6">
-        <h1 className="text-2xl font-bold">NOTION</h1>
+        <div className="flex items-center gap-3 mb-2">
+          <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-primary/20 to-primary/10 flex items-center justify-center shrink-0 overflow-hidden p-1.5">
+            {logoError ? (
+              <h1 className="text-xl font-bold text-primary">N</h1>
+            ) : (
+              <Image
+                src="/images/logos/Notion_Favicon-removebg-preview.png"
+                alt="Notion Logo"
+                width={32}
+                height={32}
+                className="object-contain"
+                onError={() => setLogoError(true)}
+              />
+            )}
+          </div>
+          <div className="h-10 relative flex items-center">
+            {logoError ? (
+              <h1 className="text-2xl font-bold">NOTION</h1>
+            ) : (
+              <Image
+                src="/images/logos/Notion_Logo-removebg-preview.png"
+                alt="Notion"
+                width={180}
+                height={40}
+                className="object-contain h-full"
+                onError={() => setLogoError(true)}
+              />
+            )}
+          </div>
+        </div>
         <p className="text-sm text-muted-foreground mt-1">
           {ROLE_LABELS[userRole]}
         </p>

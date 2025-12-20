@@ -14,10 +14,11 @@ import { cn } from "@/lib/utils";
 
 interface ChatIconProps {
   onClick: () => void;
+  isActive?: boolean;
   className?: string;
 }
 
-export function ChatIcon({ onClick, className }: ChatIconProps) {
+export function ChatIcon({ onClick, isActive = false, className }: ChatIconProps) {
   const unreadCount = useUnreadCount();
 
   return (
@@ -25,10 +26,14 @@ export function ChatIcon({ onClick, className }: ChatIconProps) {
       onClick={onClick}
       size="icon"
       variant="ghost"
-      className={cn("relative", className)}
+      className={cn(
+        "relative transition-colors",
+        isActive && "bg-primary/10 text-primary hover:bg-primary/20",
+        className
+      )}
       aria-label={`Chat${unreadCount > 0 ? ` (${unreadCount} unread)` : ""}`}
     >
-      <MessageCircle className="h-5 w-5" />
+      <MessageCircle className={cn("h-5 w-5", isActive && "text-primary")} />
       {unreadCount > 0 && (
         <Badge
           variant="destructive"

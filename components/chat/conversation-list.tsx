@@ -71,7 +71,8 @@ function UserItem({ user, conversation, isSelected, onSelect }: UserItemProps) {
     <button
       onClick={onSelect}
       className={cn(
-        "w-full flex items-start gap-3 p-3.5 sm:p-4 rounded-xl transition-all text-left backdrop-blur-sm",
+        "w-full flex items-start gap-3 p-4 sm:p-4 rounded-xl transition-all text-left backdrop-blur-sm touch-manipulation",
+        "active:scale-[0.98] active:opacity-80",
         isSelected 
           ? "bg-primary/10 border border-primary/20 shadow-md" 
           : "hover:bg-muted/60 border border-transparent hover:border-border/50 hover:shadow-sm bg-background/50"
@@ -168,15 +169,15 @@ export function ConversationList({
   return (
     <div className={cn("flex flex-col h-full bg-gradient-to-br from-background via-background to-muted/20", className)}>
       {/* Search Header */}
-      <div className="p-4 sm:p-5 border-b border-border/50 bg-background/80 backdrop-blur-md">
-        <div className="relative max-w-md">
+      <div className="p-3 sm:p-4 md:p-5 border-b border-border/50 bg-background/80 backdrop-blur-md">
+        <div className="relative w-full">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             type="text"
             placeholder="Search by name or username..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-9 bg-background/80 backdrop-blur-sm border-border/50 focus:border-primary/50 rounded-xl"
+            className="pl-9 h-10 sm:h-11 bg-background/80 backdrop-blur-sm border-border/50 focus:border-primary/50 rounded-xl text-base"
           />
         </div>
       </div>

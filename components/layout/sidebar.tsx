@@ -7,7 +7,9 @@
  */
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
+import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { Role, ROLES, ROLE_LABELS } from "@/lib/auth/roles";
 import { 
@@ -18,8 +20,8 @@ import {
   Package,
   Building2,
   MessageCircle,
-  ChevronLeft,
-  ChevronRight
+  PanelLeftClose,
+  PanelLeftOpen,
 } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
@@ -53,12 +55,6 @@ const navigationItems: NavigationItem[] = [
     roles: [ROLES.SITE_ENGINEER],
   },
   {
-    label: "Chat",
-    href: "/dashboard/chat",
-    icon: MessageCircle,
-    roles: [ROLES.SITE_ENGINEER],
-  },
-  {
     label: "Inventory",
     href: "/dashboard/inventory",
     icon: Package,
@@ -82,12 +78,6 @@ const navigationItems: NavigationItem[] = [
     label: "User Management",
     href: "/dashboard/manager/users",
     icon: Users,
-    roles: [ROLES.MANAGER],
-  },
-  {
-    label: "Chat",
-    href: "/dashboard/chat",
-    icon: MessageCircle,
     roles: [ROLES.MANAGER],
   },
   {
@@ -134,12 +124,6 @@ const navigationItems: NavigationItem[] = [
     icon: Package,
     roles: [ROLES.PURCHASE_OFFICER],
   },
-  {
-    label: "Chat",
-    href: "/dashboard/chat",
-    icon: MessageCircle,
-    roles: [ROLES.PURCHASE_OFFICER],
-  },
 ];
 
 interface SidebarProps {
@@ -149,6 +133,7 @@ interface SidebarProps {
 export function Sidebar({ userRole }: SidebarProps) {
   const pathname = usePathname();
   const { isCollapsed, toggle, isMounted } = useSidebar();
+  const [logoError, setLogoError] = useState(false);
 
   // Filter navigation items based on user role
   const filteredItems = navigationItems.filter((item) =>
@@ -159,6 +144,7 @@ export function Sidebar({ userRole }: SidebarProps) {
     <aside 
       className={cn(
         "hidden md:flex md:flex-col md:border-r md:bg-card/50 md:backdrop-blur-sm transition-all duration-300 ease-in-out fixed left-0 top-0 h-screen z-30 shadow-sm",
+        "group",
         isCollapsed ? "md:w-20" : "md:w-64"
       )}
     >
@@ -174,10 +160,20 @@ export function Sidebar({ userRole }: SidebarProps) {
                 <TooltipTrigger asChild>
                   <button
                     onClick={toggle}
-                    className="flex items-center justify-center h-10 w-10 rounded-lg bg-gradient-to-br from-primary/20 to-primary/10 hover:from-primary/30 hover:to-primary/20 transition-all hover:scale-105 active:scale-95"
-                    style={{ cursor: 'pointer' }}
+                    className="flex items-center justify-center h-10 w-10 rounded-lg bg-gradient-to-br from-primary/20 to-primary/10 hover:from-primary/30 hover:to-primary/20 transition-all hover:scale-105 active:scale-95 cursor-ew-resize group"
                   >
-                    <h1 className="text-xl font-bold text-primary">N</h1>
+                    {logoError ? (
+                      <span className="text-xl font-bold text-primary">N</span>
+                    ) : (
+                      <Image
+                        src="/images/logos/Notion_Favicon-removebg-preview.png"
+                        alt="Notion"
+                        width={32}
+                        height={32}
+                        className="object-contain"
+                        onError={() => setLogoError(true)}
+                      />
+                    )}
                   </button>
                 </TooltipTrigger>
                 <TooltipContent side="right" className="font-medium">
@@ -187,12 +183,36 @@ export function Sidebar({ userRole }: SidebarProps) {
             ) : (
               <>
                 <div className="flex items-center gap-3">
-                  <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-primary/20 to-primary/10 flex items-center justify-center shrink-0">
-                    <h1 className="text-xl font-bold text-primary">N</h1>
+                  <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-primary/20 to-primary/10 flex items-center justify-center shrink-0 overflow-hidden p-1.5">
+                    {logoError ? (
+                      <h1 className="text-xl font-bold text-primary">N</h1>
+                    ) : (
+                      <Image
+                        src="/images/logos/Notion_Favicon-removebg-preview.png"
+                        alt="Notion Logo"
+                        width={32}
+                        height={32}
+                        className="object-contain"
+                        onError={() => setLogoError(true)}
+                      />
+                    )}
                   </div>
-                  <div className="min-w-0">
-                    <h1 className="text-xl font-bold truncate">NOTION</h1>
-                    <p className="text-xs text-muted-foreground mt-0.5 truncate">
+                  <div className="min-w-0 flex flex-col gap-1">
+                    <div className="h-10 relative flex items-center">
+                      {logoError ? (
+                        <h1 className="text-xl font-bold truncate">NOTION</h1>
+                      ) : (
+                        <Image
+                          src="/images/logos/Notion_Logo-removebg-preview.png"
+                          alt="Notion"
+                          width={160}
+                          height={40}
+                          className="object-contain h-full"
+                          onError={() => setLogoError(true)}
+                        />
+                      )}
+                    </div>
+                    <p className="text-xs text-muted-foreground truncate">
                       {ROLE_LABELS[userRole]}
                     </p>
                   </div>
@@ -203,10 +223,9 @@ export function Sidebar({ userRole }: SidebarProps) {
                       onClick={toggle}
                       variant="ghost"
                       size="icon"
-                      className="h-8 w-8 shrink-0 hover:bg-accent hover:scale-105 active:scale-95"
-                      style={{ cursor: 'pointer' }}
+                      className="h-8 w-8 shrink-0 hover:bg-accent hover:scale-105 active:scale-95 cursor-ew-resize group"
                     >
-                      <ChevronLeft className="h-4 w-4" />
+                      <PanelLeftClose className="h-4 w-4 font-bold stroke-[2.5] transition-transform group-hover:scale-110" />
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent side="right" className="font-medium">

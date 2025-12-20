@@ -169,6 +169,7 @@ export default defineSchema({
     senderId: v.id("users"),
     content: v.string(),
     readBy: v.array(v.id("users")), // Users who have read this message
+    deliveredBy: v.optional(v.array(v.id("users"))), // Users who have received/delivered this message
     createdAt: v.number(),
   })
     .index("by_conversation_id", ["conversationId"])
@@ -213,6 +214,11 @@ export default defineSchema({
       text: v.string(),
       completed: v.boolean(),
     }))),
+    // Position and size for draggable/resizable sticky notes
+    positionX: v.optional(v.number()), // X position on screen
+    positionY: v.optional(v.number()), // Y position on screen
+    width: v.optional(v.number()), // Width of the note
+    height: v.optional(v.number()), // Height of the note
     createdAt: v.number(),
     updatedAt: v.number(),
   })

@@ -1,22 +1,19 @@
 /**
- * Dashboard Layout
+ * Chat Page Layout
  * 
- * Main layout for all dashboard pages.
- * Includes sidebar navigation, header, and presence tracking.
+ * Custom layout for chat page without sidebar.
  */
 
 import { ReactNode } from "react";
 import { redirect } from "next/navigation";
 import { auth } from "@clerk/nextjs/server";
-import { SidebarProvider } from "@/components/layout/sidebar-provider";
-import { SidebarWrapper } from "@/components/layout/sidebar-wrapper";
 import { Header } from "@/components/layout/header";
 import { PresenceProvider } from "@/components/chat/presence-provider";
 import { ChatWidthProvider } from "@/components/chat/chat-width-provider";
 import { ReminderScheduler } from "@/components/sticky-notes/reminder-scheduler";
 import { getUserRole } from "@/lib/auth/get-user-role";
 
-export default async function DashboardLayout({ children }: { children: ReactNode }) {
+export default async function ChatLayout({ children }: { children: ReactNode }) {
   // Check authentication
   const { userId } = await auth();
   
@@ -34,18 +31,16 @@ export default async function DashboardLayout({ children }: { children: ReactNod
   return (
     <PresenceProvider>
       <ChatWidthProvider>
-        <SidebarProvider>
-          <ReminderScheduler />
-          <SidebarWrapper userRole={role}>
-            <Header userRole={role} />
-            
-            <main className="flex-1 overflow-y-auto">
-              <div className="container mx-auto px-4 py-6 md:px-6 md:py-8">
-                {children}
-              </div>
-            </main>
-          </SidebarWrapper>
-        </SidebarProvider>
+        <ReminderScheduler />
+        <div className="min-h-screen bg-background flex flex-col">
+          <Header userRole={role} />
+          
+          <main className="flex-1 overflow-y-auto">
+            <div className="h-full">
+              {children}
+            </div>
+          </main>
+        </div>
       </ChatWidthProvider>
     </PresenceProvider>
   );

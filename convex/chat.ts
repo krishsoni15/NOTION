@@ -238,6 +238,11 @@ export const getMessages = query({
       .order("desc")
       .take(args.limit || 100);
 
+    // Get other user ID for delivery status
+    const otherUserId = conversation.participants.find(
+      (id) => id !== currentUser._id
+    );
+
     // Enrich messages with sender data
     const enrichedMessages = await Promise.all(
       messages.map(async (message) => {
@@ -253,6 +258,9 @@ export const getMessages = query({
               }
             : null,
           isRead: message.readBy.includes(currentUser._id),
+          isDelivered: otherUserId 
+            ? (message.deliveredBy || []).includes(otherUserId)
+            : false,
         };
       })
     );
@@ -301,6 +309,25 @@ export const sendMessage = mutation({
       throw new Error("Message content too long (max 5000 characters)");
     }
 
+    // Check if receiver is online (for delivery status)
+    const otherUserId = conversation.participants.find(
+      (id) => id !== currentUser._id
+    );
+    let deliveredBy: Id<"users">[] = [currentUser._id]; // Sender has delivered their own message
+    
+    if (otherUserId) {
+      // Check if other user is online
+      const otherUserPresence = await ctx.db
+        .query("userPresence")
+        .withIndex("by_user_id", (q) => q.eq("userId", otherUserId))
+        .unique();
+      
+      // If receiver is online, mark as delivered immediately
+      if (otherUserPresence?.isOnline) {
+        deliveredBy.push(otherUserId);
+      }
+    }
+
     // Create message
     const now = Date.now();
     const messageId = await ctx.db.insert("messages", {
@@ -308,6 +335,7 @@ export const sendMessage = mutation({
       senderId: currentUser._id,
       content: trimmedContent,
       readBy: [currentUser._id], // Sender has read their own message
+      deliveredBy: deliveredBy,
       createdAt: now,
     });
 
@@ -363,7 +391,7 @@ export const markAsRead = mutation({
       throw new Error("Not authorized");
     }
 
-    // Get all messages in this conversation and filter unread ones
+    // Get all messages in this conversation
     const allMessages = await ctx.db
       .query("messages")
       .withIndex("by_conversation_id", (q) =>
@@ -371,17 +399,29 @@ export const markAsRead = mutation({
       )
       .collect();
     
-    const messages = allMessages.filter(
-      (msg) => !msg.readBy.includes(currentUser._id)
-    );
-
-    // Mark all messages as read
+    // Mark all messages as delivered (if not already) and read
     await Promise.all(
-      messages.map((message) =>
-        ctx.db.patch(message._id, {
-          readBy: [...message.readBy, currentUser._id],
-        })
-      )
+      allMessages.map((message) => {
+        const currentDeliveredBy = message.deliveredBy || [];
+        const currentReadBy = message.readBy;
+        const isDelivered = currentDeliveredBy.includes(currentUser._id);
+        const isRead = currentReadBy.includes(currentUser._id);
+        
+        // Always mark as delivered when user opens conversation
+        const newDeliveredBy = isDelivered 
+          ? currentDeliveredBy 
+          : [...currentDeliveredBy, currentUser._id];
+        
+        // Mark as read if not already read
+        const newReadBy = isRead
+          ? currentReadBy
+          : [...currentReadBy, currentUser._id];
+        
+        return ctx.db.patch(message._id, {
+          readBy: newReadBy,
+          deliveredBy: newDeliveredBy,
+        });
+      })
     );
 
     // Reset unread count for current user

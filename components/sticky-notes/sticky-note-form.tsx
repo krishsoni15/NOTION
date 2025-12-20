@@ -49,14 +49,39 @@ interface StickyNoteFormProps {
   onCancel: () => void;
 }
 
+// Colors ordered: Blue first (default), then others in sequence
 const colors: { value: NoteColor; label: string; bgClass: string; darkBg: string }[] = [
-  { value: "yellow", label: "Yellow", bgClass: "bg-yellow-100", darkBg: "dark:bg-yellow-900/40" },
-  { value: "pink", label: "Pink", bgClass: "bg-pink-100", darkBg: "dark:bg-pink-900/40" },
   { value: "blue", label: "Blue", bgClass: "bg-blue-100", darkBg: "dark:bg-blue-900/40" },
   { value: "green", label: "Green", bgClass: "bg-green-100", darkBg: "dark:bg-green-900/40" },
   { value: "purple", label: "Purple", bgClass: "bg-purple-100", darkBg: "dark:bg-purple-900/40" },
   { value: "orange", label: "Orange", bgClass: "bg-orange-100", darkBg: "dark:bg-orange-900/40" },
+  { value: "yellow", label: "Yellow", bgClass: "bg-yellow-100", darkBg: "dark:bg-yellow-900/40" },
+  { value: "pink", label: "Pink", bgClass: "bg-pink-100", darkBg: "dark:bg-pink-900/40" },
 ];
+
+// Sequential color order: blue -> green -> purple -> orange -> yellow -> pink -> blue...
+const colorSequence: NoteColor[] = ["blue", "green", "purple", "orange", "yellow", "pink"];
+
+const STORAGE_KEY = "sticky-note-last-color-index";
+
+// Get next color in sequence
+function getNextSequentialColor(): NoteColor {
+  if (typeof window === "undefined") return "blue";
+  
+  // Get last used color index, default to -1 so first note is blue (index 0)
+  const lastIndex = parseInt(localStorage.getItem(STORAGE_KEY) || "-1", 10);
+  const nextIndex = (lastIndex + 1) % colorSequence.length;
+  return colorSequence[nextIndex];
+}
+
+// Save color index to localStorage
+function saveColorIndex(color: NoteColor) {
+  if (typeof window === "undefined") return;
+  const index = colorSequence.indexOf(color);
+  if (index !== -1) {
+    localStorage.setItem(STORAGE_KEY, index.toString());
+  }
+}
 
 const colorClasses = {
   yellow: "bg-gradient-to-br from-yellow-50 via-yellow-50/90 to-yellow-100/70 dark:from-yellow-950/50 dark:via-yellow-900/30 dark:to-yellow-800/20 border-2 border-yellow-300/80 dark:border-yellow-700/60 text-yellow-900 dark:text-yellow-100",
@@ -79,9 +104,16 @@ export function StickyNoteForm({
   const allUsers = useQuery(api.users.getAllUsers);
   const currentUser = useQuery(api.users.getCurrentUser);
 
+  // Get initial color: use provided color if editing, otherwise get next sequential color
+  const getInitialColor = (): NoteColor => {
+    if (initialData?.color) return initialData.color;
+    if (noteId) return "blue"; // Default for editing
+    return getNextSequentialColor(); // Sequential for new notes
+  };
+
   const [title, setTitle] = useState(initialData?.title || "");
   const [content, setContent] = useState(initialData?.content || "");
-  const [color, setColor] = useState<NoteColor>(initialData?.color || "yellow");
+  const [color, setColor] = useState<NoteColor>(getInitialColor());
   const [assignedTo, setAssignedTo] = useState<Id<"users">>(
     initialData?.assignedTo || currentUserId
   );
@@ -105,7 +137,7 @@ export function StickyNoteForm({
     if (initialData) {
       setTitle(initialData.title || "");
       setContent(initialData.content || "");
-      setColor(initialData.color || "yellow");
+      setColor(initialData.color || "blue");
       setAssignedTo(initialData.assignedTo || currentUserId);
       setChecklistItems(initialData.checklistItems || []);
       
@@ -117,10 +149,10 @@ export function StickyNoteForm({
         setReminderTime("");
       }
     } else {
-      // Reset form for new note
+      // Reset form for new note - use next sequential color
       setTitle("");
       setContent("");
-      setColor("yellow");
+      setColor(getNextSequentialColor());
       setAssignedTo(currentUserId);
       setChecklistItems([]);
       setReminderDate("");
@@ -142,8 +174,16 @@ export function StickyNoteForm({
         reminderAt = reminderDateTime.getTime();
       }
 
+      // Non-managers can only assign to themselves
+      const finalAssignedTo = canAssignToOthers ? assignedTo : currentUserId;
+
+      // Save color index to localStorage for sequential rotation (only for new notes)
+      if (!noteId) {
+        saveColorIndex(color);
+      }
+
       await onSubmit({
-        assignedTo,
+        assignedTo: finalAssignedTo,
         title: title.trim(),
         content: content.trim(),
         color,

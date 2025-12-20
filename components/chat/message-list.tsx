@@ -19,7 +19,9 @@ interface Message {
   createdAt: number;
   senderId: string;
   isRead: boolean;
+  isDelivered?: boolean;
   readBy: string[];
+  deliveredBy?: string[];
   sender: {
     _id: string;
     fullName: string;
@@ -118,7 +120,7 @@ export function MessageList({ messages, currentUserId, otherUserId, className }:
   return (
     <div
       ref={containerRef}
-      className={cn("flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 bg-gradient-to-b from-background via-background to-muted/10", className)}
+      className={cn("flex-1 overflow-y-auto p-3 sm:p-4 md:p-6 space-y-3 sm:space-y-4 bg-gradient-to-b from-background via-background to-muted/10", className)}
     >
       {messages.map((message, index) => {
         const isOwnMessage = message.senderId === currentUserId;
@@ -161,7 +163,7 @@ export function MessageList({ messages, currentUserId, otherUserId, className }:
               {/* Message Content */}
               <div
                 className={cn(
-                  "flex flex-col gap-1.5 max-w-[75%] sm:max-w-[70%]",
+                  "flex flex-col gap-1.5 max-w-[85%] sm:max-w-[75%] md:max-w-[70%]",
                   isOwnMessage ? "items-end" : "items-start"
                 )}
               >
@@ -175,7 +177,7 @@ export function MessageList({ messages, currentUserId, otherUserId, className }:
                 {/* Message Bubble */}
                 <div
                   className={cn(
-                    "rounded-2xl px-4 py-3 break-words shadow-md transition-all backdrop-blur-sm",
+                    "rounded-2xl px-3 py-2.5 sm:px-4 sm:py-3 break-words shadow-md transition-all backdrop-blur-sm",
                     isOwnMessage
                       ? "bg-primary text-primary-foreground shadow-primary/30 hover:shadow-lg"
                       : "bg-card/90 border border-border/50 hover:shadow-lg"
@@ -197,7 +199,7 @@ export function MessageList({ messages, currentUserId, otherUserId, className }:
                   {isOwnMessage && (
                     <ReadReceipt 
                       isRead={otherUserId ? message.readBy.includes(otherUserId) : false}
-                      isDelivered={Date.now() - message.createdAt > 1000}
+                      isDelivered={otherUserId ? (message.deliveredBy || []).includes(otherUserId) : false}
                     />
                   )}
                 </div>

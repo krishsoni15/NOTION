@@ -20,6 +20,13 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Notion App",
   description: "Notion app with Convex and Clerk authentication",
+  icons: {
+    icon: [
+      { url: '/images/logos/Notion_Favicon-removebg-preview.png', type: 'image/png' },
+      { url: '/favicon.ico', type: 'image/x-icon' },
+    ],
+    apple: '/images/logos/Notion_Favicon-removebg-preview.png',
+  },
 };
 
 export default function RootLayout({

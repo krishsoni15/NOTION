@@ -186,6 +186,10 @@ export const create = mutation({
       text: v.string(),
       completed: v.boolean(),
     }))),
+    positionX: v.optional(v.number()),
+    positionY: v.optional(v.number()),
+    width: v.optional(v.number()),
+    height: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     const userId = await getAuthUserId(ctx);
@@ -219,6 +223,10 @@ export const create = mutation({
       color: args.color,
       reminderAt: args.reminderAt,
       checklistItems: args.checklistItems,
+      positionX: args.positionX,
+      positionY: args.positionY,
+      width: args.width,
+      height: args.height,
       isCompleted: false,
       isDeleted: false,
       reminderTriggered: false,
@@ -254,6 +262,10 @@ export const update = mutation({
       text: v.string(),
       completed: v.boolean(),
     }))),
+    positionX: v.optional(v.number()),
+    positionY: v.optional(v.number()),
+    width: v.optional(v.number()),
+    height: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     const userId = await getAuthUserId(ctx);
@@ -271,9 +283,35 @@ export const update = mutation({
     const note = await ctx.db.get(args.noteId);
     if (!note) throw new Error("Note not found");
 
-    // Check permissions: Only creator or assignee can update
-    if (note.createdBy !== currentUser._id && note.assignedTo !== currentUser._id) {
-      throw new Error("Unauthorized: You can only update your own notes");
+    const isManager = currentUser.role === "manager";
+    const isCreator = note.createdBy === currentUser._id;
+    const isAssignee = note.assignedTo === currentUser._id;
+    const canViewNote = isManager || isAssignee;
+
+    // Check if this is only a position/size update (drag and drop)
+    const isOnlyPositionUpdate = 
+      args.positionX !== undefined || 
+      args.positionY !== undefined || 
+      args.width !== undefined || 
+      args.height !== undefined;
+    
+    const hasContentUpdate = 
+      args.title !== undefined || 
+      args.content !== undefined || 
+      args.color !== undefined || 
+      args.reminderAt !== undefined || 
+      args.checklistItems !== undefined;
+
+    // For position/size updates: Allow anyone who can view the note
+    if (isOnlyPositionUpdate && !hasContentUpdate) {
+      if (!canViewNote) {
+        throw new Error("Unauthorized: You can only update notes you can view");
+      }
+    } else {
+      // For content updates: Only assignee can update
+      if (!isAssignee) {
+      throw new Error("Unauthorized: Only the assigned manager can update this note");
+      }
     }
 
     // Update note
@@ -286,6 +324,10 @@ export const update = mutation({
         reminderTriggered: false, // Reset reminder trigger when updating reminder time
       }),
       ...(args.checklistItems !== undefined && { checklistItems: args.checklistItems }),
+      ...(args.positionX !== undefined && { positionX: args.positionX }),
+      ...(args.positionY !== undefined && { positionY: args.positionY }),
+      ...(args.width !== undefined && { width: args.width }),
+      ...(args.height !== undefined && { height: args.height }),
       updatedAt: Date.now(),
     });
 
@@ -355,9 +397,9 @@ export const deleteNote = mutation({
     const note = await ctx.db.get(args.noteId);
     if (!note) throw new Error("Note not found");
 
-    // Check permissions: Only creator or assignee can delete
-    if (note.createdBy !== currentUser._id && note.assignedTo !== currentUser._id) {
-      throw new Error("Unauthorized: You can only delete your own notes");
+    // Check permissions: Only assignee can delete
+    if (note.assignedTo !== currentUser._id) {
+      throw new Error("Unauthorized: Only the assigned manager can delete this note");
     }
 
     // Soft delete

@@ -14,10 +14,11 @@ import { cn } from "@/lib/utils";
 
 interface StickyNotesIconProps {
   onClick: () => void;
+  isActive?: boolean;
   className?: string;
 }
 
-export function StickyNotesIcon({ onClick, className }: StickyNotesIconProps) {
+export function StickyNotesIcon({ onClick, isActive = false, className }: StickyNotesIconProps) {
   const pendingCount = usePendingReminders();
 
   return (
@@ -25,10 +26,14 @@ export function StickyNotesIcon({ onClick, className }: StickyNotesIconProps) {
       onClick={onClick}
       size="icon"
       variant="ghost"
-      className={cn("relative", className)}
+      className={cn(
+        "relative transition-colors",
+        isActive && "bg-primary/10 text-primary hover:bg-primary/20",
+        className
+      )}
       aria-label={`Sticky Notes${pendingCount > 0 ? ` (${pendingCount} pending reminders)` : ""}`}
     >
-      <StickyNote className="h-5 w-5" />
+      <StickyNote className={cn("h-5 w-5", isActive && "text-primary")} />
       {pendingCount > 0 && (
         <Badge
           variant="destructive"

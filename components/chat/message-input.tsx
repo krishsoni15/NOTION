@@ -45,7 +45,7 @@ export function MessageInput({
   };
 
   return (
-    <div className={cn("flex items-center gap-3 p-4 sm:p-5 border-t border-border/50 bg-background/80 backdrop-blur-md shadow-sm", className)}>
+    <div className={cn("flex items-center gap-2 sm:gap-3 p-3 sm:p-4 md:p-5 border-t border-border/50 bg-background/80 backdrop-blur-md shadow-sm safe-area-inset-bottom", className)}>
       <Input
         ref={inputRef}
         type="text"
@@ -54,16 +54,16 @@ export function MessageInput({
         onKeyDown={handleKeyDown}
         placeholder={placeholder}
         disabled={disabled}
-        className="flex-1 bg-background/80 backdrop-blur-sm border-border/50 focus:border-primary/50 rounded-xl h-11"
+        className="flex-1 bg-background/80 backdrop-blur-sm border-border/50 focus:border-primary/50 rounded-xl h-11 sm:h-12 text-base"
         maxLength={5000}
       />
       <Button
         onClick={handleSend}
         disabled={disabled || !message.trim()}
         size="icon"
-        className="shrink-0 rounded-xl h-11 w-11 bg-primary hover:bg-primary/90 disabled:opacity-50 transition-all shadow-md hover:shadow-lg"
+        className="shrink-0 rounded-xl h-11 w-11 sm:h-12 sm:w-12 bg-primary hover:bg-primary/90 disabled:opacity-50 transition-all shadow-md hover:shadow-lg touch-manipulation active:scale-95"
       >
-        <Send className="h-4 w-4" />
+        <Send className="h-5 w-5 sm:h-4 sm:w-4" />
         <span className="sr-only">Send message</span>
       </Button>
     </div>

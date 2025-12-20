@@ -35,7 +35,7 @@ export default function ChatPage() {
   }
 
   return (
-    <div className="h-[calc(100vh-4rem)] md:h-[calc(100vh-5rem)]">
+    <div className="h-[calc(100vh-4rem)] md:h-[calc(100vh-5rem)] w-full">
       <ChatWindow currentUserId={currentUser._id} />
     </div>
   );

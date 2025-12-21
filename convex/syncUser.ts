@@ -1,13 +1,12 @@
 /**
- * Auto-sync user from Clerk to Convex
+ * Check if current user exists in Convex
  * 
- * This mutation automatically creates a user in Convex if they don't exist
- * when they first login. It syncs data from Clerk.
+ * This mutation checks if the user exists. It does NOT auto-create users.
+ * Users must be created by managers through the user management interface.
  */
 
 import { mutation } from "./_generated/server";
 import { getAuthUserId } from "@convex-dev/auth/server";
-import { v } from "convex/values";
 
 export const syncCurrentUser = mutation({
   args: {},
@@ -24,26 +23,13 @@ export const syncCurrentUser = mutation({
       .unique();
 
     if (existingUser) {
-      return existingUser._id; // User already exists
+      return existingUser._id; // User exists
     }
 
-    // User doesn't exist, create them
-    // Get user info from Clerk (we'll need to fetch this)
-    // For now, create with default values that can be updated later
-    const userId = await ctx.db.insert("users", {
-      clerkUserId: clerkUserId,
-      username: `user_${clerkUserId.slice(0, 8)}`, // Temporary username
-      fullName: "User", // Will be updated
-      phoneNumber: "",
-      address: "",
-      role: "site_engineer", // Default role, manager can change
-      assignedSites: [],
-      isActive: true,
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-    });
-
-    return userId;
+    // User doesn't exist - DO NOT auto-create
+    // User must be created by a manager first
+    // Return null to indicate user doesn't exist
+    return null;
   },
 });
 

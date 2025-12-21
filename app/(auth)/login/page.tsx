@@ -12,7 +12,7 @@ import { LoginForm } from "@/components/auth/login-form";
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ disabled?: string }>;
+  searchParams: Promise<{ disabled?: string; error?: string }>;
 }) {
   // If user is already authenticated, redirect to dashboard
   const { userId } = await auth();

@@ -7,10 +7,10 @@
  * Fully responsive for mobile and tablet devices.
  */
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Image from "next/image";
 import { useSignIn } from "@clerk/nextjs";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -24,12 +24,25 @@ interface LoginFormProps {
 export function LoginForm({ disabled = false }: LoginFormProps) {
   const { isLoaded, signIn, setActive } = useSignIn();
   const router = useRouter();
+  const searchParams = useSearchParams();
   
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+
+  // Check for error/disabled params in URL
+  useEffect(() => {
+    const errorParam = searchParams?.get("error");
+    const disabledParam = searchParams?.get("disabled");
+    
+    if (errorParam === "not_found") {
+      setError("Your account is not registered in the system. Please contact your administrator to create your account.");
+    } else if (disabledParam === "true") {
+      setError("Your account has been disabled. Please contact your administrator for assistance.");
+    }
+  }, [searchParams]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

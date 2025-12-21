@@ -3,13 +3,13 @@
 /**
  * User Sync Component
  * 
- * Automatically syncs the current user from Clerk to Convex
- * if they don't exist in Convex database.
+ * Checks if the current user exists in Convex database.
+ * If user doesn't exist (not created by manager), redirects to login.
  * Also checks if user is active and redirects disabled users.
  */
 
 import { useEffect } from "react";
-import { useMutation, useQuery } from "convex/react";
+import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { useAuth, useClerk } from "@clerk/nextjs";
 import { useRouter } from "next/navigation";
@@ -19,7 +19,6 @@ export function UserSync() {
   const { signOut } = useClerk();
   const router = useRouter();
   const currentUser = useQuery(api.users.getCurrentUser);
-  const syncUser = useMutation(api.users.syncCurrentUser);
 
   useEffect(() => {
     // Only sync if user is signed in and loaded
@@ -27,11 +26,13 @@ export function UserSync() {
       return;
     }
 
-    // If user doesn't exist in Convex, sync them
+    // Check if user exists in Convex
     if (currentUser === null) {
-      // User exists in Clerk but not in Convex - sync them
-      syncUser().catch((error) => {
-        console.error("Failed to sync user:", error);
+      // User exists in Clerk but not in Convex
+      // This means user was not created by a manager
+      // Sign them out and redirect to login with error message
+      signOut().then(() => {
+        router.push("/login?error=not_found");
       });
       return;
     }
@@ -43,7 +44,7 @@ export function UserSync() {
         router.push("/login?disabled=true");
       });
     }
-  }, [isLoaded, isSignedIn, currentUser, syncUser, signOut, router]);
+  }, [isLoaded, isSignedIn, currentUser, signOut, router]);
 
   // This component doesn't render anything
   return null;

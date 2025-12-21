@@ -9,7 +9,7 @@
 
 import { useUser, useClerk } from "@clerk/nextjs";
 import { useRouter } from "next/navigation";
-import { useQuery } from "convex/react";
+import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import {
   DropdownMenu,
@@ -36,6 +36,7 @@ export function UserMenu() {
   const { user, isLoaded } = useUser();
   const { signOut } = useClerk();
   const router = useRouter();
+  const setOffline = useMutation(api.presence.setOffline);
   
   // Get user data from Convex (includes role)
   const convexUser = useQuery(
@@ -64,6 +65,15 @@ export function UserMenu() {
   const role = convexUser?.role;
 
   const handleSignOut = async () => {
+    // Set user offline before signing out
+    try {
+      await setOffline();
+    } catch (error) {
+      // Continue even if setting offline fails
+      console.warn("Failed to set offline status:", error);
+    }
+    
+    // Sign out and redirect
     await signOut();
     router.push("/login");
   };

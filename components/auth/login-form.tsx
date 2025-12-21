@@ -17,7 +17,11 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { User, Lock, Eye, EyeOff } from "lucide-react";
 
-export function LoginForm() {
+interface LoginFormProps {
+  disabled?: boolean;
+}
+
+export function LoginForm({ disabled = false }: LoginFormProps) {
   const { isLoaded, signIn, setActive } = useSignIn();
   const router = useRouter();
   
@@ -186,6 +190,14 @@ export function LoginForm() {
                     </button>
                   </div>
                 </div>
+
+                {/* Disabled User Message */}
+                {disabled && (
+                  <div className="text-sm text-destructive bg-destructive/10 border border-destructive/20 rounded-lg p-3 flex items-start gap-2">
+                    <span className="text-destructive">⚠</span>
+                    <span>Your account has been disabled. Please contact your administrator for assistance.</span>
+                  </div>
+                )}
 
                 {/* Error Message */}
                 {error && (

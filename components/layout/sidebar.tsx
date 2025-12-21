@@ -75,6 +75,12 @@ const navigationItems: NavigationItem[] = [
     roles: [ROLES.MANAGER],
   },
   {
+    label: "Cost Comparisons",
+    href: "/dashboard/manager/cost-comparisons",
+    icon: FileText,
+    roles: [ROLES.MANAGER],
+  },
+  {
     label: "User Management",
     href: "/dashboard/manager/users",
     icon: Users,
@@ -98,12 +104,6 @@ const navigationItems: NavigationItem[] = [
     label: "Dashboard",
     href: "/dashboard/purchase",
     icon: LayoutDashboard,
-    roles: [ROLES.PURCHASE_OFFICER],
-  },
-  {
-    label: "Purchase Orders",
-    href: "/dashboard/purchase/orders",
-    icon: ShoppingCart,
     roles: [ROLES.PURCHASE_OFFICER],
   },
   {
@@ -144,36 +144,43 @@ export function Sidebar({ userRole }: SidebarProps) {
     <aside 
       className={cn(
         "hidden md:flex md:flex-col md:border-r md:bg-card/50 md:backdrop-blur-sm transition-all duration-300 ease-in-out fixed left-0 top-0 h-screen z-30 shadow-sm",
-        "group",
-        isCollapsed ? "md:w-20" : "md:w-64"
+        isCollapsed ? "md:w-16" : "md:w-64"
       )}
     >
       <TooltipProvider delayDuration={0}>
-        <div className="flex-1 overflow-y-auto">
-          {/* Brand with Toggle */}
-          <div className={cn(
-            "transition-all duration-300 flex items-center",
-            isCollapsed ? "p-4 justify-center" : "p-6 justify-between"
+        <div className="flex flex-col h-full">
+          {/* Logo Section - Top */}
+          <header className={cn(
+            "transition-all duration-300 border-b shrink-0",
+            isCollapsed ? "px-3 py-4" : "px-5 py-5"
           )}>
             {isCollapsed ? (
               <Tooltip>
                 <TooltipTrigger asChild>
                   <button
                     onClick={toggle}
-                    className="flex items-center justify-center h-10 w-10 rounded-lg bg-gradient-to-br from-primary/20 to-primary/10 hover:from-primary/30 hover:to-primary/20 transition-all hover:scale-105 active:scale-95 cursor-ew-resize group"
+                    className="logo-toggle-btn relative flex items-center justify-center h-10 w-10 rounded-lg bg-gradient-to-br from-primary/20 to-primary/10 hover:from-primary/30 hover:to-primary/20 transition-all hover:scale-105 active:scale-95 cursor-ew-resize group/logo"
+                    aria-label="Expand sidebar"
                   >
-                    {logoError ? (
-                      <span className="text-xl font-bold text-primary">N</span>
-                    ) : (
-                      <Image
-                        src="/images/logos/Notion_Favicon-removebg-preview.png"
-                        alt="Notion"
-                        width={32}
-                        height={32}
-                        className="object-contain"
-                        onError={() => setLogoError(true)}
-                      />
-                    )}
+                    {/* Notion Icon - hidden on hover */}
+                    <div className="group-hover/logo:opacity-0 group-hover/logo:scale-0 transition-all duration-200">
+                      {logoError ? (
+                        <span className="text-lg font-bold text-primary">N</span>
+                      ) : (
+                        <Image
+                          src="/images/logos/Notion_Favicon-removebg-preview.png"
+                          alt="Notion Logo"
+                          width={28}
+                          height={28}
+                          className="object-contain"
+                          onError={() => setLogoError(true)}
+                        />
+                      )}
+                    </div>
+                    {/* Expand Icon - shown on hover */}
+                    <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover/logo:opacity-100 scale-0 group-hover/logo:scale-100 transition-all duration-200">
+                      <PanelLeftOpen className="h-4 w-4 text-primary font-bold stroke-[2.5]" aria-hidden="true" />
+                    </div>
                   </button>
                 </TooltipTrigger>
                 <TooltipContent side="right" className="font-medium">
@@ -181,125 +188,139 @@ export function Sidebar({ userRole }: SidebarProps) {
                 </TooltipContent>
               </Tooltip>
             ) : (
-              <>
-                <div className="flex items-center gap-3">
-                  <div className="h-10 w-10 rounded-lg bg-gradient-to-br from-primary/20 to-primary/10 flex items-center justify-center shrink-0 overflow-hidden p-1.5">
+              <div className="flex items-center justify-between gap-3">
+                <Link 
+                  href="/dashboard" 
+                  className="flex items-center gap-3 min-w-0 flex-1 cursor-pointer hover:opacity-80 transition-opacity"
+                >
+                  <div className="h-12 w-12 rounded-lg bg-gradient-to-br from-primary/20 to-primary/10 flex items-center justify-center shrink-0 overflow-hidden p-2">
                     {logoError ? (
-                      <h1 className="text-xl font-bold text-primary">N</h1>
+                      <span className="text-2xl font-bold text-primary">N</span>
                     ) : (
                       <Image
                         src="/images/logos/Notion_Favicon-removebg-preview.png"
                         alt="Notion Logo"
-                        width={32}
-                        height={32}
+                        width={40}
+                        height={40}
                         className="object-contain"
                         onError={() => setLogoError(true)}
                       />
                     )}
                   </div>
                   <div className="min-w-0 flex flex-col gap-1">
-                    <div className="h-10 relative flex items-center">
+                    <div className="h-12 relative flex items-center overflow-hidden -my-1.5">
                       {logoError ? (
                         <h1 className="text-xl font-bold truncate">NOTION</h1>
                       ) : (
                         <Image
                           src="/images/logos/Notion_Logo-removebg-preview.png"
                           alt="Notion"
-                          width={160}
-                          height={40}
-                          className="object-contain h-full"
+                          width={180}
+                          height={48}
+                          className="object-contain w-full h-[120%] object-center"
                           onError={() => setLogoError(true)}
                         />
                       )}
                     </div>
-                    <p className="text-xs text-muted-foreground truncate">
+                    <p className="text-sm text-muted-foreground truncate">
                       {ROLE_LABELS[userRole]}
                     </p>
                   </div>
-                </div>
+                </Link>
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Button
                       onClick={toggle}
                       variant="ghost"
                       size="icon"
-                      className="h-8 w-8 shrink-0 hover:bg-accent hover:scale-105 active:scale-95 cursor-ew-resize group"
+                      className="h-8 w-8 shrink-0 hover:bg-accent hover:scale-105 active:scale-95 cursor-ew-resize group/collapse"
+                      aria-label="Collapse sidebar"
                     >
-                      <PanelLeftClose className="h-4 w-4 font-bold stroke-[2.5] transition-transform group-hover:scale-110" />
+                      <PanelLeftClose className="h-4 w-4 font-bold stroke-[2.5] transition-transform group-hover/collapse:scale-110" aria-hidden="true" />
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent side="right" className="font-medium">
                     Collapse sidebar
                   </TooltipContent>
                 </Tooltip>
-              </>
+              </div>
             )}
-          </div>
+          </header>
 
-          <Separator />
+          {/* Navigation Section */}
+          <div className="flex-1 overflow-y-auto">
 
-          {/* Navigation */}
-          <nav className={cn(
-            "space-y-1 transition-all duration-300",
-            isCollapsed ? "p-2" : "p-4"
-          )}>
-            {filteredItems.map((item) => {
-              const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
-              const Icon = item.icon;
+            <nav className={cn(
+              "transition-all duration-300",
+              isCollapsed ? "px-3 py-3 space-y-2" : "px-4 py-4 space-y-1.5"
+            )}>
+              {filteredItems.map((item) => {
+                // More precise active state checking
+                // Dashboard should only be active on exact match
+                // Other pages should be active on exact match or child routes
+                const isDashboard = item.href === "/dashboard/manager" || 
+                                   item.href === "/dashboard/site" || 
+                                   item.href === "/dashboard/purchase";
+                const isActive = isDashboard 
+                  ? pathname === item.href
+                  : pathname === item.href || pathname.startsWith(item.href + "/");
+                const Icon = item.icon;
 
-              if (isCollapsed) {
+                if (isCollapsed) {
+                  return (
+                    <Tooltip key={item.href}>
+                      <TooltipTrigger asChild>
+                        <Link
+                          href={item.href}
+                          className={cn(
+                            "flex items-center justify-center h-10 w-10 rounded-lg text-sm font-medium transition-all cursor-pointer",
+                            "hover:scale-105 active:scale-95",
+                            isActive
+                              ? "bg-primary text-primary-foreground shadow-md"
+                              : "text-muted-foreground hover:bg-accent hover:text-accent-foreground hover:shadow-sm"
+                          )}
+                          aria-label={item.label}
+                          aria-current={isActive ? "page" : undefined}
+                        >
+                          <Icon className="h-4 w-4" aria-hidden="true" />
+                        </Link>
+                      </TooltipTrigger>
+                      <TooltipContent side="right" className="font-medium">
+                        {item.label}
+                      </TooltipContent>
+                    </Tooltip>
+                  );
+                }
+
                 return (
-                  <Tooltip key={item.href}>
-                    <TooltipTrigger asChild>
-                      <Link
-                        href={item.href}
-                        className={cn(
-                          "flex items-center justify-center h-12 w-full rounded-lg text-sm font-medium transition-all",
-                          "hover:scale-105 active:scale-95",
-                          isActive
-                            ? "bg-primary text-primary-foreground shadow-md"
-                            : "text-muted-foreground hover:bg-accent hover:text-accent-foreground hover:shadow-sm"
-                        )}
-                        style={{ cursor: 'pointer' }}
-                      >
-                        <Icon className="h-5 w-5" />
-                      </Link>
-                    </TooltipTrigger>
-                    <TooltipContent side="right" className="font-medium">
-                      {item.label}
-                    </TooltipContent>
-                  </Tooltip>
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className={cn(
+                      "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all cursor-pointer",
+                      "hover:translate-x-1 active:scale-[0.98]",
+                      isActive
+                        ? "bg-primary text-primary-foreground shadow-md"
+                        : "text-muted-foreground hover:bg-accent hover:text-accent-foreground hover:shadow-sm"
+                    )}
+                    aria-current={isActive ? "page" : undefined}
+                  >
+                    <Icon className="h-5 w-5 shrink-0" aria-hidden="true" />
+                    <span className="truncate">{item.label}</span>
+                  </Link>
                 );
-              }
-
-              return (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  className={cn(
-                    "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all",
-                    "hover:translate-x-1 active:scale-[0.98]",
-                    isActive
-                      ? "bg-primary text-primary-foreground shadow-md"
-                      : "text-muted-foreground hover:bg-accent hover:text-accent-foreground hover:shadow-sm"
-                  )}
-                  style={{ cursor: 'pointer' }}
-                >
-                  <Icon className="h-5 w-5 shrink-0" />
-                  <span className="truncate">{item.label}</span>
-                </Link>
-              );
-            })}
-          </nav>
+              })}
+            </nav>
+          </div>
         </div>
 
         {/* Footer */}
         {!isCollapsed && (
-          <div className="p-4 border-t">
+          <footer className="p-4 border-t shrink-0">
             <p className="text-xs text-muted-foreground text-center">
               v1.0.0 © {new Date().getFullYear()}
             </p>
-          </div>
+          </footer>
         )}
       </TooltipProvider>
     </aside>

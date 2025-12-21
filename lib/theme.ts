@@ -7,7 +7,7 @@
  * Brand themes are applied via CSS classes on the <html> element.
  */
 
-export type BrandTheme = "notion" | "ocean" | "forest" | "purple"; // Professional CRM themes
+export type BrandTheme = "notion" | "ocean" | "forest" | "purple" | "dark" | "red"; // Professional CRM themes
 
 const THEME_STORAGE_KEY = "brand-theme";
 const DEFAULT_THEME: BrandTheme = "notion";
@@ -17,6 +17,8 @@ export const THEME_LABELS: Record<BrandTheme, string> = {
   ocean: "Ocean Teal",
   forest: "Forest Green",
   purple: "Royal Purple",
+  dark: "Midnight",
+  red: "Crimson Red",
 };
 
 export const THEME_COLORS: Record<BrandTheme, { primary: string; accent: string; description: string }> = {
@@ -40,6 +42,16 @@ export const THEME_COLORS: Record<BrandTheme, { primary: string; accent: string;
     accent: "#A78BFA", 
     description: "Modern purple aesthetic" 
   },
+  dark: { 
+    primary: "#1F2937", 
+    accent: "#6B7280", 
+    description: "Black and grey midnight theme" 
+  },
+  red: { 
+    primary: "#DC2626", 
+    accent: "#EF4444", 
+    description: "Bold crimson red theme" 
+  },
 };
 
 /**
@@ -61,7 +73,9 @@ export function setBrandTheme(themeName: BrandTheme): void {
     "theme-notion",
     "theme-ocean",
     "theme-forest",
-    "theme-purple"
+    "theme-purple",
+    "theme-dark",
+    "theme-red"
   );
 
   // Add the new theme class
@@ -81,7 +95,7 @@ export function getCurrentTheme(): BrandTheme {
 
   // Check localStorage first
   const stored = localStorage.getItem(THEME_STORAGE_KEY);
-  if (stored && (stored === "notion" || stored === "ocean" || stored === "forest" || stored === "purple")) {
+  if (stored && (stored === "notion" || stored === "ocean" || stored === "forest" || stored === "purple" || stored === "dark" || stored === "red")) {
     return stored as BrandTheme;
   }
 

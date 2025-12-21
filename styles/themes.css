@@ -277,3 +277,119 @@
   --radius: 0.75rem;
 }
 
+/* ============================================
+   THEME: DARK (Midnight - Black & Grey)
+   ============================================ */
+
+/* Light Mode - Theme Dark */
+.theme-dark {
+  --background: #F9FAFB;
+  --surface: #FFFFFF;
+  --card: #FFFFFF;
+  --primary: #1F2937;
+  --primary-foreground: #FFFFFF;
+  --accent: #4B5563;
+  --accent-foreground: #FFFFFF;
+  --text-primary: #111827;
+  --text-secondary: #6B7280;
+  --foreground: #111827;
+  --border: #E5E7EB;
+  --input: #E5E7EB;
+  --ring: #1F2937;
+  --secondary: #F3F4F6;
+  --secondary-foreground: #111827;
+  --muted: #F3F4F6;
+  --muted-foreground: #6B7280;
+  --popover: #FFFFFF;
+  --popover-foreground: #111827;
+  --card-foreground: #111827;
+  --destructive: #DC2626;
+  --destructive-foreground: #FFFFFF;
+  --radius: 0.75rem;
+}
+
+/* Dark Mode - Theme Dark (Black & Grey) */
+.dark.theme-dark {
+  --background: #000000;
+  --surface: #0A0A0A;
+  --card: #111111;
+  --primary: #FFFFFF;
+  --primary-foreground: #000000;
+  --accent: #6B7280;
+  --accent-foreground: #FFFFFF;
+  --text-primary: #F9FAFB;
+  --text-secondary: #9CA3AF;
+  --foreground: #F9FAFB;
+  --border: #1F2937;
+  --input: #1F2937;
+  --ring: #FFFFFF;
+  --secondary: #1F2937;
+  --secondary-foreground: #F9FAFB;
+  --muted: #1F2937;
+  --muted-foreground: #9CA3AF;
+  --popover: #111111;
+  --popover-foreground: #F9FAFB;
+  --card-foreground: #F9FAFB;
+  --destructive: #EF4444;
+  --destructive-foreground: #FFFFFF;
+  --radius: 0.75rem;
+}
+
+/* ============================================
+   THEME: RED (Crimson Red)
+   ============================================ */
+
+/* Light Mode - Theme Red */
+.theme-red {
+  --background: #FEF2F2;
+  --surface: #FFFFFF;
+  --card: #FFFFFF;
+  --primary: #DC2626;
+  --primary-foreground: #FFFFFF;
+  --accent: #EF4444;
+  --accent-foreground: #FFFFFF;
+  --text-primary: #0F172A;
+  --text-secondary: #475569;
+  --foreground: #0F172A;
+  --border: #FECACA;
+  --input: #FECACA;
+  --ring: #DC2626;
+  --secondary: #FEE2E2;
+  --secondary-foreground: #0F172A;
+  --muted: #FEE2E2;
+  --muted-foreground: #475569;
+  --popover: #FFFFFF;
+  --popover-foreground: #0F172A;
+  --card-foreground: #0F172A;
+  --destructive: #B91C1C;
+  --destructive-foreground: #FFFFFF;
+  --radius: 0.75rem;
+}
+
+/* Dark Mode - Theme Red */
+.dark.theme-red {
+  --background: #1F0A0A;
+  --surface: #2D0F0F;
+  --card: #2D0F0F;
+  --primary: #EF4444;
+  --primary-foreground: #FEF2F2;
+  --accent: #F87171;
+  --accent-foreground: #1F0A0A;
+  --text-primary: #FEE2E2;
+  --text-secondary: #FCA5A5;
+  --foreground: #FEE2E2;
+  --border: #7F1D1D;
+  --input: #7F1D1D;
+  --ring: #EF4444;
+  --secondary: #991B1B;
+  --secondary-foreground: #FEE2E2;
+  --muted: #991B1B;
+  --muted-foreground: #FCA5A5;
+  --popover: #2D0F0F;
+  --popover-foreground: #FEE2E2;
+  --card-foreground: #FEE2E2;
+  --destructive: #F87171;
+  --destructive-foreground: #FFFFFF;
+  --radius: 0.75rem;
+}
+

@@ -10,10 +10,12 @@
 
 import type * as auth from "../auth.js";
 import type * as chat from "../chat.js";
+import type * as costComparisons from "../costComparisons.js";
 import type * as cron from "../cron.js";
 import type * as inventory from "../inventory.js";
 import type * as migrations from "../migrations.js";
 import type * as presence from "../presence.js";
+import type * as requests from "../requests.js";
 import type * as sites from "../sites.js";
 import type * as stickyNotes from "../stickyNotes.js";
 import type * as syncUser from "../syncUser.js";
@@ -29,10 +31,12 @@ import type {
 declare const fullApi: ApiFromModules<{
   auth: typeof auth;
   chat: typeof chat;
+  costComparisons: typeof costComparisons;
   cron: typeof cron;
   inventory: typeof inventory;
   migrations: typeof migrations;
   presence: typeof presence;
+  requests: typeof requests;
   sites: typeof sites;
   stickyNotes: typeof stickyNotes;
   syncUser: typeof syncUser;

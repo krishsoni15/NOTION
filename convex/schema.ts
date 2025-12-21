@@ -39,18 +39,27 @@ export default defineSchema({
   requests: defineTable({
     requestNumber: v.string(), // Auto-generated unique identifier
     createdBy: v.id("users"), // Site Engineer
-    items: v.array(
-      v.object({
-        name: v.string(),
-        quantity: v.number(),
-        unit: v.string(),
-        description: v.optional(v.string()),
-      })
-    ),
+    siteId: v.id("sites"), // Site location for the request
+    itemName: v.string(), // Item name (can be from inventory or new)
+    description: v.string(), // Item description
+    specsBrand: v.optional(v.string()), // Specifications/Brand
+    quantity: v.number(), // Quantity needed
+    unit: v.string(), // Unit of measurement
+    requiredBy: v.number(), // Required date timestamp
+    isUrgent: v.boolean(), // Urgent flag
+    photo: v.optional(v.object({
+      imageUrl: v.string(), // Cloudflare R2 public URL
+      imageKey: v.string(), // R2 object key for deletion/updates
+    })), // Photo attachment
     status: v.union(
       v.literal("pending"),
       v.literal("approved"),
       v.literal("rejected"),
+      v.literal("ready_for_cc"),
+      v.literal("cc_pending"),
+      v.literal("cc_approved"),
+      v.literal("ready_for_po"),
+      v.literal("delivery_stage"),
       v.literal("delivered")
     ),
     approvedBy: v.optional(v.id("users")), // Manager
@@ -63,6 +72,7 @@ export default defineSchema({
   })
     .index("by_request_number", ["requestNumber"])
     .index("by_created_by", ["createdBy"])
+    .index("by_site_id", ["siteId"])
     .index("by_status", ["status"])
     .index("by_created_at", ["createdAt"]),
 
@@ -74,25 +84,22 @@ export default defineSchema({
     requestId: v.id("requests"), // Linked request
     vendorId: v.id("vendors"),
     createdBy: v.id("users"), // Purchase Officer
-    items: v.array(
-      v.object({
-        name: v.string(),
+    itemDescription: v.string(), // Item description
         quantity: v.number(),
         unit: v.string(),
-        unitPrice: v.number(),
-        totalPrice: v.number(),
-      })
-    ),
-    totalAmount: v.number(),
-    status: v.union(
-      v.literal("draft"),
-      v.literal("sent"),
-      v.literal("received"),
-      v.literal("completed")
-    ),
-    expectedDeliveryDate: v.number(),
-    actualDeliveryDate: v.optional(v.number()),
+    hsnSacCode: v.optional(v.string()), // HSN/SAC Code
+    unitRate: v.number(),
+    discountPercent: v.number(), // Discount percentage
+    gstTaxRate: v.number(), // GST Tax Rate percentage
+    totalAmount: v.number(), // Total amount after discount and GST
     notes: v.optional(v.string()),
+    status: v.union(
+      v.literal("ordered"),
+      v.literal("delivered"),
+      v.literal("cancelled")
+    ),
+    expectedDeliveryDate: v.optional(v.number()),
+    actualDeliveryDate: v.optional(v.number()),
     createdAt: v.number(),
     updatedAt: v.number(),
   })
@@ -243,6 +250,70 @@ export default defineSchema({
   })
     .index("by_name", ["name"])
     .index("by_is_active", ["isActive"])
+    .index("by_created_at", ["createdAt"]),
+
+  // ============================================================================
+  // Cost Comparisons Table
+  // ============================================================================
+  costComparisons: defineTable({
+    requestId: v.id("requests"), // Linked request
+    createdBy: v.id("users"), // Purchase Officer
+    vendorQuotes: v.array(
+      v.object({
+        vendorId: v.id("vendors"),
+        unitPrice: v.number(), // Unit price in ₹
+      })
+    ),
+    selectedVendorId: v.optional(v.id("vendors")), // Selected by manager
+    status: v.union(
+      v.literal("draft"), // Being created by purchase officer
+      v.literal("cc_pending"), // Submitted for manager approval
+      v.literal("cc_approved"), // Approved by manager
+      v.literal("cc_rejected") // Rejected by manager
+    ),
+    managerNotes: v.optional(v.string()), // Manager's notes or rejection reason
+    rejectedAt: v.optional(v.number()),
+    approvedAt: v.optional(v.number()),
+    approvedBy: v.optional(v.id("users")), // Manager who approved/rejected
+    isDirectDelivery: v.boolean(), // If item is in inventory, can go directly to delivery
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_request_id", ["requestId"])
+    .index("by_created_by", ["createdBy"])
+    .index("by_status", ["status"])
+    .index("by_created_at", ["createdAt"]),
+
+  // ============================================================================
+  // Delivery Challans Table
+  // ============================================================================
+  deliveryChallans: defineTable({
+    dcNumber: v.string(), // Auto-generated unique identifier
+    poId: v.id("purchaseOrders"), // Linked purchase order
+    requestId: v.id("requests"), // Linked request
+    deliveryMode: v.union(
+      v.literal("porter"),
+      v.literal("private_vehicle")
+    ),
+    vehicleNumber: v.optional(v.string()),
+    driverPhone: v.optional(v.string()),
+    receiverName: v.string(), // Receiver name at site
+    invoiceUrl: v.optional(v.string()), // Uploaded invoice URL
+    invoiceKey: v.optional(v.string()), // Invoice storage key
+    status: v.union(
+      v.literal("pending"),
+      v.literal("delivered"),
+      v.literal("cancelled")
+    ),
+    deliveredAt: v.optional(v.number()),
+    createdBy: v.id("users"), // Purchase Officer
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_dc_number", ["dcNumber"])
+    .index("by_po_id", ["poId"])
+    .index("by_request_id", ["requestId"])
+    .index("by_status", ["status"])
     .index("by_created_at", ["createdAt"]),
 });
 

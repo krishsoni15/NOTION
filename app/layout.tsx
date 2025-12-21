@@ -23,10 +23,10 @@ export const metadata: Metadata = {
   description: "Notion app with Convex and Clerk authentication",
   icons: {
     icon: [
-      { url: '/images/logos/Notion_Favicon-removebg-preview.png', type: 'image/png' },
+      { url: '/fav.svg', type: 'image/svg+xml' },
       { url: '/favicon.ico', type: 'image/x-icon' },
     ],
-    apple: '/images/logos/Notion_Favicon-removebg-preview.png',
+    apple: '/fav.svg',
   },
 };
 
@@ -39,6 +39,7 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning className="theme-notion">
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+        suppressHydrationWarning
       >
         <ClerkProvider
           signInUrl="/login"

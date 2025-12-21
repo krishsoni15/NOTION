@@ -13,14 +13,7 @@ export default async function UserManagementPage() {
   await requireRole(ROLES.MANAGER);
 
   return (
-    <div className="space-y-6">
-      <div className="space-y-2">
-        <h1 className="text-3xl font-bold tracking-tight">User Management</h1>
-        <p className="text-muted-foreground">
-          Create and manage users, assign roles, and control access.
-        </p>
-      </div>
-
+    <div className="space-y-4 sm:space-y-6 px-2 sm:px-4 md:px-6">
       <UserManagement />
     </div>
   );

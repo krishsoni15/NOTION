@@ -70,7 +70,7 @@ export const getAllUsers = query({
   handler: async (ctx) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) {
-      throw new Error("Not authenticated");
+      return []; // Return empty array if not authenticated
     }
 
     // Get current user
@@ -80,12 +80,12 @@ export const getAllUsers = query({
       .unique();
 
     if (!currentUser) {
-      throw new Error("User not found");
+      return []; // Return empty array if user not found
     }
 
-    // Check if user is a manager
+    // Check if user is a manager - return empty array for non-managers instead of throwing error
     if (currentUser.role !== "manager") {
-      throw new Error("Unauthorized: Only managers can view all users");
+      return []; // Non-managers get empty array (they can only assign to themselves anyway)
     }
 
     // Get all users

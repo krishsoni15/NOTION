@@ -65,6 +65,12 @@ const navigationItems: NavigationItem[] = [
     roles: [ROLES.MANAGER],
   },
   {
+    label: "Cost Comparisons",
+    href: "/dashboard/manager/cost-comparisons",
+    icon: FileText,
+    roles: [ROLES.MANAGER],
+  },
+  {
     label: "User Management",
     href: "/dashboard/manager/users",
     icon: Users,
@@ -88,12 +94,6 @@ const navigationItems: NavigationItem[] = [
     label: "Dashboard",
     href: "/dashboard/purchase",
     icon: LayoutDashboard,
-    roles: [ROLES.PURCHASE_OFFICER],
-  },
-  {
-    label: "Purchase Orders",
-    href: "/dashboard/purchase/orders",
-    icon: ShoppingCart,
     roles: [ROLES.PURCHASE_OFFICER],
   },
   {

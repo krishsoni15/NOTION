@@ -36,9 +36,9 @@ export default async function DashboardLayout({ children }: { children: ReactNod
   }
 
   return (
-    <PresenceProvider>
       <ChatWidthProvider>
         <SidebarProvider>
+        <PresenceProvider>
           <UserSync />
           <ReminderScheduler />
           <SidebarWrapper userRole={role}>
@@ -50,9 +50,9 @@ export default async function DashboardLayout({ children }: { children: ReactNod
               </div>
             </main>
           </SidebarWrapper>
+        </PresenceProvider>
         </SidebarProvider>
       </ChatWidthProvider>
-    </PresenceProvider>
   );
 }
 

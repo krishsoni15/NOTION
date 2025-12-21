@@ -54,26 +54,47 @@ export function usePresenceHeartbeat(enabled: boolean = true) {
     if (!enabled) return;
 
     // Update presence immediately
-    updatePresence({ isOnline: true }).catch(console.error);
+    updatePresence({ isOnline: true }).catch((error) => {
+      // Silently handle errors (Convex might not be ready yet)
+      if (process.env.NODE_ENV === "development") {
+        console.warn("Failed to update presence:", error);
+      }
+    });
 
     // Set up heartbeat interval (every 30 seconds)
     intervalRef.current = setInterval(() => {
-      updatePresence({ isOnline: true }).catch(console.error);
+      updatePresence({ isOnline: true }).catch((error) => {
+        if (process.env.NODE_ENV === "development") {
+          console.warn("Failed to update presence:", error);
+        }
+      });
     }, 30000);
 
     // Set offline on unmount or page unload
     const handleBeforeUnload = () => {
-      setOffline().catch(console.error);
+      setOffline().catch((error) => {
+        if (process.env.NODE_ENV === "development") {
+          console.warn("Failed to set offline:", error);
+        }
+      });
     };
 
+    if (typeof window !== "undefined") {
     window.addEventListener("beforeunload", handleBeforeUnload);
+    }
 
     return () => {
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
       }
+      if (typeof window !== "undefined") {
       window.removeEventListener("beforeunload", handleBeforeUnload);
-      setOffline().catch(console.error);
+      }
+      setOffline().catch((error) => {
+        if (process.env.NODE_ENV === "development") {
+          console.warn("Failed to set offline:", error);
+        }
+      });
     };
   }, [enabled, updatePresence, setOffline]);
 }

@@ -8,18 +8,19 @@
 
 import { v } from "convex/values";
 import { mutation, query } from "./_generated/server";
+import { getAuthUserId } from "@convex-dev/auth/server";
 import type { Id } from "./_generated/dataModel";
 
 // Helper function to get current user
 async function getCurrentUser(ctx: any) {
-  const identity = await ctx.auth.getUserIdentity();
-  if (!identity) {
+  const userId = await getAuthUserId(ctx);
+  if (!userId) {
     throw new Error("Not authenticated");
   }
 
   const user = await ctx.db
     .query("users")
-    .withIndex("by_clerk_user_id", (q: any) => q.eq("clerkUserId", identity.subject))
+    .withIndex("by_clerk_user_id", (q: any) => q.eq("clerkUserId", userId))
     .unique();
 
   if (!user) {
@@ -40,14 +41,22 @@ async function getCurrentUser(ctx: any) {
 export const getAllVendors = query({
   args: {},
   handler: async (ctx) => {
-    const currentUser = await getCurrentUser(ctx);
+    const userId = await getAuthUserId(ctx);
+    if (!userId) return [];
+
+    const currentUser = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_user_id", (q: any) => q.eq("clerkUserId", userId))
+      .unique();
+
+    if (!currentUser) return [];
 
     // Check if user has access (Purchase Officer or Manager)
     if (
       currentUser.role !== "purchase_officer" &&
       currentUser.role !== "manager"
     ) {
-      throw new Error("Unauthorized: Only Purchase Officers and Managers can view vendors");
+      return [];
     }
 
     const vendors = await ctx.db

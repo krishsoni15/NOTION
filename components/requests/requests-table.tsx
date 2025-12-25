@@ -27,7 +27,7 @@ import {
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Eye, AlertCircle, FileText } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, normalizeSearchQuery, matchesAnySearchQuery } from "@/lib/utils";
 import type { Id } from "@/convex/_generated/dataModel";
 
 type RequestStatus = 
@@ -112,15 +112,20 @@ export function RequestsTable({
     );
   }
 
-  // Filter by search query
-  if (searchQuery.trim()) {
-    const query = searchQuery.toLowerCase();
-    filteredRequests = filteredRequests.filter(
-      (req) =>
-        req.requestNumber.toLowerCase().includes(query) ||
-        req.itemName.toLowerCase().includes(query) ||
-        req.site?.name.toLowerCase().includes(query) ||
-        req.creator?.fullName.toLowerCase().includes(query)
+  // Filter by search query - smart search with normalized query
+  const normalizedQuery = normalizeSearchQuery(searchQuery);
+  if (normalizedQuery) {
+    filteredRequests = filteredRequests.filter((req) =>
+      matchesAnySearchQuery(
+        [
+          req.requestNumber,
+          req.itemName,
+          req.site?.name,
+          req.creator?.fullName,
+          req.site?.code,
+        ],
+        normalizedQuery
+      )
     );
   }
 

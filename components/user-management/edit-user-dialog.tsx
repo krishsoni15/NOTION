@@ -34,6 +34,7 @@ import { Eye, EyeOff, Loader2, Save, X } from "lucide-react";
 import { Doc } from "@/convex/_generated/dataModel";
 import { toast } from "sonner";
 import { SiteSelector } from "./site-selector";
+import { AddressAutocomplete } from "@/components/vendors/address-autocomplete";
 import type { Id } from "@/convex/_generated/dataModel";
 
 interface EditUserDialogProps {
@@ -66,9 +67,9 @@ export function EditUserDialog({ open, onOpenChange, user }: EditUserDialogProps
     confirmPassword: "", // For password confirmation
   });
 
-  // Initialize form when user changes
+  // Initialize form when user changes or dialog opens
   useEffect(() => {
-    if (user) {
+    if (user && open) {
       setFormData({
         fullName: user.fullName || "",
         phoneNumber: user.phoneNumber || "",
@@ -80,7 +81,7 @@ export function EditUserDialog({ open, onOpenChange, user }: EditUserDialogProps
         confirmPassword: "",
       });
     }
-  }, [user]);
+  }, [user, open]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -198,24 +199,21 @@ export function EditUserDialog({ open, onOpenChange, user }: EditUserDialogProps
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-5 py-2">
+        <form onSubmit={handleSubmit} className="space-y-4 py-2">
           {/* Username (read-only) */}
-          <div className="space-y-2">
-            <Label htmlFor="username">Username</Label>
+          <div className="space-y-1.5">
+            <Label htmlFor="username" className="text-sm">Username</Label>
             <Input
               id="username"
               value={user.username}
               disabled
-              className="bg-muted"
+              className="bg-muted h-9"
             />
-            <p className="text-xs text-muted-foreground">
-              Username cannot be changed
-            </p>
           </div>
 
           {/* Full Name */}
-          <div className="space-y-2">
-            <Label htmlFor="fullName">Full Name *</Label>
+          <div className="space-y-1.5">
+            <Label htmlFor="fullName" className="text-sm">Full Name *</Label>
             <Input
               id="fullName"
               placeholder="John Doe"
@@ -225,6 +223,7 @@ export function EditUserDialog({ open, onOpenChange, user }: EditUserDialogProps
               }
               required
               disabled={isLoading}
+              className="h-9"
             />
           </div>
 
@@ -232,8 +231,8 @@ export function EditUserDialog({ open, onOpenChange, user }: EditUserDialogProps
           {isEditingSelf ? (
             // Self: Show current + new + confirm password
             <>
-              <div className="space-y-2">
-                <Label htmlFor="currentPassword">
+              <div className="space-y-1.5">
+                <Label htmlFor="currentPassword" className="text-sm">
                   Current Password <span className="text-muted-foreground text-xs">(required to change password)</span>
                 </Label>
                 <div className="relative">
@@ -246,7 +245,7 @@ export function EditUserDialog({ open, onOpenChange, user }: EditUserDialogProps
                       setFormData({ ...formData, currentPassword: e.target.value })
                     }
                     disabled={isLoading}
-                    className="pr-10"
+                    className="pr-10 h-9"
                   />
                   <button
                     type="button"
@@ -264,8 +263,8 @@ export function EditUserDialog({ open, onOpenChange, user }: EditUserDialogProps
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="password">
+              <div className="space-y-1.5">
+                <Label htmlFor="password" className="text-sm">
                   New Password <span className="text-muted-foreground text-xs">(optional - leave empty to keep current)</span>
                 </Label>
                 <div className="relative">
@@ -279,7 +278,7 @@ export function EditUserDialog({ open, onOpenChange, user }: EditUserDialogProps
                     }
                     disabled={isLoading}
                     minLength={6}
-                    className="pr-10"
+                    className="pr-10 h-9"
                   />
                   <button
                     type="button"
@@ -297,8 +296,8 @@ export function EditUserDialog({ open, onOpenChange, user }: EditUserDialogProps
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="confirmPassword">
+              <div className="space-y-1.5">
+                <Label htmlFor="confirmPassword" className="text-sm">
                   Confirm New Password <span className="text-muted-foreground text-xs">(optional)</span>
                 </Label>
                 <div className="relative">
@@ -312,7 +311,7 @@ export function EditUserDialog({ open, onOpenChange, user }: EditUserDialogProps
                     }
                     disabled={isLoading}
                     minLength={6}
-                    className="pr-10"
+                    className="pr-10 h-9"
                   />
                   <button
                     type="button"
@@ -332,8 +331,8 @@ export function EditUserDialog({ open, onOpenChange, user }: EditUserDialogProps
             </>
           ) : (
             // Others: Just new password (no current password needed)
-            <div className="space-y-2">
-              <Label htmlFor="password">
+            <div className="space-y-1.5">
+              <Label htmlFor="password" className="text-sm">
                 New Password <span className="text-muted-foreground text-xs">(leave empty to keep current)</span>
               </Label>
               <div className="relative">
@@ -347,7 +346,7 @@ export function EditUserDialog({ open, onOpenChange, user }: EditUserDialogProps
                   }
                   disabled={isLoading}
                   minLength={6}
-                  className="pr-10"
+                  className="pr-10 h-9"
                 />
                 <button
                   type="button"
@@ -372,41 +371,36 @@ export function EditUserDialog({ open, onOpenChange, user }: EditUserDialogProps
           )}
 
           {/* Phone Number */}
-          <div className="space-y-2">
-            <Label htmlFor="phoneNumber">
-              Phone Number <span className="text-muted-foreground text-xs">(optional)</span>
+          <div className="space-y-1.5">
+            <Label htmlFor="phoneNumber" className="text-sm">
+              Phone <span className="text-muted-foreground text-xs">(optional)</span>
             </Label>
             <Input
               id="phoneNumber"
               type="tel"
-              placeholder="+1234567890"
+              placeholder="+91 9876543210"
               value={formData.phoneNumber}
               onChange={(e) =>
                 setFormData({ ...formData, phoneNumber: e.target.value })
               }
               disabled={isLoading}
+              className="h-9"
             />
           </div>
 
           {/* Address */}
-          <div className="space-y-2">
-            <Label htmlFor="address">
-              Address <span className="text-muted-foreground text-xs">(optional)</span>
-            </Label>
-            <Input
-              id="address"
-              placeholder="123 Main St, City, State"
-              value={formData.address}
-              onChange={(e) =>
-                setFormData({ ...formData, address: e.target.value })
-              }
-              disabled={isLoading}
-            />
-          </div>
+          <AddressAutocomplete
+            value={formData.address}
+            onChange={(address) => setFormData({ ...formData, address })}
+            disabled={isLoading}
+            label="Address"
+            placeholder="Search address or type manually..."
+            id="address"
+          />
 
           {/* Role */}
-          <div className="space-y-2">
-            <Label htmlFor="role">Role *</Label>
+          <div className="space-y-1.5">
+            <Label htmlFor="role" className="text-sm">Role *</Label>
             <Select
               value={formData.role}
               onValueChange={(value) =>
@@ -438,7 +432,7 @@ export function EditUserDialog({ open, onOpenChange, user }: EditUserDialogProps
 
           {/* Site Selection - Only for Site Engineers */}
           {formData.role === ROLES.SITE_ENGINEER && (
-            <div className="space-y-2">
+            <div className="space-y-1.5">
               <SiteSelector
                 selectedSites={formData.assignedSites}
                 onSelectionChange={(sites) =>
@@ -446,9 +440,6 @@ export function EditUserDialog({ open, onOpenChange, user }: EditUserDialogProps
                 }
                 disabled={isLoading}
               />
-              <p className="text-xs text-muted-foreground">
-                Select one or more sites to assign to this site engineer
-              </p>
             </div>
           )}
 

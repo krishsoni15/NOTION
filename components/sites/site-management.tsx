@@ -1,9 +1,9 @@
 "use client";
 
 /**
- * Inventory Management Component
+ * Site Management Component
  * 
- * Main component for managing inventory items with search, filters, and responsive views.
+ * Main component for managing sites with search, filters, and responsive views.
  */
 
 import { useState, useMemo, useEffect } from "react";
@@ -21,27 +21,21 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Plus, Search, LayoutGrid, Table2, RefreshCw } from "lucide-react";
-import { InventoryFormDialog } from "./inventory-form-dialog";
-import { InventoryTable } from "./inventory-table";
-import { ROLES, Role } from "@/lib/auth/roles";
+import { SiteFormDialog } from "./site-form-dialog";
+import { SiteTable } from "./site-table";
 
 type ViewMode = "table" | "card";
-type SortOption = "newest" | "oldest" | "name_asc" | "name_desc" | "stock_asc" | "stock_desc";
+type SortOption = "newest" | "oldest" | "name_asc" | "name_desc";
 
-interface InventoryManagementProps {
-  userRole: Role;
-}
-
-export function InventoryManagement({ userRole }: InventoryManagementProps) {
+export function SiteManagement() {
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState<string>("all");
   const [sortBy, setSortBy] = useState<SortOption>("newest");
   const [viewMode, setViewMode] = useState<ViewMode>("table");
   const [refreshKey, setRefreshKey] = useState(0);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const { isLoaded, isSignedIn } = useAuth();
-
-  const canCreate = userRole === ROLES.PURCHASE_OFFICER;
 
   // Auto-detect mobile and switch to card view
   useEffect(() => {
@@ -55,10 +49,10 @@ export function InventoryManagement({ userRole }: InventoryManagementProps) {
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
-  // Only fetch inventory if user is signed in
-  const items = useQuery(
-    api.inventory.getAllInventoryItems,
-    isLoaded && isSignedIn ? {} : "skip"
+  // Only fetch sites if user is signed in
+  const sites = useQuery(
+    api.sites.getAllSites,
+    isLoaded && isSignedIn ? { includeInactive: true } : "skip"
   );
 
   const handleRefresh = () => {
@@ -69,27 +63,27 @@ export function InventoryManagement({ userRole }: InventoryManagementProps) {
     }, 1000);
   };
 
-  // Filter and sort inventory items
-  const filteredAndSortedItems = useMemo(() => {
-    if (!items) return undefined;
+  // Filter and sort sites
+  const filteredAndSortedSites = useMemo(() => {
+    if (!sites) return undefined;
 
-    let filtered = [...items];
+    let filtered = [...sites];
 
     // Search filter - smart search with normalized query
     const normalizedQuery = normalizeSearchQuery(searchQuery);
     if (normalizedQuery) {
-      filtered = filtered.filter((item) =>
+      filtered = filtered.filter((site) =>
         matchesAnySearchQuery(
-          [
-            item.itemName,
-            item.unit,
-            item.vendor?.companyName,
-            // Also search in multiple vendors if available
-            ...(item.vendors?.map((v) => v.companyName) || []),
-          ],
+          [site.name, site.code, site.address, site.description],
           normalizedQuery
         )
       );
+    }
+
+    // Status filter
+    if (statusFilter !== "all") {
+      const isActive = statusFilter === "active";
+      filtered = filtered.filter((site) => site.isActive === isActive);
     }
 
     // Sort
@@ -100,20 +94,16 @@ export function InventoryManagement({ userRole }: InventoryManagementProps) {
         case "oldest":
           return a.createdAt - b.createdAt;
         case "name_asc":
-          return a.itemName.localeCompare(b.itemName);
+          return a.name.localeCompare(b.name);
         case "name_desc":
-          return b.itemName.localeCompare(a.itemName);
-        case "stock_asc":
-          return (a.centralStock || 0) - (b.centralStock || 0);
-        case "stock_desc":
-          return (b.centralStock || 0) - (a.centralStock || 0);
+          return b.name.localeCompare(a.name);
         default:
           return 0;
       }
     });
 
     return filtered;
-  }, [items, searchQuery, sortBy]);
+  }, [sites, searchQuery, statusFilter, sortBy]);
 
   return (
     <div className="space-y-4">
@@ -121,10 +111,10 @@ export function InventoryManagement({ userRole }: InventoryManagementProps) {
       <div className="flex flex-col sm:flex-row gap-3 justify-between items-start sm:items-center">
         <div className="flex items-center gap-2">
           <p className="text-sm text-muted-foreground">
-            <span className="font-medium text-foreground">{items?.length || 0}</span> items
-            {filteredAndSortedItems && filteredAndSortedItems.length !== items?.length && (
+            <span className="font-medium text-foreground">{sites?.length || 0}</span> sites
+            {filteredAndSortedSites && filteredAndSortedSites.length !== sites?.length && (
               <span className="ml-1">
-                ({filteredAndSortedItems.length} shown)
+                ({filteredAndSortedSites.length} shown)
               </span>
             )}
           </p>
@@ -139,12 +129,10 @@ export function InventoryManagement({ userRole }: InventoryManagementProps) {
             <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
           </Button>
         </div>
-        {canCreate && (
-          <Button onClick={() => setIsCreateDialogOpen(true)} className="w-full sm:w-auto h-9" size="sm">
-            <Plus className="h-4 w-4 mr-2" />
-            Add Item
-          </Button>
-        )}
+        <Button onClick={() => setIsCreateDialogOpen(true)} className="w-full sm:w-auto h-9" size="sm">
+          <Plus className="h-4 w-4 mr-2" />
+          Add Site
+        </Button>
       </div>
 
       {/* Search and Filters */}
@@ -154,7 +142,7 @@ export function InventoryManagement({ userRole }: InventoryManagementProps) {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             type="text"
-            placeholder="Search by item name, unit, or vendor..."
+            placeholder="Search by name, code, address, or description..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="pl-9 h-9"
@@ -163,8 +151,19 @@ export function InventoryManagement({ userRole }: InventoryManagementProps) {
 
         {/* Filters row */}
         <div className="flex flex-col sm:flex-row gap-2">
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger className="w-full sm:w-[120px] h-9 text-sm">
+              <SelectValue placeholder="Status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All</SelectItem>
+              <SelectItem value="active">Active</SelectItem>
+              <SelectItem value="inactive">Inactive</SelectItem>
+            </SelectContent>
+          </Select>
+
           <Select value={sortBy} onValueChange={(value) => setSortBy(value as SortOption)}>
-            <SelectTrigger className="w-full sm:w-[160px] h-9 text-sm">
+            <SelectTrigger className="w-full sm:w-[140px] h-9 text-sm">
               <SelectValue placeholder="Sort" />
             </SelectTrigger>
             <SelectContent>
@@ -172,8 +171,6 @@ export function InventoryManagement({ userRole }: InventoryManagementProps) {
               <SelectItem value="oldest">Oldest</SelectItem>
               <SelectItem value="name_asc">Name A-Z</SelectItem>
               <SelectItem value="name_desc">Name Z-A</SelectItem>
-              <SelectItem value="stock_asc">Stock Low-High</SelectItem>
-              <SelectItem value="stock_desc">Stock High-Low</SelectItem>
             </SelectContent>
           </Select>
 
@@ -199,20 +196,18 @@ export function InventoryManagement({ userRole }: InventoryManagementProps) {
         </div>
       </div>
 
-      {/* Inventory table/cards */}
-      <InventoryTable 
+      {/* Site table/cards */}
+      <SiteTable 
         key={refreshKey}
-        items={filteredAndSortedItems ?? undefined}
+        sites={filteredAndSortedSites ?? undefined} 
         viewMode={viewMode}
       />
 
-      {/* Create inventory dialog */}
-      {canCreate && (
-        <InventoryFormDialog
-          open={isCreateDialogOpen}
-          onOpenChange={setIsCreateDialogOpen}
-        />
-      )}
+      {/* Create site dialog */}
+      <SiteFormDialog
+        open={isCreateDialogOpen}
+        onOpenChange={setIsCreateDialogOpen}
+      />
     </div>
   );
 }

@@ -14,14 +14,14 @@ import { cn } from "@/lib/utils";
 import { Role, ROLES, ROLE_LABELS } from "@/lib/auth/roles";
 import { 
   LayoutDashboard, 
-  FileText, 
+  ClipboardList, 
   Users, 
-  ShoppingCart, 
-  Package,
-  Building2,
-  MessageCircle,
+  Store,
+  Warehouse,
+  CheckCircle,
   PanelLeftClose,
   PanelLeftOpen,
+  Building2,
 } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
@@ -41,7 +41,7 @@ interface NavigationItem {
 }
 
 const navigationItems: NavigationItem[] = [
-  // Site Engineer
+  // Site Engineer - Logical sequence: Dashboard → Requests → Inventory
   {
     label: "Dashboard",
     href: "/dashboard/site",
@@ -51,17 +51,17 @@ const navigationItems: NavigationItem[] = [
   {
     label: "My Requests",
     href: "/dashboard/site/requests",
-    icon: FileText,
+    icon: ClipboardList,
     roles: [ROLES.SITE_ENGINEER],
   },
   {
     label: "Inventory",
     href: "/dashboard/inventory",
-    icon: Package,
+    icon: Warehouse,
     roles: [ROLES.SITE_ENGINEER],
   },
   
-  // Manager
+  // Manager - Logical sequence: Dashboard → Requests → Inventory → Vendors → Users → Sites
   {
     label: "Dashboard",
     href: "/dashboard/manager",
@@ -71,7 +71,19 @@ const navigationItems: NavigationItem[] = [
   {
     label: "All Requests",
     href: "/dashboard/manager/requests",
-    icon: FileText,
+    icon: ClipboardList,
+    roles: [ROLES.MANAGER],
+  },
+  {
+    label: "Inventory",
+    href: "/dashboard/inventory",
+    icon: Warehouse,
+    roles: [ROLES.MANAGER],
+  },
+  {
+    label: "Vendors",
+    href: "/dashboard/vendors",
+    icon: Store,
     roles: [ROLES.MANAGER],
   },
   {
@@ -81,19 +93,13 @@ const navigationItems: NavigationItem[] = [
     roles: [ROLES.MANAGER],
   },
   {
-    label: "Vendors",
-    href: "/dashboard/vendors",
+    label: "Sites",
+    href: "/dashboard/sites",
     icon: Building2,
     roles: [ROLES.MANAGER],
   },
-  {
-    label: "Inventory",
-    href: "/dashboard/inventory",
-    icon: Package,
-    roles: [ROLES.MANAGER],
-  },
   
-  // Purchase Officer
+  // Purchase Officer - Logical sequence: Dashboard → Requests → Inventory → Vendors
   {
     label: "Dashboard",
     href: "/dashboard/purchase",
@@ -103,19 +109,19 @@ const navigationItems: NavigationItem[] = [
   {
     label: "Approved Requests",
     href: "/dashboard/purchase/requests",
-    icon: Package,
-    roles: [ROLES.PURCHASE_OFFICER],
-  },
-  {
-    label: "Vendors",
-    href: "/dashboard/vendors",
-    icon: Building2,
+    icon: CheckCircle,
     roles: [ROLES.PURCHASE_OFFICER],
   },
   {
     label: "Inventory",
     href: "/dashboard/inventory",
-    icon: Package,
+    icon: Warehouse,
+    roles: [ROLES.PURCHASE_OFFICER],
+  },
+  {
+    label: "Vendors",
+    href: "/dashboard/vendors",
+    icon: Store,
     roles: [ROLES.PURCHASE_OFFICER],
   },
 ];
@@ -138,7 +144,8 @@ export function Sidebar({ userRole }: SidebarProps) {
     <aside 
       className={cn(
         "hidden md:flex md:flex-col md:border-r md:bg-card/50 md:backdrop-blur-sm transition-all duration-300 ease-in-out fixed left-0 top-0 h-screen z-30 shadow-sm",
-        isCollapsed ? "md:w-16" : "md:w-64"
+        // Only apply width after mount to prevent hydration mismatch
+        isMounted ? (isCollapsed ? "md:w-16" : "md:w-64") : "md:w-64"
       )}
     >
       <TooltipProvider delayDuration={0}>
@@ -146,9 +153,10 @@ export function Sidebar({ userRole }: SidebarProps) {
           {/* Logo Section - Top */}
           <header className={cn(
             "transition-all duration-300 border-b shrink-0",
-            isCollapsed ? "px-3 py-4" : "px-5 py-5"
+            // Only apply collapsed styles after mount to prevent hydration mismatch
+            isMounted && isCollapsed ? "px-3 py-4" : "px-5 py-5"
           )}>
-            {isCollapsed ? (
+            {isMounted && isCollapsed ? (
               <Tooltip>
                 <TooltipTrigger asChild>
                   <button
@@ -227,10 +235,10 @@ export function Sidebar({ userRole }: SidebarProps) {
                       onClick={toggle}
                       variant="ghost"
                       size="icon"
-                      className="h-8 w-8 shrink-0 hover:bg-accent hover:scale-105 active:scale-95 cursor-ew-resize group/collapse"
+                      className="h-8 w-8 shrink-0 text-muted-foreground hover:text-accent-foreground hover:bg-accent hover:scale-105 active:scale-95 cursor-ew-resize group/collapse"
                       aria-label="Collapse sidebar"
                     >
-                      <PanelLeftClose className="h-4 w-4 font-bold stroke-[2.5] transition-transform group-hover/collapse:scale-110" aria-hidden="true" />
+                      <PanelLeftClose className="h-4 w-4 font-bold stroke-[2.5] text-current transition-transform group-hover/collapse:scale-110" aria-hidden="true" />
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent side="right" className="font-medium">

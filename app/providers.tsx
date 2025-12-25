@@ -2,6 +2,7 @@
 
 import { ThemeProvider } from "next-themes";
 import { ReactNode } from "react";
+import { PerformanceErrorSuppressor } from "@/components/performance-error-suppressor";
 
 /**
  * Client-side Providers Wrapper
@@ -17,6 +18,7 @@ export function Providers({ children }: { children: ReactNode }) {
       enableSystem={true}
       disableTransitionOnChange
     >
+      <PerformanceErrorSuppressor />
       {children}
     </ThemeProvider>
   );

@@ -135,7 +135,8 @@ export default defineSchema({
     itemName: v.string(), // Item Name
     unit: v.optional(v.string()), // Unit (e.g., bags, kg, mm, gm, nos, ton) - optional
     centralStock: v.optional(v.number()), // Central Stock quantity - optional
-    vendorId: v.optional(v.id("vendors")), // Linked vendor - optional
+    vendorId: v.optional(v.id("vendors")), // Linked vendor - optional (deprecated, use vendorIds)
+    vendorIds: v.optional(v.array(v.id("vendors"))), // Linked vendors - optional (multiple vendors)
     images: v.optional(v.array(v.object({
       imageUrl: v.string(), // Cloudflare R2 public URL
       imageKey: v.string(), // R2 object key for deletion/updates

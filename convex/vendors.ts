@@ -99,7 +99,7 @@ export const getVendorById = query({
 // ============================================================================
 
 /**
- * Create a new vendor (Purchase Officer only)
+ * Create a new vendor (Purchase Officer and Manager)
  */
 export const createVendor = mutation({
   args: {
@@ -197,7 +197,42 @@ export const updateVendor = mutation({
 });
 
 /**
+ * Check if vendor is used in inventory
+ */
+export const checkVendorUsage = query({
+  args: { vendorId: v.id("vendors") },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) return { isInUse: false, usedInInventory: 0 };
+
+    // Check if vendor is used in any inventory items
+    // Support both old vendorId and new vendorIds format
+    const allInventoryItems = await ctx.db
+      .query("inventory")
+      .withIndex("by_is_active", (q) => q.eq("isActive", true))
+      .collect();
+
+    const usedInInventory = allInventoryItems.filter((item) => {
+      // Check old vendorId format
+      if (item.vendorId === args.vendorId) return true;
+      // Check new vendorIds format
+      const vendorIds = (item as any).vendorIds || [];
+      return vendorIds.includes(args.vendorId);
+    }).length;
+
+    const isInUse = usedInInventory > 0;
+
+    return {
+      isInUse,
+      usedInInventory,
+    };
+  },
+});
+
+/**
  * Delete vendor (Purchase Officer only)
+ * If vendor is not used in inventory: Hard delete (permanent)
+ * If vendor is used in inventory: Cannot delete (error)
  */
 export const deleteVendor = mutation({
   args: { vendorId: v.id("vendors") },
@@ -214,13 +249,30 @@ export const deleteVendor = mutation({
       throw new Error("Vendor not found");
     }
 
-    // Soft delete
-    await ctx.db.patch(args.vendorId, {
-      isActive: false,
-      updatedAt: Date.now(),
+    // Check if vendor is used in inventory
+    const allInventoryItems = await ctx.db
+      .query("inventory")
+      .withIndex("by_is_active", (q) => q.eq("isActive", true))
+      .collect();
+
+    const usedInInventory = allInventoryItems.filter((item) => {
+      // Check old vendorId format
+      if (item.vendorId === args.vendorId) return true;
+      // Check new vendorIds format
+      const vendorIds = (item as any).vendorIds || [];
+      return vendorIds.includes(args.vendorId);
     });
 
-    return args.vendorId;
+    if (usedInInventory.length > 0) {
+      throw new Error(
+        `Cannot delete vendor: It is used in ${usedInInventory.length} inventory item(s). Please remove the vendor from inventory items first.`
+      );
+    }
+
+    // Hard delete (permanent)
+    await ctx.db.delete(args.vendorId);
+
+    return { success: true };
   },
 });
 

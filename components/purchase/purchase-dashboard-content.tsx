@@ -11,7 +11,7 @@ import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ShoppingCart, Package, FileText, CheckCircle, Clock, Truck, Building2 } from "lucide-react";
+import { ShoppingCart, ClipboardList, CheckCircle, Clock, Truck, Store, Warehouse } from "lucide-react";
 import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { CostComparisonDialog } from "./cost-comparison-dialog";
@@ -40,7 +40,7 @@ export function PurchaseDashboardContent() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">New Requests</CardTitle>
-            <FileText className="h-4 w-4 text-muted-foreground" />
+            <ClipboardList className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{stats.newRequests}</div>
@@ -98,7 +98,7 @@ export function PurchaseDashboardContent() {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Building2 className="h-5 w-5" />
+              <Store className="h-5 w-5" />
               Vendors
             </CardTitle>
             <CardDescription>
@@ -117,7 +117,7 @@ export function PurchaseDashboardContent() {
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Package className="h-5 w-5" />
+              <CheckCircle className="h-5 w-5" />
               All Requests
             </CardTitle>
             <CardDescription>

@@ -517,8 +517,8 @@ export const searchConversations = query({
       conv.participants.includes(currentUser._id)
     );
 
-    // Enrich and filter conversations
-    const query = args.searchQuery.toLowerCase();
+    // Enrich and filter conversations - normalize search query
+    const query = args.searchQuery.trim().replace(/\s+/g, " ").toLowerCase();
     const enrichedConversations = await Promise.all(
       conversations.map(async (conversation) => {
         const otherUserId = conversation.participants.find(

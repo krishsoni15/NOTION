@@ -34,7 +34,7 @@ import { DatePicker } from "@/components/ui/date-picker";
 import { CameraDialog } from "@/components/inventory/camera-dialog";
 import { Camera, Upload, X, Search, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
-import { cn } from "@/lib/utils";
+import { cn, normalizeSearchQuery, matchesSearchQuery } from "@/lib/utils";
 import type { Id } from "@/convex/_generated/dataModel";
 
 interface MaterialRequestFormProps {
@@ -79,10 +79,12 @@ export function MaterialRequestForm({
     notes: "",
   });
 
-  // Filter inventory items based on search query
-  const filteredInventoryItems = inventoryItems?.filter((item) =>
-    item.itemName.toLowerCase().includes(itemSearchQuery.toLowerCase())
-  ) || [];
+  // Filter inventory items based on search query - smart search with normalized query
+  const filteredInventoryItems = inventoryItems?.filter((item) => {
+    const normalizedQuery = normalizeSearchQuery(itemSearchQuery);
+    if (!normalizedQuery) return true;
+    return matchesSearchQuery(item.itemName, normalizedQuery);
+  }) || [];
 
   // Reset form when dialog closes
   useEffect(() => {

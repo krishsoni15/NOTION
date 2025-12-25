@@ -49,7 +49,8 @@ export function SidebarWrapper({ userRole, children }: SidebarWrapperProps) {
           "flex-1 flex flex-col min-w-0 transition-all duration-300",
           // Mobile (<md): no offset, Sidebar hidden
           // Tablet/Desktop: offset matches sidebar width (icon vs full)
-          isMounted && (isCollapsed ? "md:ml-20" : "md:ml-64")
+          // Only apply after mount to prevent hydration mismatch
+          isMounted ? (isCollapsed ? "md:ml-20" : "md:ml-64") : "md:ml-64"
         )}
         style={{
           // Adjust margin on desktop when chat or sticky notes are open

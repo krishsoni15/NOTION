@@ -59,19 +59,30 @@ export const getAllInventoryItems = query({
       .order("desc")
       .collect();
 
-    // Fetch vendor info for each item
+    // Fetch vendor info for each item (support both old vendorId and new vendorIds)
     const itemsWithVendors = await Promise.all(
       items.map(async (item) => {
-        const vendor = item.vendorId ? await ctx.db.get(item.vendorId) : null;
+        const vendorIds = (item as any).vendorIds || (item.vendorId ? [item.vendorId] : []);
+        const vendors = await Promise.all(
+          vendorIds.map(async (vendorId: any) => {
+            const vendor = await ctx.db.get(vendorId) as any;
+            if (!vendor) return null;
+            return {
+              _id: vendor._id,
+              companyName: vendor.companyName,
+              email: vendor.email,
+              phone: vendor.phone,
+              gstNumber: vendor.gstNumber,
+              address: vendor.address,
+            };
+          })
+        );
+        // Filter out null vendors and return first vendor for backward compatibility
+        const validVendors = vendors.filter((v) => v !== null);
         return {
           ...item,
-          vendor: vendor
-            ? {
-                _id: vendor._id,
-                companyName: vendor.companyName,
-                email: vendor.email,
-              }
-            : null,
+          vendor: validVendors.length > 0 ? validVendors[0] : null, // First vendor for backward compatibility
+          vendors: validVendors, // Array of all vendors
         };
       })
     );
@@ -130,14 +141,15 @@ export const getInventoryByVendor = query({
 // ============================================================================
 
 /**
- * Create a new inventory item (Purchase Officer only)
+ * Create a new inventory item (Purchase Officer and Manager)
  */
 export const createInventoryItem = mutation({
   args: {
     itemName: v.string(),
     unit: v.optional(v.string()),
     centralStock: v.optional(v.number()),
-    vendorId: v.optional(v.id("vendors")),
+    vendorId: v.optional(v.id("vendors")), // Deprecated, use vendorIds
+    vendorIds: v.optional(v.array(v.id("vendors"))),
   },
   handler: async (ctx, args) => {
     const currentUser = await getCurrentUser(ctx);
@@ -147,11 +159,16 @@ export const createInventoryItem = mutation({
       throw new Error("Unauthorized: Only Purchase Officers can create inventory items");
     }
 
-    // Validate vendor exists if provided
-    if (args.vendorId) {
-      const vendor = await ctx.db.get(args.vendorId);
-      if (!vendor || !vendor.isActive) {
-        throw new Error("Vendor not found");
+    // Support both old vendorId and new vendorIds
+    const vendorIds = args.vendorIds || (args.vendorId ? [args.vendorId] : []);
+
+    // Validate vendors exist if provided
+    if (vendorIds.length > 0) {
+      for (const vendorId of vendorIds) {
+        const vendor = await ctx.db.get(vendorId);
+        if (!vendor || !vendor.isActive) {
+          throw new Error(`Vendor not found: ${vendorId}`);
+        }
       }
     }
 
@@ -160,7 +177,8 @@ export const createInventoryItem = mutation({
       itemName: args.itemName,
       unit: args.unit || "",
       centralStock: args.centralStock || 0,
-      vendorId: args.vendorId,
+      vendorId: vendorIds.length === 1 ? vendorIds[0] : undefined, // Keep for backward compatibility
+      vendorIds: vendorIds.length > 0 ? vendorIds : undefined,
       images: [],
       isActive: true,
       createdBy: currentUser._id,
@@ -181,7 +199,8 @@ export const updateInventoryItem = mutation({
     itemName: v.string(),
     unit: v.optional(v.string()),
     centralStock: v.optional(v.number()),
-    vendorId: v.optional(v.id("vendors")),
+    vendorId: v.optional(v.id("vendors")), // Deprecated, use vendorIds
+    vendorIds: v.optional(v.array(v.id("vendors"))),
   },
   handler: async (ctx, args) => {
     const currentUser = await getCurrentUser(ctx);
@@ -196,11 +215,18 @@ export const updateInventoryItem = mutation({
       throw new Error("Inventory item not found");
     }
 
-    // Validate vendor exists if provided
-    if (args.vendorId) {
-      const vendor = await ctx.db.get(args.vendorId);
-      if (!vendor || !vendor.isActive) {
-        throw new Error("Vendor not found");
+    // Support both old vendorId and new vendorIds
+    const vendorIds = args.vendorIds !== undefined 
+      ? args.vendorIds 
+      : (args.vendorId ? [args.vendorId] : []);
+
+    // Validate vendors exist if provided
+    if (vendorIds.length > 0) {
+      for (const vendorId of vendorIds) {
+        const vendor = await ctx.db.get(vendorId);
+        if (!vendor || !vendor.isActive) {
+          throw new Error(`Vendor not found: ${vendorId}`);
+        }
       }
     }
 
@@ -208,7 +234,8 @@ export const updateInventoryItem = mutation({
       itemName: args.itemName,
       unit: args.unit ?? item.unit ?? "",
       centralStock: args.centralStock ?? item.centralStock ?? 0,
-      vendorId: args.vendorId,
+      vendorId: vendorIds.length === 1 ? vendorIds[0] : undefined, // Keep for backward compatibility
+      vendorIds: vendorIds.length > 0 ? vendorIds : undefined,
       updatedAt: Date.now(),
     });
 

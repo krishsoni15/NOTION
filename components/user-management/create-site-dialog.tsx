@@ -6,7 +6,9 @@
 
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useQuery } from "convex/react";
+import { api } from "@/convex/_generated/api";
 import {
   Dialog,
   DialogContent,
@@ -36,12 +38,32 @@ export function CreateSiteDialog({
   onCreate,
 }: CreateSiteDialogProps) {
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState("");
   const [formData, setFormData] = useState({
     name: "",
     code: "",
     address: "",
     description: "",
   });
+
+  const allSites = useQuery(api.sites.getAllSites, {});
+
+  // Check for duplicate site name
+  useEffect(() => {
+    if (formData.name.trim()) {
+      const siteNameLower = formData.name.trim().toLowerCase();
+      const existingSite = allSites?.find(
+        (site: { name: string }) => site.name.toLowerCase() === siteNameLower
+      );
+      if (existingSite) {
+        setError(`Site "${formData.name}" already exists`);
+      } else {
+        setError("");
+      }
+    } else {
+      setError("");
+    }
+  }, [formData.name, allSites]);
 
   const handleOpenChange = (newOpen: boolean) => {
     if (!newOpen) {
@@ -51,15 +73,29 @@ export function CreateSiteDialog({
         address: "",
         description: "",
       });
+      setError("");
     }
+    // Only close this dialog, don't propagate to parent
     onOpenChange(newOpen);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    e.stopPropagation(); // Prevent event from bubbling to parent form
     if (!formData.name.trim()) return;
 
+    // Check for duplicate before submitting
+    const siteNameLower = formData.name.trim().toLowerCase();
+    const existingSite = allSites?.find(
+      (site: { name: string }) => site.name.toLowerCase() === siteNameLower
+    );
+    if (existingSite) {
+      setError(`Site "${formData.name}" already exists`);
+      return;
+    }
+
     setIsLoading(true);
+    setError("");
     try {
       await onCreate({
         name: formData.name.trim(),
@@ -67,17 +103,41 @@ export function CreateSiteDialog({
         address: formData.address.trim() || undefined,
         description: formData.description.trim() || undefined,
       });
-      handleOpenChange(false);
-    } catch (error) {
-      // Error is handled by parent
+      // Reset form and close only this dialog
+      setFormData({
+        name: "",
+        code: "",
+        address: "",
+        description: "",
+      });
+      setError("");
+      onOpenChange(false);
+    } catch (error: any) {
+      // Check if error is about duplicate site
+      if (error.message?.includes("already exists") || error.message?.includes("duplicate")) {
+        setError(`Site "${formData.name}" already exists`);
+      } else {
+        setError(error.message || "Failed to create site");
+      }
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="sm:max-w-[500px]">
+    <Dialog open={open} onOpenChange={handleOpenChange} modal={true}>
+      <DialogContent 
+        className="sm:max-w-[500px] z-[110]"
+        onPointerDownOutside={(e) => {
+          // Prevent closing parent dialog when clicking outside
+          e.preventDefault();
+        }}
+        onEscapeKeyDown={(e) => {
+          // Allow ESC to close only this dialog, prevent propagation
+          e.preventDefault();
+          handleOpenChange(false);
+        }}
+      >
         <DialogHeader>
           <DialogTitle>Create New Site</DialogTitle>
           <DialogDescription>
@@ -97,7 +157,11 @@ export function CreateSiteDialog({
               }
               required
               disabled={isLoading}
+              className={error ? "border-destructive" : ""}
             />
+            {error && (
+              <p className="text-sm text-destructive">{error}</p>
+            )}
           </div>
 
           <div className="space-y-2">
@@ -155,7 +219,7 @@ export function CreateSiteDialog({
             >
               Cancel
             </Button>
-            <Button type="submit" disabled={isLoading || !formData.name.trim()}>
+            <Button type="submit" disabled={isLoading || !formData.name.trim() || !!error}>
               {isLoading ? "Creating..." : "Create Site"}
             </Button>
           </DialogFooter>

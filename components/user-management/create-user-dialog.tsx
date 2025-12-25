@@ -30,6 +30,8 @@ import {
 import { ROLES, ROLE_LABELS, Role } from "@/lib/auth/roles";
 import { Eye, EyeOff } from "lucide-react";
 import { SiteSelector } from "./site-selector";
+import { AddressAutocomplete } from "@/components/vendors/address-autocomplete";
+import { toast } from "sonner";
 import type { Id } from "@/convex/_generated/dataModel";
 
 interface CreateUserDialogProps {
@@ -79,6 +81,13 @@ export function CreateUserDialog({ open, onOpenChange }: CreateUserDialogProps) 
     setIsLoading(true);
 
     try {
+      // Validate site engineer has at least one site assigned
+      if (formData.role === ROLES.SITE_ENGINEER && formData.assignedSites.length === 0) {
+        setError("Please assign at least one site to the site engineer");
+        setIsLoading(false);
+        return;
+      }
+
       // Step 1: Create user in Clerk via API
       const clerkResponse = await fetch("/api/admin/create-user", {
         method: "POST",
@@ -97,7 +106,11 @@ export function CreateUserDialog({ open, onOpenChange }: CreateUserDialogProps) 
 
       const { clerkUserId } = await clerkResponse.json();
 
-      // Step 2: Create user in Convex
+      // Step 2: Create user in Convex with assigned sites
+      const assignedSites = formData.role === ROLES.SITE_ENGINEER && formData.assignedSites.length > 0 
+        ? formData.assignedSites 
+        : undefined;
+      
       await createUser({
         clerkUserId,
         username: formData.username,
@@ -105,8 +118,14 @@ export function CreateUserDialog({ open, onOpenChange }: CreateUserDialogProps) 
         phoneNumber: formData.phoneNumber,
         address: formData.address,
         role: formData.role as Role,
-        assignedSites: formData.assignedSites,
+        assignedSites: assignedSites,
       });
+
+      // Show success message with site count
+      const successMessage = formData.role === ROLES.SITE_ENGINEER && assignedSites
+        ? `User created successfully with ${assignedSites.length} site(s) assigned!`
+        : "User created successfully!";
+      toast.success(successMessage);
 
       // Reset form and close dialog - handleOpenChange will reset the form
       handleOpenChange(false);
@@ -128,9 +147,9 @@ export function CreateUserDialog({ open, onOpenChange }: CreateUserDialogProps) 
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-5 py-2">
-          <div className="space-y-2">
-            <Label htmlFor="fullName">Full Name *</Label>
+        <form onSubmit={handleSubmit} className="space-y-4 py-2">
+          <div className="space-y-1.5">
+            <Label htmlFor="fullName" className="text-sm">Full Name *</Label>
             <Input
               id="fullName"
               placeholder="John Doe"
@@ -140,11 +159,12 @@ export function CreateUserDialog({ open, onOpenChange }: CreateUserDialogProps) 
               }
               required
               disabled={isLoading}
+              className="h-9"
             />
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="username">Username *</Label>
+          <div className="space-y-1.5">
+            <Label htmlFor="username" className="text-sm">Username *</Label>
             <Input
               id="username"
               placeholder="johndoe"
@@ -154,11 +174,12 @@ export function CreateUserDialog({ open, onOpenChange }: CreateUserDialogProps) 
               }
               required
               disabled={isLoading}
+              className="h-9"
             />
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="password">Password *</Label>
+          <div className="space-y-1.5">
+            <Label htmlFor="password" className="text-sm">Password *</Label>
             <div className="relative">
               <Input
                 id="password"
@@ -171,7 +192,7 @@ export function CreateUserDialog({ open, onOpenChange }: CreateUserDialogProps) 
                 required
               disabled={isLoading}
               minLength={6}
-              className="pr-10"
+              className="pr-10 h-9"
             />
             <button
               type="button"
@@ -187,44 +208,36 @@ export function CreateUserDialog({ open, onOpenChange }: CreateUserDialogProps) 
               )}
             </button>
           </div>
-          <p className="text-xs text-muted-foreground">
-            At least 6 characters required
-          </p>
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="phoneNumber">
-              Phone Number <span className="text-muted-foreground text-xs">(optional)</span>
+          <div className="space-y-1.5">
+            <Label htmlFor="phoneNumber" className="text-sm">
+              Phone <span className="text-muted-foreground text-xs">(optional)</span>
             </Label>
             <Input
               id="phoneNumber"
               type="tel"
-              placeholder="+1234567890"
+              placeholder="+91 9876543210"
               value={formData.phoneNumber}
               onChange={(e) =>
                 setFormData({ ...formData, phoneNumber: e.target.value })
               }
               disabled={isLoading}
+              className="h-9"
             />
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="address">
-              Address <span className="text-muted-foreground text-xs">(optional)</span>
-            </Label>
-            <Input
-              id="address"
-              placeholder="123 Main St, City, State"
-              value={formData.address}
-              onChange={(e) =>
-                setFormData({ ...formData, address: e.target.value })
-              }
-              disabled={isLoading}
-            />
-          </div>
+          <AddressAutocomplete
+            value={formData.address}
+            onChange={(address) => setFormData({ ...formData, address })}
+            disabled={isLoading}
+            label="Address"
+            placeholder="Search address or type manually..."
+            id="address"
+          />
 
-          <div className="space-y-2">
-            <Label htmlFor="role">Role *</Label>
+          <div className="space-y-1.5">
+            <Label htmlFor="role" className="text-sm">Role *</Label>
             <Select
               value={formData.role}
               onValueChange={(value) =>
@@ -251,7 +264,7 @@ export function CreateUserDialog({ open, onOpenChange }: CreateUserDialogProps) 
 
           {/* Site Selection - Only for Site Engineers */}
           {formData.role === ROLES.SITE_ENGINEER && (
-            <div className="space-y-2">
+            <div className="space-y-1.5">
               <SiteSelector
                 selectedSites={formData.assignedSites}
                 onSelectionChange={(sites) =>
@@ -259,9 +272,6 @@ export function CreateUserDialog({ open, onOpenChange }: CreateUserDialogProps) 
                 }
                 disabled={isLoading}
               />
-              <p className="text-xs text-muted-foreground">
-                Select one or more sites to assign to this site engineer
-              </p>
             </div>
           )}
 

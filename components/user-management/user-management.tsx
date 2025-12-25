@@ -10,6 +10,7 @@ import { useState, useMemo, useEffect } from "react";
 import { useQuery } from "convex/react";
 import { useAuth } from "@clerk/nextjs";
 import { api } from "@/convex/_generated/api";
+import { normalizeSearchQuery, matchesAnySearchQuery } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -60,14 +61,14 @@ export function UserManagement() {
 
     let filtered = [...users];
 
-    // Search filter
-    if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase();
-      filtered = filtered.filter(
-        (user) =>
-          user.fullName.toLowerCase().includes(query) ||
-          user.username.toLowerCase().includes(query) ||
-          user.phoneNumber.includes(query)
+    // Search filter - smart search with normalized query
+    const normalizedQuery = normalizeSearchQuery(searchQuery);
+    if (normalizedQuery) {
+      filtered = filtered.filter((user) =>
+        matchesAnySearchQuery(
+          [user.fullName, user.username, user.phoneNumber, user.address],
+          normalizedQuery
+        )
       );
     }
 
@@ -104,13 +105,13 @@ export function UserManagement() {
   return (
     <div className="space-y-4">
       {/* Action bar */}
-      <div className="flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center">
-        <div className="flex items-center gap-3">
+      <div className="flex flex-col sm:flex-row gap-3 justify-between items-start sm:items-center">
+        <div className="flex items-center gap-2">
           <p className="text-sm text-muted-foreground">
-            Total users: {users?.length || 0}
+            <span className="font-medium text-foreground">{users?.length || 0}</span> users
             {filteredAndSortedUsers && filteredAndSortedUsers.length !== users?.length && (
               <span className="ml-1">
-                ({filteredAndSortedUsers.length} filtered)
+                ({filteredAndSortedUsers.length} shown)
               </span>
             )}
           </p>
@@ -125,14 +126,14 @@ export function UserManagement() {
             <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
           </Button>
         </div>
-        <Button onClick={() => setIsCreateDialogOpen(true)} className="w-full sm:w-auto">
+        <Button onClick={() => setIsCreateDialogOpen(true)} className="w-full sm:w-auto h-9" size="sm">
           <Plus className="h-4 w-4 mr-2" />
           Create User
         </Button>
       </div>
 
       {/* Filters and Search */}
-      <div className="flex flex-col gap-3">
+      <div className="flex flex-col gap-2.5">
         {/* Search bar */}
         <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -141,15 +142,15 @@ export function UserManagement() {
             placeholder="Search by name, username, or phone..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-9"
+            className="pl-9 h-9"
           />
         </div>
 
         {/* Filters row */}
-        <div className="flex flex-col sm:flex-row gap-3">
+        <div className="flex flex-col sm:flex-row gap-2">
           <Select value={roleFilter} onValueChange={setRoleFilter}>
-            <SelectTrigger className="w-full sm:w-[180px]">
-              <SelectValue placeholder="Filter by role" />
+            <SelectTrigger className="w-full sm:w-[140px] h-9 text-sm">
+              <SelectValue placeholder="Role" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Roles</SelectItem>
@@ -162,34 +163,35 @@ export function UserManagement() {
           </Select>
 
           <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-full sm:w-[180px]">
-              <SelectValue placeholder="Filter by status" />
+            <SelectTrigger className="w-full sm:w-[120px] h-9 text-sm">
+              <SelectValue placeholder="Status" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All Status</SelectItem>
+              <SelectItem value="all">All</SelectItem>
               <SelectItem value="active">Active</SelectItem>
               <SelectItem value="inactive">Inactive</SelectItem>
             </SelectContent>
           </Select>
 
           <Select value={sortBy} onValueChange={(value) => setSortBy(value as SortOption)}>
-            <SelectTrigger className="w-full sm:w-[180px]">
-              <SelectValue placeholder="Sort by" />
+            <SelectTrigger className="w-full sm:w-[140px] h-9 text-sm">
+              <SelectValue placeholder="Sort" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="newest">Newest First</SelectItem>
-              <SelectItem value="oldest">Oldest First</SelectItem>
-              <SelectItem value="name_asc">Name (A-Z)</SelectItem>
-              <SelectItem value="name_desc">Name (Z-A)</SelectItem>
+              <SelectItem value="newest">Newest</SelectItem>
+              <SelectItem value="oldest">Oldest</SelectItem>
+              <SelectItem value="name_asc">Name A-Z</SelectItem>
+              <SelectItem value="name_desc">Name Z-A</SelectItem>
             </SelectContent>
           </Select>
 
           {/* View mode toggle */}
-          <div className="flex gap-2 ml-auto">
+          <div className="flex gap-1 ml-auto">
             <Button
               variant={viewMode === "table" ? "default" : "outline"}
               size="icon"
               onClick={() => setViewMode("table")}
+              className="h-9 w-9"
             >
               <Table2 className="h-4 w-4" />
             </Button>
@@ -197,6 +199,7 @@ export function UserManagement() {
               variant={viewMode === "card" ? "default" : "outline"}
               size="icon"
               onClick={() => setViewMode("card")}
+              className="h-9 w-9"
             >
               <LayoutGrid className="h-4 w-4" />
             </Button>

@@ -22,6 +22,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { Id } from "@/convex/_generated/dataModel";
 import { toast } from "sonner";
+import { AddressAutocomplete } from "./address-autocomplete";
 
 interface VendorFormDialogProps {
   open: boolean;
@@ -143,9 +144,9 @@ export function VendorFormDialog({
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-5 py-2">
-          <div className="space-y-2">
-            <Label htmlFor="companyName">Company Name *</Label>
+        <form onSubmit={handleSubmit} className="space-y-4 py-2">
+          <div className="space-y-1.5">
+            <Label htmlFor="companyName" className="text-sm">Company Name *</Label>
             <Input
               id="companyName"
               placeholder="ABC Company Ltd."
@@ -155,11 +156,12 @@ export function VendorFormDialog({
               }
               required
               disabled={isLoading}
+              className="h-9"
             />
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="email">Email *</Label>
+          <div className="space-y-1.5">
+            <Label htmlFor="email" className="text-sm">Email *</Label>
             <Input
               id="email"
               type="email"
@@ -170,27 +172,29 @@ export function VendorFormDialog({
               }
               required
               disabled={isLoading}
+              className="h-9"
             />
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="phone">
+          <div className="space-y-1.5">
+            <Label htmlFor="phone" className="text-sm">
               Phone <span className="text-muted-foreground text-xs">(optional)</span>
             </Label>
             <Input
               id="phone"
               type="tel"
-              placeholder="+1234567890"
+              placeholder="+91 9876543210"
               value={formData.phone}
               onChange={(e) =>
                 setFormData({ ...formData, phone: e.target.value })
               }
               disabled={isLoading}
+              className="h-9"
             />
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="gstNumber">GST Number *</Label>
+          <div className="space-y-1.5">
+            <Label htmlFor="gstNumber" className="text-sm">GST Number *</Label>
             <Input
               id="gstNumber"
               placeholder="24AAAAA0000A1Z5"
@@ -201,25 +205,22 @@ export function VendorFormDialog({
               required
               disabled={isLoading}
               maxLength={15}
+              className="h-9"
             />
             <p className="text-xs text-muted-foreground">
               Format: 24AAAAA0000A1Z5 (15 characters)
             </p>
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="address">Address *</Label>
-            <Input
-              id="address"
-              placeholder="123 Main St, City, State, ZIP"
-              value={formData.address}
-              onChange={(e) =>
-                setFormData({ ...formData, address: e.target.value })
-              }
-              required
-              disabled={isLoading}
-            />
-          </div>
+          <AddressAutocomplete
+            value={formData.address}
+            onChange={(address) => setFormData({ ...formData, address })}
+            required
+            disabled={isLoading}
+            label="Address"
+            placeholder="Search address or type manually..."
+            id="address"
+          />
 
           {error && (
             <div className="text-sm text-destructive bg-destructive/10 border border-destructive/20 rounded-md p-3 flex items-start gap-2">

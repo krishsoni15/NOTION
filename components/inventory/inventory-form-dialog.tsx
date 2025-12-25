@@ -22,13 +22,9 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
 import { UnitInput } from "./unit-input";
 import { CameraDialog } from "./camera-dialog";
+import { VendorSelector } from "./vendor-selector";
 import { Camera, Upload, X, Search } from "lucide-react";
 import { useUserRole } from "@/hooks/use-user-role";
 import { ROLES } from "@/lib/auth/roles";
@@ -44,7 +40,8 @@ interface InventoryFormDialogProps {
     itemName: string;
     unit: string;
     centralStock: number;
-    vendorId: Id<"vendors">;
+    vendorId?: Id<"vendors">;
+    vendorIds?: Id<"vendors">[];
   } | null;
   mode?: "create" | "edit" | "add-image"; // add-image for Site Engineer
 }
@@ -64,14 +61,6 @@ export function InventoryFormDialog({
   // Determine if we're in add-image mode (needed before queries)
   const isAddImageMode = mode === "add-image";
   
-  // Only query vendors if user can create/edit items (Purchase Officer)
-  // Site Engineers only add images, so they don't need vendors
-  const canQueryVendors = userRole === ROLES.PURCHASE_OFFICER && !isAddImageMode;
-  const vendors = useQuery(
-    api.vendors.getAllVendors,
-    canQueryVendors ? {} : "skip"
-  );
-  
   const currentItem = useQuery(
     api.inventory.getInventoryItemById,
     itemId ? { itemId } : "skip"
@@ -80,14 +69,12 @@ export function InventoryFormDialog({
   const [isLoading, setIsLoading] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState("");
-  const [searchQuery, setSearchQuery] = useState("");
-  const [vendorPopoverOpen, setVendorPopoverOpen] = useState(false);
   const [selectedImages, setSelectedImages] = useState<File[]>([]);
   const [imagePreviews, setImagePreviews] = useState<string[]>([]);
   const [cameraOpen, setCameraOpen] = useState(false);
   const uploadInputRef = useRef<HTMLInputElement>(null);
 
-  const canEdit = userRole === ROLES.PURCHASE_OFFICER && !isAddImageMode;
+  const canEdit = userRole === ROLES.PURCHASE_OFFICER && !isAddImageMode; // Only Purchase Officers can edit
   // Purchase Officer can add images when creating or editing items
   // Site Engineer can add images to existing items only
   const canAddImages =
@@ -99,7 +86,7 @@ export function InventoryFormDialog({
     itemName: "",
     unit: "",
     centralStock: undefined as number | undefined,
-    vendorId: "" as Id<"vendors"> | "",
+    vendorIds: [] as Id<"vendors">[],
   });
 
   // Load initial data
@@ -109,21 +96,24 @@ export function InventoryFormDialog({
         itemName: initialData.itemName,
         unit: initialData.unit,
         centralStock: initialData.centralStock,
-        vendorId: initialData.vendorId,
+        vendorIds: initialData.vendorIds || (initialData.vendorId ? [initialData.vendorId] : []),
       });
     } else if (currentItem && !isAddImageMode) {
+      // Support both old vendorId and new vendorIds format
+      const vendorIds = (currentItem as any).vendorIds || 
+                       (currentItem.vendorId ? [currentItem.vendorId] : []);
       setFormData({
         itemName: currentItem.itemName,
         unit: currentItem.unit ?? "",
         centralStock: currentItem.centralStock,
-        vendorId: currentItem.vendorId ?? ("" as Id<"vendors"> | ""),
+        vendorIds: vendorIds,
       });
     } else {
       setFormData({
         itemName: "",
         unit: "",
         centralStock: undefined,
-        vendorId: "" as Id<"vendors"> | "",
+        vendorIds: [],
       });
     }
     setSelectedImages([]);
@@ -137,24 +127,15 @@ export function InventoryFormDialog({
         itemName: "",
         unit: "",
         centralStock: undefined,
-        vendorId: "" as Id<"vendors"> | "",
+        vendorIds: [],
       });
       setSelectedImages([]);
       setImagePreviews([]);
       setError("");
-      setSearchQuery("");
     }
     onOpenChange(newOpen);
   };
 
-  const filteredVendors =
-    (vendors && Array.isArray(vendors))
-      ? vendors.filter((vendor) =>
-          vendor.companyName.toLowerCase().includes(searchQuery.toLowerCase())
-        )
-      : [];
-
-  const selectedVendor = vendors?.find((v) => v._id === formData.vendorId);
 
   const handleCameraCapture = (file: File) => {
     const newImages = [...selectedImages, file];
@@ -283,7 +264,7 @@ export function InventoryFormDialog({
           itemName: formData.itemName,
           unit: formData.unit || undefined,
           centralStock: formData.centralStock || undefined,
-          vendorId: (formData.vendorId && formData.vendorId !== "") ? formData.vendorId as Id<"vendors"> : undefined,
+          vendorIds: formData.vendorIds.length > 0 ? formData.vendorIds : undefined,
         });
 
         // Upload images if any (after item is updated)
@@ -313,7 +294,7 @@ export function InventoryFormDialog({
           itemName: formData.itemName,
           unit: formData.unit || undefined,
           centralStock: formData.centralStock || undefined,
-          vendorId: (formData.vendorId && formData.vendorId !== "") ? formData.vendorId as Id<"vendors"> : undefined,
+          vendorIds: formData.vendorIds.length > 0 ? formData.vendorIds : undefined,
         });
 
         // Upload images if any (after item is created)
@@ -418,65 +399,16 @@ export function InventoryFormDialog({
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="vendor">
-                  Vendor <span className="text-muted-foreground text-xs">(optional)</span>
+                <Label htmlFor="vendors">
+                  Vendors <span className="text-muted-foreground text-xs">(optional)</span>
                 </Label>
-                <Popover open={vendorPopoverOpen} onOpenChange={setVendorPopoverOpen}>
-                  <PopoverTrigger asChild>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      className="w-full justify-start text-left font-normal"
-                      disabled={isLoading || !canEdit}
-                    >
-                      <Search className="mr-2 h-4 w-4" />
-                      {selectedVendor
-                        ? selectedVendor.companyName
-                        : "Select vendor..."}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-[400px] p-0" align="start">
-                    <div className="p-3 border-b">
-                      <div className="relative">
-                        <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                        <Input
-                          placeholder="Search vendors..."
-                          value={searchQuery}
-                          onChange={(e) => setSearchQuery(e.target.value)}
-                          className="pl-8"
-                        />
-                      </div>
-                    </div>
-                    <div className="max-h-[300px] overflow-y-auto">
-                      {filteredVendors.length === 0 ? (
-                        <div className="p-4 text-center text-sm text-muted-foreground">
-                          No vendors found
-                        </div>
-                      ) : (
-                        filteredVendors.map((vendor) => (
-                          <button
-                            key={vendor._id}
-                            type="button"
-                            onClick={() => {
-                              setFormData({
-                                ...formData,
-                                vendorId: vendor._id,
-                              });
-                              setVendorPopoverOpen(false);
-                              setSearchQuery("");
-                            }}
-                            className={cn(
-                              "w-full text-left px-4 py-2 text-sm hover:bg-accent transition-colors",
-                              formData.vendorId === vendor._id && "bg-accent"
-                            )}
-                          >
-                            {vendor.companyName}
-                          </button>
-                        ))
-                      )}
-                    </div>
-                  </PopoverContent>
-                </Popover>
+                <VendorSelector
+                  selectedVendors={formData.vendorIds}
+                  onSelectionChange={(vendorIds) =>
+                    setFormData({ ...formData, vendorIds })
+                  }
+                  disabled={isLoading || !canEdit}
+                />
               </div>
             </>
           )}

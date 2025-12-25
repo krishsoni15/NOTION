@@ -44,7 +44,12 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { MoreHorizontal, Edit, UserX, UserCheck, Trash2, ChevronLeft, ChevronRight, User, Phone, Calendar, MapPin, Shield } from "lucide-react";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { MoreHorizontal, Edit, UserX, UserCheck, Trash2, ChevronLeft, ChevronRight, User, Phone, Calendar, MapPin, Shield, Info, Building2, Hash } from "lucide-react";
 import { ROLE_LABELS, ROLES } from "@/lib/auth/roles";
 import { Doc } from "@/convex/_generated/dataModel";
 import { EditUserDialog } from "./edit-user-dialog";
@@ -280,13 +285,61 @@ export function UserTable({ users, viewMode = "table" }: UserTableProps) {
                   <MapPin className="h-3.5 w-3.5" />
                   <span>Assigned Sites</span>
                 </div>
-                <div className="flex flex-wrap gap-1.5">
+                <div className="flex flex-wrap gap-1.5 items-center">
                   {user.assignedSites.map((siteId) => {
                     const site = allSites?.find((s) => s._id === siteId);
                     return site ? (
-                      <Badge key={siteId} variant="secondary" className="text-xs font-medium">
-                        {site.name}
-                      </Badge>
+                      <div key={siteId} className="flex items-center gap-1">
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <Badge 
+                              variant="secondary" 
+                              className="text-xs font-medium cursor-pointer hover:bg-primary/10 transition-colors"
+                            >
+                              {site.name}
+                            </Badge>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-80 p-4" align="start">
+                            <div className="space-y-3">
+                              <div>
+                                <h4 className="font-semibold text-sm mb-2 flex items-center gap-2">
+                                  <Building2 className="h-4 w-4 text-primary" />
+                                  {site.name}
+                                </h4>
+                              </div>
+                              <div className="space-y-2 text-sm">
+                                {site.code && (
+                                  <div className="flex items-start gap-2">
+                                    <Hash className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
+                                    <div>
+                                      <p className="text-xs text-muted-foreground">Site Code</p>
+                                      <p className="font-medium">{site.code}</p>
+                                    </div>
+                                  </div>
+                                )}
+                                {site.address && (
+                                  <div className="flex items-start gap-2">
+                                    <MapPin className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
+                                    <div>
+                                      <p className="text-xs text-muted-foreground">Address</p>
+                                      <p className="font-medium text-xs">{site.address}</p>
+                                    </div>
+                                  </div>
+                                )}
+                                {site.description && (
+                                  <div className="flex items-start gap-2">
+                                    <Info className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
+                                    <div>
+                                      <p className="text-xs text-muted-foreground">Description</p>
+                                      <p className="font-medium text-xs">{site.description}</p>
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </PopoverContent>
+                        </Popover>
+                      </div>
                     ) : null;
                   })}
                 </div>
@@ -342,13 +395,61 @@ export function UserTable({ users, viewMode = "table" }: UserTableProps) {
                       <TableCell>{user.phoneNumber}</TableCell>
                       <TableCell>
                         {user.role === ROLES.SITE_ENGINEER && user.assignedSites && user.assignedSites.length > 0 ? (
-                          <div className="flex flex-wrap gap-1">
+                          <div className="flex flex-wrap gap-1 items-center">
                             {user.assignedSites.map((siteId) => {
                               const site = allSites?.find((s) => s._id === siteId);
                               return site ? (
-                                <Badge key={siteId} variant="secondary" className="text-xs">
-                                  {site.name}
-                                </Badge>
+                                <div key={siteId} className="flex items-center gap-1">
+                                  <Popover>
+                                    <PopoverTrigger asChild>
+                                      <Badge 
+                                        variant="secondary" 
+                                        className="text-xs cursor-pointer hover:bg-primary/10 transition-colors"
+                                      >
+                                        {site.name}
+                                      </Badge>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-80 p-4" align="start">
+                                      <div className="space-y-3">
+                                        <div>
+                                          <h4 className="font-semibold text-sm mb-2 flex items-center gap-2">
+                                            <Building2 className="h-4 w-4 text-primary" />
+                                            {site.name}
+                                          </h4>
+                                        </div>
+                                        <div className="space-y-2 text-sm">
+                                          {site.code && (
+                                            <div className="flex items-start gap-2">
+                                              <Hash className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
+                                              <div>
+                                                <p className="text-xs text-muted-foreground">Site Code</p>
+                                                <p className="font-medium">{site.code}</p>
+                                              </div>
+                                            </div>
+                                          )}
+                                          {site.address && (
+                                            <div className="flex items-start gap-2">
+                                              <MapPin className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
+                                              <div>
+                                                <p className="text-xs text-muted-foreground">Address</p>
+                                                <p className="font-medium text-xs">{site.address}</p>
+                                              </div>
+                                            </div>
+                                          )}
+                                          {site.description && (
+                                            <div className="flex items-start gap-2">
+                                              <Info className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
+                                              <div>
+                                                <p className="text-xs text-muted-foreground">Description</p>
+                                                <p className="font-medium text-xs">{site.description}</p>
+                                              </div>
+                                            </div>
+                                          )}
+                                        </div>
+                                      </div>
+                                    </PopoverContent>
+                                  </Popover>
+                                </div>
                               ) : null;
                             })}
                           </div>

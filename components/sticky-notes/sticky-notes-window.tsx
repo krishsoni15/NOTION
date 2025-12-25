@@ -44,7 +44,7 @@ import { toast } from "sonner";
 import type { Id } from "@/convex/_generated/dataModel";
 import { useUserRole } from "@/hooks/use-user-role";
 import { ROLES } from "@/lib/auth/roles";
-import { cn } from "@/lib/utils";
+import { cn, normalizeSearchQuery, matchesAnySearchQuery } from "@/lib/utils";
 
 // Draggable Note Card Component for the window
 function DraggableNoteCard({

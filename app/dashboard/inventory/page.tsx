@@ -6,7 +6,7 @@
 
 import { requireRole } from "@/lib/auth/redirect";
 import { ROLES } from "@/lib/auth/roles";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { InventoryManagement } from "@/components/inventory/inventory-management";
 
 export default async function InventoryPage() {
@@ -19,20 +19,7 @@ export default async function InventoryPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Inventory</h1>
-          <p className="text-muted-foreground">
-            Manage inventory items and stock
-          </p>
-        </div>
-      </div>
-
       <Card>
-        <CardHeader>
-          <CardTitle>Inventory Items</CardTitle>
-          <CardDescription>All inventory items with stock information</CardDescription>
-        </CardHeader>
         <CardContent>
           <InventoryManagement userRole={role} />
         </CardContent>

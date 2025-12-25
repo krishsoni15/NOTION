@@ -14,12 +14,12 @@ import { cn } from "@/lib/utils";
 import { Role, ROLES, ROLE_LABELS } from "@/lib/auth/roles";
 import { 
   LayoutDashboard, 
-  FileText, 
+  ClipboardList, 
   Users, 
-  ShoppingCart, 
-  Package,
+  Store,
+  Warehouse,
+  CheckCircle,
   Building2,
-  MessageCircle
 } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 
@@ -31,7 +31,7 @@ interface NavigationItem {
 }
 
 const navigationItems: NavigationItem[] = [
-  // Site Engineer
+  // Site Engineer - Logical sequence: Dashboard → Requests → Inventory
   {
     label: "Dashboard",
     href: "/dashboard/site",
@@ -41,17 +41,17 @@ const navigationItems: NavigationItem[] = [
   {
     label: "My Requests",
     href: "/dashboard/site/requests",
-    icon: FileText,
+    icon: ClipboardList,
     roles: [ROLES.SITE_ENGINEER],
   },
   {
     label: "Inventory",
     href: "/dashboard/inventory",
-    icon: Package,
+    icon: Warehouse,
     roles: [ROLES.SITE_ENGINEER],
   },
   
-  // Manager
+  // Manager - Logical sequence: Dashboard → Requests → Inventory → Vendors → Users → Sites
   {
     label: "Dashboard",
     href: "/dashboard/manager",
@@ -61,7 +61,19 @@ const navigationItems: NavigationItem[] = [
   {
     label: "All Requests",
     href: "/dashboard/manager/requests",
-    icon: FileText,
+    icon: ClipboardList,
+    roles: [ROLES.MANAGER],
+  },
+  {
+    label: "Inventory",
+    href: "/dashboard/inventory",
+    icon: Warehouse,
+    roles: [ROLES.MANAGER],
+  },
+  {
+    label: "Vendors",
+    href: "/dashboard/vendors",
+    icon: Store,
     roles: [ROLES.MANAGER],
   },
   {
@@ -71,19 +83,13 @@ const navigationItems: NavigationItem[] = [
     roles: [ROLES.MANAGER],
   },
   {
-    label: "Vendors",
-    href: "/dashboard/vendors",
+    label: "Sites",
+    href: "/dashboard/sites",
     icon: Building2,
     roles: [ROLES.MANAGER],
   },
-  {
-    label: "Inventory",
-    href: "/dashboard/inventory",
-    icon: Package,
-    roles: [ROLES.MANAGER],
-  },
   
-  // Purchase Officer
+  // Purchase Officer - Logical sequence: Dashboard → Requests → Inventory → Vendors
   {
     label: "Dashboard",
     href: "/dashboard/purchase",
@@ -93,19 +99,19 @@ const navigationItems: NavigationItem[] = [
   {
     label: "Approved Requests",
     href: "/dashboard/purchase/requests",
-    icon: Package,
-    roles: [ROLES.PURCHASE_OFFICER],
-  },
-  {
-    label: "Vendors",
-    href: "/dashboard/vendors",
-    icon: Building2,
+    icon: CheckCircle,
     roles: [ROLES.PURCHASE_OFFICER],
   },
   {
     label: "Inventory",
     href: "/dashboard/inventory",
-    icon: Package,
+    icon: Warehouse,
+    roles: [ROLES.PURCHASE_OFFICER],
+  },
+  {
+    label: "Vendors",
+    href: "/dashboard/vendors",
+    icon: Store,
     roles: [ROLES.PURCHASE_OFFICER],
   },
 ];

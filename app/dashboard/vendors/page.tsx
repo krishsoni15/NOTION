@@ -1,14 +1,12 @@
 /**
  * Vendors Page
  * 
- * Manage vendors (Purchase Officer: CRUD, Manager: Read-only).
+ * Manage vendors (Purchase Officer: CRUD, Manager: CRUD).
  */
 
 import { requireRole } from "@/lib/auth/redirect";
 import { ROLES } from "@/lib/auth/roles";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Plus } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
 import { VendorManagement } from "@/components/vendors/vendor-management";
 
 export default async function VendorsPage() {
@@ -18,12 +16,8 @@ export default async function VendorsPage() {
   return (
     <div className="space-y-6">
       <Card>
-        <CardHeader>
-          <CardTitle>Vendors</CardTitle>
-          <CardDescription>All registered vendors</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <VendorManagement showTableOnly={role === ROLES.MANAGER} />
+        <CardContent className="pt-6">
+          <VendorManagement />
         </CardContent>
       </Card>
     </div>

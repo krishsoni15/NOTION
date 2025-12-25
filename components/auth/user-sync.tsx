@@ -26,6 +26,13 @@ export function UserSync() {
       return;
     }
 
+    // Wait for the query to finish loading (undefined means still loading)
+    // Only check if currentUser is explicitly null (user not found) or a user object
+    if (currentUser === undefined) {
+      // Query is still loading, don't do anything yet
+      return;
+    }
+
     // Check if user exists in Convex
     if (currentUser === null) {
       // User exists in Clerk but not in Convex

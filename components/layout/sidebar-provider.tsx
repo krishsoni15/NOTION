@@ -21,25 +21,27 @@ interface SidebarContextType {
 const SidebarContext = createContext<SidebarContextType | undefined>(undefined);
 
 export function SidebarProvider({ children }: { children: ReactNode }) {
+  // Always start with false to match server-side rendering
+  // This prevents hydration mismatches
   const [isCollapsed, setIsCollapsed] = useState(false);
   const [isMounted, setIsMounted] = useState(false);
 
   useEffect(() => {
     setIsMounted(true);
 
-    // Load saved preference from localStorage
+    // Load saved preference from localStorage after mount
+    // This ensures consistent server/client rendering
     const saved = localStorage.getItem(SIDEBAR_KEY);
     if (saved !== null) {
       setIsCollapsed(saved === "true");
-      return;
-    }
-
-    // Default behavior: icon-only on tablet (md), full on desktop (lg+)
+    } else {
+      // If no saved preference, set based on screen size
     const width = window.innerWidth;
     if (width >= 768 && width < 1024) {
       setIsCollapsed(true);
     } else {
       setIsCollapsed(false);
+      }
     }
   }, []);
 
@@ -64,7 +66,7 @@ export function SidebarProvider({ children }: { children: ReactNode }) {
   return (
     <SidebarContext.Provider
       value={{
-        isCollapsed: isMounted ? isCollapsed : false,
+        isCollapsed,
         isMounted,
         toggle,
         collapse,

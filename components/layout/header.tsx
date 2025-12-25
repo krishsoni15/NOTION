@@ -6,8 +6,6 @@
  * Top navigation bar with user info, theme toggle, chat, and logout.
  */
 
-import Image from "next/image";
-import { useState } from "react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { UserMenu } from "./user-menu";
 import { ChatIcon } from "@/components/chat/chat-icon";
@@ -34,7 +32,6 @@ interface HeaderProps {
 export function Header({ userRole }: HeaderProps) {
   const currentUser = useQuery(api.users.getCurrentUser);
   const { isChatOpen, setIsChatOpen, isStickyNotesOpen, setIsStickyNotesOpen } = useChatWidth();
-  const [logoError, setLogoError] = useState(false);
 
   return (
     <header className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -60,37 +57,7 @@ export function Header({ userRole }: HeaderProps) {
         {/* Desktop: Empty space (brand is in sidebar) */}
         <div className="hidden md:block" />
 
-        {/* Mobile: Brand */}
-        <div className="md:hidden flex items-center gap-2.5">
-          <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-primary/20 to-primary/10 flex items-center justify-center shrink-0 overflow-hidden p-1">
-            {logoError ? (
-              <span className="text-lg font-bold text-primary">N</span>
-            ) : (
-              <Image
-                src="/images/logos/Notion_Favicon-removebg-preview.png"
-                alt="Notion Logo"
-                width={28}
-                height={28}
-                className="object-contain"
-                onError={() => setLogoError(true)}
-              />
-            )}
-          </div>
-          <div className="h-10 relative flex items-center">
-            {logoError ? (
-              <span className="text-lg font-bold text-primary">NOTION</span>
-            ) : (
-              <Image
-                src="/images/logos/Notion_Logo-removebg-preview.png"
-                alt="Notion"
-                width={140}
-                height={40}
-                className="object-contain h-full"
-                onError={() => setLogoError(true)}
-              />
-            )}
-          </div>
-        </div>
+        {/* Mobile: No brand shown on small screens */}
 
         {/* Right side: Sticky Notes + Chat + Theme toggle + Custom User Menu */}
         <div className="flex items-center gap-2 md:gap-4">

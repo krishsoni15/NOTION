@@ -67,7 +67,8 @@ export const searchSites = query({
     const userId = await getAuthUserId(ctx);
     if (!userId) return [];
 
-    const searchQuery = args.query.toLowerCase().trim();
+    // Normalize search query - trim and normalize whitespace
+    const searchQuery = args.query.trim().replace(/\s+/g, " ").toLowerCase();
     if (!searchQuery) return [];
 
     const allSites = await ctx.db
@@ -112,6 +113,17 @@ export const createSite = mutation({
     // Check if user is a manager
     if (currentUser.role !== "manager") {
       throw new Error("Unauthorized: Only managers can create sites");
+    }
+
+    // Check if site name already exists (case-insensitive)
+    const siteNameLower = args.name.trim().toLowerCase();
+    const allSites = await ctx.db.query("sites").collect();
+    const existingSite = allSites.find(
+      (site) => site.name.toLowerCase() === siteNameLower && site.isActive
+    );
+
+    if (existingSite) {
+      throw new Error(`Site "${args.name}" already exists`);
     }
 
     const now = Date.now();
@@ -180,7 +192,92 @@ export const updateSite = mutation({
 });
 
 /**
- * Delete a site (Manager only) - Soft delete
+ * Check if site is in use (assigned to users or used in requests)
+ */
+export const checkSiteUsage = query({
+  args: { siteId: v.id("sites") },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) return { isInUse: false, assignedToUsers: 0, usedInRequests: 0 };
+
+    // Check if site is assigned to any users
+    const allUsers = await ctx.db.query("users").collect();
+    const assignedToUsers = allUsers.filter(
+      (user) => user.assignedSites && user.assignedSites.includes(args.siteId)
+    ).length;
+
+    // Check if site is used in any requests
+    const requests = await ctx.db
+      .query("requests")
+      .withIndex("by_site_id", (q) => q.eq("siteId", args.siteId))
+      .collect();
+    const usedInRequests = requests.length;
+
+    const isInUse = assignedToUsers > 0 || usedInRequests > 0;
+
+    return {
+      isInUse,
+      assignedToUsers,
+      usedInRequests,
+    };
+  },
+});
+
+/**
+ * Toggle site active status (Manager only)
+ * Cannot deactivate if site is assigned to users
+ */
+export const toggleSiteStatus = mutation({
+  args: { siteId: v.id("sites") },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new Error("Not authenticated");
+
+    // Get current user
+    const currentUser = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_user_id", (q) => q.eq("clerkUserId", userId))
+      .unique();
+
+    if (!currentUser) throw new Error("User not found");
+
+    // Check if user is a manager
+    if (currentUser.role !== "manager") {
+      throw new Error("Unauthorized: Only managers can toggle site status");
+    }
+
+    // Get site
+    const site = await ctx.db.get(args.siteId);
+    if (!site) throw new Error("Site not found");
+
+    // If trying to deactivate, check if site is assigned to users
+    if (site.isActive) {
+      const allUsers = await ctx.db.query("users").collect();
+      const assignedToUsers = allUsers.filter(
+        (user) => user.assignedSites && user.assignedSites.includes(args.siteId)
+      );
+
+      if (assignedToUsers.length > 0) {
+        throw new Error(
+          `Cannot deactivate site: It is assigned to ${assignedToUsers.length} user(s). Please unassign the site first.`
+        );
+      }
+    }
+
+    // Toggle status
+    await ctx.db.patch(args.siteId, {
+      isActive: !site.isActive,
+      updatedAt: Date.now(),
+    });
+
+    return { success: true, isActive: !site.isActive };
+  },
+});
+
+/**
+ * Delete a site (Manager only)
+ * If site is not assigned to users: Hard delete (permanent)
+ * If site is assigned: Cannot delete (error)
  */
 export const deleteSite = mutation({
   args: { siteId: v.id("sites") },
@@ -201,11 +298,36 @@ export const deleteSite = mutation({
       throw new Error("Unauthorized: Only managers can delete sites");
     }
 
-    // Soft delete
-    await ctx.db.patch(args.siteId, {
-      isActive: false,
-      updatedAt: Date.now(),
-    });
+    // Get site
+    const site = await ctx.db.get(args.siteId);
+    if (!site) throw new Error("Site not found");
+
+    // Check if site is assigned to any users
+    const allUsers = await ctx.db.query("users").collect();
+    const assignedToUsers = allUsers.filter(
+      (user) => user.assignedSites && user.assignedSites.includes(args.siteId)
+    );
+
+    if (assignedToUsers.length > 0) {
+      throw new Error(
+        `Cannot delete site: It is assigned to ${assignedToUsers.length} user(s). Please unassign the site first.`
+      );
+    }
+
+    // Check if site is used in any requests
+    const requests = await ctx.db
+      .query("requests")
+      .withIndex("by_site_id", (q) => q.eq("siteId", args.siteId))
+      .collect();
+
+    if (requests.length > 0) {
+      throw new Error(
+        `Cannot delete site: It is used in ${requests.length} request(s). Sites with associated requests cannot be deleted.`
+      );
+    }
+
+    // Hard delete (permanent) - site is not assigned, safe to delete
+    await ctx.db.delete(args.siteId);
 
     return { success: true };
   },

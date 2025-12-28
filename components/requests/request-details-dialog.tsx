@@ -47,6 +47,11 @@ export function RequestDetailsDialog({
     api.requests.getRequestById,
     requestId ? { requestId } : "skip"
   );
+  // Get all requests with the same requestNumber to show all items
+  const allRequests = useQuery(
+    api.requests.getRequestsByRequestNumber,
+    request?.requestNumber ? { requestNumber: request.requestNumber } : "skip"
+  );
   const updateStatus = useMutation(api.requests.updateRequestStatus);
   const markDelivery = useMutation(api.requests.markDelivery);
 
@@ -187,7 +192,7 @@ export function RequestDetailsDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader className="pr-12">
           <div className="flex items-start justify-between gap-4">
             <div className="flex-1">
@@ -235,63 +240,159 @@ export function RequestDetailsDialog({
                 {format(new Date(request.createdAt), "dd/MM/yyyy hh:mm a")}
               </p>
             </div>
+            <div>
+              <Label className="text-muted-foreground">Required By</Label>
+              <p className="font-medium">
+                {format(new Date(request.requiredBy), "dd/MM/yyyy")}
+              </p>
+            </div>
           </div>
 
           <Separator />
 
-          {/* Item Details */}
+          {/* All Items Details */}
           <div className="space-y-4">
             <div>
-              <Label className="text-muted-foreground">Item Name</Label>
-              <p className="font-medium text-lg">{request.itemName}</p>
+              <Label className="text-muted-foreground text-base font-semibold">
+                {allRequests && allRequests.length > 1 
+                  ? `Items (${allRequests.length} items)` 
+                  : "Item Details"}
+              </Label>
             </div>
-            <div>
-              <Label className="text-muted-foreground">Description</Label>
-              <p className="text-sm">{request.description}</p>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <Label className="text-muted-foreground">Quantity</Label>
-                <p className="font-medium">
-                  {request.quantity} {request.unit}
-                </p>
+            
+            {/* Display all items */}
+            {allRequests && allRequests.length > 0 ? (
+              <div className="space-y-4">
+                {allRequests
+                  .sort((a, b) => a.createdAt - b.createdAt)
+                  .map((item, idx) => (
+                  <div key={item._id} className="p-4 border rounded-lg bg-card space-y-3">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Badge variant="outline" className="text-xs px-2 py-1">
+                        Item {idx + 1}
+                      </Badge>
+                      {item.isUrgent && (
+                        <Badge variant="destructive" className="text-xs">
+                          <AlertCircle className="h-3 w-3 mr-1" />
+                          Urgent
+                        </Badge>
+                      )}
+                      {getStatusBadge(item.status)}
+                    </div>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <Label className="text-muted-foreground">Item Name</Label>
+                        <p className="font-medium">{item.itemName}</p>
+                      </div>
+                      <div>
+                        <Label className="text-muted-foreground">Quantity</Label>
+                        <p className="font-medium">
+                          {item.quantity} {item.unit}
+                        </p>
+                      </div>
+                    </div>
+                    
+                    {item.description && (
+                      <div>
+                        <Label className="text-muted-foreground">Description</Label>
+                        <p className="text-sm">{item.description}</p>
+                      </div>
+                    )}
+                    
+                    {item.specsBrand && (
+                      <div>
+                        <Label className="text-muted-foreground">Specs/Brand</Label>
+                        <p className="text-sm font-medium">{item.specsBrand}</p>
+                      </div>
+                    )}
+                    
+                    {item.notes && (
+                      <div>
+                        <Label className="text-muted-foreground">Notes</Label>
+                        <p className="text-sm whitespace-pre-wrap">{item.notes}</p>
+                      </div>
+                    )}
+                    
+                    {item.photo && (
+                      <div>
+                        <Label className="text-muted-foreground">Photo</Label>
+                        <div className="mt-2">
+                          <img
+                            src={item.photo.imageUrl}
+                            alt={`${item.itemName} photo`}
+                            className="max-w-full h-auto rounded-md border max-h-64 object-contain"
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
               </div>
-              <div>
-                <Label className="text-muted-foreground">Required By</Label>
-                <p className="font-medium">
-                  {format(new Date(request.requiredBy), "dd/MM/yyyy")}
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {/* Photo */}
-          {request.photo && (
-            <>
-              <Separator />
-              <div>
-                <Label className="text-muted-foreground">Photo</Label>
-                <div className="mt-2">
-                  <img
-                    src={request.photo.imageUrl}
-                    alt="Request photo"
-                    className="max-w-full h-auto rounded-md border max-h-96 object-contain"
-                  />
+            ) : (
+              // Fallback to single item display if allRequests not loaded yet
+              <div className="space-y-4">
+                <div className="p-4 border rounded-lg bg-card space-y-3">
+                  <div className="flex items-center gap-2 mb-2">
+                    {request.isUrgent && (
+                      <Badge variant="destructive" className="text-xs">
+                        <AlertCircle className="h-3 w-3 mr-1" />
+                        Urgent
+                      </Badge>
+                    )}
+                    {getStatusBadge(request.status)}
+                  </div>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <Label className="text-muted-foreground">Item Name</Label>
+                      <p className="font-medium">{request.itemName}</p>
+                    </div>
+                    <div>
+                      <Label className="text-muted-foreground">Quantity</Label>
+                      <p className="font-medium">
+                        {request.quantity} {request.unit}
+                      </p>
+                    </div>
+                  </div>
+                  
+                  {request.description && (
+                    <div>
+                      <Label className="text-muted-foreground">Description</Label>
+                      <p className="text-sm">{request.description}</p>
+                    </div>
+                  )}
+                  
+                  {request.specsBrand && (
+                    <div>
+                      <Label className="text-muted-foreground">Specs/Brand</Label>
+                      <p className="text-sm font-medium">{request.specsBrand}</p>
+                    </div>
+                  )}
+                  
+                  {request.notes && (
+                    <div>
+                      <Label className="text-muted-foreground">Notes</Label>
+                      <p className="text-sm whitespace-pre-wrap">{request.notes}</p>
+                    </div>
+                  )}
+                  
+                  {request.photo && (
+                    <div>
+                      <Label className="text-muted-foreground">Photo</Label>
+                      <div className="mt-2">
+                        <img
+                          src={request.photo.imageUrl}
+                          alt="Request photo"
+                          className="max-w-full h-auto rounded-md border max-h-64 object-contain"
+                        />
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
-            </>
-          )}
-
-          {/* Notes */}
-          {request.notes && (
-            <>
-              <Separator />
-              <div>
-                <Label className="text-muted-foreground">Notes</Label>
-                <p className="text-sm whitespace-pre-wrap">{request.notes}</p>
-              </div>
-            </>
-          )}
+            )}
+          </div>
 
           {/* Approval Information */}
           {request.approvedBy && (

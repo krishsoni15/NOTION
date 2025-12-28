@@ -12,7 +12,7 @@ import { format, parse, isValid, startOfMonth, endOfMonth, eachDayOfInterval, is
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Calendar, ChevronLeft, ChevronRight } from "lucide-react";
+import { Calendar, ChevronLeft, ChevronRight, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface DatePickerProps {
@@ -21,6 +21,7 @@ interface DatePickerProps {
   placeholder?: string;
   className?: string;
   disabled?: boolean;
+  error?: boolean;
 }
 
 export function DatePicker({
@@ -29,6 +30,7 @@ export function DatePicker({
   placeholder = "DD/MM/YYYY",
   className,
   disabled = false,
+  error = false,
 }: DatePickerProps) {
   const [open, setOpen] = useState(false);
   const [currentMonth, setCurrentMonth] = useState(value ? startOfMonth(value) : startOfMonth(new Date()));
@@ -124,10 +126,17 @@ export function DatePicker({
   };
 
   const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const handleTodayClick = () => {
+    const todayDate = new Date();
+    todayDate.setHours(0, 0, 0, 0);
+    onChange(todayDate);
+  };
 
   return (
-    <div className={cn("space-y-2", className)}>
-      <div className="flex gap-2">
+    <div className={cn("space-y-1.5 sm:space-y-2", className)}>
+      <div className="flex gap-1.5 sm:gap-2">
         {/* Manual Input Field */}
         <div className="flex-1 relative">
           <Input
@@ -141,9 +150,42 @@ export function DatePicker({
             placeholder={placeholder}
             disabled={disabled}
             maxLength={10}
-            className="font-mono w-full"
+            className={cn(
+              "font-mono w-full h-10 sm:h-11 text-sm sm:text-base",
+              value && "pr-8 sm:pr-10",
+              error && "border-destructive focus:border-destructive focus:ring-destructive/20"
+            )}
           />
+          {value && !disabled && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                onChange(null);
+                setManualInput("");
+                inputRef.current?.focus();
+              }}
+              className="absolute right-2 sm:right-3 top-1/2 -translate-y-1/2 p-1 sm:p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors focus:outline-none focus:ring-2 focus:ring-ring touch-manipulation"
+              aria-label="Clear date"
+            >
+              <X className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+            </button>
+          )}
         </div>
+        
+        {/* Today Button */}
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={handleTodayClick}
+          disabled={disabled}
+          className="shrink-0 h-10 sm:h-11 px-2 sm:px-3 text-xs sm:text-sm font-medium touch-manipulation"
+          title="Set today's date"
+        >
+          Today
+        </Button>
         
         {/* Calendar Button */}
         <Popover open={open} onOpenChange={setOpen}>
@@ -153,26 +195,30 @@ export function DatePicker({
               variant="outline"
               size="icon"
               disabled={disabled}
-              className="shrink-0"
+              className="shrink-0 h-10 w-10 sm:h-11 sm:w-11 touch-manipulation"
             >
-              <Calendar className="h-4 w-4" />
+              <Calendar className="h-4 w-4 sm:h-5 sm:w-5" />
             </Button>
           </PopoverTrigger>
-        <PopoverContent className="w-auto p-0" align="start">
-          <div className="p-4">
-            <div className="space-y-4">
+        <PopoverContent 
+          className="w-[calc(100vw-2rem)] sm:w-auto p-2 sm:p-4 max-w-[320px] sm:max-w-none" 
+          align="start"
+          sideOffset={4}
+        >
+          <div className="p-2 sm:p-3">
+            <div className="space-y-3 sm:space-y-4">
               {/* Calendar Header */}
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between px-1">
                 <Button
                   type="button"
                   variant="ghost"
                   size="icon"
                   onClick={previousMonth}
-                  className="h-7 w-7"
+                  className="h-8 w-8 sm:h-9 sm:w-9 touch-manipulation"
                 >
-                  <ChevronLeft className="h-4 w-4" />
+                  <ChevronLeft className="h-4 w-4 sm:h-5 sm:w-5" />
                 </Button>
-                <div className="font-semibold">
+                <div className="font-semibold text-sm sm:text-base px-2">
                   {format(currentMonth, "MMMM yyyy")}
                 </div>
                 <Button
@@ -180,19 +226,19 @@ export function DatePicker({
                   variant="ghost"
                   size="icon"
                   onClick={nextMonth}
-                  className="h-7 w-7"
+                  className="h-8 w-8 sm:h-9 sm:w-9 touch-manipulation"
                 >
-                  <ChevronRight className="h-4 w-4" />
+                  <ChevronRight className="h-4 w-4 sm:h-5 sm:w-5" />
                 </Button>
               </div>
 
               {/* Calendar Grid */}
-              <div className="grid grid-cols-7 gap-1">
+              <div className="grid grid-cols-7 gap-0.5 sm:gap-1">
                 {/* Day headers */}
                 {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
                   <div
                     key={day}
-                    className="text-center text-sm font-medium text-muted-foreground p-1"
+                    className="text-center text-xs sm:text-sm font-medium text-muted-foreground p-1 sm:p-1.5"
                   >
                     {day}
                   </div>
@@ -211,11 +257,11 @@ export function DatePicker({
                       variant={isSelected ? "default" : "ghost"}
                       size="sm"
                       className={cn(
-                        "h-8 w-8 p-0 font-normal",
+                        "h-8 w-8 sm:h-9 sm:w-9 p-0 font-normal text-xs sm:text-sm touch-manipulation",
                         !isCurrentMonth && "text-muted-foreground opacity-50",
                         isSelected && "bg-primary text-primary-foreground",
                         !isSelected && isToday && "bg-accent",
-                        !isSelected && !isToday && "hover:bg-accent"
+                        !isSelected && !isToday && "hover:bg-accent active:bg-accent/80"
                       )}
                       onClick={() => handleCalendarDateSelect(day)}
                     >
@@ -232,7 +278,7 @@ export function DatePicker({
       
       {/* Format hint below - responsive */}
       {isFocused && manualInput.length > 0 && manualInput.length < 10 && (
-        <p className="text-xs text-muted-foreground">
+        <p className="text-xs sm:text-sm text-muted-foreground px-1">
           Enter date as DD/MM/YYYY (e.g., 24/10/2024)
         </p>
       )}

@@ -11,11 +11,9 @@ import { usePresenceHeartbeat } from "@/hooks/use-presence";
 import { useEffect, useState } from "react";
 
 export function PresenceProvider({ children }: { children: React.ReactNode }) {
-  const [isMounted, setIsMounted] = useState(false);
   const [isReady, setIsReady] = useState(false);
 
   useEffect(() => {
-    setIsMounted(true);
     // Small delay to ensure ConvexProvider is fully initialized
     const timer = setTimeout(() => {
       setIsReady(true);
@@ -23,9 +21,9 @@ export function PresenceProvider({ children }: { children: React.ReactNode }) {
     return () => clearTimeout(timer);
   }, []);
 
-  // Enable presence heartbeat only after component is mounted and ready
+  // Enable presence heartbeat only after component is ready
   // This ensures ConvexProvider is available
-  usePresenceHeartbeat(isMounted && isReady);
+  usePresenceHeartbeat(isReady);
 
   return <>{children}</>;
 }

@@ -11,6 +11,8 @@ import { useState, useEffect } from "react";
 import Image from "next/image";
 import { useSignIn } from "@clerk/nextjs";
 import { useRouter, useSearchParams } from "next/navigation";
+import { useMutation } from "convex/react";
+import { api } from "@/convex/_generated/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -25,6 +27,7 @@ export function LoginForm({ disabled = false }: LoginFormProps) {
   const { isLoaded, signIn, setActive } = useSignIn();
   const router = useRouter();
   const searchParams = useSearchParams();
+  const syncUser = useMutation(api.syncUser.syncCurrentUser);
   
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -39,6 +42,12 @@ export function LoginForm({ disabled = false }: LoginFormProps) {
     
     if (errorParam === "not_found") {
       setError("Your account is not registered in the system. Please contact your administrator to create your account.");
+    } else if (errorParam === "auth_error") {
+      setError("Authentication error. Please try logging in again.");
+    } else if (errorParam === "no_role") {
+      setError("Your account exists but has no assigned role. Please contact your administrator.");
+    } else if (errorParam === "not_authenticated") {
+      setError("You must be logged in to access this page.");
     } else if (disabledParam === "true") {
       setError("Your account has been disabled. Please contact your administrator for assistance.");
     }
@@ -62,8 +71,26 @@ export function LoginForm({ disabled = false }: LoginFormProps) {
       });
 
       if (result.status === "complete") {
+        // Ensure session is properly activated
         await setActive({ session: result.createdSessionId });
+
+        // Check if user exists in Convex before redirecting
+        try {
+          const userExists = await syncUser();
+          if (!userExists) {
+            setError("Your account is not registered in the system. Please contact your administrator to create your account.");
+            return;
+          }
+
+          // Small delay to ensure session is fully active
+          setTimeout(() => {
         router.push("/dashboard");
+            router.refresh(); // Force a refresh to ensure proper state
+          }, 100);
+        } catch (syncError) {
+          console.error("User sync error:", syncError);
+          setError("Login successful but account verification failed. Please try again.");
+        }
       } else {
         setError("Login failed. Please try again.");
       }

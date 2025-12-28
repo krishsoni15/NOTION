@@ -396,6 +396,65 @@ export const getAllRequests = query({
 });
 
 /**
+ * Get all requests by request number (for drafts with multiple items)
+ */
+export const getRequestsByRequestNumber = query({
+  args: { requestNumber: v.string() },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) return [];
+
+    const currentUser = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_user_id", (q: any) => q.eq("clerkUserId", userId))
+      .unique();
+
+    if (!currentUser) return [];
+
+    const requests = await ctx.db
+      .query("requests")
+      .withIndex("by_request_number", (q) => q.eq("requestNumber", args.requestNumber))
+      .collect();
+
+    // Check permissions: Site engineers can only view their own requests
+    if (
+      currentUser.role === "site_engineer" &&
+      requests.length > 0 &&
+      requests[0].createdBy !== currentUser._id
+    ) {
+      return [];
+    }
+
+    // Sort by itemOrder (1, 2, 3...) or createdAt as fallback
+    requests.sort((a, b) => {
+      const orderA = a.itemOrder ?? a.createdAt;
+      const orderB = b.itemOrder ?? b.createdAt;
+      return orderA - orderB;
+    });
+
+    // Fetch related data
+    const requestsWithDetails = await Promise.all(
+      requests.map(async (request) => {
+        const site = await ctx.db.get(request.siteId);
+        return {
+          ...request,
+          site: site
+            ? {
+                _id: site._id,
+                name: site.name,
+                code: site.code,
+                address: site.address,
+              }
+            : null,
+        };
+      })
+    );
+
+    return requestsWithDetails;
+  },
+});
+
+/**
  * Get single request by ID
  */
 export const getRequestById = query({
@@ -482,6 +541,7 @@ export const createMaterialRequest = mutation({
       })
     ),
     notes: v.optional(v.string()),
+    requestNumber: v.optional(v.string()), // Optional: if provided, use this request number
   },
   handler: async (ctx, args) => {
     const currentUser = await getCurrentUser(ctx);
@@ -502,6 +562,106 @@ export const createMaterialRequest = mutation({
       !currentUser.assignedSites.includes(args.siteId)
     ) {
       throw new Error("Unauthorized: Site not assigned to you");
+    }
+
+    // Use provided request number or generate a new one
+    let requestNumber: string;
+    if (args.requestNumber) {
+      requestNumber = args.requestNumber;
+    } else {
+    // Generate unique sequential request number (001, 002, 003, etc.)
+    const allRequests = await ctx.db.query("requests").collect();
+    
+    // Find the highest existing request number (if in numeric format)
+    let maxNumber = 0;
+    for (const request of allRequests) {
+      // Try to parse as a 3-digit number (001, 002, etc.)
+      const numMatch = request.requestNumber.match(/^(\d{3})$/);
+      if (numMatch) {
+        const num = parseInt(numMatch[1], 10);
+        if (num > maxNumber) {
+          maxNumber = num;
+        }
+      }
+    }
+    
+    // Generate next sequential number with leading zeros
+    const nextNumber = maxNumber + 1;
+      requestNumber = nextNumber.toString().padStart(3, "0");
+    }
+
+    const now = Date.now();
+
+    // Create request
+    const requestId = await ctx.db.insert("requests", {
+      requestNumber,
+      createdBy: currentUser._id,
+      siteId: args.siteId,
+      itemName: args.itemName,
+      description: args.description,
+      specsBrand: args.specsBrand,
+      quantity: args.quantity,
+      unit: args.unit,
+      requiredBy: args.requiredBy,
+      isUrgent: args.isUrgent,
+      photo: args.photo,
+      status: "pending",
+      notes: args.notes,
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    return { requestId, requestNumber };
+  },
+});
+
+/**
+ * Create multiple material requests with the same request number (Site Engineer only)
+ */
+export const createMultipleMaterialRequests = mutation({
+  args: {
+    siteId: v.id("sites"),
+    requiredBy: v.number(),
+    items: v.array(
+      v.object({
+        itemName: v.string(),
+        description: v.string(),
+        quantity: v.number(),
+        unit: v.string(),
+        notes: v.optional(v.string()),
+        isUrgent: v.boolean(),
+        photo: v.optional(
+          v.object({
+            imageUrl: v.string(),
+            imageKey: v.string(),
+          })
+        ),
+      })
+    ),
+  },
+  handler: async (ctx, args) => {
+    const currentUser = await getCurrentUser(ctx);
+
+    // Only site engineers can create requests
+    if (currentUser.role !== "site_engineer") {
+      throw new Error("Unauthorized: Only site engineers can create requests");
+    }
+
+    // Verify site exists and is assigned to user
+    const site = await ctx.db.get(args.siteId);
+    if (!site || !site.isActive) {
+      throw new Error("Site not found or inactive");
+    }
+
+    if (
+      !currentUser.assignedSites ||
+      !currentUser.assignedSites.includes(args.siteId)
+    ) {
+      throw new Error("Unauthorized: Site not assigned to you");
+    }
+
+    if (args.items.length === 0) {
+      throw new Error("At least one item is required");
     }
 
     // Generate unique sequential request number (001, 002, 003, etc.)
@@ -525,27 +685,134 @@ export const createMaterialRequest = mutation({
     const requestNumber = nextNumber.toString().padStart(3, "0");
 
     const now = Date.now();
+    const requestIds: Id<"requests">[] = [];
 
-    // Create request
-    const requestId = await ctx.db.insert("requests", {
-      requestNumber,
-      createdBy: currentUser._id,
-      siteId: args.siteId,
-      itemName: args.itemName,
-      description: args.description,
-      specsBrand: args.specsBrand,
-      quantity: args.quantity,
-      unit: args.unit,
-      requiredBy: args.requiredBy,
-      isUrgent: args.isUrgent,
-      photo: args.photo,
-      status: "pending",
-      notes: args.notes,
-      createdAt: now,
-      updatedAt: now,
-    });
+    // Create all requests with the same request number
+    for (let i = 0; i < args.items.length; i++) {
+      const item = args.items[i];
+      const requestId = await ctx.db.insert("requests", {
+        requestNumber,
+        createdBy: currentUser._id,
+        siteId: args.siteId,
+        itemName: item.itemName,
+        description: item.description,
+        specsBrand: undefined,
+        quantity: item.quantity,
+        unit: item.unit,
+        requiredBy: args.requiredBy,
+        isUrgent: item.isUrgent,
+        photo: item.photo,
+        itemOrder: i + 1, // Sequential order: 1, 2, 3...
+        status: "pending",
+        notes: item.notes,
+        createdAt: now,
+        updatedAt: now,
+      });
+      requestIds.push(requestId);
+    }
 
-    return requestId;
+    return { requestIds, requestNumber };
+  },
+});
+
+/**
+ * Save multiple material requests as draft (Site Engineer only)
+ */
+export const saveMultipleMaterialRequestsAsDraft = mutation({
+  args: {
+    siteId: v.id("sites"),
+    requiredBy: v.number(),
+    items: v.array(
+      v.object({
+        itemName: v.string(),
+        description: v.string(),
+        quantity: v.number(),
+        unit: v.string(),
+        notes: v.optional(v.string()),
+        isUrgent: v.boolean(),
+        photo: v.optional(
+          v.object({
+            imageUrl: v.string(),
+            imageKey: v.string(),
+          })
+        ),
+      })
+    ),
+  },
+  handler: async (ctx, args) => {
+    const currentUser = await getCurrentUser(ctx);
+
+    // Only site engineers can save drafts
+    if (currentUser.role !== "site_engineer") {
+      throw new Error("Unauthorized: Only site engineers can save drafts");
+    }
+
+    // Verify site exists and is assigned to user
+    const site = await ctx.db.get(args.siteId);
+    if (!site || !site.isActive) {
+      throw new Error("Site not found or inactive");
+    }
+
+    if (
+      !currentUser.assignedSites ||
+      !currentUser.assignedSites.includes(args.siteId)
+    ) {
+      throw new Error("Unauthorized: Site not assigned to you");
+    }
+
+    if (args.items.length === 0) {
+      throw new Error("At least one item is required");
+    }
+
+    // Generate temporary draft ID (DRAFT-001, DRAFT-002, etc.)
+    // Only count other drafts to generate sequential draft numbers
+    const allDrafts = await ctx.db
+      .query("requests")
+      .withIndex("by_status", (q) => q.eq("status", "draft"))
+      .collect();
+    
+    let maxDraftNumber = 0;
+    for (const draft of allDrafts) {
+      const draftMatch = draft.requestNumber.match(/^DRAFT-(\d{3})$/);
+      if (draftMatch) {
+        const num = parseInt(draftMatch[1], 10);
+        if (num > maxDraftNumber) {
+          maxDraftNumber = num;
+        }
+      }
+    }
+    
+    const nextDraftNumber = maxDraftNumber + 1;
+    const requestNumber = `DRAFT-${nextDraftNumber.toString().padStart(3, "0")}`;
+
+    const now = Date.now();
+    const requestIds: Id<"requests">[] = [];
+
+    // Create all requests with draft status
+    for (let i = 0; i < args.items.length; i++) {
+      const item = args.items[i];
+      const requestId = await ctx.db.insert("requests", {
+        requestNumber,
+        createdBy: currentUser._id,
+        siteId: args.siteId,
+        itemName: item.itemName,
+        description: item.description,
+        specsBrand: undefined,
+        quantity: item.quantity,
+        unit: item.unit,
+        requiredBy: args.requiredBy,
+        isUrgent: item.isUrgent,
+        photo: item.photo,
+        itemOrder: i + 1, // Sequential order: 1, 2, 3...
+        status: "draft",
+        notes: item.notes,
+        createdAt: now,
+        updatedAt: now,
+      });
+      requestIds.push(requestId);
+    }
+
+    return { requestIds, requestNumber };
   },
 });
 
@@ -598,6 +865,213 @@ export const updateRequestStatus = mutation({
     });
 
     return { success: true };
+  },
+});
+
+/**
+ * Send draft request (convert to pending with proper request number) - Site Engineer only
+ */
+export const sendDraftRequest = mutation({
+  args: {
+    requestNumber: v.string(), // Draft request number (DRAFT-001, etc.)
+  },
+  handler: async (ctx, args) => {
+    const currentUser = await getCurrentUser(ctx);
+
+    // Only site engineers can send their own draft requests
+    if (currentUser.role !== "site_engineer") {
+      throw new Error("Unauthorized: Only site engineers can send draft requests");
+    }
+
+    // Get all requests with this draft request number
+    const requests = await ctx.db
+      .query("requests")
+      .withIndex("by_request_number", (q) => q.eq("requestNumber", args.requestNumber))
+      .collect();
+
+    if (requests.length === 0) {
+      throw new Error("Draft request not found");
+    }
+
+    // Check if all requests are in draft status and created by current user
+    const allDrafts = requests.every((req) => req.status === "draft" && req.createdBy === currentUser._id);
+    if (!allDrafts) {
+      throw new Error("All requests must be in draft status and created by you");
+    }
+
+    // Generate next sequential request number (only count non-draft requests)
+    const allRequests = await ctx.db.query("requests").collect();
+    
+    let maxNumber = 0;
+    for (const request of allRequests) {
+      // Only count non-draft requests (001, 002, etc.)
+      const numMatch = request.requestNumber.match(/^(\d{3})$/);
+      if (numMatch) {
+        const num = parseInt(numMatch[1], 10);
+        if (num > maxNumber) {
+          maxNumber = num;
+        }
+      }
+    }
+    
+    // Generate next sequential number
+    const nextNumber = maxNumber + 1;
+    const newRequestNumber = nextNumber.toString().padStart(3, "0");
+
+    const now = Date.now();
+
+    // Update all requests to pending with new request number
+    for (const request of requests) {
+      await ctx.db.patch(request._id, {
+        requestNumber: newRequestNumber,
+        status: "pending",
+        updatedAt: now,
+      });
+    }
+
+    return { success: true, requestNumber: newRequestNumber };
+  },
+});
+
+/**
+ * Delete draft request - Site Engineer only (can delete their own drafts)
+ */
+export const deleteDraftRequest = mutation({
+  args: {
+    requestNumber: v.string(), // Draft request number
+  },
+  handler: async (ctx, args) => {
+    const currentUser = await getCurrentUser(ctx);
+
+    // Only site engineers can delete their own drafts
+    if (currentUser.role !== "site_engineer") {
+      throw new Error("Unauthorized: Only site engineers can delete their own drafts");
+    }
+
+    // Get all requests with this request number
+    const requests = await ctx.db
+      .query("requests")
+      .withIndex("by_request_number", (q) => q.eq("requestNumber", args.requestNumber))
+      .collect();
+
+    if (requests.length === 0) {
+      throw new Error("Draft request not found");
+    }
+
+    // Check if all requests are in draft status and created by current user
+    const allDrafts = requests.every((req) => req.status === "draft" && req.createdBy === currentUser._id);
+    if (!allDrafts) {
+      throw new Error("Unauthorized: You can only delete your own drafts");
+    }
+
+    // Delete all requests
+    for (const request of requests) {
+      await ctx.db.delete(request._id);
+    }
+
+    return { success: true };
+  },
+});
+
+/**
+ * Update draft request - Site Engineer only (can edit their own drafts)
+ */
+export const updateDraftRequest = mutation({
+  args: {
+    requestNumber: v.string(), // Draft request number
+    siteId: v.id("sites"),
+    requiredBy: v.number(),
+    items: v.array(
+      v.object({
+        itemName: v.string(),
+        description: v.string(),
+        quantity: v.number(),
+        unit: v.string(),
+        notes: v.optional(v.string()),
+        isUrgent: v.boolean(),
+        photo: v.optional(
+          v.object({
+            imageUrl: v.string(),
+            imageKey: v.string(),
+          })
+        ),
+      })
+    ),
+  },
+  handler: async (ctx, args) => {
+    const currentUser = await getCurrentUser(ctx);
+
+    // Only site engineers can update their own drafts
+    if (currentUser.role !== "site_engineer") {
+      throw new Error("Unauthorized: Only site engineers can update drafts");
+    }
+
+    // Get existing draft requests
+    const existingRequests = await ctx.db
+      .query("requests")
+      .withIndex("by_request_number", (q) => q.eq("requestNumber", args.requestNumber))
+      .collect();
+
+    if (existingRequests.length === 0) {
+      throw new Error("Draft request not found");
+    }
+
+    // Check if all are drafts created by current user
+    const allDrafts = existingRequests.every((req) => req.status === "draft" && req.createdBy === currentUser._id);
+    if (!allDrafts) {
+      throw new Error("Unauthorized: You can only update your own drafts");
+    }
+
+    // Verify site exists and is assigned to user
+    const site = await ctx.db.get(args.siteId);
+    if (!site || !site.isActive) {
+      throw new Error("Site not found or inactive");
+    }
+
+    if (
+      !currentUser.assignedSites ||
+      !currentUser.assignedSites.includes(args.siteId)
+    ) {
+      throw new Error("Unauthorized: Site not assigned to you");
+    }
+
+    if (args.items.length === 0) {
+      throw new Error("At least one item is required");
+    }
+
+    const now = Date.now();
+
+    // Delete old requests
+    for (const request of existingRequests) {
+      await ctx.db.delete(request._id);
+    }
+
+    // Create new requests with same draft number
+    const requestIds: Id<"requests">[] = [];
+    for (let i = 0; i < args.items.length; i++) {
+      const item = args.items[i];
+      const requestId = await ctx.db.insert("requests", {
+        requestNumber: args.requestNumber, // Keep same draft number
+        createdBy: currentUser._id,
+        siteId: args.siteId,
+        itemName: item.itemName,
+        description: item.description,
+        specsBrand: undefined,
+        quantity: item.quantity,
+        unit: item.unit,
+        requiredBy: args.requiredBy,
+        isUrgent: item.isUrgent,
+        photo: item.photo,
+        itemOrder: i + 1, // Sequential order: 1, 2, 3...
+        status: "draft",
+        notes: item.notes,
+        createdAt: existingRequests[0].createdAt, // Keep original creation time
+        updatedAt: now,
+      });
+      requestIds.push(requestId);
+    }
+
+    return { requestIds, requestNumber: args.requestNumber };
   },
 });
 

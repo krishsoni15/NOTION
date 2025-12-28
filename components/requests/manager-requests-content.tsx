@@ -22,13 +22,17 @@ export function ManagerRequestsContent() {
   
   const allRequests = useQuery(api.requests.getAllRequests);
   
-  // Separate new requests (pending approval/CC) from history
+  // Separate drafts, new requests (pending approval/CC), and history
+  const draftRequests = allRequests?.filter((r) => 
+    r.status === "draft"
+  ) || [];
+  
   const newRequests = allRequests?.filter((r) => 
     ["pending", "cc_pending"].includes(r.status)
   ) || [];
   
   const historyRequests = allRequests?.filter((r) => 
-    !["pending", "cc_pending"].includes(r.status)
+    !["draft", "pending", "cc_pending"].includes(r.status)
   ) || [];
 
   return (
@@ -42,7 +46,10 @@ export function ManagerRequestsContent() {
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="grid w-full grid-cols-2">
+          <TabsList className="grid w-full grid-cols-3">
+            <TabsTrigger value="drafts">
+              Drafts ({draftRequests.length})
+            </TabsTrigger>
             <TabsTrigger value="new">
               New Requests ({newRequests.length})
             </TabsTrigger>
@@ -50,6 +57,15 @@ export function ManagerRequestsContent() {
               History ({historyRequests.length})
             </TabsTrigger>
           </TabsList>
+
+          <TabsContent value="drafts">
+            <RequestsTable
+              requests={draftRequests}
+              onViewDetails={(requestId) => setSelectedRequestId(requestId)}
+              onOpenCC={(requestId) => setCCRequestId(requestId)}
+              showCreator={true}
+            />
+          </TabsContent>
 
           <TabsContent value="new">
             <RequestsTable

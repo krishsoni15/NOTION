@@ -191,6 +191,88 @@
   .animate-bounce-subtle {
     animation: bounce 0.5s ease-in-out;
   }
+
+  /* Slide in from top animation for new requests */
+  @keyframes slideIn {
+    from {
+      opacity: 0;
+      transform: translateY(-20px) scale(0.95);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+
+  /* Fade in animation */
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  /* Highlight animation for newly sent requests */
+  @keyframes highlight {
+    0% {
+      background-color: transparent;
+    }
+    50% {
+      background-color: hsl(var(--primary) / 0.1);
+    }
+    100% {
+      background-color: transparent;
+    }
+  }
+
+  /* Slide down animation for new requests appearing at top */
+  @keyframes slideDown {
+    from {
+      opacity: 0;
+      transform: translateY(-30px) scale(0.98);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+
+  .animate-highlight {
+    animation: highlight 2s ease-in-out;
+  }
+
+  .animate-slide-down {
+    animation: slideDown 0.6s ease-out;
+  }
+
+  /* Enhanced table styling for grouped items */
+  .grouped-item-row {
+    @apply bg-gradient-to-r from-primary/5 to-transparent hover:from-primary/10 hover:to-muted/30;
+  }
+
+  .grouped-item-border {
+    @apply border-l-4 border-l-primary/30;
+  }
+
+  .grouped-item-indicator {
+    @apply w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center;
+  }
+
+  .grouped-item-indicator span {
+    @apply text-xs font-medium text-primary;
+  }
+
+  /* Mobile-friendly touch targets */
+  .touch-manipulation {
+    touch-action: manipulation;
+  }
+
+  /* Improved card hover effects */
+  .grouped-card-hover {
+    @apply hover:shadow-lg hover:scale-[1.02] transition-all duration-200;
+  }
 }
 
 /* Modern Scrollbar Styling - Works with all themes and light/dark mode */

@@ -51,7 +51,9 @@ export default defineSchema({
       imageUrl: v.string(), // Cloudflare R2 public URL
       imageKey: v.string(), // R2 object key for deletion/updates
     })), // Photo attachment
+    itemOrder: v.optional(v.number()), // Order of item within the request (1, 2, 3...)
     status: v.union(
+      v.literal("draft"),
       v.literal("pending"),
       v.literal("approved"),
       v.literal("rejected"),

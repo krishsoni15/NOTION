@@ -96,7 +96,7 @@ export function usePresenceHeartbeat(enabled: boolean = true) {
         }
       });
     };
-  }, [enabled, updatePresence, setOffline]);
+  }, [enabled]); // Remove updatePresence and setOffline from dependencies to prevent re-running
 }
 
 /**

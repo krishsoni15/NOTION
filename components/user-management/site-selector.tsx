@@ -172,9 +172,23 @@ export function SiteSelector({
                         {site.address && (
                           <div className="flex items-start gap-2">
                             <MapPin className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
-                            <div>
+                            <div className="flex-1">
                               <p className="text-xs text-muted-foreground">Address</p>
-                              <p className="font-medium text-xs">{site.address}</p>
+                              <div className="flex items-center gap-1">
+                                <p className="font-medium text-xs flex-1">{site.address}</p>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    const encodedAddress = encodeURIComponent(site.address || '');
+                                    const mapUrl = `https://www.google.com/maps/search/?api=1&query=${encodedAddress}`;
+                                    window.open(mapUrl, '_blank');
+                                  }}
+                                  className="text-muted-foreground hover:text-primary transition-colors p-1 rounded-full hover:bg-muted/50 shrink-0 border border-muted-foreground/20 hover:border-primary/40"
+                                  title="Open in Maps"
+                                >
+                                  <MapPin className="h-2.5 w-2.5" />
+                                </button>
+                              </div>
                             </div>
                           </div>
                         )}

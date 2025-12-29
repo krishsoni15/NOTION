@@ -45,6 +45,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { MoreHorizontal, Edit, Trash2, Building2, MapPin, Hash, Calendar, Info, Power, PowerOff } from "lucide-react";
 import { SiteFormDialog } from "./site-form-dialog";
+import { SiteInfoDialog } from "../requests/site-info-dialog";
 import { toast } from "sonner";
 import type { Doc } from "@/convex/_generated/dataModel";
 
@@ -60,6 +61,7 @@ export function SiteTable({ sites, viewMode = "table" }: SiteTableProps) {
   const [deletingSite, setDeletingSite] = useState<Doc<"sites"> | null>(null);
   const [deactivatingSite, setDeactivatingSite] = useState<Doc<"sites"> | null>(null);
   const [loadingSiteId, setLoadingSiteId] = useState<string | null>(null);
+  const [selectedSiteId, setSelectedSiteId] = useState<Doc<"sites">["_id"] | null>(null);
   const deleteSite = useMutation(api.sites.deleteSite);
   const toggleSiteStatus = useMutation(api.sites.toggleSiteStatus);
   
@@ -148,14 +150,13 @@ export function SiteTable({ sites, viewMode = "table" }: SiteTableProps) {
             <div className="flex-1 min-w-0">
               <CardTitle className="text-base font-semibold flex items-center gap-2 mb-1">
                 <Building2 className="h-4 w-4 text-primary shrink-0" />
-                <span className="truncate">{site.name}</span>
+                <button
+                  onClick={() => setSelectedSiteId(site._id)}
+                  className="truncate text-foreground hover:text-primary hover:bg-muted/50 rounded-full px-3 py-1.5 -mx-2 -my-1 transition-colors cursor-pointer text-left border border-transparent hover:border-primary/20"
+                >
+                  {site.name}
+                </button>
               </CardTitle>
-              {site.code && (
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Hash className="h-3.5 w-3.5 shrink-0" />
-                  <span className="truncate">{site.code}</span>
-                </div>
-              )}
             </div>
             <Badge variant={site.isActive ? "default" : "secondary"} className="text-xs">
               {site.isActive ? "Active" : "Inactive"}
@@ -239,7 +240,6 @@ export function SiteTable({ sites, viewMode = "table" }: SiteTableProps) {
               <TableHeader>
                 <TableRow>
                   <TableHead>Site Name</TableHead>
-                  <TableHead>Code</TableHead>
                   <TableHead>Address</TableHead>
                   <TableHead>Description</TableHead>
                   <TableHead>Status</TableHead>
@@ -250,13 +250,13 @@ export function SiteTable({ sites, viewMode = "table" }: SiteTableProps) {
               <TableBody>
                 {sites.map((site) => (
                   <TableRow key={site._id}>
-                    <TableCell className="font-medium">{site.name}</TableCell>
-                    <TableCell>
-                      {site.code ? (
-                        <Badge variant="outline">{site.code}</Badge>
-                      ) : (
-                        "—"
-                      )}
+                    <TableCell className="font-medium">
+                      <button
+                        onClick={() => setSelectedSiteId(site._id)}
+                        className="text-foreground hover:text-primary hover:bg-muted/50 rounded-full px-3 py-1.5 -mx-2 -my-1 transition-colors cursor-pointer text-left border border-transparent hover:border-primary/20"
+                      >
+                        {site.name}
+                      </button>
                     </TableCell>
                     <TableCell className="max-w-xs truncate">
                       {site.address || "—"}
@@ -431,6 +431,14 @@ export function SiteTable({ sites, viewMode = "table" }: SiteTableProps) {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <SiteInfoDialog
+        open={!!selectedSiteId}
+        onOpenChange={(open) => {
+          if (!open) setSelectedSiteId(null);
+        }}
+        siteId={selectedSiteId}
+      />
     </>
   );
 }

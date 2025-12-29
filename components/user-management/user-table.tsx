@@ -9,6 +9,7 @@
 import { useState, useEffect } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { useUser } from "@clerk/nextjs";
+import { SiteInfoDialog } from "../requests/site-info-dialog";
 import { api } from "@/convex/_generated/api";
 import {
   Table,
@@ -77,6 +78,13 @@ export function UserTable({ users, viewMode = "table" }: UserTableProps) {
   const [editingUser, setEditingUser] = useState<Doc<"users"> | null>(null);
   const [deletingUser, setDeletingUser] = useState<Doc<"users"> | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
+  const [selectedSiteId, setSelectedSiteId] = useState<Doc<"sites">["_id"] | null>(null);
+
+  const handleOpenInMap = (address: string) => {
+    const encodedAddress = encodeURIComponent(address);
+    const mapUrl = `https://www.google.com/maps/search/?api=1&query=${encodedAddress}`;
+    window.open(mapUrl, '_blank');
+  };
 
   // Reset to page 1 when users change
   useEffect(() => {
@@ -267,6 +275,29 @@ export function UserTable({ users, viewMode = "table" }: UserTableProps) {
                 <p className="text-sm font-medium">{user.phoneNumber || "—"}</p>
               </div>
             </div>
+            {user.address && (
+              <div className="flex items-start gap-2.5">
+                <MapPin className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-1">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Address</p>
+                      <p className="text-sm font-medium line-clamp-2">{user.address}</p>
+                    </div>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleOpenInMap(user.address);
+                      }}
+                      className="text-primary hover:text-primary/80 hover:bg-primary/10 rounded-full p-2 transition-colors shrink-0 border border-primary/20 hover:border-primary/40"
+                      title="Open in Maps"
+                    >
+                      <MapPin className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
             <div className="flex items-start gap-2.5">
               <Calendar className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
               <div className="flex-1 min-w-0">
@@ -290,16 +321,13 @@ export function UserTable({ users, viewMode = "table" }: UserTableProps) {
                     const site = allSites?.find((s) => s._id === siteId);
                     return site ? (
                       <div key={siteId} className="flex items-center gap-1">
-                        <Popover>
-                          <PopoverTrigger asChild>
-                            <Badge 
-                              variant="secondary" 
-                              className="text-xs font-medium cursor-pointer hover:bg-primary/10 transition-colors"
-                            >
-                              {site.name}
-                            </Badge>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-80 p-4" align="start">
+                        <Badge
+                          variant="secondary"
+                          className="text-xs font-medium cursor-pointer hover:bg-primary/10 transition-colors"
+                          onClick={() => setSelectedSiteId(site._id)}
+                        >
+                          {site.name}
+                        </Badge>
                             <div className="space-y-3">
                               <div>
                                 <h4 className="font-semibold text-sm mb-2 flex items-center gap-2">
@@ -337,8 +365,6 @@ export function UserTable({ users, viewMode = "table" }: UserTableProps) {
                                 )}
                               </div>
                             </div>
-                          </PopoverContent>
-                        </Popover>
                       </div>
                     ) : null;
                   })}
@@ -364,6 +390,7 @@ export function UserTable({ users, viewMode = "table" }: UserTableProps) {
                   <TableHead className="font-semibold text-foreground">Username</TableHead>
                   <TableHead className="font-semibold text-foreground">Role</TableHead>
                   <TableHead className="font-semibold text-foreground">Phone</TableHead>
+                  <TableHead className="font-semibold text-foreground">Address</TableHead>
                   <TableHead className="font-semibold text-foreground">Sites</TableHead>
                   <TableHead className="font-semibold text-foreground">Status</TableHead>
                   <TableHead className="font-semibold text-foreground">Created</TableHead>
@@ -393,6 +420,25 @@ export function UserTable({ users, viewMode = "table" }: UserTableProps) {
                         <Badge variant="outline">{ROLE_LABELS[user.role]}</Badge>
                       </TableCell>
                       <TableCell>{user.phoneNumber}</TableCell>
+                      <TableCell className="max-w-xs">
+                        {user.address ? (
+                          <div className="flex items-center gap-2">
+                            <span className="truncate flex-1">{user.address}</span>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleOpenInMap(user.address);
+                              }}
+                              className="text-primary hover:text-primary/80 hover:bg-primary/10 rounded-full p-2 transition-colors shrink-0 border border-primary/20 hover:border-primary/40"
+                              title="Open in Maps"
+                            >
+                              <MapPin className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        ) : (
+                          "—"
+                        )}
+                      </TableCell>
                       <TableCell>
                         {user.role === ROLES.SITE_ENGINEER && user.assignedSites && user.assignedSites.length > 0 ? (
                           <div className="flex flex-wrap gap-1 items-center">
@@ -569,6 +615,14 @@ export function UserTable({ users, viewMode = "table" }: UserTableProps) {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <SiteInfoDialog
+        open={!!selectedSiteId}
+        onOpenChange={(open) => {
+          if (!open) setSelectedSiteId(null);
+        }}
+        siteId={selectedSiteId}
+      />
     </div>
   );
 }

@@ -26,6 +26,7 @@ interface Request {
   status: string;
   site?: {
     name: string;
+    code?: string;
   } | null;
   creator?: {
     fullName: string;
@@ -79,7 +80,7 @@ export function RequestCardWithCC({ request, statusInfo, onViewDetails, onOpenCC
 
             <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
               <span><span className="font-medium">ID:</span> {request.requestNumber}</span>
-              <span><span className="font-medium">Site:</span> {request.site?.name || "N/A"}</span>
+              <span><span className="font-medium">Site:</span> {request.site?.name || "N/A"}{request.site?.code ? ` (${request.site.code})` : ""}</span>
               <span><span className="font-medium">Qty:</span> {request.quantity} {request.unit}</span>
               <span><span className="font-medium">By:</span> {new Date(request.requiredBy).toLocaleDateString()}</span>
             </div>

@@ -38,12 +38,6 @@ export function ManagerRequestsContent() {
   return (
     <>
       <div className="space-y-6">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">All Requests</h1>
-          <p className="text-muted-foreground">
-            Review and approve site requests
-          </p>
-        </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList className="grid w-full grid-cols-3">

@@ -48,6 +48,17 @@ export const getUserByClerkId = query({
 });
 
 /**
+ * Get user by ID
+ */
+export const getUserById = query({
+  args: { userId: v.id("users") },
+  handler: async (ctx, args) => {
+    const user = await ctx.db.get(args.userId);
+    return user;
+  },
+});
+
+/**
  * Get user by username
  */
 export const getUserByUsername = query({

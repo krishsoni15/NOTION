@@ -203,24 +203,24 @@ export function MaterialRequestForm({
             return orderA - orderB; // Ascending: 1, 2, 3...
           })
           .map((req, index) => {
-            const quantityInput = `${req.quantity} ${req.unit}`;
-            return {
+        const quantityInput = `${req.quantity} ${req.unit}`;
+        return {
               id: `${index + 1}`, // Sequential IDs: 1, 2, 3...
-              itemName: req.itemName,
-              itemSearchQuery: req.itemName,
-              description: req.description,
-              quantityInput: quantityInput,
-              quantity: req.quantity,
-              unit: req.unit,
-              notes: req.notes || "",
-              images: [],
-              imagePreviews: req.photo ? [req.photo.imageUrl] : [],
-              selectedItemFromInventory: null,
-              showItemSuggestions: false,
-              showQuantitySuggestions: false,
-              isUrgent: req.isUrgent,
-            };
-          });
+          itemName: req.itemName,
+          itemSearchQuery: req.itemName,
+          description: req.description,
+          quantityInput: quantityInput,
+          quantity: req.quantity,
+          unit: req.unit,
+          notes: req.notes || "",
+          images: [],
+          imagePreviews: req.photo ? [req.photo.imageUrl] : [],
+          selectedItemFromInventory: null,
+          showItemSuggestions: false,
+          showQuantitySuggestions: false,
+          isUrgent: req.isUrgent,
+        };
+      });
       
       // Ensure items are sorted by ID before setting state
       const sortedDraftItems = draftItems.sort((a, b) => {
@@ -1240,8 +1240,22 @@ export function MaterialRequestForm({
                                       </div>
                                     )}
                                     {site.address && (
-                                      <div className="text-xs text-muted-foreground truncate mt-0.5">
-                                        {site.address}
+                                      <div className="flex items-center gap-1 mt-0.5">
+                                        <div className="text-xs text-muted-foreground truncate flex-1">
+                                          {site.address}
+                                        </div>
+                                        <div
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            const encodedAddress = encodeURIComponent(site.address || '');
+                                            const mapUrl = `https://www.google.com/maps/search/?api=1&query=${encodedAddress}`;
+                                            window.open(mapUrl, '_blank');
+                                          }}
+                                          className="text-muted-foreground hover:text-primary transition-colors p-1 rounded-full hover:bg-muted/50 shrink-0 border border-muted-foreground/20 hover:border-primary/40 cursor-pointer"
+                                          title="Open in Maps"
+                                        >
+                                          <MapPin className="h-2.5 w-2.5" />
+                                        </div>
                                       </div>
                                     )}
                                   </div>
@@ -1325,7 +1339,21 @@ export function MaterialRequestForm({
                                               <MapPin className="h-5 w-5 text-primary shrink-0 mt-0.5" />
                                               <div className="flex-1 min-w-0">
                                                 <p className="text-xs font-semibold text-muted-foreground mb-1.5 uppercase tracking-wide">Address</p>
-                                                <p className="text-sm font-medium break-words">{site.address}</p>
+                                                <div className="flex items-center gap-2">
+                                                  <p className="text-sm font-medium break-words flex-1">{site.address}</p>
+                                                  <button
+                                                    onClick={(e) => {
+                                                      e.stopPropagation();
+                                                      const encodedAddress = encodeURIComponent(site.address || '');
+                                                      const mapUrl = `https://www.google.com/maps/search/?api=1&query=${encodedAddress}`;
+                                                      window.open(mapUrl, '_blank');
+                                                    }}
+                                                    className="text-primary hover:text-primary/80 hover:bg-primary/10 rounded-full p-2 transition-colors shrink-0 border border-primary/20 hover:border-primary/40"
+                                                    title="Open in Maps"
+                                                  >
+                                                    <MapPin className="h-3.5 w-3.5" />
+                                                  </button>
+                                                </div>
                                               </div>
                                             </div>
                                           ) : (
@@ -1898,7 +1926,7 @@ export function MaterialRequestForm({
               </div>
               <AlertDialogTitle className="text-lg sm:text-xl font-bold">Confirm & Send Request</AlertDialogTitle>
             </div>
-            <AlertDialogDescription className="text-sm space-y-4 pt-2">
+            <div className="text-sm text-muted-foreground space-y-4 pt-2">
               <div className="p-4 rounded-lg bg-muted/50 border space-y-3">
                 <div className="flex items-start gap-3">
                   <MapPin className="h-5 w-5 text-primary shrink-0 mt-0.5" />
@@ -1946,7 +1974,7 @@ export function MaterialRequestForm({
                   Are you sure you want to send this request? This action cannot be undone.
                 </p>
               </div>
-            </AlertDialogDescription>
+            </div>
           </AlertDialogHeader>
           <AlertDialogFooter className="flex-col sm:flex-row gap-2 sm:gap-3 pt-4">
             <AlertDialogCancel 

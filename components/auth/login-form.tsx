@@ -35,23 +35,39 @@ export function LoginForm({ disabled = false }: LoginFormProps) {
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
-  // Check for error/disabled params in URL
+  // Check for error/disabled params in URL and clear them after displaying
   useEffect(() => {
     const errorParam = searchParams?.get("error");
     const disabledParam = searchParams?.get("disabled");
     
     if (errorParam === "not_found") {
       setError("Your account is not registered in the system. Please contact your administrator to create your account.");
+      // Clear error parameter from URL after displaying to prevent it from showing on refresh
+      setTimeout(() => {
+        router.replace("/login", { scroll: false });
+      }, 100);
     } else if (errorParam === "auth_error") {
       setError("Authentication error. Please try logging in again.");
+      setTimeout(() => {
+        router.replace("/login", { scroll: false });
+      }, 100);
     } else if (errorParam === "no_role") {
       setError("Your account exists but has no assigned role. Please contact your administrator.");
+      setTimeout(() => {
+        router.replace("/login", { scroll: false });
+      }, 100);
     } else if (errorParam === "not_authenticated") {
       setError("You must be logged in to access this page.");
+      setTimeout(() => {
+        router.replace("/login", { scroll: false });
+      }, 100);
     } else if (disabledParam === "true") {
       setError("Your account has been disabled. Please contact your administrator for assistance.");
+      setTimeout(() => {
+        router.replace("/login", { scroll: false });
+      }, 100);
     }
-  }, [searchParams]);
+  }, [searchParams, router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -83,8 +99,9 @@ export function LoginForm({ disabled = false }: LoginFormProps) {
           }
 
           // Small delay to ensure session is fully active
+          // Clear any error parameters from URL by redirecting to clean dashboard URL
           setTimeout(() => {
-        router.push("/dashboard");
+            router.replace("/dashboard"); // Use replace instead of push to avoid back button issues
             router.refresh(); // Force a refresh to ensure proper state
           }, 100);
         } catch (syncError) {

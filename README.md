@@ -52,7 +52,12 @@ CLERK_SECRET_KEY=sk_test_...
 NEXT_PUBLIC_CONVEX_URL=http://127.0.0.1:3210
 CONVEX_DEPLOYMENT=dev:your-deployment
 
-# Cloudflare R2 (for image uploads)
+# Cloudinary (for image uploads - recommended)
+CLOUDINARY_CLOUD_NAME=your_cloud_name
+CLOUDINARY_API_KEY=your_api_key
+CLOUDINARY_API_SECRET=your_api_secret
+
+# Cloudflare R2 (alternative for image uploads)
 R2_ACCOUNT_ID=your_account_id
 R2_ACCESS_KEY_ID=your_access_key
 R2_SECRET_ACCESS_KEY=your_secret_key
@@ -156,7 +161,7 @@ Open http://localhost:3000 → Login with your manager credentials → Start man
 - **Theme**: next-themes (light/dark mode with smooth transitions)
 - **Auth**: Clerk (username + password ONLY)
 - **Database**: Convex (real-time database)
-- **Storage**: Cloudflare R2 (for images)
+- **Storage**: Cloudinary (for images)
 - **State**: Convex React Queries
 
 ## 📁 Project Structure
@@ -237,11 +242,9 @@ NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_live_...
 CLERK_SECRET_KEY=sk_live_...
 NEXT_PUBLIC_CONVEX_URL=https://your-project.convex.cloud
 CONVEX_DEPLOYMENT=prod:your-deployment
-R2_ACCOUNT_ID=your_account_id
-R2_ACCESS_KEY_ID=your_access_key
-R2_SECRET_ACCESS_KEY=your_secret_key
-R2_BUCKET_NAME=your_bucket_name
-R2_PUBLIC_URL=https://your-bucket.r2.dev
+CLOUDINARY_CLOUD_NAME=your_cloud_name
+CLOUDINARY_API_KEY=your_api_key
+CLOUDINARY_API_SECRET=your_api_secret
 ```
 
 ## 🛠️ Development
@@ -284,9 +287,9 @@ npm run lint         # Run ESLint
 - Check browser console for errors
 
 ### Images not uploading
-- Verify R2 credentials in `.env.local`
-- Check R2 bucket permissions
-- Verify bucket name and public URL
+- Verify Cloudinary credentials in `.env.local`
+- Check Cloudinary dashboard for API keys
+- Verify cloud name, API key, and API secret
 
 ### Redirects not working
 - Clear browser cache and cookies

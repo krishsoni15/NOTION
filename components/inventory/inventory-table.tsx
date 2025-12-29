@@ -60,6 +60,7 @@ import { MoreHorizontal, Edit, Trash2, Image as ImageIcon, Plus, Package, Buildi
 import { useUserRole } from "@/hooks/use-user-role";
 import { ROLES } from "@/lib/auth/roles";
 import { InventoryFormDialog } from "./inventory-form-dialog";
+import { ItemInfoDialog } from "../requests/item-info-dialog";
 import { toast } from "sonner";
 import type { Doc, Id } from "@/convex/_generated/dataModel";
 
@@ -80,6 +81,7 @@ export function InventoryTable({ items, viewMode = "table" }: InventoryTableProp
   const [deletingItem, setDeletingItem] = useState<Doc<"inventory"> | null>(null);
   const [addingImageItem, setAddingImageItem] = useState<Doc<"inventory"> | null>(null);
   const [removingImageKey, setRemovingImageKey] = useState<string | null>(null);
+  const [selectedItemName, setSelectedItemName] = useState<string | null>(null);
 
   const canPerformCRUD = userRole === ROLES.PURCHASE_OFFICER; // Only Purchase Officers can edit/delete
   const canAddImages = userRole === ROLES.PURCHASE_OFFICER || userRole === ROLES.SITE_ENGINEER; // Purchase Officers and Site Engineers can add images
@@ -104,7 +106,12 @@ export function InventoryTable({ items, viewMode = "table" }: InventoryTableProp
             <div className="flex-1 min-w-0">
               <CardTitle className="text-base font-semibold flex items-center gap-2 mb-1">
                 <Package className="h-4 w-4 text-primary shrink-0" />
-                <span className="truncate">{item.itemName}</span>
+                <button
+                  onClick={() => setSelectedItemName(item.itemName)}
+                  className="truncate text-foreground hover:text-primary hover:bg-muted/50 rounded-full px-3 py-1.5 -mx-2 -my-1 transition-colors cursor-pointer text-left border border-transparent hover:border-primary/20"
+                >
+                  {item.itemName}
+                </button>
               </CardTitle>
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Badge variant="outline" className="text-xs">
@@ -462,7 +469,14 @@ export function InventoryTable({ items, viewMode = "table" }: InventoryTableProp
               <TableBody>
                 {items.map((item) => (
                   <TableRow key={item._id}>
-                    <TableCell className="font-medium">{item.itemName}</TableCell>
+                    <TableCell className="font-medium">
+                      <button
+                        onClick={() => setSelectedItemName(item.itemName)}
+                        className="font-semibold text-sm text-foreground hover:text-primary hover:bg-muted/50 rounded-full px-3 py-1.5 -mx-2 -my-1 transition-colors cursor-pointer text-left border border-transparent hover:border-primary/20"
+                      >
+                        {item.itemName}
+                      </button>
+                    </TableCell>
                     <TableCell>
                       <Badge variant="outline">{item.unit}</Badge>
                     </TableCell>
@@ -809,6 +823,14 @@ export function InventoryTable({ items, viewMode = "table" }: InventoryTableProp
           </AlertDialogContent>
         </AlertDialog>
       )}
+
+      <ItemInfoDialog
+        open={!!selectedItemName}
+        onOpenChange={(open) => {
+          if (!open) setSelectedItemName(null);
+        }}
+        itemName={selectedItemName}
+      />
     </>
   );
 }

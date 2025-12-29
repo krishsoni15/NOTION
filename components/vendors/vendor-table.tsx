@@ -74,6 +74,12 @@ export function VendorTable({ vendors, viewMode = "table" }: VendorTableProps) {
   const canPerformCRUD = userRole === ROLES.PURCHASE_OFFICER; // Only Purchase Officers can edit/delete
   const canDelete = userRole === ROLES.PURCHASE_OFFICER; // Only Purchase Officers can delete
 
+  const handleOpenInMap = (address: string) => {
+    const encodedAddress = encodeURIComponent(address);
+    const mapUrl = `https://www.google.com/maps/search/?api=1&query=${encodedAddress}`;
+    window.open(mapUrl, '_blank');
+  };
+
   const handleDelete = async () => {
     if (!deletingVendor) return;
     
@@ -167,7 +173,16 @@ export function VendorTable({ vendors, viewMode = "table" }: VendorTableProps) {
             <MapPin className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
             <div className="flex-1 min-w-0">
               <p className="text-muted-foreground text-xs">Address</p>
-              <p className="line-clamp-2">{vendor.address}</p>
+              <div className="flex items-center gap-1">
+                <p className="line-clamp-2 flex-1">{vendor.address}</p>
+                <button
+                  onClick={() => handleOpenInMap(vendor.address)}
+                  className="text-muted-foreground hover:text-primary transition-colors p-2 rounded-full hover:bg-muted/50 shrink-0 border border-muted-foreground/20 hover:border-primary/40"
+                  title="Open in Maps"
+                >
+                  <MapPin className="h-3 w-3" />
+                </button>
+              </div>
             </div>
           </div>
           <div className="flex items-center gap-2 text-xs text-muted-foreground pt-2 border-t">
@@ -206,7 +221,18 @@ export function VendorTable({ vendors, viewMode = "table" }: VendorTableProps) {
                     <TableCell>
                       <Badge variant="outline">{vendor.gstNumber}</Badge>
                     </TableCell>
-                    <TableCell className="max-w-xs truncate">{vendor.address}</TableCell>
+                    <TableCell className="max-w-xs">
+                      <div className="flex items-center gap-2">
+                        <span className="truncate flex-1">{vendor.address}</span>
+                        <button
+                          onClick={() => handleOpenInMap(vendor.address)}
+                          className="text-muted-foreground hover:text-primary transition-colors p-2 rounded-full hover:bg-muted/50 shrink-0 border border-muted-foreground/20 hover:border-primary/40"
+                          title="Open in Maps"
+                        >
+                          <MapPin className="h-3 w-3" />
+                        </button>
+                      </div>
+                    </TableCell>
                     <TableCell className="text-muted-foreground text-sm">
                       {new Date(vendor.createdAt).toLocaleDateString()}
                     </TableCell>

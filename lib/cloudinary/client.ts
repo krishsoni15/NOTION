@@ -1,0 +1,116 @@
+/**
+ * Cloudinary client for uploading and managing images.
+ */
+
+import { v2 as cloudinary } from 'cloudinary';
+
+// Configure Cloudinary
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME!,
+  api_key: process.env.CLOUDINARY_API_KEY!,
+  api_secret: process.env.CLOUDINARY_API_SECRET!,
+});
+
+export interface UploadResult {
+  public_id: string;
+  secure_url: string;
+  url: string;
+  format: string;
+  width: number;
+  height: number;
+  bytes: number;
+  created_at: string;
+}
+
+/**
+ * Upload an image to Cloudinary
+ */
+export async function uploadImage(
+  fileBuffer: Buffer,
+  publicId?: string,
+  options: {
+    folder?: string;
+    transformation?: any[];
+    quality?: string | number;
+    format?: string;
+  } = {}
+): Promise<{ url: string; publicId: string; key: string }> {
+  try {
+    const { folder = 'notion-uploads', transformation, quality = 'auto', format } = options;
+
+    const uploadOptions: any = {
+      folder,
+      quality,
+      resource_type: 'image',
+    };
+
+    if (publicId) {
+      uploadOptions.public_id = publicId;
+    }
+
+    if (transformation) {
+      uploadOptions.transformation = transformation;
+    }
+
+    if (format) {
+      uploadOptions.format = format;
+    }
+
+    const result = await new Promise<UploadResult>((resolve, reject) => {
+      cloudinary.uploader.upload_stream(
+        uploadOptions,
+        (error, result) => {
+          if (error) {
+            console.error('Cloudinary upload error:', error);
+            reject(error);
+          } else if (result) {
+            resolve(result);
+          } else {
+            reject(new Error('Upload failed - no result'));
+          }
+        }
+      ).end(fileBuffer);
+    });
+
+    return {
+      url: result.secure_url,
+      publicId: result.public_id,
+      key: result.public_id, // Cloudinary public_id serves as the key
+    };
+  } catch (error) {
+    console.error('Error uploading to Cloudinary:', error);
+    throw new Error('Failed to upload image to Cloudinary');
+  }
+}
+
+/**
+ * Delete an image from Cloudinary
+ */
+export async function deleteImage(publicId: string): Promise<void> {
+  try {
+    await cloudinary.uploader.destroy(publicId);
+  } catch (error) {
+    console.error('Error deleting from Cloudinary:', error);
+    throw new Error('Failed to delete image from Cloudinary');
+  }
+}
+
+/**
+ * Generate a unique public ID for Cloudinary
+ */
+export function generateImageKey(itemId: string, fileName: string): string {
+  const timestamp = Date.now();
+  const sanitizedFileName = fileName.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
+  return `${itemId}_${timestamp}_${sanitizedFileName}`;
+}
+
+/**
+ * Get Cloudinary configuration (for debugging)
+ */
+export function getCloudinaryConfig() {
+  return {
+    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+    api_key: process.env.CLOUDINARY_API_KEY ? '***configured***' : 'not configured',
+    api_secret: process.env.CLOUDINARY_API_SECRET ? '***configured***' : 'not configured',
+  };
+}

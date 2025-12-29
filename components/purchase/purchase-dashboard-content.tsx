@@ -165,7 +165,7 @@ export function PurchaseDashboardContent() {
                     <div className="text-sm text-muted-foreground">
                       <span>Req ID: {request.requestNumber}</span>
                       {" • "}
-                      <span>Site: {request.site?.name || "N/A"}</span>
+                      <span>Site: {request.site?.name || "N/A"}{request.site?.code ? ` (${request.site.code})` : ""}</span>
                     </div>
                   </div>
                   <Button onClick={() => setCCRequestId(request._id)}>

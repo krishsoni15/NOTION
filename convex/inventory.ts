@@ -92,6 +92,60 @@ export const getAllInventoryItems = query({
 });
 
 /**
+ * Get inventory item by item name
+ */
+export const getInventoryItemByName = query({
+  args: { itemName: v.string() },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) return null;
+
+    const currentUser = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_user_id", (q: any) => q.eq("clerkUserId", userId))
+      .unique();
+
+    if (!currentUser) return null;
+
+    // Search for inventory item by name (case-insensitive)
+    const items = await ctx.db
+      .query("inventory")
+      .withIndex("by_is_active", (q) => q.eq("isActive", true))
+      .collect();
+
+    const item = items.find(
+      (i) => i.itemName.toLowerCase() === args.itemName.toLowerCase()
+    );
+
+    if (!item) return null;
+
+    // Fetch vendor info
+    const vendorIds = (item as any).vendorIds || (item.vendorId ? [item.vendorId] : []);
+    const vendors = await Promise.all(
+      vendorIds.map(async (vendorId: any) => {
+        const vendor = await ctx.db.get(vendorId) as any;
+        if (!vendor) return null;
+        return {
+          _id: vendor._id,
+          companyName: vendor.companyName,
+          email: vendor.email,
+          phone: vendor.phone,
+          gstNumber: vendor.gstNumber,
+          address: vendor.address,
+        };
+      })
+    );
+    const validVendors = vendors.filter((v) => v !== null);
+
+    return {
+      ...item,
+      vendor: validVendors.length > 0 ? validVendors[0] : null,
+      vendors: validVendors,
+    };
+  },
+});
+
+/**
  * Get inventory item by ID
  */
 export const getInventoryItemById = query({

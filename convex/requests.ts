@@ -869,6 +869,80 @@ export const updateRequestStatus = mutation({
 });
 
 /**
+ * Bulk update request status (approve/reject multiple items) - Manager only
+ */
+export const bulkUpdateRequestStatus = mutation({
+  args: {
+    requestIds: v.array(v.id("requests")),
+    status: v.union(v.literal("approved"), v.literal("rejected"), v.literal("direct_po")),
+    rejectionReason: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const currentUser = await getCurrentUser(ctx);
+
+    // Only managers can approve/reject requests
+    if (currentUser.role !== "manager") {
+      throw new Error("Unauthorized: Only managers can update request status");
+    }
+
+    if (args.requestIds.length === 0) {
+      throw new Error("No requests selected");
+    }
+
+    const now = Date.now();
+
+    // Determine new status based on action
+    let newStatus: "ready_for_cc" | "ready_for_po" | "rejected";
+    if (args.status === "approved") {
+      newStatus = "ready_for_cc"; // Normal approval goes to cost comparison
+    } else if (args.status === "direct_po") {
+      newStatus = "ready_for_po"; // Direct PO bypasses cost comparison
+    } else {
+      newStatus = "rejected"; // Rejected stays rejected
+    }
+
+    // Update all requests
+    const results = await Promise.allSettled(
+      args.requestIds.map(async (requestId) => {
+        const request = await ctx.db.get(requestId);
+        if (!request) {
+          throw new Error(`Request ${requestId} not found`);
+        }
+
+        if (request.status !== "pending") {
+          throw new Error(`Request ${requestId} status can only be updated from pending`);
+        }
+
+        await ctx.db.patch(requestId, {
+          status: newStatus,
+          approvedBy: currentUser._id,
+          approvedAt: now,
+          rejectionReason:
+            args.status === "rejected" ? args.rejectionReason : undefined,
+          updatedAt: now,
+        });
+      })
+    );
+
+    // Check for errors
+    const errors = results
+      .map((result, index) => {
+        if (result.status === "rejected") {
+          return `Request ${args.requestIds[index]}: ${result.reason}`;
+        }
+        return null;
+      })
+      .filter((error) => error !== null);
+
+    if (errors.length > 0) {
+      throw new Error(`Some requests failed to update: ${errors.join(", ")}`);
+    }
+
+    return { success: true, updatedCount: args.requestIds.length };
+  },
+});
+
+/**
  * Send draft request (convert to pending with proper request number) - Site Engineer only
  */
 export const sendDraftRequest = mutation({

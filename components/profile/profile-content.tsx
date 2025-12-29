@@ -23,7 +23,7 @@ import { Label } from "@/components/ui/label";
 import { ROLE_LABELS } from "@/lib/auth/roles";
 import { PersonalInfoForm } from "./personal-info-form";
 import { PasswordForm } from "./password-form";
-import { User, Lock, Shield } from "lucide-react";
+import { User, Lock, Shield, MapPin } from "lucide-react";
 
 export function ProfileContent() {
   const { user, isLoaded } = useUser();
@@ -55,6 +55,12 @@ export function ProfileContent() {
     .join("")
     .toUpperCase()
     .slice(0, 2);
+
+  const handleOpenInMap = (address: string) => {
+    const encodedAddress = encodeURIComponent(address);
+    const mapUrl = `https://www.google.com/maps/search/?api=1&query=${encodedAddress}`;
+    window.open(mapUrl, '_blank');
+  };
 
   // Check if user is a manager
   const isManager = convexUser?.role === "manager";
@@ -157,7 +163,18 @@ export function ProfileContent() {
                   {/* Address */}
                   <div className="space-y-2">
                     <Label className="text-muted-foreground">Address</Label>
-                    <p className="text-sm font-medium">{convexUser?.address || "Not set"}</p>
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-medium flex-1">{convexUser?.address || "Not set"}</p>
+                      {convexUser?.address && (
+                        <button
+                          onClick={() => handleOpenInMap(convexUser.address)}
+                          className="text-primary hover:text-primary/80 hover:bg-primary/10 rounded-full p-2 transition-colors shrink-0 border border-primary/20 hover:border-primary/40"
+                          title="Open in Maps"
+                        >
+                          <MapPin className="h-4 w-4" />
+                        </button>
+                      )}
+                    </div>
                   </div>
 
                   {/* Role */}

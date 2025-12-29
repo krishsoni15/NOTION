@@ -1,12 +1,12 @@
 /**
  * Image Upload API Route
- * 
- * Handles image uploads to Cloudflare R2.
+ *
+ * Handles image uploads to Cloudinary.
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
-import { uploadImage, generateImageKey } from "@/lib/r2/client";
+import { uploadImage, generateImageKey } from "@/lib/cloudinary/client";
 
 export async function POST(request: NextRequest) {
   try {
@@ -49,12 +49,15 @@ export async function POST(request: NextRequest) {
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
 
-    // Generate unique key
-    const key = generateImageKey(itemId, file.name);
+    // Generate unique public ID
+    const publicId = generateImageKey(itemId, file.name);
 
-    // Upload to R2
+    // Upload to Cloudinary
     try {
-      const { url } = await uploadImage(buffer, key, file.type);
+      const { url, key } = await uploadImage(buffer, publicId, {
+        folder: 'notion-uploads',
+        quality: 'auto',
+      });
 
       if (!url || !key) {
         throw new Error("Upload succeeded but no URL or key returned");
@@ -66,7 +69,7 @@ export async function POST(request: NextRequest) {
         imageKey: key,
       });
     } catch (uploadError) {
-      console.error("R2 upload error:", uploadError);
+      console.error("Cloudinary upload error:", uploadError);
       throw uploadError;
     }
   } catch (error) {

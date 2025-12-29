@@ -26,15 +26,18 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
-import { Eye, AlertCircle, FileText, Edit, Trash2, Send, ChevronDown, ChevronRight } from "lucide-react";
+import { Eye, AlertCircle, FileText, Edit, Trash2, Send, ChevronDown, ChevronRight, MapPin } from "lucide-react";
 import { cn, normalizeSearchQuery, matchesAnySearchQuery } from "@/lib/utils";
+import { UserInfoDialog } from "./user-info-dialog";
+import { ItemInfoDialog } from "./item-info-dialog";
+import { SiteInfoDialog } from "./site-info-dialog";
 import type { Id } from "@/convex/_generated/dataModel";
 
-type RequestStatus = 
+type RequestStatus =
   | "draft"
-  | "pending" 
-  | "approved" 
-  | "rejected" 
+  | "pending"
+  | "approved"
+  | "rejected"
   | "ready_for_cc"
   | "cc_rejected"
   | "cc_pending"
@@ -42,6 +45,36 @@ type RequestStatus =
   | "ready_for_po"
   | "delivery_stage"
   | "delivered";
+
+// Enhanced status color mapping for view buttons with better visuals
+const getStatusButtonStyles = (status: RequestStatus) => {
+  const baseClasses = "border-2 font-medium shadow-sm hover:shadow-md transition-all duration-200";
+
+  switch (status) {
+    case "draft":
+      return `${baseClasses} border-slate-300 text-slate-700 bg-gradient-to-r from-slate-50 to-slate-100 hover:from-slate-100 hover:to-slate-200 hover:border-slate-400 dark:border-slate-600 dark:text-slate-300 dark:from-slate-800 dark:to-slate-700 dark:hover:from-slate-700 dark:hover:to-slate-600`;
+    case "pending":
+      return `${baseClasses} border-amber-300 text-amber-800 bg-gradient-to-r from-amber-50 to-amber-100 hover:from-amber-100 hover:to-amber-200 hover:border-amber-400 dark:border-amber-600 dark:text-amber-300 dark:from-amber-900 dark:to-amber-800 dark:hover:from-amber-800 dark:hover:to-amber-700`;
+    case "approved":
+      return `${baseClasses} border-emerald-300 text-emerald-800 bg-gradient-to-r from-emerald-50 to-emerald-100 hover:from-emerald-100 hover:to-emerald-200 hover:border-emerald-400 dark:border-emerald-600 dark:text-emerald-300 dark:from-emerald-900 dark:to-emerald-800 dark:hover:from-emerald-800 dark:hover:to-emerald-700`;
+    case "ready_for_cc":
+      return `${baseClasses} border-sky-300 text-sky-800 bg-gradient-to-r from-sky-50 to-sky-100 hover:from-sky-100 hover:to-sky-200 hover:border-sky-400 dark:border-sky-600 dark:text-sky-300 dark:from-sky-900 dark:to-sky-800 dark:hover:from-sky-800 dark:hover:to-sky-700`;
+    case "cc_pending":
+      return `${baseClasses} border-violet-300 text-violet-800 bg-gradient-to-r from-violet-50 to-violet-100 hover:from-violet-100 hover:to-violet-200 hover:border-violet-400 dark:border-violet-600 dark:text-violet-300 dark:from-violet-900 dark:to-violet-800 dark:hover:from-violet-800 dark:hover:to-violet-700`;
+    case "cc_approved":
+      return `${baseClasses} border-indigo-300 text-indigo-800 bg-gradient-to-r from-indigo-50 to-indigo-100 hover:from-indigo-100 hover:to-indigo-200 hover:border-indigo-400 dark:border-indigo-600 dark:text-indigo-300 dark:from-indigo-900 dark:to-indigo-800 dark:hover:from-indigo-800 dark:hover:to-indigo-700`;
+    case "ready_for_po":
+      return `${baseClasses} border-teal-300 text-teal-800 bg-gradient-to-r from-teal-50 to-teal-100 hover:from-teal-100 hover:to-teal-200 hover:border-teal-400 dark:border-teal-600 dark:text-teal-300 dark:from-teal-900 dark:to-teal-800 dark:hover:from-teal-800 dark:hover:to-teal-700`;
+    case "delivery_stage":
+      return `${baseClasses} border-orange-300 text-orange-800 bg-gradient-to-r from-orange-50 to-orange-100 hover:from-orange-100 hover:to-orange-200 hover:border-orange-400 dark:border-orange-600 dark:text-orange-300 dark:from-orange-900 dark:to-orange-800 dark:hover:from-orange-800 dark:hover:to-orange-700`;
+    case "rejected":
+      return `${baseClasses} border-rose-300 text-rose-800 bg-gradient-to-r from-rose-50 to-rose-100 hover:from-rose-100 hover:to-rose-200 hover:border-rose-400 dark:border-rose-600 dark:text-rose-300 dark:from-rose-900 dark:to-rose-800 dark:hover:from-rose-800 dark:hover:to-rose-700`;
+    case "delivered":
+      return `${baseClasses} border-blue-300 text-blue-800 bg-gradient-to-r from-blue-50 to-blue-100 hover:from-blue-100 hover:to-blue-200 hover:border-blue-400 dark:border-blue-600 dark:text-blue-300 dark:from-blue-900 dark:to-blue-800 dark:hover:from-blue-800 dark:hover:to-blue-700`;
+    default:
+      return `${baseClasses} border-blue-300 text-blue-800 bg-gradient-to-r from-blue-50 to-blue-100 hover:from-blue-100 hover:to-blue-200 hover:border-blue-400 dark:border-blue-600 dark:text-blue-300 dark:from-blue-900 dark:to-blue-800 dark:hover:from-blue-800 dark:hover:to-blue-700`;
+  }
+};
 
 interface Request {
   _id: Id<"requests">;
@@ -108,6 +141,15 @@ export function RequestsTable({
   viewMode = "table",
 }: RequestsTableProps) {
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+  const [selectedUserId, setSelectedUserId] = useState<Id<"users"> | null>(null);
+  const [selectedItemName, setSelectedItemName] = useState<string | null>(null);
+  const [selectedSiteId, setSelectedSiteId] = useState<Id<"sites"> | null>(null);
+
+  const handleOpenInMap = (address: string) => {
+    const encodedAddress = encodeURIComponent(address);
+    const mapUrl = `https://www.google.com/maps/search/?api=1&query=${encodedAddress}`;
+    window.open(mapUrl, '_blank');
+  };
 
   if (!requests) {
     return <div className="text-center py-8 text-muted-foreground">Loading...</div>;
@@ -124,16 +166,16 @@ export function RequestsTable({
   // Convert to array and sort by request number (newest first)
   const groupedRequestsArray = Array.from(groupedRequests.entries())
     .map(([requestNumber, items]) => {
-      // Sort items within group by itemOrder (1, 2, 3...) or createdAt as fallback
+      // Sort items within group by itemOrder (latest first: 3, 2, 1) or createdAt as fallback
       const sortedItems = items.sort((a, b) => {
         const orderA = a.itemOrder ?? a.createdAt;
         const orderB = b.itemOrder ?? b.createdAt;
-        return orderA - orderB; // Ascending order: 1, 2, 3...
+        return orderB - orderA; // Descending order: 3, 2, 1...
       });
       return {
-        requestNumber,
+      requestNumber,
         items: sortedItems,
-        firstItem: sortedItems[0], // Use first item for shared data (site, date, status, etc.)
+        firstItem: sortedItems[0], // Use latest item for shared data (site, date, status, etc.)
       };
     })
     .sort((a, b) => {
@@ -247,39 +289,67 @@ export function RequestsTable({
         const isExpanded = expandedGroups.has(requestNumber);
         const isNewlySent = newlySentRequestNumbers.has(requestNumber);
         const hasMultipleItems = items.length > 1;
+        const urgentCount = items.filter((item) => item.isUrgent).length;
+        const totalItems = items.length;
+
+        // Check if all items in the group have the same status
+        const allItemsHaveSameStatus = items.length > 0
+          ? items.every((item) => item.status === items[0].status)
+          : true;
 
         return (
           <div
             key={requestNumber}
             className={cn(
               "border rounded-lg p-3 sm:p-4 bg-card shadow-sm grouped-card-hover touch-manipulation",
-              isNewlySent && "bg-primary/10 border-l-4 border-l-primary shadow-md",
-              hasMultipleItems && "cursor-pointer"
+              isNewlySent && "bg-primary/10 border-l-4 border-l-primary shadow-md"
             )}
-            onClick={() => hasMultipleItems && toggleGroup(requestNumber)}
           >
             {/* Card Header */}
             <div className="flex items-start justify-between mb-3">
               <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="font-mono text-xs font-semibold text-primary">
+                <div className="flex items-center gap-2 mb-1 flex-nowrap overflow-x-auto">
+                  <span className="font-mono text-xs font-semibold text-primary flex-shrink-0">
                     #{requestNumber}
                   </span>
-                  {getStatusBadge(firstItem.status)}
-                  {hasMultipleItems && (
-                    <Badge variant="secondary" className="text-xs px-2 py-0.5">
-                      {items.length} items
+                  {allItemsHaveSameStatus && (
+                    <div className="flex-shrink-0">
+                      {getStatusBadge(firstItem.status)}
+                    </div>
+                  )}
+                  {urgentCount > 0 && (
+                    <Badge
+                      variant="destructive"
+                      className="flex items-center gap-1 text-xs flex-shrink-0"
+                    >
+                      <AlertCircle className="h-3 w-3" />
+                      {urgentCount}/{totalItems} urgent{urgentCount > 1 ? 's' : ''}
                     </Badge>
                   )}
                 </div>
-                <div className="text-sm font-medium text-foreground truncate">
-                  {firstItem.site?.name || "—"}
-                </div>
-                {firstItem.site?.code && (
-                  <div className="text-xs text-muted-foreground">
-                    Code: {firstItem.site.code}
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    {firstItem.site?.address && (
+                      <button
+                        onClick={() => handleOpenInMap(firstItem.site?.address || '')}
+                        className="text-primary hover:text-primary/80 hover:bg-primary/10 rounded-full p-2 transition-colors shrink-0 border border-primary/20 hover:border-primary/40"
+                        title="Open in Maps"
+                      >
+                        <MapPin className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                    {firstItem.site ? (
+                      <button
+                        onClick={() => setSelectedSiteId(firstItem.site!._id)}
+                        className="font-semibold text-sm text-foreground hover:text-primary hover:bg-muted/50 rounded-full px-3 py-1.5 -mx-2 -my-1 transition-colors cursor-pointer text-left truncate flex-1 border border-transparent hover:border-primary/20"
+                      >
+                        {firstItem.site.name}
+                      </button>
+                    ) : (
+                      "—"
+                    )}
                   </div>
-                )}
+                </div>
               </div>
               {hasMultipleItems && (
                 <Button
@@ -299,7 +369,7 @@ export function RequestsTable({
                   ) : (
                     <>
                       <ChevronRight className="h-3 w-3 mr-1" />
-                      <span className="hidden sm:inline">Expand ({items.length - 1} more)</span>
+                      <span className="hidden sm:inline">Expand ({items.length - 1})</span>
                       <span className="sm:hidden">+{items.length - 1}</span>
                     </>
                   )}
@@ -308,26 +378,38 @@ export function RequestsTable({
             </div>
 
             {/* Items List */}
-            <div className="space-y-3 mb-3">
+            <div
+              className={cn("space-y-3 mb-3", hasMultipleItems && "cursor-pointer")}
+              onClick={() => hasMultipleItems && toggleGroup(requestNumber)}
+            >
               {isExpanded ? (
                 items.map((item, idx) => {
-                  const displayNumber = item.itemOrder ?? idx + 1;
+                  const displayNumber = item.itemOrder ?? (items.length - idx);
                   return (
                   <div
                     key={item._id}
                     className="p-3 rounded-lg border bg-card/50 shadow-sm"
                   >
                     <div className="flex items-start justify-between gap-2 mb-2">
-                      <div className="flex-1 min-w-0">
+                    <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-1">
                           <Badge variant="outline" className="text-xs px-1.5 py-0.5 h-5 min-w-[24px] flex items-center justify-center flex-shrink-0">
                             {displayNumber}
                           </Badge>
                           <div className="space-y-1 text-sm flex-1 min-w-0">
                             <div className="break-words">
-                              <span className="font-medium text-muted-foreground">Item:</span> <span className="whitespace-normal">{item.itemName}</span>
+                              <span className="font-medium text-muted-foreground">Item:</span>{" "}
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setSelectedItemName(item.itemName);
+                                }}
+                                className="font-semibold text-sm text-foreground hover:text-primary hover:bg-muted/50 rounded-full px-3 py-1.5 -mx-2 -my-1 transition-colors cursor-pointer text-left border border-transparent hover:border-primary/20 whitespace-normal"
+                              >
+                                {item.itemName}
+                              </button>
                             </div>
-                            {item.description && (
+                      {item.description && (
                               <div className="text-xs text-muted-foreground break-words whitespace-normal">
                                 <span className="font-medium">Dis:</span> {item.description}
                               </div>
@@ -341,12 +423,6 @@ export function RequestsTable({
                           </div>
                         </div>
                         <div className="flex items-center gap-1 flex-shrink-0 ml-7">
-                          {item.isUrgent && (
-                            <Badge variant="destructive" className="text-xs">
-                              <AlertCircle className="h-3 w-3 mr-1" />
-                              Urgent
-                            </Badge>
-                          )}
                           {item.photo && (
                             <Badge variant="outline" className="text-xs px-1.5 py-0.5">
                               📷
@@ -354,10 +430,24 @@ export function RequestsTable({
                           )}
                         </div>
                       </div>
-                      <div className="flex items-center justify-between flex-shrink-0">
-                        <div className="text-xs">
-                          {getStatusBadge(item.status)}
-                        </div>
+                    </div>
+                    {/* Urgent and Status badges on new line */}
+                    <div className="flex items-center justify-between pt-2 border-t mt-2">
+                      <div className="flex items-center gap-2">
+                        {item.isUrgent && (
+                          <Badge variant="destructive" className="text-xs flex-shrink-0">
+                            <AlertCircle className="h-3 w-3 mr-1" />
+                            Urgent
+                          </Badge>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {item.status === 'draft' && (
+                          <Badge variant="outline" className="bg-gray-50 text-gray-700 border-gray-200 dark:bg-gray-950 dark:text-gray-300 dark:border-gray-800 text-xs flex-shrink-0">
+                            Draft
+                          </Badge>
+                        )}
+                        {item.status !== 'draft' && getStatusBadge(item.status)}
                       </div>
                     </div>
                   </div>
@@ -365,50 +455,68 @@ export function RequestsTable({
                 })
               ) : (
                 <div className="p-3 rounded-lg border bg-card/50 shadow-sm">
-                  <div className="flex items-center gap-2 mb-1">
-                    <Badge variant="outline" className="text-xs px-1.5 py-0.5 h-5 min-w-[24px] flex items-center justify-center flex-shrink-0">
-                      {items[0].itemOrder ?? 1}
-                    </Badge>
-                    <div className="space-y-1 text-sm flex-1 min-w-0">
+                  <div className="flex items-start justify-between gap-2 mb-2">
+                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                      <Badge variant="outline" className="text-xs px-1.5 py-0.5 h-5 min-w-[24px] flex items-center justify-center flex-shrink-0">
+                        {items[0].itemOrder ?? items.length}
+                      </Badge>
+                      <div className="space-y-1 text-sm flex-1 min-w-0">
                       <div className="break-words">
-                        <span className="font-medium text-muted-foreground">Item:</span> <span className="whitespace-normal">{items[0].itemName}</span>
+                        <span className="font-medium text-muted-foreground">Item:</span>{" "}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedItemName(items[0].itemName);
+                          }}
+                          className="font-semibold text-sm text-foreground hover:text-primary hover:bg-muted/50 rounded-full px-3 py-1.5 -mx-2 -my-1 transition-colors cursor-pointer text-left border border-transparent hover:border-primary/20 whitespace-normal"
+                        >
+                          {items[0].itemName}
+                        </button>
                       </div>
                       {items[0].description && (
                         <div className="text-xs text-muted-foreground break-words whitespace-normal">
                           <span className="font-medium">Dis:</span> {items[0].description}
                         </div>
                       )}
-                      <div className="text-xs text-muted-foreground">
-                        <span className="font-medium">Quantity:</span> {items[0].quantity} {items[0].unit}
+                        <div className="text-xs text-muted-foreground">
+                          <span className="font-medium">Quantity:</span> {items[0].quantity} {items[0].unit}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                  {items.length > 1 && (
-                    <div className="text-xs text-primary font-medium border-t pt-2 mt-2 cursor-pointer hover:underline">
-                      +{items.length - 1} more item{items.length - 1 > 1 ? 's' : ''}
+                    <div className="flex items-center gap-1 flex-shrink-0">
+                      {items[0].photo && (
+                        <Badge variant="outline" className="text-xs px-1.5 py-0.5">
+                          📷
+                        </Badge>
+                      )}
                     </div>
-                  )}
-                </div>
-              )}
-              {!isExpanded && hasMultipleItems && (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    toggleGroup(requestNumber);
-                  }}
-                  className="w-full p-3 rounded-lg border-2 border-dashed border-primary/30 bg-primary/5 hover:bg-primary/10 active:bg-primary/15 transition-colors text-sm font-medium text-primary touch-manipulation"
-                >
-                  <div className="flex items-center justify-center gap-2">
-                    <ChevronRight className="h-4 w-4" />
-                    <span>Show {items.length - 1} more item{items.length - 1 > 1 ? "s" : ""}</span>
                   </div>
-                </button>
+                  {/* Urgent and Status badges on new line */}
+                  <div className="flex items-center justify-between pt-2 border-t mt-2">
+                    <div className="flex items-center gap-2">
+                      {items[0].isUrgent && (
+                        <Badge variant="destructive" className="text-xs flex-shrink-0">
+                          <AlertCircle className="h-3 w-3 mr-1" />
+                          Urgent
+                        </Badge>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {items[0].status === 'draft' && (
+                        <Badge variant="outline" className="bg-gray-50 text-gray-700 border-gray-200 dark:bg-gray-950 dark:text-gray-300 dark:border-gray-800 text-xs flex-shrink-0">
+                          Draft
+                        </Badge>
+                      )}
+                      {items[0].status !== 'draft' && getStatusBadge(items[0].status)}
+                    </div>
+                  </div>
+                </div>
               )}
             </div>
 
             {/* Card Footer */}
-            <div className="flex items-center justify-between pt-3 border-t">
-              <div className="space-y-1">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 pt-3 border-t">
+              <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3">
                 <div className="text-sm font-medium text-foreground">
                   <span className="text-muted-foreground">Required:</span> {format(new Date(firstItem.requiredBy), "dd/MM/yyyy")}
                 </div>
@@ -416,25 +524,27 @@ export function RequestsTable({
                   <span className="font-medium">Created:</span> {format(new Date(firstItem.createdAt), "dd/MM/yyyy hh:mm a")}
                 </div>
               </div>
-              <div className="flex gap-1">
+              <div className="flex gap-0.5 flex-nowrap overflow-x-auto justify-end">
                 {firstItem.status === "draft" && (
-                  <>
+                  <div className="flex gap-0.5 flex-nowrap">
                     {onEditDraft && (
                       <Button
                         variant="ghost"
                         size="sm"
                         onClick={() => onEditDraft(requestNumber)}
-                        className="h-7 px-2 text-xs"
+                        className="h-6 sm:h-7 px-1.5 sm:px-2 text-xs text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-950"
+                        title="Edit draft"
                       >
                         <Edit className="h-3 w-3" />
                       </Button>
                     )}
                     {onSendDraft && (
                       <Button
-                        variant="ghost"
+                        variant="default"
                         size="sm"
                         onClick={() => onSendDraft(requestNumber)}
-                        className="h-7 px-2 text-xs"
+                        className="h-6 sm:h-7 px-1.5 sm:px-2 text-xs bg-green-600 hover:bg-green-700 text-white"
+                        title="Send draft"
                       >
                         <Send className="h-3 w-3" />
                       </Button>
@@ -444,21 +554,22 @@ export function RequestsTable({
                         variant="ghost"
                         size="sm"
                         onClick={() => onDeleteDraft(requestNumber)}
-                        className="h-7 px-2 text-xs text-destructive"
+                        className="h-6 sm:h-7 px-1.5 sm:px-2 text-xs text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950"
+                        title="Delete draft"
                       >
                         <Trash2 className="h-3 w-3" />
                       </Button>
                     )}
-                  </>
+                  </div>
                 )}
                 {onViewDetails && (
                   <Button
                     variant="ghost"
                     size="sm"
                     onClick={() => onViewDetails(firstItem._id)}
-                    className="h-7 px-2 text-xs"
+                    className="h-6 sm:h-7 px-1.5 sm:px-2 text-xs text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-950 transition-colors duration-200"
                   >
-                    <Eye className="h-3 w-3" />
+                    <Eye className="h-3 sm:h-3.5 w-3 sm:w-3.5" />
                   </Button>
                 )}
               </div>
@@ -485,7 +596,7 @@ export function RequestsTable({
                       <span className="sr-only">Group Indicator</span>
                     </TableHead>
                     <TableHead className="text-xs sm:text-sm">Request #</TableHead>
-                    <TableHead className="text-xs sm:text-sm hidden md:table-cell">Site Location</TableHead>
+                    <TableHead className="text-xs sm:text-sm">Site Location</TableHead>
                     <TableHead className="text-xs sm:text-sm">Dates</TableHead>
                     <TableHead className="text-xs sm:text-sm min-w-[200px] max-w-[400px]">Items</TableHead>
                     <TableHead className="text-xs sm:text-sm">Status</TableHead>
@@ -500,17 +611,23 @@ export function RequestsTable({
                 const isExpanded = expandedGroups.has(requestNumber);
                 const isNewlySent = newlySentRequestNumbers.has(requestNumber);
                 const hasMultipleItems = items.length > 1;
+                const urgentCount = items.filter((item) => item.isUrgent).length;
+                const totalItems = items.length;
+
+                // Check if all items in the group have the same status
+                const allItemsHaveSameStatus = items.length > 0
+                  ? items.every((item) => item.status === items[0].status)
+                  : true;
                 
                 return (
                   <Fragment key={requestNumber}>
                     {/* Group Header Row */}
                     <TableRow
                       className={cn(
-                        "transition-all duration-300 cursor-pointer hover:bg-muted/50",
-                        isNewlySent && "bg-primary/10 border-l-4 border-l-primary shadow-md",
-                        hasMultipleItems && "border-b-2 border-primary/20 bg-gradient-to-r from-primary/5 to-transparent"
+                        "transition-all duration-300 hover:bg-muted/30",
+                        isNewlySent && "border-l-2 border-l-primary",
+                        hasMultipleItems && "border-b border-primary/10"
                       )}
-                      onClick={() => hasMultipleItems && toggleGroup(requestNumber)}
                     >
                       <TableCell className="w-[50px] hidden sm:table-cell">
                         {hasMultipleItems && (
@@ -519,11 +636,11 @@ export function RequestsTable({
                               <Badge variant="outline" className="text-xs px-1.5 py-0.5 h-5">
                                 {items.length}
                               </Badge>
-                              {isExpanded ? (
-                                <ChevronDown className="h-4 w-4 text-muted-foreground" />
-                              ) : (
-                                <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                              )}
+                            {isExpanded ? (
+                              <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                            ) : (
+                              <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                            )}
                             </div>
                           </div>
                         )}
@@ -538,14 +655,29 @@ export function RequestsTable({
                           )}
                         </div>
                       </TableCell>
-                      <TableCell className="hidden md:table-cell">
-                        <div>
-                          {firstItem.site?.name || "—"}
-                          {firstItem.site?.code && (
-                            <span className="text-muted-foreground ml-1 text-xs">
-                              ({firstItem.site.code})
-                            </span>
-                          )}
+                      <TableCell className="max-w-xs">
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2">
+                            {firstItem.site ? (
+                              <button
+                                onClick={() => setSelectedSiteId(firstItem.site!._id)}
+                                className="font-semibold text-sm text-foreground hover:text-primary hover:bg-muted/50 rounded-md px-2 py-1 -mx-2 -my-1 transition-colors cursor-pointer text-left truncate"
+                              >
+                                {firstItem.site.name}
+                              </button>
+                            ) : (
+                              "—"
+                            )}
+                            {firstItem.site?.address && (
+                              <button
+                                onClick={() => handleOpenInMap(firstItem.site?.address || '')}
+                                className="text-primary hover:text-primary/80 hover:bg-primary/10 rounded-full p-2 transition-colors shrink-0 border border-primary/20 hover:border-primary/40"
+                                title="Open in Maps"
+                              >
+                                <MapPin className="h-3.5 w-3.5" />
+                              </button>
+                            )}
+                          </div>
                         </div>
                       </TableCell>
                       <TableCell className="text-xs sm:text-sm">
@@ -555,21 +687,33 @@ export function RequestsTable({
                         </div>
                       </TableCell>
                       <TableCell className="max-w-[400px]">
-                        <div className="space-y-2">
+                        <div
+                          className={cn("space-y-2", hasMultipleItems && "cursor-pointer")}
+                          onClick={() => hasMultipleItems && toggleGroup(requestNumber)}
+                        >
                           {isExpanded ? (
                             <div className="space-y-2">
                               {items.map((item, idx) => {
-                                const displayNumber = item.itemOrder ?? idx + 1;
+                                const displayNumber = item.itemOrder ?? (items.length - idx);
                                 return (
                                 <div key={item._id} className="p-2 rounded-md border bg-card">
                                   <div className="space-y-1.5 text-sm">
                                     <div className="flex items-start gap-2">
                                       <Badge variant="outline" className="text-xs px-1.5 py-0.5 h-5 min-w-[20px] flex items-center justify-center flex-shrink-0 mt-0.5">
-                                        {displayNumber}
+                                        {item.itemOrder ?? (items.length - idx)}
                                       </Badge>
                                       <div className="flex-1 min-w-0 space-y-1">
                                         <div className="break-words">
-                                          <span className="font-medium text-muted-foreground">Item:</span> <span className="whitespace-normal">{item.itemName}</span>
+                                          <span className="font-medium text-muted-foreground">Item:</span>{" "}
+                                          <button
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              setSelectedItemName(item.itemName);
+                                            }}
+                                            className="font-semibold text-sm text-foreground hover:text-primary hover:bg-muted/50 rounded-full px-3 py-1.5 -mx-2 -my-1 transition-colors cursor-pointer text-left border border-transparent hover:border-primary/20 whitespace-normal"
+                                          >
+                                            {item.itemName}
+                                          </button>
                                         </div>
                                         {item.description && (
                                           <div className="text-xs text-muted-foreground break-words whitespace-normal">
@@ -594,54 +738,73 @@ export function RequestsTable({
                           ) : (
                             <div className="space-y-1">
                               <div className="flex items-start gap-2">
-                                <Badge variant="outline" className="text-xs px-1.5 py-0.5 h-5 min-w-[20px] flex items-center justify-center flex-shrink-0 mt-0.5">
-                                  {items[0].itemOrder ?? 1}
-                                </Badge>
+                                      <Badge variant="outline" className="text-xs px-1.5 py-0.5 h-5 min-w-[20px] flex items-center justify-center flex-shrink-0 mt-0.5">
+                                        {items[0].itemOrder ?? items.length}
+                                      </Badge>
                                 <div className="flex-1 min-w-0 space-y-1">
                                   <div className="text-sm break-words">
-                                    <span className="font-medium text-muted-foreground">Item:</span> <span className="whitespace-normal">{items[0].itemName}</span>
+                                    <span className="font-medium text-muted-foreground">Item:</span>{" "}
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        setSelectedItemName(items[0].itemName);
+                                      }}
+                                      className="font-semibold text-sm text-foreground hover:text-primary hover:bg-muted/50 rounded-full px-3 py-1.5 -mx-2 -my-1 transition-colors cursor-pointer text-left border border-transparent hover:border-primary/20 whitespace-normal"
+                                    >
+                                      {items[0].itemName}
+                                    </button>
                                   </div>
                                   {items[0].description && (
                                     <div className="text-xs text-muted-foreground break-words whitespace-normal">
                                       <span className="font-medium">Dis:</span> {items[0].description}
                                     </div>
                                   )}
-                                  <div className="text-xs text-muted-foreground">
-                                    <span className="font-medium">Quantity:</span> {items[0].quantity} {items[0].unit}
+                                  <div className="text-xs text-muted-foreground flex items-center gap-2">
+                                    <span><span className="font-medium">Quantity:</span> {items[0].quantity} {items[0].unit}</span>
+                                    <div className="flex-shrink-0">
+                                      {getStatusBadge(items[0].status)}
+                                    </div>
                                   </div>
                                 </div>
                               </div>
-                              {items.length > 1 && (
-                                <div className="text-xs text-primary font-medium border-t pt-1 cursor-pointer hover:underline">
-                                  +{items.length - 1} more item{items.length - 1 > 1 ? 's' : ''}
-                                </div>
-                              )}
                             </div>
                           )}
                         </div>
                       </TableCell>
-                      <TableCell>{getStatusBadge(firstItem.status)}</TableCell>
+                      <TableCell>{allItemsHaveSameStatus ? getStatusBadge(firstItem.status) : null}</TableCell>
                       <TableCell className="hidden lg:table-cell">
                         <div className="flex gap-2 flex-wrap">
-                          {items.some((item) => item.isUrgent) && (
+                          {urgentCount > 0 && (
                             <Badge
                               variant="destructive"
                               className="flex items-center gap-1 text-xs"
                             >
                               <AlertCircle className="h-3 w-3" />
-                              Urgent
+                              {urgentCount}/{totalItems} urgent{urgentCount > 1 ? 's' : ''}
                             </Badge>
                           )}
                         </div>
                       </TableCell>
                       {showCreator && (
                         <TableCell className="hidden lg:table-cell text-xs sm:text-sm">
-                          {firstItem.creator?.fullName || "—"}
+                          {firstItem.creator ? (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedUserId(firstItem.creator!._id);
+                              }}
+                              className="font-semibold text-sm text-foreground hover:text-primary hover:bg-muted/50 rounded-full px-3 py-1.5 -mx-2 -my-1 transition-colors cursor-pointer text-left border border-transparent hover:border-primary/20"
+                            >
+                              {firstItem.creator.fullName}
+                            </button>
+                          ) : (
+                            "—"
+                          )}
                         </TableCell>
                       )}
                       {onViewDetails && (
                         <TableCell className="text-right">
-                          <div className="flex justify-end gap-2">
+                          <div className="flex justify-end gap-1 sm:gap-2 flex-nowrap overflow-x-auto">
                             {/* Draft action buttons */}
                             {firstItem.status === "draft" && (
                               <>
@@ -653,7 +816,7 @@ export function RequestsTable({
                                       e.stopPropagation();
                                       onEditDraft(requestNumber);
                                     }}
-                                    className="text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-950"
+                                    className="text-orange-600 hover:text-orange-700 hover:bg-orange-50 dark:text-orange-400 dark:hover:bg-orange-950"
                                   >
                                     <Edit className="h-4 w-4 mr-1" />
                                     Edit
@@ -705,14 +868,15 @@ export function RequestsTable({
                             )}
                             {/* View button - show for first item */}
                             <Button
-                              variant={showCreator && firstItem.status === "pending" ? "default" : "ghost"}
+                              variant={showCreator && firstItem.status === "pending" ? "default" : "outline"}
                               size="sm"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 onViewDetails(firstItem._id);
                               }}
+                              className={getStatusButtonStyles(firstItem.status)}
                             >
-                              <Eye className="h-4 w-4 mr-2" />
+                              <Eye className="h-4 w-4 mr-2 text-current" />
                               {showCreator && firstItem.status === "pending" ? "Review" : "View"}
                             </Button>
                           </div>
@@ -728,6 +892,32 @@ export function RequestsTable({
           </div>
         </div>
       )}
+
+      {/* User Info Dialog */}
+      <UserInfoDialog
+        open={!!selectedUserId}
+        onOpenChange={(open) => {
+          if (!open) setSelectedUserId(null);
+        }}
+        userId={selectedUserId}
+      />
+
+      {/* Item Info Dialog */}
+      <ItemInfoDialog
+        open={!!selectedItemName}
+        onOpenChange={(open) => {
+          if (!open) setSelectedItemName(null);
+        }}
+        itemName={selectedItemName}
+      />
+
+      <SiteInfoDialog
+        open={!!selectedSiteId}
+        onOpenChange={(open) => {
+          if (!open) setSelectedSiteId(null);
+        }}
+        siteId={selectedSiteId}
+      />
     </>
   );
 }

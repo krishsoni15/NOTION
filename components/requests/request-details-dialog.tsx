@@ -28,6 +28,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Separator } from "@/components/ui/separator";
 import { AlertCircle, CheckCircle, XCircle, Package, ShoppingCart, MapPin } from "lucide-react";
 import { useUserRole } from "@/hooks/use-user-role";
+import { CompactImageGallery } from "@/components/ui/image-gallery";
 import { ROLES } from "@/lib/auth/roles";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -90,6 +91,30 @@ export function RequestDetailsDialog({
   const allItemsHaveSameStatus = allRequests && allRequests.length > 0
     ? allRequests.every((item) => item.status === allRequests[0].status)
     : true;
+
+  // Collect all photos from all request items (support both photo and photos fields)
+  const allPhotos = allRequests?.reduce((photos, item) => {
+    // Check for new photos array first
+    if (item.photos && item.photos.length > 0) {
+      item.photos.forEach((photo, index) => {
+        photos.push({
+          imageUrl: photo.imageUrl,
+          imageKey: photo.imageKey,
+          alt: `${item.itemName} - ${item.quantity} ${item.unit} (Photo ${index + 1})`
+        });
+      });
+    }
+    // Fallback to legacy photo field
+    else if ((item as any).photo) {
+      const legacyPhoto = (item as any).photo;
+      photos.push({
+        imageUrl: legacyPhoto.imageUrl,
+        imageKey: legacyPhoto.imageKey,
+        alt: `${item.itemName} - ${item.quantity} ${item.unit}`
+      });
+    }
+    return photos;
+  }, [] as Array<{ imageUrl: string; imageKey: string; alt: string }>) || [];
 
   // Reset when dialog opens/closes
   useEffect(() => {
@@ -585,6 +610,23 @@ export function RequestDetailsDialog({
           <Separator />
 
 
+          {/* Request Images Gallery */}
+          {allPhotos.length > 0 && (
+            <div className="space-y-3">
+              <Label className="text-muted-foreground font-bold">
+                Request Photos ({allPhotos.length})
+              </Label>
+              <div className="flex justify-center">
+                <CompactImageGallery
+                  images={allPhotos}
+                  maxDisplay={5}
+                  size="lg"
+                  className="justify-center"
+                />
+              </div>
+            </div>
+          )}
+
           {/* All Items Details */}
           <div className="space-y-4">
             <div className="flex items-center justify-between">
@@ -676,18 +718,6 @@ export function RequestDetailsDialog({
                               </div>
                             )}
 
-                            {item.photo && (
-                              <div className="space-y-2">
-                                <Label className="text-sm font-semibold text-muted-foreground">Picture</Label>
-                                <div className="rounded-lg overflow-hidden border bg-muted/20">
-                                  <img
-                                    src={item.photo.imageUrl}
-                                    alt={`${item.itemName} picture`}
-                                    className="w-full h-auto max-h-48 object-contain bg-muted/30"
-                                  />
-                                </div>
-                              </div>
-                            )}
                           </div>
                         </div>
                       );
@@ -784,18 +814,6 @@ export function RequestDetailsDialog({
                           </div>
                         )}
 
-                        {item.photo && (
-                          <div className="space-y-1 mt-auto min-w-0">
-                            <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Photo</Label>
-                            <div className="mt-2 rounded-lg overflow-hidden border bg-muted/20">
-                              <img
-                                src={item.photo.imageUrl}
-                                alt={`${item.itemName} photo`}
-                                className="w-full h-auto max-h-32 sm:max-h-40 xl:max-h-48 object-contain bg-muted/30"
-                              />
-                            </div>
-                          </div>
-                        )}
                       </div>
 
                       {/* Per-item actions - Better Layout, Sticky to bottom */}

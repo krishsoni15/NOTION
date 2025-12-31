@@ -214,7 +214,7 @@ export function MaterialRequestForm({
           unit: req.unit,
           notes: req.notes || "",
           images: [],
-          imagePreviews: req.photo ? [req.photo.imageUrl] : [],
+          imagePreviews: req.photos ? req.photos.map(p => p.imageUrl) : (req.photo ? [req.photo.imageUrl] : []),
           selectedItemFromInventory: null,
           showItemSuggestions: false,
           showQuantitySuggestions: false,
@@ -843,11 +843,14 @@ export function MaterialRequestForm({
       // Upload images for all items first
       const itemsWithPhotos = await Promise.all(
         items.map(async (item) => {
-          let photo = null;
+          let photos: Array<{ imageUrl: string; imageKey: string }> = [];
           if (item.images.length > 0) {
             setUploadingItemId(item.id);
             try {
-              photo = await uploadImage(item.images[0]);
+              // Upload all images for this item
+              const uploadPromises = item.images.map(file => uploadImage(file));
+              const uploadResults = await Promise.all(uploadPromises);
+              photos = uploadResults.filter((result): result is { imageUrl: string; imageKey: string } => result !== null);
             } finally {
               setUploadingItemId(null);
             }
@@ -858,7 +861,7 @@ export function MaterialRequestForm({
             quantity: item.quantity || 1,
             unit: item.unit.trim() || "nos",
             notes: item.notes.trim() || undefined,
-            photo: photo || undefined,
+            photos: photos.length > 0 ? photos : undefined,
             isUrgent: item.isUrgent,
           };
         })
@@ -924,11 +927,14 @@ export function MaterialRequestForm({
       // Upload images for all items first
       const itemsWithPhotos = await Promise.all(
         items.map(async (item) => {
-      let photo = null;
+          let photos: Array<{ imageUrl: string; imageKey: string }> = [];
           if (item.images.length > 0) {
             setUploadingItemId(item.id);
             try {
-              photo = await uploadImage(item.images[0]);
+              // Upload all images for this item
+              const uploadPromises = item.images.map(file => uploadImage(file));
+              const uploadResults = await Promise.all(uploadPromises);
+              photos = uploadResults.filter((result): result is { imageUrl: string; imageKey: string } => result !== null);
             } finally {
               setUploadingItemId(null);
             }
@@ -939,7 +945,7 @@ export function MaterialRequestForm({
             quantity: item.quantity,
             unit: item.unit.trim(),
             notes: item.notes.trim() || undefined,
-        photo: photo || undefined,
+            photos: photos.length > 0 ? photos : undefined,
             isUrgent: item.isUrgent,
           };
         })
@@ -1686,7 +1692,7 @@ export function MaterialRequestForm({
                 <div className="space-y-2.5 sm:space-y-3">
                     <Label className="text-xs sm:text-sm font-semibold flex items-center gap-1.5">
                       <ImageIcon className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground" />
-                      Photo <span className="text-muted-foreground font-normal">(Optional)</span>
+                      Photos <span className="text-muted-foreground font-normal">(Multiple allowed)</span>
                     </Label>
                     
                     {/* Compact Drag and Drop Zone with Buttons - Desktop Only */}
@@ -1700,7 +1706,7 @@ export function MaterialRequestForm({
                         const input = document.createElement("input");
                         input.type = "file";
                         input.accept = "image/*";
-                        input.multiple = false;
+                        input.multiple = true;
                         input.onchange = (e) =>
                           handleImageSelect(
                             item.id,
@@ -1741,7 +1747,7 @@ export function MaterialRequestForm({
                         </div>
                         <div className="flex-1 min-w-0">
                           <p className="text-xs font-medium truncate">
-                            Drag and drop images here
+                            Drag and drop multiple images here
                           </p>
                         </div>
                       </div>
@@ -1754,7 +1760,7 @@ export function MaterialRequestForm({
                             const input = document.createElement("input");
                             input.type = "file";
                             input.accept = "image/*";
-                            input.multiple = false;
+                            input.multiple = true;
                             input.onchange = (e) =>
                               handleImageSelect(
                                 item.id,
@@ -1795,7 +1801,7 @@ export function MaterialRequestForm({
                           const input = document.createElement("input");
                           input.type = "file";
                           input.accept = "image/*";
-                          input.multiple = false;
+                          input.multiple = true;
                           input.onchange = (e) =>
                             handleImageSelect(
                               item.id,
@@ -1808,7 +1814,7 @@ export function MaterialRequestForm({
                         className="flex-1 text-xs h-9 font-semibold border-2 bg-background text-foreground hover:bg-primary hover:text-primary-foreground hover:border-primary transition-all duration-200"
                       >
                         <Upload className="h-3.5 w-3.5 mr-1.5" />
-                        Choose File
+                        Choose Files
                       </Button>
                       <Button
                         type="button"
@@ -1999,7 +2005,7 @@ export function MaterialRequestForm({
         open={cameraOpen.open}
         onOpenChange={(open) => setCameraOpen({ itemId: "", open })}
         onCapture={handleCameraCapture}
-        multiple={false}
+        multiple={true}
       />
     </>
   );

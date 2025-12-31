@@ -34,19 +34,52 @@ export const clearOldMessages = mutation({
 });
 
 /**
+ * Migrate photo field to photos array for requests
+ * Converts single photo objects to photos arrays for backward compatibility
+ */
+export const migrateRequestPhotos = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const requests = await ctx.db.query("requests").collect();
+
+    let migratedCount = 0;
+
+    for (const request of requests) {
+      const requestAny = request as any;
+
+      // Check if request has old photo field and no photos field
+      if (requestAny.photo && !requestAny.photos) {
+        // Convert single photo to photos array
+        await ctx.db.patch(request._id, {
+          photos: [requestAny.photo],
+          photo: undefined, // Remove old field
+        });
+        migratedCount++;
+      }
+    }
+
+    return {
+      success: true,
+      migratedCount,
+      message: `Migrated ${migratedCount} request(s) from photo to photos array`
+    };
+  },
+});
+
+/**
  * Clear all conversations (use with caution!)
  */
 export const clearAllConversations = mutation({
   args: {},
   handler: async (ctx) => {
     const conversations = await ctx.db.query("conversations").collect();
-    
+
     for (const conversation of conversations) {
       await ctx.db.delete(conversation._id);
     }
-    
-    return { 
-      success: true, 
+
+    return {
+      success: true,
       deletedCount: conversations.length,
       message: `Cleared ${conversations.length} conversation(s)`
     };

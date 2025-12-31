@@ -277,6 +277,8 @@ export const sendMessage = mutation({
   args: {
     conversationId: v.id("conversations"),
     content: v.string(),
+    imageUrl: v.optional(v.string()),
+    imageKey: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const userId = await getAuthUserId(ctx);
@@ -299,9 +301,11 @@ export const sendMessage = mutation({
       throw new Error("Not authorized to send messages in this conversation");
     }
 
-    // Validate content
+    // Validate content - allow either text content or image
     const trimmedContent = args.content.trim();
-    if (!trimmedContent) {
+    const hasContent = trimmedContent || args.imageUrl;
+
+    if (!hasContent) {
       throw new Error("Message content cannot be empty");
     }
 
@@ -334,6 +338,8 @@ export const sendMessage = mutation({
       conversationId: args.conversationId,
       senderId: currentUser._id,
       content: trimmedContent,
+      imageUrl: args.imageUrl,
+      imageKey: args.imageKey,
       readBy: [currentUser._id], // Sender has read their own message
       deliveredBy: deliveredBy,
       createdAt: now,
@@ -593,6 +599,43 @@ export const getUnreadCount = query({
     }, 0);
 
     return totalUnread;
+  },
+});
+
+/**
+ * Get dashboard stats for site engineers
+ */
+export const getSiteEngineerStats = query({
+  args: {},
+  handler: async (ctx) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) return { total: 0, pending: 0, approved: 0, delivered: 0 };
+
+    // Get current user
+    const currentUser = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_user_id", (q) => q.eq("clerkUserId", userId))
+      .unique();
+
+    if (!currentUser || currentUser.role !== "site_engineer") {
+      return { total: 0, pending: 0, approved: 0, delivered: 0 };
+    }
+
+    // Get all requests created by this user
+    const userRequests = await ctx.db
+      .query("requests")
+      .withIndex("by_created_by", (q) => q.eq("createdBy", currentUser._id))
+      .collect();
+
+    // Count by status
+    const stats = {
+      total: userRequests.length,
+      pending: userRequests.filter(r => r.status === "pending").length,
+      approved: userRequests.filter(r => r.status === "approved").length,
+      delivered: userRequests.filter(r => r.status === "delivered").length,
+    };
+
+    return stats;
   },
 });
 

@@ -16,6 +16,8 @@ import { cn } from "@/lib/utils";
 interface Message {
   _id: string;
   content: string;
+  imageUrl?: string;
+  imageKey?: string;
   createdAt: number;
   senderId: string;
   isRead: boolean;
@@ -183,7 +185,30 @@ export function MessageList({ messages, currentUserId, otherUserId, className }:
                       : "bg-card/90 border border-border/50 hover:shadow-lg"
                   )}
                 >
-                  <p className="text-sm leading-relaxed whitespace-pre-wrap">{message.content}</p>
+                  {/* Image */}
+                  {message.imageUrl && (
+                    <div className="mb-2">
+                      <img
+                        src={message.imageUrl}
+                        alt="Shared image"
+                        className="max-w-full max-h-64 rounded-lg object-contain cursor-pointer hover:opacity-90 transition-opacity"
+                        onClick={() => {
+                          // Open image in new tab for now - could be enhanced with a modal
+                          window.open(message.imageUrl, '_blank');
+                        }}
+                      />
+                    </div>
+                  )}
+
+                  {/* Text Content */}
+                  {message.content && (
+                    <p className="text-sm leading-relaxed whitespace-pre-wrap">{message.content}</p>
+                  )}
+
+                  {/* Show placeholder if no content and no image */}
+                  {!message.content && !message.imageUrl && (
+                    <p className="text-sm text-muted-foreground italic">Image shared</p>
+                  )}
                 </div>
 
                 {/* Timestamp and Read Receipt */}

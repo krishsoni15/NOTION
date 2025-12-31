@@ -1,12 +1,12 @@
 /**
  * Image Delete API Route
- * 
- * Handles image deletion from Cloudflare R2.
+ *
+ * Handles image deletion from Cloudinary.
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
-import { deleteImage } from "@/lib/r2/client";
+import { deleteImage } from "@/lib/cloudinary/client";
 
 export async function DELETE(request: NextRequest) {
   try {
@@ -26,7 +26,7 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    // Delete from R2
+    // Delete from Cloudinary
     await deleteImage(imageKey);
 
     return NextResponse.json({ success: true });

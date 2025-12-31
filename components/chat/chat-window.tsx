@@ -74,13 +74,15 @@ export function ChatWindow({ currentUserId, onClose, className }: ChatWindowProp
     }
   };
 
-  const handleSendMessage = async (content: string) => {
+  const handleSendMessage = async (content: string, imageUrl?: string, imageKey?: string) => {
     if (!selectedConversationId) return;
 
     try {
       await sendMessage({
         conversationId: selectedConversationId,
         content,
+        imageUrl,
+        imageKey,
       });
     } catch (error) {
       toast.error("Failed to send message. Please try again.");

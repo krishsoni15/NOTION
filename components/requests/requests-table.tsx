@@ -27,6 +27,8 @@ import {
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Eye, AlertCircle, FileText, Edit, Trash2, Send, ChevronDown, ChevronRight, MapPin } from "lucide-react";
+import { CompactImageGallery } from "@/components/ui/image-gallery";
+import { LazyImage } from "@/components/ui/lazy-image";
 import { cn, normalizeSearchQuery, matchesAnySearchQuery } from "@/lib/utils";
 import { UserInfoDialog } from "./user-info-dialog";
 import { ItemInfoDialog } from "./item-info-dialog";
@@ -388,10 +390,16 @@ export function RequestsTable({
                   return (
                   <div
                     key={item._id}
-                    className="p-3 rounded-lg border bg-card/50 shadow-sm"
+                    className={cn(
+                      "p-3 rounded-lg border shadow-sm",
+                      item.status === "approved" && "bg-green-50 border-green-200 dark:bg-green-950/20 dark:border-green-800",
+                      item.status === "rejected" && "bg-red-50 border-red-200 dark:bg-red-950/20 dark:border-red-800",
+                      item.status === "cc_rejected" && "bg-red-50 border-red-200 dark:bg-red-950/20 dark:border-red-800",
+                      !["approved", "rejected", "cc_rejected"].includes(item.status) && "bg-card/50"
+                    )}
                   >
                     <div className="flex items-start justify-between gap-2 mb-2">
-                    <div className="flex-1 min-w-0">
+                      <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-1">
                           <Badge variant="outline" className="text-xs px-1.5 py-0.5 h-5 min-w-[24px] flex items-center justify-center flex-shrink-0">
                             {displayNumber}
@@ -409,7 +417,7 @@ export function RequestsTable({
                                 {item.itemName}
                               </button>
                             </div>
-                      {item.description && (
+                            {item.description && (
                               <div className="text-xs text-muted-foreground break-words whitespace-normal">
                                 <span className="font-medium">Dis:</span> {item.description}
                               </div>
@@ -422,13 +430,13 @@ export function RequestsTable({
                             </div>
                           </div>
                         </div>
-                        <div className="flex items-center gap-1 flex-shrink-0 ml-7">
-                          {item.photo && (
-                            <Badge variant="outline" className="text-xs px-1.5 py-0.5">
-                              📷
-                            </Badge>
-                          )}
-                        </div>
+                      </div>
+                      <div className="flex items-center gap-1 flex-shrink-0">
+                        <CompactImageGallery
+                          images={item.photo ? [{ imageUrl: item.photo.imageUrl, imageKey: item.photo.imageKey }] : []}
+                          maxDisplay={1}
+                          size="md"
+                        />
                       </div>
                     </div>
                     {/* Urgent and Status badges on new line */}
@@ -440,6 +448,16 @@ export function RequestsTable({
                             Urgent
                           </Badge>
                         )}
+                        {(item.status === 'approved' || item.status === 'cc_approved') && (
+                          <Badge variant="default" className="bg-green-600 hover:bg-green-700 text-white text-xs flex-shrink-0">
+                            ✓ Approved
+                          </Badge>
+                        )}
+                        {(item.status === 'rejected' || item.status === 'cc_rejected') && (
+                          <Badge variant="destructive" className="text-xs flex-shrink-0">
+                            ✗ Rejected
+                          </Badge>
+                        )}
                       </div>
                       <div className="flex items-center gap-2">
                         {item.status === 'draft' && (
@@ -447,7 +465,7 @@ export function RequestsTable({
                             Draft
                           </Badge>
                         )}
-                        {item.status !== 'draft' && getStatusBadge(item.status)}
+                        {item.status !== 'draft' && !['approved', 'rejected', 'cc_approved', 'cc_rejected'].includes(item.status) && getStatusBadge(item.status)}
                       </div>
                     </div>
                   </div>
@@ -484,11 +502,11 @@ export function RequestsTable({
                       </div>
                     </div>
                     <div className="flex items-center gap-1 flex-shrink-0">
-                      {items[0].photo && (
-                        <Badge variant="outline" className="text-xs px-1.5 py-0.5">
-                          📷
-                        </Badge>
-                      )}
+                      <CompactImageGallery
+                        images={items[0].photo ? [{ imageUrl: items[0].photo.imageUrl, imageKey: items[0].photo.imageKey }] : []}
+                        maxDisplay={1}
+                        size="md"
+                      />
                     </div>
                   </div>
                   {/* Urgent and Status badges on new line */}
@@ -729,6 +747,13 @@ export function RequestsTable({
                                           )}
                                         </div>
                                       </div>
+                                      <div className="flex-shrink-0">
+                                        <CompactImageGallery
+                                          images={item.photo ? [{ imageUrl: item.photo.imageUrl, imageKey: item.photo.imageKey }] : []}
+                                          maxDisplay={1}
+                                          size="sm"
+                                        />
+                                      </div>
                                     </div>
                                   </div>
                                 </div>
@@ -765,6 +790,13 @@ export function RequestsTable({
                                       {getStatusBadge(items[0].status)}
                                     </div>
                                   </div>
+                                </div>
+                                <div className="flex-shrink-0">
+                                  <CompactImageGallery
+                                    images={items[0].photo ? [{ imageUrl: items[0].photo.imageUrl, imageKey: items[0].photo.imageKey }] : []}
+                                    maxDisplay={1}
+                                    size="sm"
+                                  />
                                 </div>
                               </div>
                             </div>

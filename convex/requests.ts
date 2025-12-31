@@ -534,11 +534,13 @@ export const createMaterialRequest = mutation({
     unit: v.string(),
     requiredBy: v.number(),
     isUrgent: v.boolean(),
-    photo: v.optional(
-      v.object({
-        imageUrl: v.string(),
-        imageKey: v.string(),
-      })
+    photos: v.optional(
+      v.array(
+        v.object({
+          imageUrl: v.string(),
+          imageKey: v.string(),
+        })
+      )
     ),
     notes: v.optional(v.string()),
     requestNumber: v.optional(v.string()), // Optional: if provided, use this request number
@@ -604,7 +606,7 @@ export const createMaterialRequest = mutation({
       unit: args.unit,
       requiredBy: args.requiredBy,
       isUrgent: args.isUrgent,
-      photo: args.photo,
+      photos: args.photos,
       status: "pending",
       notes: args.notes,
       createdAt: now,
@@ -630,11 +632,13 @@ export const createMultipleMaterialRequests = mutation({
         unit: v.string(),
         notes: v.optional(v.string()),
         isUrgent: v.boolean(),
-        photo: v.optional(
-          v.object({
-            imageUrl: v.string(),
-            imageKey: v.string(),
-          })
+        photos: v.optional(
+          v.array(
+            v.object({
+              imageUrl: v.string(),
+              imageKey: v.string(),
+            })
+          )
         ),
       })
     ),
@@ -701,7 +705,7 @@ export const createMultipleMaterialRequests = mutation({
         unit: item.unit,
         requiredBy: args.requiredBy,
         isUrgent: item.isUrgent,
-        photo: item.photo,
+        photos: item.photos,
         itemOrder: i + 1, // Sequential order: 1, 2, 3...
         status: "pending",
         notes: item.notes,
@@ -730,11 +734,13 @@ export const saveMultipleMaterialRequestsAsDraft = mutation({
         unit: v.string(),
         notes: v.optional(v.string()),
         isUrgent: v.boolean(),
-        photo: v.optional(
-          v.object({
-            imageUrl: v.string(),
-            imageKey: v.string(),
-          })
+        photos: v.optional(
+          v.array(
+            v.object({
+              imageUrl: v.string(),
+              imageKey: v.string(),
+            })
+          )
         ),
       })
     ),
@@ -802,7 +808,7 @@ export const saveMultipleMaterialRequestsAsDraft = mutation({
         unit: item.unit,
         requiredBy: args.requiredBy,
         isUrgent: item.isUrgent,
-        photo: item.photo,
+        photos: item.photos,
         itemOrder: i + 1, // Sequential order: 1, 2, 3...
         status: "draft",
         notes: item.notes,
@@ -1063,11 +1069,13 @@ export const updateDraftRequest = mutation({
         unit: v.string(),
         notes: v.optional(v.string()),
         isUrgent: v.boolean(),
-        photo: v.optional(
-          v.object({
-            imageUrl: v.string(),
-            imageKey: v.string(),
-          })
+        photos: v.optional(
+          v.array(
+            v.object({
+              imageUrl: v.string(),
+              imageKey: v.string(),
+            })
+          )
         ),
       })
     ),
@@ -1135,7 +1143,7 @@ export const updateDraftRequest = mutation({
         unit: item.unit,
         requiredBy: args.requiredBy,
         isUrgent: item.isUrgent,
-        photo: item.photo,
+        photos: item.photos,
         itemOrder: i + 1, // Sequential order: 1, 2, 3...
         status: "draft",
         notes: item.notes,

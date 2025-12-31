@@ -10,6 +10,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useMutation, useQuery } from "convex/react";
+import { useRouter } from "next/navigation";
 import { api } from "@/convex/_generated/api";
 import {
   Dialog,
@@ -26,6 +27,7 @@ import { UnitInput } from "./unit-input";
 import { CameraDialog } from "./camera-dialog";
 import { VendorSelector } from "./vendor-selector";
 import { Camera, Upload, X, Search } from "lucide-react";
+import { ImageViewer } from "@/components/ui/image-viewer";
 import { useUserRole } from "@/hooks/use-user-role";
 import { ROLES } from "@/lib/auth/roles";
 import type { Id } from "@/convex/_generated/dataModel";
@@ -54,6 +56,7 @@ export function InventoryFormDialog({
   mode = "create",
 }: InventoryFormDialogProps) {
   const userRole = useUserRole();
+  const router = useRouter();
   const createItem = useMutation(api.inventory.createInventoryItem);
   const updateItem = useMutation(api.inventory.updateInventoryItem);
   const addImage = useMutation(api.inventory.addImageToInventory);
@@ -71,7 +74,11 @@ export function InventoryFormDialog({
   const [error, setError] = useState("");
   const [selectedImages, setSelectedImages] = useState<File[]>([]);
   const [imagePreviews, setImagePreviews] = useState<string[]>([]);
+  const [existingImages, setExistingImages] = useState<Array<{imageUrl: string; imageKey: string; uploadedAt: number; uploadedBy: Id<"users">}>>([]);
   const [cameraOpen, setCameraOpen] = useState(false);
+  const [formImageViewerOpen, setFormImageViewerOpen] = useState(false);
+  const [formImageViewerImages, setFormImageViewerImages] = useState<Array<{imageUrl: string; imageKey: string}>>([]);
+  const [formImageViewerInitialIndex, setFormImageViewerInitialIndex] = useState(0);
   const uploadInputRef = useRef<HTMLInputElement>(null);
 
   const canEdit = userRole === ROLES.PURCHASE_OFFICER && !isAddImageMode; // Only Purchase Officers can edit
@@ -81,6 +88,12 @@ export function InventoryFormDialog({
     (userRole === ROLES.PURCHASE_OFFICER && !isAddImageMode) ||
     (userRole === ROLES.SITE_ENGINEER && itemId) ||
     isAddImageMode;
+
+  const openFormImageViewer = (images: Array<{imageUrl: string; imageKey: string}>, initialIndex: number) => {
+    setFormImageViewerImages(images);
+    setFormImageViewerInitialIndex(initialIndex);
+    setFormImageViewerOpen(true);
+  };
 
   const [formData, setFormData] = useState({
     itemName: "",
@@ -100,7 +113,7 @@ export function InventoryFormDialog({
       });
     } else if (currentItem && !isAddImageMode) {
       // Support both old vendorId and new vendorIds format
-      const vendorIds = (currentItem as any).vendorIds || 
+      const vendorIds = (currentItem as any).vendorIds ||
                        (currentItem.vendorId ? [currentItem.vendorId] : []);
       setFormData({
         itemName: currentItem.itemName,
@@ -108,6 +121,16 @@ export function InventoryFormDialog({
         centralStock: currentItem.centralStock,
         vendorIds: vendorIds,
       });
+
+      // Show existing images when editing (not in add-image mode)
+      if (currentItem.images && currentItem.images.length > 0) {
+        setExistingImages(currentItem.images);
+        // Create preview URLs from existing images
+        const existingPreviews = currentItem.images.map((img: any) => img.imageUrl);
+        setImagePreviews(existingPreviews);
+      } else {
+        setExistingImages([]);
+      }
     } else {
       setFormData({
         itemName: "",
@@ -117,7 +140,6 @@ export function InventoryFormDialog({
       });
     }
     setSelectedImages([]);
-    setImagePreviews([]);
     setError("");
   }, [initialData, currentItem, isAddImageMode, open]);
 
@@ -131,6 +153,7 @@ export function InventoryFormDialog({
       });
       setSelectedImages([]);
       setImagePreviews([]);
+      setExistingImages([]);
       setError("");
     }
     onOpenChange(newOpen);
@@ -175,9 +198,31 @@ export function InventoryFormDialog({
     });
   };
 
-  const removeImage = (index: number) => {
+  const removeNewImage = (index: number) => {
     setSelectedImages((prev) => prev.filter((_, i) => i !== index));
     setImagePreviews((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const removeExistingImage = async (imageKey: string, imageUrl: string) => {
+    if (!itemId) return;
+
+    try {
+      const response = await fetch(`/api/delete/image?key=${encodeURIComponent(imageKey)}`, {
+        method: 'DELETE',
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to delete image');
+      }
+
+      // Update local state
+      setExistingImages((prev) => prev.filter((img) => img.imageKey !== imageKey));
+      setImagePreviews((prev) => prev.filter((url) => url !== imageUrl));
+      toast.success("Image removed successfully");
+    } catch (error) {
+      console.error("Error removing image:", error);
+      toast.error("Failed to remove image");
+    }
   };
 
   const uploadImages = async (itemId: string) => {
@@ -249,6 +294,9 @@ export function InventoryFormDialog({
           }
 
           toast.success(`${imageData.length} image(s) added successfully`);
+          console.log('Images uploaded successfully:', imageData);
+          // Refresh the page to show the new images
+          router.refresh();
           handleOpenChange(false);
         } catch (uploadError) {
           console.error("Error uploading images:", uploadError);
@@ -452,24 +500,85 @@ export function InventoryFormDialog({
               </div>
 
               {/* Image Previews */}
-              {imagePreviews.length > 0 && (
-                <div className="grid grid-cols-3 gap-2 mt-2">
-                  {imagePreviews.map((preview, index) => (
-                    <div key={index} className="relative group">
-                      <img
-                        src={preview}
-                        alt={`Preview ${index + 1}`}
-                        className="w-full h-24 object-cover rounded-md border"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => removeImage(index)}
-                        className="absolute top-1 right-1 bg-destructive text-destructive-foreground rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                      >
-                        <X className="h-3 w-3" />
-                      </button>
+              {(existingImages.length > 0 || imagePreviews.length > 0) && (
+                <div className="space-y-3 mt-2">
+                  {/* Existing Images */}
+                  {existingImages.length > 0 && (
+                    <div>
+                      <p className="text-sm font-medium text-muted-foreground mb-2">
+                        Existing Images ({existingImages.length})
+                      </p>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2">
+                        {existingImages.map((image, index) => (
+                          <div key={`existing-${image.imageKey}`} className="relative group">
+                            <button
+                              type="button"
+                              onClick={() => openFormImageViewer(existingImages, index)}
+                              className="block w-full"
+                            >
+                              <img
+                                src={image.imageUrl}
+                                alt={`Existing ${index + 1}`}
+                                className="w-full h-16 sm:h-18 object-cover rounded border border-green-300 hover:border-green-500 transition-colors"
+                              />
+                            </button>
+                            <div className="absolute top-1 left-1 bg-green-500 text-white text-xs px-1.5 py-0.5 rounded">
+                              ✓
+                            </div>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                removeExistingImage(image.imageKey, image.imageUrl);
+                              }}
+                              className="absolute top-1 right-1 bg-destructive text-destructive-foreground rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                  ))}
+                  )}
+
+                  {/* New Images to Upload */}
+                  {imagePreviews.length > existingImages.length && (
+                    <div>
+                      <p className="text-sm font-medium text-muted-foreground mb-2">
+                        New Images to Upload ({imagePreviews.length - existingImages.length})
+                      </p>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2">
+                        {imagePreviews.slice(existingImages.length).map((preview, index) => (
+                          <div key={`new-${index}`} className="relative group">
+                            <button
+                              type="button"
+                              onClick={() => openFormImageViewer(imagePreviews.map((url, i) => ({ imageUrl: url, imageKey: `preview-${i}` })), existingImages.length + index)}
+                              className="block w-full"
+                            >
+                              <img
+                                src={preview}
+                                alt={`New ${index + 1}`}
+                                className="w-full h-16 sm:h-18 object-cover rounded border border-blue-300 hover:border-blue-500 transition-colors"
+                              />
+                            </button>
+                            <div className="absolute top-1 left-1 bg-blue-500 text-white text-xs px-1.5 py-0.5 rounded">
+                              New
+                            </div>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                removeNewImage(existingImages.length + index);
+                              }}
+                              className="absolute top-1 right-1 bg-destructive text-destructive-foreground rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -516,6 +625,15 @@ export function InventoryFormDialog({
           onOpenChange={setCameraOpen}
           onCapture={handleCameraCapture}
           multiple={true}
+        />
+
+        {/* Form Image Viewer */}
+        <ImageViewer
+          images={formImageViewerImages}
+          initialIndex={formImageViewerInitialIndex}
+          open={formImageViewerOpen}
+          onOpenChange={setFormImageViewerOpen}
+          itemName="Form Images"
         />
       </DialogContent>
     </Dialog>

@@ -259,14 +259,15 @@ export function CostComparisonDialog({
 
           {/* Direct Delivery Option */}
           {itemInInventory && (
-            <div className="flex items-center space-x-2">
+            <div className="flex items-center space-x-2 p-2 rounded-md bg-muted/50">
               <Checkbox
                 id="directDelivery"
                 checked={isDirectDelivery}
                 onCheckedChange={(checked) => setIsDirectDelivery(checked === true)}
                 disabled={!canEdit || isSubmitted}
+                className="h-3 w-3"
               />
-              <Label htmlFor="directDelivery" className="text-sm cursor-pointer">
+              <Label htmlFor="directDelivery" className="text-xs cursor-pointer text-muted-foreground">
                 Direct Delivery (Item in inventory)
               </Label>
             </div>

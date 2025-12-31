@@ -47,10 +47,15 @@ export default defineSchema({
     unit: v.string(), // Unit of measurement
     requiredBy: v.number(), // Required date timestamp
     isUrgent: v.boolean(), // Urgent flag
+    // Backward compatibility: support both old photo field and new photos array
     photo: v.optional(v.object({
-      imageUrl: v.string(), // Cloudflare R2 public URL
-      imageKey: v.string(), // R2 object key for deletion/updates
-    })), // Photo attachment
+      imageUrl: v.string(), // Cloudinary public URL
+      imageKey: v.string(), // Cloudinary public ID for deletion/updates
+    })), // Legacy single photo support
+    photos: v.optional(v.array(v.object({
+      imageUrl: v.string(), // Cloudinary public URL
+      imageKey: v.string(), // Cloudinary public ID for deletion/updates
+    }))), // Array of photos (supports multiple photos per item) // Photo attachment
     itemOrder: v.optional(v.number()), // Order of item within the request (1, 2, 3...)
     status: v.union(
       v.literal("draft"),
@@ -178,6 +183,8 @@ export default defineSchema({
     conversationId: v.id("conversations"),
     senderId: v.id("users"),
     content: v.string(),
+    imageUrl: v.optional(v.string()), // Cloudinary image URL for image messages
+    imageKey: v.optional(v.string()), // Cloudinary image key for deletion
     readBy: v.array(v.id("users")), // Users who have read this message
     deliveredBy: v.optional(v.array(v.id("users"))), // Users who have received/delivered this message
     createdAt: v.number(),

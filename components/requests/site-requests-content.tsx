@@ -32,7 +32,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { normalizeSearchQuery, matchesSearchQuery } from "@/lib/utils";
 import type { Id } from "@/convex/_generated/dataModel";
 
-// Enhanced fuzzy search function with comprehensive field matching
+// Enhanced precise search function with priority for exact matches
 const fuzzySearch = (request: any, query: string): boolean => {
   if (!query || !query.trim()) return true;
 
@@ -43,119 +43,135 @@ const fuzzySearch = (request: any, query: string): boolean => {
   const searchWords = searchTerm.split(/\s+/).filter(word => word.length > 0);
   if (searchWords.length === 0) return true;
 
-  // Function to check if any search word matches a field with fuzzy logic
-  const matchesAnyWord = (fieldValue: string | undefined | null): boolean => {
-    if (!fieldValue) return false;
-    const normalizedField = normalizeSearchQuery(fieldValue);
-
-    // Check if ALL search words are found in the field (AND logic for multi-word queries)
-    return searchWords.every(word => {
-      // Exact match gets highest priority
-      if (normalizedField.includes(word)) return true;
-
-      // Fuzzy matching: check for partial matches, typos, abbreviations
-      return fuzzyMatch(normalizedField, word);
-    });
-  };
-
-  // Fuzzy matching algorithm with typo tolerance
-  const fuzzyMatch = (text: string, pattern: string): boolean => {
-    if (pattern.length === 0) return true;
-    if (text.length === 0) return false;
-
-    // For very short patterns, require exact match or very close
-    if (pattern.length <= 2) {
-      return text.includes(pattern) ||
-             levenshteinDistance(text, pattern) <= 1;
+  // PRIORITY 1: Exact request number matches (highest priority)
+  if (request.requestNumber) {
+    const requestNum = normalizeSearchQuery(request.requestNumber);
+    // Check exact match with "REQ-" prefix
+    if (requestNum === searchTerm || requestNum === `req-${searchTerm}`) {
+      return true;
     }
-
-    // For longer patterns, allow more flexibility
-    if (pattern.length <= 4) {
-      return text.includes(pattern) ||
-             levenshteinDistance(text, pattern) <= 1 ||
-             containsAbbreviation(text, pattern);
+    // Check just the number part
+    const justNumber = requestNum.replace(/^req-/, '');
+    if (justNumber === searchTerm) {
+      return true;
     }
+  }
 
-    // For longer patterns, be more lenient
-    return text.includes(pattern) ||
-           levenshteinDistance(text, pattern) <= 2 ||
-           containsAbbreviation(text, pattern) ||
-           containsPartialMatches(text, pattern);
-  };
+  // PRIORITY 2: Exact item order matches
+  if (request.itemOrder?.toString() === searchTerm) {
+    return true;
+  }
 
-  // Levenshtein distance for typo tolerance
-  const levenshteinDistance = (str1: string, str2: string): number => {
-    const matrix = [];
-    for (let i = 0; i <= str2.length; i++) {
-      matrix[i] = [i];
-    }
-    for (let j = 0; j <= str1.length; j++) {
-      matrix[0][j] = j;
-    }
-    for (let i = 1; i <= str2.length; i++) {
-      for (let j = 1; j <= str1.length; j++) {
-        if (str2.charAt(i - 1) === str1.charAt(j - 1)) {
-          matrix[i][j] = matrix[i - 1][j - 1];
-        } else {
-          matrix[i][j] = Math.min(
-            matrix[i - 1][j - 1] + 1, // substitution
-            matrix[i][j - 1] + 1,     // insertion
-            matrix[i - 1][j] + 1      // deletion
-          );
-        }
-      }
-    }
-    return matrix[str2.length][str1.length];
-  };
-
-  // Check for abbreviations (e.g., "req" matches "request")
-  const containsAbbreviation = (text: string, pattern: string): boolean => {
-    if (pattern.length < 3) return false;
-
-    // Common abbreviations and their expansions
-    const abbreviations: Record<string, string[]> = {
-      'req': ['request', 'requests', 'required'],
-      'mat': ['material', 'materials'],
-      'del': ['delivery', 'delivered'],
-      'app': ['approved', 'approval'],
-      'pen': ['pending'],
-      'rej': ['rejected', 'rejection'],
-      'cc': ['cost comparison', 'cost'],
-      'po': ['purchase order', 'purchase']
-    };
-
-    const expansions = abbreviations[pattern.toLowerCase()];
-    if (expansions) {
-      return expansions.some(expansion => text.includes(expansion));
-    }
-
-    return false;
-  };
-
-  // Check for partial matches (e.g., "pur" matches "purchase")
-  const containsPartialMatches = (text: string, pattern: string): boolean => {
-    if (pattern.length < 4) return false;
-
-    // Check if pattern is a significant substring
-    return text.includes(pattern) ||
-           // Allow dropping vowels for longer words
-           pattern.replace(/[aeiou]/gi, '').length >= 3 &&
-           text.includes(pattern.replace(/[aeiou]/gi, ''));
-  };
-
-  // Focused search: Only Order ID (main ID), Item Name, and Site Name
-  const searchableFields = [
-    // MAIN SEARCH FIELDS ONLY
-    request.itemOrder?.toString(), // Order ID - main ID like 001, 002, 003
-    request.itemName, // Item name
-    request.site?.name // Site name
+  // PRIORITY 3: Exact matches in other fields
+  const exactMatchFields = [
+    request.itemName,
+    request.site?.name,
+    request.description,
+    request.specsBrand
   ];
 
-  // Check if any field matches any of the search words
-  return searchableFields.some(field => {
-    if (!field) return false;
-    return matchesAnyWord(field.toString());
-  });
+  for (const field of exactMatchFields) {
+    if (field && normalizeSearchQuery(field) === searchTerm) {
+      return true;
+    }
+  }
+
+  // PRIORITY 4: Contains matches (substring search)
+  const containsMatchFields = [
+    request.requestNumber,
+    request.requestNumber?.replace(/^REQ-/, ''), // Just the number part
+    request.itemOrder?.toString(),
+    request.itemName,
+    request.site?.name,
+    request.description,
+    request.specsBrand
+  ];
+
+  // Check if search term is contained in any field
+  // Allow substring matching for all terms, but be more selective for short terms
+  for (const field of containsMatchFields) {
+    if (!field) continue;
+
+    const normalizedField = normalizeSearchQuery(field);
+
+    // For very short terms (1-2 chars), only match at the beginning of request numbers
+    if (searchTerm.length <= 2) {
+      // Special handling for request numbers - allow substring match
+      if (field === request.requestNumber?.replace(/^REQ-/, '') && normalizedField.includes(searchTerm)) {
+        return true;
+      }
+      // For item orders, allow exact prefix match
+      if (field === request.itemOrder?.toString() && normalizedField.startsWith(searchTerm)) {
+        return true;
+      }
+    } else {
+      // Normal substring matching for longer terms
+      if (normalizedField.includes(searchTerm)) {
+        return true;
+      }
+    }
+  }
+
+  // PRIORITY 5: Fuzzy matching only for longer terms (>4 chars) or specific cases
+  if (searchTerm.length > 4) {
+    const matchesAnyWord = (fieldValue: string | undefined | null): boolean => {
+      if (!fieldValue) return false;
+      const normalizedField = normalizeSearchQuery(fieldValue);
+
+      return searchWords.every(word => {
+        // Exact substring match first
+        if (normalizedField.includes(word)) return true;
+        // Only do fuzzy matching for longer words
+        if (word.length > 3) {
+          return fuzzyMatch(normalizedField, word);
+        }
+        return false;
+      });
+    };
+
+    const fuzzyMatchFields = [
+      request.itemName,
+      request.site?.name,
+      request.description
+    ];
+
+    if (fuzzyMatchFields.some(field => matchesAnyWord(field))) {
+      return true;
+    }
+  }
+
+  return false;
+};
+
+// Simplified fuzzy matching - only for longer terms
+const fuzzyMatch = (text: string, pattern: string): boolean => {
+  if (pattern.length <= 3) return false; // No fuzzy matching for short terms
+
+  // Simple fuzzy: allow 1 character difference
+  let differences = 0;
+  let i = 0;
+  let j = 0;
+
+  while (i < text.length && j < pattern.length) {
+    if (text[i] === pattern[j]) {
+      i++;
+      j++;
+    } else {
+      differences++;
+      if (differences > 1) return false;
+      // Try skipping a character in text or pattern
+      if (text[i + 1] === pattern[j]) {
+        i++;
+      } else if (text[i] === pattern[j + 1]) {
+        j++;
+      } else {
+        i++;
+        j++;
+      }
+    }
+  }
+
+  return differences <= 1 && j === pattern.length;
 };
 
 // Status color mapping for dropdown
@@ -215,6 +231,13 @@ const getStatusDot = (status: string) => {
 
 export function SiteRequestsContent() {
   const [formOpen, setFormOpen] = useState(false);
+
+  // Listen for external form open requests (from dashboard)
+  useEffect(() => {
+    const handleOpenForm = () => setFormOpen(true);
+    window.addEventListener('openRequestForm', handleOpenForm);
+    return () => window.removeEventListener('openRequestForm', handleOpenForm);
+  }, []);
   const [editDraftNumber, setEditDraftNumber] = useState<string | null>(null);
   const [selectedRequestId, setSelectedRequestId] = useState<Id<"requests"> | null>(null);
   const [selectedSiteId, setSelectedSiteId] = useState<Id<"sites"> | null>(null);

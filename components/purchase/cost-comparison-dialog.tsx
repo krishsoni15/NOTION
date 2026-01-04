@@ -1367,25 +1367,32 @@ export function CostComparisonDialog({
           {isManagerReview && (
             <div className="space-y-3 pt-2 border-t">
               <div>
-                <Label className="text-xs font-medium">Manager Notes / Rejection Reason</Label>
+                <Label className="text-xs font-medium">
+                  Manager Notes / Rejection Reason <span className="text-red-500">*</span>
+                </Label>
                 <Textarea
                   value={managerNotes}
                   onChange={(e) => setManagerNotes(e.target.value)}
-                  placeholder="Add instructions or reason for rejection..."
+                  placeholder="Required: Please provide a detailed reason for rejecting this cost comparison..."
                   className="mt-1 text-sm min-h-[80px]"
                   rows={3}
                 />
               </div>
               <div className="flex gap-2">
                 <Button
-                  variant="outline"
+                  variant="destructive"
                   onClick={async () => {
+                    if (!managerNotes.trim()) {
+                      toast.error("Please provide a reason for rejection");
+                      return;
+                    }
+
                     setIsReviewing(true);
                     try {
                       await reviewCC({
                         requestId,
                         action: "reject",
-                        notes: managerNotes.trim() || undefined,
+                        notes: managerNotes.trim(),
                       });
                       toast.success("Cost comparison rejected");
                       onOpenChange(false);

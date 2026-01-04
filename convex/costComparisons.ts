@@ -361,12 +361,16 @@ export const reviewCostComparison = mutation({
         updatedAt: now,
       });
     } else {
-      // Reject
+      // Reject - require notes
+      if (!args.notes || !args.notes.trim()) {
+        throw new Error("Rejection reason is required");
+      }
+
       await ctx.db.patch(costComparison._id, {
         status: "cc_rejected",
         approvedBy: currentUser._id,
         rejectedAt: now,
-        managerNotes: args.notes || "No reason provided",
+        managerNotes: args.notes.trim(),
         updatedAt: now,
       });
 

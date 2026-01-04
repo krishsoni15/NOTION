@@ -37,7 +37,7 @@ export function InventoryManagement({ userRole }: InventoryManagementProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [sortBy, setSortBy] = useState<SortOption>("newest");
   const [viewMode, setViewMode] = useState<ViewMode>("table");
-  const [refreshKey, setRefreshKey] = useState(0);
+  const [refreshKey, setRefreshKey] = useState(Date.now());
   const [isRefreshing, setIsRefreshing] = useState(false);
   const { isLoaded, isSignedIn } = useAuth();
 
@@ -63,7 +63,7 @@ export function InventoryManagement({ userRole }: InventoryManagementProps) {
 
   const handleRefresh = () => {
     setIsRefreshing(true);
-    setRefreshKey((prev) => prev + 1);
+    setRefreshKey(Date.now());
     setTimeout(() => {
       setIsRefreshing(false);
     }, 1000);
@@ -200,17 +200,24 @@ export function InventoryManagement({ userRole }: InventoryManagementProps) {
       </div>
 
       {/* Inventory table/cards */}
-      <InventoryTable 
+      <InventoryTable
         key={refreshKey}
         items={filteredAndSortedItems ?? undefined}
         viewMode={viewMode}
+        onRefresh={handleRefresh}
       />
 
       {/* Create inventory dialog */}
       {canCreate && (
         <InventoryFormDialog
           open={isCreateDialogOpen}
-          onOpenChange={setIsCreateDialogOpen}
+          onOpenChange={(open) => {
+            setIsCreateDialogOpen(open);
+            if (!open) {
+              // Refresh data when dialog closes (after successful operations)
+              handleRefresh();
+            }
+          }}
         />
       )}
     </div>

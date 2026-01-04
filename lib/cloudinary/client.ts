@@ -100,8 +100,17 @@ export async function deleteImage(publicId: string): Promise<void> {
  */
 export function generateImageKey(itemId: string, fileName: string): string {
   const timestamp = Date.now();
-  const sanitizedFileName = fileName.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
-  return `${itemId}_${timestamp}_${sanitizedFileName}`;
+  // Extract file extension and sanitize filename, but limit total length
+  const fileExt = fileName.split('.').pop()?.toLowerCase() || 'jpg';
+  const baseName = fileName.replace(/\.[^/.]+$/, ""); // Remove extension
+  const sanitizedBaseName = baseName.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
+
+  // Limit the base filename to 50 characters to avoid Cloudinary's public_id length limit
+  const truncatedBaseName = sanitizedBaseName.length > 50
+    ? sanitizedBaseName.substring(0, 50)
+    : sanitizedBaseName;
+
+  return `${itemId}_${timestamp}_${truncatedBaseName}.${fileExt}`;
 }
 
 /**

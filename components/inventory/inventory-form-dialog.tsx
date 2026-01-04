@@ -26,8 +26,8 @@ import { Label } from "@/components/ui/label";
 import { UnitInput } from "./unit-input";
 import { CameraDialog } from "./camera-dialog";
 import { VendorSelector } from "./vendor-selector";
-import { Camera, Upload, X, Search } from "lucide-react";
-import { ImageViewer } from "@/components/ui/image-viewer";
+import { Camera, Upload, X, Search, XIcon } from "lucide-react";
+import { ImageSlider } from "@/components/ui/image-slider";
 import { useUserRole } from "@/hooks/use-user-role";
 import { ROLES } from "@/lib/auth/roles";
 import type { Id } from "@/convex/_generated/dataModel";
@@ -76,34 +76,38 @@ export function InventoryFormDialog({
   const [imagePreviews, setImagePreviews] = useState<string[]>([]);
   const [existingImages, setExistingImages] = useState<Array<{imageUrl: string; imageKey: string; uploadedAt: number; uploadedBy: Id<"users">}>>([]);
   const [cameraOpen, setCameraOpen] = useState(false);
-  const [formImageViewerOpen, setFormImageViewerOpen] = useState(false);
-  const [formImageViewerImages, setFormImageViewerImages] = useState<Array<{imageUrl: string; imageKey: string}>>([]);
-  const [formImageViewerInitialIndex, setFormImageViewerInitialIndex] = useState(0);
+  const [formImageSliderOpen, setFormImageSliderOpen] = useState(false);
+  const [formImageSliderImages, setFormImageSliderImages] = useState<Array<{imageUrl: string; imageKey: string}>>([]);
+  const [formImageSliderInitialIndex, setFormImageSliderInitialIndex] = useState(0);
+  const [isDragOver, setIsDragOver] = useState(false);
   const uploadInputRef = useRef<HTMLInputElement>(null);
 
-  const canEdit = userRole === ROLES.PURCHASE_OFFICER && !isAddImageMode; // Only Purchase Officers can edit
+  const canEdit = userRole === ROLES.PURCHASE_OFFICER && !isAddImageMode; // Only Purchase Officers can edit item details
   // Purchase Officer can add images when creating or editing items
   // Site Engineer can add images to existing items only
   const canAddImages =
     (userRole === ROLES.PURCHASE_OFFICER && !isAddImageMode) ||
     (userRole === ROLES.SITE_ENGINEER && itemId) ||
     isAddImageMode;
+  // Allow managing images (add/remove) when user can add images or is editing existing item
+  const canManageImages = canAddImages || (canEdit && itemId);
 
-  const openFormImageViewer = (images: Array<{imageUrl: string; imageKey: string}>, initialIndex: number) => {
-    setFormImageViewerImages(images);
-    setFormImageViewerInitialIndex(initialIndex);
-    setFormImageViewerOpen(true);
+  const openFormImageSlider = (images: Array<{imageUrl: string; imageKey: string}>, initialIndex: number) => {
+    setFormImageSliderImages(images);
+    setFormImageSliderInitialIndex(initialIndex);
+    setFormImageSliderOpen(true);
   };
 
   const [formData, setFormData] = useState({
     itemName: "",
     unit: "",
-    centralStock: undefined as number | undefined,
+    centralStock: 0,
     vendorIds: [] as Id<"vendors">[],
   });
 
   // Load initial data
   useEffect(() => {
+    // Set form data from initialData or currentItem
     if (initialData) {
       setFormData({
         itemName: initialData.itemName,
@@ -111,19 +115,28 @@ export function InventoryFormDialog({
         centralStock: initialData.centralStock,
         vendorIds: initialData.vendorIds || (initialData.vendorId ? [initialData.vendorId] : []),
       });
-    } else if (currentItem && !isAddImageMode) {
+    } else if (currentItem) {
       // Support both old vendorId and new vendorIds format
       const vendorIds = (currentItem as any).vendorIds ||
                        (currentItem.vendorId ? [currentItem.vendorId] : []);
       setFormData({
         itemName: currentItem.itemName,
         unit: currentItem.unit ?? "",
-        centralStock: currentItem.centralStock,
+        centralStock: currentItem.centralStock || 0,
         vendorIds: vendorIds,
       });
+    } else {
+      setFormData({
+        itemName: "",
+        unit: "",
+        centralStock: 0,
+        vendorIds: [],
+      });
+    }
 
-      // Show existing images when editing (not in add-image mode)
-      if (currentItem.images && currentItem.images.length > 0) {
+    // Always load images from currentItem if available (for both edit and add-image modes)
+    if (currentItem && currentItem.images) {
+      if (currentItem.images.length > 0) {
         setExistingImages(currentItem.images);
         // Create preview URLs from existing images
         const existingPreviews = currentItem.images.map((img: any) => img.imageUrl);
@@ -132,13 +145,9 @@ export function InventoryFormDialog({
         setExistingImages([]);
       }
     } else {
-      setFormData({
-        itemName: "",
-        unit: "",
-        centralStock: undefined,
-        vendorIds: [],
-      });
+      setExistingImages([]);
     }
+
     setSelectedImages([]);
     setError("");
   }, [initialData, currentItem, isAddImageMode, open]);
@@ -148,7 +157,7 @@ export function InventoryFormDialog({
       setFormData({
         itemName: "",
         unit: "",
-        centralStock: undefined,
+        centralStock: 0,
         vendorIds: [],
       });
       setSelectedImages([]);
@@ -186,6 +195,10 @@ export function InventoryFormDialog({
       return;
     }
 
+    if (validFiles.length !== newFiles.length) {
+      toast.warning(`${newFiles.length - validFiles.length} non-image files were skipped`);
+    }
+
     setSelectedImages((prev) => [...prev, ...validFiles]);
 
     // Create previews
@@ -196,6 +209,24 @@ export function InventoryFormDialog({
       };
       reader.readAsDataURL(file);
     });
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(false);
+
+    const files = e.dataTransfer.files;
+    handleImageSelect(files);
   };
 
   const removeNewImage = (index: number) => {
@@ -262,10 +293,15 @@ export function InventoryFormDialog({
     setError("");
     setIsLoading(true);
 
-    // Validate form data for create/edit modes - only item name is required
+    // Validate form data for create/edit modes
     if (!isAddImageMode && canEdit) {
       if (!formData.itemName.trim()) {
         setError("Item name is required");
+        setIsLoading(false);
+        return;
+      }
+      if (formData.centralStock === undefined || formData.centralStock <= 0) {
+        setError("Central stock is required and must be greater than 0");
         setIsLoading(false);
         return;
       }
@@ -295,8 +331,13 @@ export function InventoryFormDialog({
 
           toast.success(`${imageData.length} image(s) added successfully`);
           console.log('Images uploaded successfully:', imageData);
-          // Refresh the page to show the new images
-          router.refresh();
+
+          // Force a re-render by updating local state
+          setSelectedImages([]);
+          setImagePreviews([]);
+          setExistingImages([]);
+
+          // Close dialog - the parent component will handle refresh via onOpenChange callback
           handleOpenChange(false);
         } catch (uploadError) {
           console.error("Error uploading images:", uploadError);
@@ -381,20 +422,30 @@ export function InventoryFormDialog({
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
+        <DialogHeader className="relative">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="absolute right-4 top-4 h-6 w-6 rounded-full"
+            onClick={() => handleOpenChange(false)}
+            disabled={isLoading || isUploading}
+          >
+            <XIcon className="h-4 w-4" />
+            <span className="sr-only">Close</span>
+          </Button>
           <DialogTitle>
             {isAddImageMode
-              ? "Add Images to Inventory Item"
+              ? "Manage Images - Inventory Item"
               : itemId
               ? "Edit Inventory Item"
               : "Add New Inventory Item"}
           </DialogTitle>
           <DialogDescription>
             {isAddImageMode
-              ? "Upload images for this inventory item"
+              ? "Manage images for this inventory item - add new images or remove existing ones"
               : itemId
-              ? "Update inventory item information. Required fields are marked with *."
-              : "Create a new inventory item. Required fields are marked with *."}
+              ? "Update inventory item information. Required fields are marked with * (Item Name, Central Stock)."
+              : "Create a new inventory item. Required fields are marked with * (Item Name, Central Stock)."}
           </DialogDescription>
         </DialogHeader>
 
@@ -415,35 +466,38 @@ export function InventoryFormDialog({
                 />
               </div>
 
-              <div className="space-y-2">
-                <UnitInput
-                  id="unit"
-                  value={formData.unit}
-                  onChange={(value) =>
-                    setFormData({ ...formData, unit: value })
-                  }
-                  disabled={isLoading || !canEdit}
-                />
-              </div>
-
-              <div className="space-y-2">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
                 <Label htmlFor="centralStock">
-                  Central Stock <span className="text-muted-foreground text-xs">(optional)</span>
+                  Central Stock *
                 </Label>
-                <Input
-                  id="centralStock"
-                  type="number"
-                  min="0"
-                  placeholder="0"
-                  value={formData.centralStock ?? ""}
+                  <Input
+                    id="centralStock"
+                    type="number"
+                    min="0"
+                    step="any"
+                    placeholder="33"
+                    value={formData.centralStock || ""}
                   onChange={(e) =>
                     setFormData({
                       ...formData,
-                      centralStock: e.target.value ? parseFloat(e.target.value) : undefined,
+                      centralStock: e.target.value ? parseFloat(e.target.value) : 0,
                     })
                   }
-                  disabled={isLoading || !canEdit}
-                />
+                    disabled={isLoading || !canEdit}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <UnitInput
+                    id="unit"
+                    value={formData.unit}
+                    onChange={(value) =>
+                      setFormData({ ...formData, unit: value })
+                    }
+                    disabled={isLoading || !canEdit}
+                  />
+                </div>
               </div>
 
               <div className="space-y-2">
@@ -462,13 +516,29 @@ export function InventoryFormDialog({
           )}
 
           {/* Image Upload Section */}
-          {canAddImages && (
+          {(canAddImages || (canEdit && itemId)) && (
             <div className="space-y-2">
-              <Label>Add Images to Inventory Item</Label>
+              <Label>
+                {isAddImageMode ? "Manage Images" : itemId ? "Manage Images" : "Add Images to Inventory Item"}
+              </Label>
               <p className="text-xs text-muted-foreground">
-                Upload images for this inventory item
+                {isAddImageMode
+                  ? "Add new images or remove existing ones for this inventory item"
+                  : itemId
+                  ? "Add new images or remove existing ones for this inventory item"
+                  : "Upload images for this inventory item"
+                }
               </p>
-              <div className="flex gap-2">
+              <div
+                className={`border-2 border-dashed rounded-lg p-4 transition-colors ${
+                  isDragOver
+                    ? 'border-primary bg-primary/5'
+                    : 'border-muted-foreground/25 hover:border-muted-foreground/50'
+                }`}
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+              >
                 <input
                   ref={uploadInputRef}
                   type="file"
@@ -477,26 +547,31 @@ export function InventoryFormDialog({
                   onChange={(e) => handleImageSelect(e.target.files)}
                   multiple
                 />
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setCameraOpen(true)}
-                  disabled={isLoading || isUploading}
-                  className="flex-1"
-                >
-                  <Camera className="h-4 w-4 mr-2" />
-                  Camera
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => uploadInputRef.current?.click()}
-                  disabled={isLoading || isUploading}
-                  className="flex-1"
-                >
-                  <Upload className="h-4 w-4 mr-2" />
-                  Upload
-                </Button>
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setCameraOpen(true)}
+                    disabled={isLoading || isUploading}
+                    className="flex-1"
+                  >
+                    <Camera className="h-4 w-4 mr-2" />
+                    Camera
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => uploadInputRef.current?.click()}
+                    disabled={isLoading || isUploading}
+                    className="flex-1"
+                  >
+                    <Upload className="h-4 w-4 mr-2" />
+                    Browse Files
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground text-center mt-2">
+                  {isDragOver ? 'Drop images here' : 'Or drag and drop images here'}
+                </p>
               </div>
 
               {/* Image Previews */}
@@ -513,7 +588,7 @@ export function InventoryFormDialog({
                           <div key={`existing-${image.imageKey}`} className="relative group">
                             <button
                               type="button"
-                              onClick={() => openFormImageViewer(existingImages, index)}
+                              onClick={() => openFormImageSlider(existingImages, index)}
                               className="block w-full"
                             >
                               <img
@@ -525,16 +600,36 @@ export function InventoryFormDialog({
                             <div className="absolute top-1 left-1 bg-green-500 text-white text-xs px-1.5 py-0.5 rounded">
                               ✓
                             </div>
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                removeExistingImage(image.imageKey, image.imageUrl);
-                              }}
-                              className="absolute top-1 right-1 bg-destructive text-destructive-foreground rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                            >
-                              <X className="h-3 w-3" />
-                            </button>
+                            {canManageImages && (
+                              <div className="absolute top-1 right-1 flex gap-1">
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    // TODO: Implement replace functionality
+                                    // For now, just remove and let user add new image
+                                    removeExistingImage(image.imageKey, image.imageUrl);
+                                  }}
+                                  className="bg-blue-500 text-white rounded-full p-1 hover:bg-blue-600 transition-colors"
+                                  title="Replace image"
+                                >
+                                  <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                                  </svg>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    removeExistingImage(image.imageKey, image.imageUrl);
+                                  }}
+                                  className="bg-destructive text-destructive-foreground rounded-full p-1 hover:bg-destructive/90 transition-colors"
+                                  title="Remove image"
+                                >
+                                  <X className="h-3 w-3" />
+                                </button>
+                              </div>
+                            )}
                           </div>
                         ))}
                       </div>
@@ -552,7 +647,7 @@ export function InventoryFormDialog({
                           <div key={`new-${index}`} className="relative group">
                             <button
                               type="button"
-                              onClick={() => openFormImageViewer(imagePreviews.map((url, i) => ({ imageUrl: url, imageKey: `preview-${i}` })), existingImages.length + index)}
+                              onClick={() => openFormImageSlider(imagePreviews.map((url, i) => ({ imageUrl: url, imageKey: `preview-${i}` })), existingImages.length + index)}
                               className="block w-full"
                             >
                               <img
@@ -570,7 +665,7 @@ export function InventoryFormDialog({
                                 e.stopPropagation();
                                 removeNewImage(existingImages.length + index);
                               }}
-                              className="absolute top-1 right-1 bg-destructive text-destructive-foreground rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                              className="absolute top-1 right-1 bg-destructive text-destructive-foreground rounded-full p-1 hover:bg-destructive/90 transition-colors"
                             >
                               <X className="h-3 w-3" />
                             </button>
@@ -610,7 +705,7 @@ export function InventoryFormDialog({
                 </>
               ) : (
                 isAddImageMode
-                  ? "Add Images"
+                  ? "Update Images"
                   : itemId
                   ? "Update Item"
                   : "Create Item"
@@ -627,12 +722,12 @@ export function InventoryFormDialog({
           multiple={true}
         />
 
-        {/* Form Image Viewer */}
-        <ImageViewer
-          images={formImageViewerImages}
-          initialIndex={formImageViewerInitialIndex}
-          open={formImageViewerOpen}
-          onOpenChange={setFormImageViewerOpen}
+        {/* Form Image Slider */}
+        <ImageSlider
+          images={formImageSliderImages}
+          initialIndex={formImageSliderInitialIndex}
+          open={formImageSliderOpen}
+          onOpenChange={setFormImageSliderOpen}
           itemName="Form Images"
         />
       </DialogContent>

@@ -113,7 +113,7 @@ export function UnitInput({
   onChange,
   disabled,
   id,
-  placeholder = "e.g., bags, kg, mm, nos",
+  placeholder = "e.g., kg, ml, pieces, bags",
 }: UnitInputProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [filteredUnits, setFilteredUnits] = useState<string[]>([]);
@@ -121,23 +121,14 @@ export function UnitInput({
 
   useEffect(() => {
     if (value && value.length > 0) {
-      // Check if input starts with a number
-      const numberSuggestions = generateNumberSuggestions(value);
-      
-      if (numberSuggestions.length > 0) {
-        // Show number-based suggestions (e.g., "76786 m" → "76786 mm", "76786 m", etc.)
-        setFilteredUnits(numberSuggestions);
-        setIsOpen(true);
-      } else {
-        // Regular unit filtering for non-number inputs
-        const filtered = COMMON_UNITS.filter((unit) =>
-          unit.toLowerCase().includes(value.toLowerCase()) ||
-          unit.toLowerCase().startsWith(value.toLowerCase())
-        );
-        setFilteredUnits(filtered);
-        // Keep dropdown open while typing
-        setIsOpen(true);
-      }
+      // Only show unit filtering - no number-based suggestions
+      const filtered = COMMON_UNITS.filter((unit) =>
+        unit.toLowerCase().includes(value.toLowerCase()) ||
+        unit.toLowerCase().startsWith(value.toLowerCase())
+      );
+      setFilteredUnits(filtered);
+      // Keep dropdown open while typing
+      setIsOpen(true);
     } else {
       // Show all common units when empty
       setFilteredUnits(COMMON_UNITS);
@@ -157,17 +148,12 @@ export function UnitInput({
     if (value.length === 0) {
       setFilteredUnits(COMMON_UNITS);
     } else {
-      // Re-evaluate suggestions for current value
-      const numberSuggestions = generateNumberSuggestions(value);
-      if (numberSuggestions.length > 0) {
-        setFilteredUnits(numberSuggestions);
-      } else {
-        const filtered = COMMON_UNITS.filter((unit) =>
-          unit.toLowerCase().includes(value.toLowerCase()) ||
-          unit.toLowerCase().startsWith(value.toLowerCase())
-        );
-        setFilteredUnits(filtered.length > 0 ? filtered : COMMON_UNITS);
-      }
+      // Only show unit filtering - no number-based suggestions
+      const filtered = COMMON_UNITS.filter((unit) =>
+        unit.toLowerCase().includes(value.toLowerCase()) ||
+        unit.toLowerCase().startsWith(value.toLowerCase())
+      );
+      setFilteredUnits(filtered.length > 0 ? filtered : COMMON_UNITS);
     }
     setIsOpen(true);
   };

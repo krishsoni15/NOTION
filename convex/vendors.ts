@@ -230,6 +230,61 @@ export const checkVendorUsage = query({
 });
 
 /**
+ * Get vendor purchase statistics
+ */
+export const getVendorPurchaseStats = query({
+  args: { vendorId: v.id("vendors") },
+  handler: async (ctx, args) => {
+    const currentUser = await getCurrentUser(ctx);
+
+    // Check if user has access
+    if (
+      currentUser.role !== "purchase_officer" &&
+      currentUser.role !== "manager"
+    ) {
+      throw new Error("Unauthorized");
+    }
+
+    // Get all purchase orders for this vendor
+    const purchaseOrders = await ctx.db
+      .query("purchaseOrders")
+      .withIndex("by_vendor_id", (q) => q.eq("vendorId", args.vendorId))
+      .collect();
+
+    // Get inventory items associated with this vendor
+    const inventoryItems = await ctx.db
+      .query("inventory")
+      .withIndex("by_is_active", (q) => q.eq("isActive", true))
+      .collect();
+
+    const vendorInventoryItems = inventoryItems.filter((item) => {
+      const vendorIds = (item as any).vendorIds || [];
+      return vendorIds.includes(args.vendorId) || item.vendorId === args.vendorId;
+    });
+
+    // Calculate statistics
+    let totalItems = 0;
+    let totalValue = 0;
+    let totalOrders = purchaseOrders.length;
+
+    purchaseOrders.forEach((po) => {
+      totalItems += po.quantity;
+      totalValue += po.totalAmount;
+    });
+
+    const activeItems = vendorInventoryItems.length;
+
+    return {
+      totalItems,
+      totalValue,
+      totalOrders,
+      activeItems,
+      inventoryItems: vendorInventoryItems,
+    };
+  },
+});
+
+/**
  * Delete vendor (Purchase Officer only)
  * If vendor is not used in inventory: Hard delete (permanent)
  * If vendor is used in inventory: Cannot delete (error)

@@ -1237,6 +1237,95 @@ export const markDelivery = mutation({
 /**
  * Update request status for purchase workflow - Purchase Officer only
  */
+/**
+ * Direct to PO (skip cost comparison) - Purchase Officer only
+ * Used when item is available in inventory and direct delivery is possible
+ */
+export const directToPO = mutation({
+  args: { requestId: v.id("requests") },
+  handler: async (ctx, args) => {
+    const currentUser = await getCurrentUser(ctx);
+
+    // Only purchase officers can use direct to PO
+    if (currentUser.role !== "purchase_officer") {
+      throw new Error("Unauthorized: Only purchase officers can use direct to PO");
+    }
+
+    const request = await ctx.db.get(args.requestId);
+    if (!request) {
+      throw new Error("Request not found");
+    }
+
+    // Only allow for approved requests that are ready for CC
+    if (request.status !== "approved" && request.status !== "ready_for_cc") {
+      throw new Error("Can only use direct to PO for approved requests ready for cost comparison");
+    }
+
+    await ctx.db.patch(args.requestId, {
+      status: "ready_for_po",
+      updatedAt: Date.now(),
+    });
+
+    return { success: true };
+  },
+});
+
+/**
+ * Update request details (quantity, description) - Purchase Officer only
+ * Used during cost comparison to adjust item details
+ */
+export const updateRequestDetails = mutation({
+  args: {
+    requestId: v.id("requests"),
+    quantity: v.optional(v.number()),
+    unit: v.optional(v.string()),
+    description: v.optional(v.string()),
+    itemName: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const currentUser = await getCurrentUser(ctx);
+
+    // Only purchase officers can update request details
+    if (currentUser.role !== "purchase_officer") {
+      throw new Error("Unauthorized: Only purchase officers can update request details");
+    }
+
+    const request = await ctx.db.get(args.requestId);
+    if (!request) {
+      throw new Error("Request not found");
+    }
+
+    // Only allow updates for approved requests that are in cost comparison stage
+    if (request.status !== "approved" && request.status !== "ready_for_cc" && request.status !== "cc_pending") {
+      throw new Error("Can only update details for approved requests in cost comparison process");
+    }
+
+    const updates: any = {
+      updatedAt: Date.now(),
+    };
+
+    if (args.quantity !== undefined) {
+      updates.quantity = args.quantity;
+    }
+
+    if (args.unit !== undefined) {
+      updates.unit = args.unit;
+    }
+
+    if (args.description !== undefined) {
+      updates.description = args.description;
+    }
+
+    if (args.itemName !== undefined) {
+      updates.itemName = args.itemName;
+    }
+
+    await ctx.db.patch(args.requestId, updates);
+
+    return { success: true };
+  },
+});
+
 export const updatePurchaseRequestStatus = mutation({
   args: {
     requestId: v.id("requests"),

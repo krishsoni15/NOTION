@@ -8,7 +8,7 @@
  * Manager and Site Engineer: Read-only, but Site Engineer can add images
  */
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import {
@@ -57,7 +57,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { MoreHorizontal, Edit, Trash2, Image as ImageIcon, Plus, Package, Building2, Calendar, Box, Info, Mail, Phone, Hash, MapPin } from "lucide-react";
-import { ImageViewer } from "@/components/ui/image-viewer";
+import { ImageSlider } from "@/components/ui/image-slider";
 import { LazyImage } from "@/components/ui/lazy-image";
 import { CompactImageGallery } from "@/components/ui/image-gallery";
 import { useUserRole } from "@/hooks/use-user-role";
@@ -72,16 +72,15 @@ type ViewMode = "table" | "card";
 interface InventoryTableProps {
   items: typeof import("@/convex/_generated/api").api.inventory.getAllInventoryItems._returnType | undefined;
   viewMode?: ViewMode;
+  onRefresh?: () => void;
 }
 
-export function InventoryTable({ items, viewMode = "table" }: InventoryTableProps) {
+export function InventoryTable({ items, viewMode = "table", onRefresh }: InventoryTableProps) {
   const userRole = useUserRole();
   const deleteItem = useMutation(api.inventory.deleteInventoryItem);
   const removeImage = useMutation(api.inventory.removeImageFromInventory);
 
-  // Debug logging
-  console.log('InventoryTable items:', items);
-  console.log('First item images:', items?.[0]?.images);
+  // Debug logging removed for production
 
   const [loadingItemId, setLoadingItemId] = useState<string | null>(null);
   const [editingItem, setEditingItem] = useState<Doc<"inventory"> | null>(null);
@@ -89,19 +88,20 @@ export function InventoryTable({ items, viewMode = "table" }: InventoryTableProp
   const [addingImageItem, setAddingImageItem] = useState<Doc<"inventory"> | null>(null);
   const [removingImageKey, setRemovingImageKey] = useState<string | null>(null);
   const [selectedItemName, setSelectedItemName] = useState<string | null>(null);
-  const [imageViewerOpen, setImageViewerOpen] = useState(false);
-  const [imageViewerImages, setImageViewerImages] = useState<Array<{imageUrl: string; imageKey: string}>>([]);
-  const [imageViewerItemName, setImageViewerItemName] = useState("");
-  const [imageViewerInitialIndex, setImageViewerInitialIndex] = useState(0);
+  const [imageSliderOpen, setImageSliderOpen] = useState(false);
+  const [imageSliderImages, setImageSliderImages] = useState<Array<{imageUrl: string; imageKey: string}>>([]);
+  const [imageSliderItemName, setImageSliderItemName] = useState("");
+  const [imageSliderInitialIndex, setImageSliderInitialIndex] = useState(0);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   const canPerformCRUD = userRole === ROLES.PURCHASE_OFFICER; // Only Purchase Officers can edit/delete
   const canAddImages = userRole === ROLES.PURCHASE_OFFICER || userRole === ROLES.SITE_ENGINEER; // Purchase Officers and Site Engineers can add images
 
-  const openImageViewer = (images: Array<{imageUrl: string; imageKey: string}>, itemName: string, initialIndex: number = 0) => {
-    setImageViewerImages(images);
-    setImageViewerItemName(itemName);
-    setImageViewerInitialIndex(initialIndex);
-    setImageViewerOpen(true);
+  const openImageSlider = (images: Array<{imageUrl: string; imageKey: string}>, itemName: string, initialIndex: number = 0) => {
+    setImageSliderImages(images);
+    setImageSliderItemName(itemName);
+    setImageSliderInitialIndex(initialIndex);
+    setImageSliderOpen(true);
   };
 
   if (!items) {
@@ -159,8 +159,8 @@ export function InventoryTable({ items, viewMode = "table" }: InventoryTableProp
                   )}
                   {canAddImages && (
                     <DropdownMenuItem onClick={() => setAddingImageItem(item)}>
-                      <Plus className="h-4 w-4 mr-2" />
-                      Add Images
+                      <ImageIcon className="h-4 w-4 mr-2" />
+                      Manage Images
                     </DropdownMenuItem>
                   )}
                   {canPerformCRUD && (
@@ -181,6 +181,52 @@ export function InventoryTable({ items, viewMode = "table" }: InventoryTableProp
           </div>
         </CardHeader>
         <CardContent className="pt-4 space-y-3">
+          {/* Image Display - Show prominently if available */}
+          {item.images && item.images.length > 0 && (
+            <div className="mb-3">
+              <div className="flex justify-center">
+                <div className="relative group">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      console.log('Opening image slider for:', item.itemName, item.images);
+                      openImageSlider(item.images || [], item.itemName, 0);
+                    }}
+                    className="block"
+                  >
+                    <LazyImage
+                      src={item.images[0].imageUrl}
+                      alt={`${item.itemName} main image`}
+                      width={120}
+                      height={80}
+                      className="rounded-lg border-2 border-border hover:border-primary transition-colors object-cover w-full max-w-[120px] h-[80px]"
+                    />
+                  </button>
+                  {item.images.length > 1 && (
+                    <div className="absolute -bottom-2 -right-2 bg-primary text-primary-foreground rounded-full text-xs px-2 py-1 font-medium shadow-sm">
+                      +{item.images.length - 1}
+                    </div>
+                  )}
+                  {canPerformCRUD && (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        if (item.images && item.images[0]) {
+                          handleRemoveImage(item._id, item.images[0].imageKey);
+                        }
+                      }}
+                      disabled={removingImageKey === (item.images && item.images[0]?.imageKey)}
+                      className="absolute -top-2 -right-2 bg-destructive text-destructive-foreground rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity text-xs w-6 h-6 flex items-center justify-center hover:bg-destructive/90 z-10"
+                    >
+                      ×
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
           <div className="flex items-start gap-2 text-sm">
             <Box className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
             <div className="flex-1 min-w-0">
@@ -375,61 +421,6 @@ export function InventoryTable({ items, viewMode = "table" }: InventoryTableProp
               </div>
             </div>
           ) : null}
-          {/* Image Section - Always show for debugging */}
-          <div className="flex items-start gap-2 text-sm">
-            <ImageIcon className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
-            <div className="flex-1 min-w-0">
-              <p className="text-muted-foreground text-xs mb-1.5">
-                Images ({item.images?.length || 0})
-              </p>
-              <div className="flex items-center gap-2">
-                {item.images && item.images.length > 0 ? (
-                  <div className="relative group">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        console.log('Opening image viewer for:', item.itemName, item.images);
-                        openImageViewer(item.images || [], item.itemName, 0);
-                      }}
-                      className="block"
-                    >
-                      <LazyImage
-                        src={item.images[0].imageUrl}
-                        alt={`${item.itemName} 1`}
-                        width={48}
-                        height={48}
-                        className="rounded border hover:border-primary transition-colors"
-                      />
-                    </button>
-                    {canPerformCRUD && (
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (item.images && item.images[0]) {
-                            handleRemoveImage(item._id, item.images[0].imageKey);
-                          }
-                        }}
-                        disabled={removingImageKey === (item.images && item.images[0]?.imageKey)}
-                        className="absolute -top-1 -right-1 bg-destructive text-destructive-foreground rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity text-xs w-4 h-4 flex items-center justify-center z-10"
-                      >
-                        ×
-                      </button>
-                    )}
-                    {item.images.length > 1 && (
-                      <div className="absolute -bottom-1 -right-1 bg-primary text-primary-foreground rounded-full text-xs w-5 h-5 flex items-center justify-center font-medium">
-                        +{item.images.length - 1}
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <div className="text-xs text-muted-foreground">
-                    No images uploaded
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
           <div className="flex items-center gap-2 text-xs text-muted-foreground pt-2 border-t">
             <Calendar className="h-3.5 w-3.5" />
             <span>Created {new Date(item.createdAt).toLocaleDateString()}</span>
@@ -707,11 +698,32 @@ export function InventoryTable({ items, viewMode = "table" }: InventoryTableProp
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">
-                        <CompactImageGallery
-                          images={item.images ? item.images.map(img => ({ imageUrl: img.imageUrl, imageKey: img.imageKey })) : []}
-                          maxDisplay={1}
-                          size="md"
-                        />
+                        {item.images && item.images.length > 0 ? (
+                          <div className="relative group">
+                            <button
+                              type="button"
+                              onClick={() => openImageSlider(item.images || [], item.itemName, 0)}
+                              className="block"
+                            >
+                              <LazyImage
+                                src={item.images[0].imageUrl}
+                                alt={`${item.itemName} 1`}
+                                width={40}
+                                height={40}
+                                className="rounded border hover:border-primary transition-colors"
+                              />
+                            </button>
+                            {item.images.length > 1 && (
+                              <div className="absolute -bottom-1 -right-1 bg-primary text-primary-foreground rounded-full text-xs w-5 h-5 flex items-center justify-center font-medium">
+                                +{item.images.length - 1}
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="text-xs text-muted-foreground">
+                            No images
+                          </div>
+                        )}
                       </div>
                     </TableCell>
                     <TableCell className="text-muted-foreground text-sm">
@@ -745,8 +757,8 @@ export function InventoryTable({ items, viewMode = "table" }: InventoryTableProp
                             )}
                             {canAddImages && (
                               <DropdownMenuItem onClick={() => setAddingImageItem(item)}>
-                                <Plus className="h-4 w-4 mr-2" />
-                                Add Images
+                                <ImageIcon className="h-4 w-4 mr-2" />
+                                Manage Images
                               </DropdownMenuItem>
                             )}
                             {canPerformCRUD && (
@@ -786,14 +798,19 @@ export function InventoryTable({ items, viewMode = "table" }: InventoryTableProp
       {canPerformCRUD && (
         <InventoryFormDialog
           open={editingItem !== null}
-          onOpenChange={(open) => !open && setEditingItem(null)}
+          onOpenChange={(open) => {
+            if (!open) {
+              setEditingItem(null);
+              onRefresh?.();
+            }
+          }}
           itemId={editingItem?._id}
           initialData={editingItem
             ? {
                 itemName: editingItem.itemName,
                 unit: editingItem.unit ?? "",
                 centralStock: editingItem.centralStock ?? 0,
-                vendorIds: (editingItem as any).vendorIds || 
+                vendorIds: (editingItem as any).vendorIds ||
                           (editingItem.vendorId ? [editingItem.vendorId] : []),
               }
             : null}
@@ -805,7 +822,12 @@ export function InventoryTable({ items, viewMode = "table" }: InventoryTableProp
       {canAddImages && (
         <InventoryFormDialog
           open={addingImageItem !== null}
-          onOpenChange={(open) => !open && setAddingImageItem(null)}
+          onOpenChange={(open) => {
+            if (!open) {
+              setAddingImageItem(null);
+              onRefresh?.();
+            }
+          }}
           itemId={addingImageItem?._id || undefined}
           mode="add-image"
         />
@@ -846,12 +868,12 @@ export function InventoryTable({ items, viewMode = "table" }: InventoryTableProp
         itemName={selectedItemName}
       />
 
-      <ImageViewer
-        images={imageViewerImages}
-        initialIndex={imageViewerInitialIndex}
-        open={imageViewerOpen}
-        onOpenChange={setImageViewerOpen}
-        itemName={imageViewerItemName}
+      <ImageSlider
+        images={imageSliderImages}
+        initialIndex={imageSliderInitialIndex}
+        open={imageSliderOpen}
+        onOpenChange={setImageSliderOpen}
+        itemName={imageSliderItemName}
       />
     </>
   );

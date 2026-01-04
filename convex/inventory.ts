@@ -158,16 +158,29 @@ export const getInventoryItemById = query({
       throw new Error("Inventory item not found");
     }
 
-    const vendor = item.vendorId ? await ctx.db.get(item.vendorId) : null;
+    // Fetch vendor info for multiple vendors (support both old vendorId and new vendorIds)
+    const vendorIds = (item as any).vendorIds || (item.vendorId ? [item.vendorId] : []);
+    const vendors = await Promise.all(
+      vendorIds.map(async (vendorId: any) => {
+        const vendor = await ctx.db.get(vendorId) as any;
+        if (!vendor) return null;
+        return {
+          _id: vendor._id,
+          companyName: vendor.companyName,
+          email: vendor.email,
+          phone: vendor.phone,
+          gstNumber: vendor.gstNumber,
+          address: vendor.address,
+        };
+      })
+    );
+    // Filter out null vendors and return first vendor for backward compatibility
+    const validVendors = vendors.filter((v) => v !== null);
+
     return {
       ...item,
-      vendor: vendor
-        ? {
-            _id: vendor._id,
-            companyName: vendor.companyName,
-            email: vendor.email,
-          }
-        : null,
+      vendor: validVendors.length > 0 ? validVendors[0] : null, // First vendor for backward compatibility
+      vendors: validVendors, // Array of all vendors
     };
   },
 });

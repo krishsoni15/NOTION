@@ -347,6 +347,7 @@ export function PurchaseRequestsContent() {
                   onOpenCC={setCCRequestId}
                   onSiteClick={setSelectedSiteId}
                   onItemClick={setSelectedItemName}
+                  canEditVendor={true}
                 />
               );
             })}

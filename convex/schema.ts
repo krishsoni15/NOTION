@@ -62,10 +62,15 @@ export default defineSchema({
       v.literal("pending"),
       v.literal("approved"),
       v.literal("rejected"),
+      v.literal("recheck"),
       v.literal("ready_for_cc"),
       v.literal("cc_pending"),
       v.literal("cc_approved"),
+      v.literal("cc_rejected"),
       v.literal("ready_for_po"),
+      v.literal("pending_po"),
+      v.literal("rejected_po"),
+      v.literal("ready_for_delivery"),
       v.literal("delivery_stage"),
       v.literal("delivered")
     ),
@@ -296,6 +301,7 @@ export default defineSchema({
     approvedAt: v.optional(v.number()),
     approvedBy: v.optional(v.id("users")), // Manager who approved/rejected
     isDirectDelivery: v.boolean(), // If item is in inventory, can go directly to delivery
+    inventoryFulfillmentQuantity: v.optional(v.number()), // Quantity to be fulfilled from inventory in a split/mixed plan
     createdAt: v.number(),
     updatedAt: v.number(),
   })

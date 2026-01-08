@@ -265,6 +265,7 @@ export function MaterialRequestForm({
       setSharedFormData({
         siteId: "" as Id<"sites"> | "",
         requiredBy: null,
+        orderNote: "",
       });
       setItems([
         {

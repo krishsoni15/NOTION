@@ -322,10 +322,18 @@ export const getPurchaseRequestsByStatus = query({
   args: {
     status: v.optional(
       v.union(
+        v.literal("draft"),
+        v.literal("pending"),
+        v.literal("rejected"),
+        v.literal("recheck"),
         v.literal("ready_for_cc"),
         v.literal("cc_pending"),
         v.literal("cc_approved"),
+        v.literal("cc_rejected"),
         v.literal("ready_for_po"),
+        v.literal("pending_po"),
+        v.literal("rejected_po"),
+        v.literal("ready_for_delivery"),
         v.literal("delivery_stage")
       )
     ),
@@ -348,22 +356,67 @@ export const getPurchaseRequestsByStatus = query({
 
     let requests;
     if (args.status) {
-      // TypeScript guard: ensure status is defined before using it
-      const status = args.status;
-      requests = await ctx.db
-        .query("requests")
-        .withIndex("by_status", (q) => q.eq("status", status))
-        .order("desc")
-        .collect();
+      if (args.status === "draft") {
+        // Special case for drafts: ONLY show drafts created by the Purchase Officer themselves
+        requests = await ctx.db
+          .query("requests")
+          .withIndex("by_created_by", (q) => q.eq("createdBy", currentUser._id))
+          .order("desc")
+          .collect();
+        requests = requests.filter((r) => r.status === "draft");
+      } else {
+        // TypeScript guard: ensure status is defined before using it
+        const status = args.status;
+        requests = await ctx.db
+          .query("requests")
+          .withIndex("by_status", (q) => q.eq("status", status))
+          .order("desc")
+          .collect();
+      }
     } else {
-      // Get all purchase-related requests
-      requests = await ctx.db
+      // Get all requests first
+      const allRequests = await ctx.db
         .query("requests")
         .collect();
 
-      requests = requests.filter((r) =>
-        ["ready_for_cc", "cc_rejected", "cc_pending", "cc_approved", "ready_for_po", "delivery_stage"].includes(r.status)
-      );
+      // Identify "Active Purchase Groups":
+      // A group is active if it contains at least one item in a purchase-relevant status
+      const purchaseRelevantStatuses = new Set([
+        "recheck",
+        "ready_for_cc",
+        "cc_rejected",
+        "cc_pending",
+        "cc_approved",
+        "ready_for_po",
+        "pending_po",
+        "rejected_po",
+        "ready_for_delivery",
+        "delivery_stage",
+        "delivered"
+      ]);
+
+      const activeRequestNumbers = new Set<string>();
+
+      // First pass: Find all request numbers that have at least one purchase-relevant item
+      // OR if it's a draft created by me
+      for (const r of allRequests) {
+        if (purchaseRelevantStatuses.has(r.status)) {
+          activeRequestNumbers.add(r.requestNumber);
+        } else if (r.status === "draft" && r.createdBy === currentUser._id) {
+          activeRequestNumbers.add(r.requestNumber);
+        }
+      }
+
+      // Second pass: Filter to include ALL items belonging to active groups
+      // Exception: Do not show drafts created by others even if the group is active
+      requests = allRequests.filter((r) => {
+        if (!activeRequestNumbers.has(r.requestNumber)) return false;
+
+        // Hide drafts from other users
+        if (r.status === "draft" && r.createdBy !== currentUser._id) return false;
+
+        return true;
+      });
     }
 
     // Fetch related data
@@ -434,6 +487,7 @@ export const getPurchaseRequestsByStatus = query({
             : null,
           selectedVendorId,
           vendorQuotes,
+          isSplitApproved: costComparison?.managerNotes?.includes("Split Fulfillment Approved") || false,
           notesCount: notesCounts.get(request.requestNumber) || 0,
         };
       })
@@ -538,6 +592,7 @@ export const getAllRequests = query({
             : null,
           selectedVendorId,
           vendorQuotes,
+          isSplitApproved: costComparison?.managerNotes?.includes("Split Fulfillment Approved") || false,
           notesCount: notesCounts.get(request.requestNumber) || 0,
         };
       })
@@ -588,6 +643,13 @@ export const getRequestsByRequestNumber = query({
     const requestsWithDetails = await Promise.all(
       requests.map(async (request) => {
         const site = await ctx.db.get(request.siteId);
+
+        // Fetch cost comparison to check for split approval and vendor quotes
+        const costComparison = await ctx.db
+          .query("costComparisons")
+          .withIndex("by_request_id", (q) => q.eq("requestId", request._id))
+          .unique();
+
         return {
           ...request,
           site: site
@@ -598,6 +660,9 @@ export const getRequestsByRequestNumber = query({
               address: site.address,
             }
             : null,
+          vendorQuotes: costComparison?.vendorQuotes || [],
+          selectedVendorId: costComparison?.selectedVendorId || null,
+          isSplitApproved: costComparison?.managerNotes?.includes("Split Fulfillment Approved") || false,
         };
       })
     );
@@ -1029,18 +1094,17 @@ export const updateRequestStatus = mutation({
     const now = Date.now();
 
     // Determine new status based on action
-    // Logic updated: Direct PO and Direct Delivery now go to 'ready_for_cc' but with a directAction flag,
-    // allowing the Purchase Officer to see them "side of cc" and execute the direct action.
-    let newStatus: "ready_for_cc" | "rejected";
+    // Logic updated: All approved requests go to 'recheck' first for Purchase Officer review
+    let newStatus: "recheck" | "rejected";
     let directAction: "po" | "delivery" | undefined = undefined;
 
     if (args.status === "approved") {
-      newStatus = "ready_for_cc"; // Normal approval
+      newStatus = "recheck"; // Normal approval -> Recheck
     } else if (args.status === "direct_po") {
-      newStatus = "ready_for_cc"; // Goes to Purchaser, but flagged for PO
+      newStatus = "recheck"; // Goes to Purchaser (Recheck) with PO flag
       directAction = "po";
     } else if (args.status === "delivery_stage") {
-      newStatus = "ready_for_cc"; // Goes to Purchaser, but flagged for Delivery
+      newStatus = "recheck"; // Goes to Purchaser (Recheck) with Delivery flag
       directAction = "delivery";
     } else {
       newStatus = "rejected";
@@ -1116,16 +1180,16 @@ export const bulkUpdateRequestStatus = mutation({
     const now = Date.now();
 
     // Determine new status and flags
-    let newStatus: "ready_for_cc" | "rejected";
+    let newStatus: "recheck" | "rejected";
     let directAction: "po" | "delivery" | undefined = undefined;
 
     if (args.status === "approved") {
-      newStatus = "ready_for_cc";
+      newStatus = "recheck";
     } else if (args.status === "direct_po") {
-      newStatus = "ready_for_cc";
+      newStatus = "recheck";
       directAction = "po";
     } else if (args.status === "delivery_stage") {
-      newStatus = "ready_for_cc";
+      newStatus = "recheck";
       directAction = "delivery";
     } else {
       newStatus = "rejected";
@@ -1589,8 +1653,8 @@ export const updateRequestDetails = mutation({
       throw new Error("Request not found");
     }
 
-    // Only allow updates for approved requests that are in cost comparison stage
-    if (request.status !== "approved" && request.status !== "ready_for_cc" && request.status !== "cc_pending") {
+    // Only allow updates for approved requests that are in cost comparison, recheck, or approved stage
+    if (request.status !== "approved" && request.status !== "ready_for_cc" && request.status !== "cc_pending" && request.status !== "recheck") {
       throw new Error("Can only update details for approved requests in cost comparison process");
     }
 
@@ -1624,10 +1688,17 @@ export const updatePurchaseRequestStatus = mutation({
   args: {
     requestId: v.id("requests"),
     status: v.union(
+      v.literal("recheck"),
+      v.literal("ready_for_cc"),
       v.literal("cc_pending"),
       v.literal("cc_approved"),
+      v.literal("cc_rejected"),
       v.literal("ready_for_po"),
-      v.literal("delivery_stage")
+      v.literal("pending_po"),
+      v.literal("rejected_po"),
+      v.literal("ready_for_delivery"),
+      v.literal("delivery_stage"),
+      v.literal("delivered")
     ),
   },
   handler: async (ctx, args) => {
@@ -1645,11 +1716,16 @@ export const updatePurchaseRequestStatus = mutation({
 
     // Validate status transitions
     const validTransitions: Record<string, string[]> = {
-      ready_for_cc: ["cc_pending", "ready_for_po", "delivery_stage"],
-      cc_pending: ["cc_approved", "ready_for_cc"], // Can go back if needed
+      recheck: ["ready_for_cc", "rejected"],
+      ready_for_cc: ["cc_pending", "cc_rejected", "ready_for_po", "delivery_stage", "ready_for_delivery"],
+      cc_pending: ["cc_approved", "cc_rejected", "ready_for_cc"],
       cc_approved: ["ready_for_po"],
-      ready_for_po: ["delivery_stage"],
-      delivery_stage: ["delivery_stage"], // Can stay in delivery stage
+      cc_rejected: ["ready_for_cc"],
+      ready_for_po: ["pending_po", "delivery_stage", "ready_for_delivery"],
+      pending_po: ["ready_for_delivery", "rejected_po"],
+      rejected_po: ["ready_for_po"],
+      ready_for_delivery: ["delivered"],
+      delivery_stage: ["delivered", "ready_for_delivery"],
     };
 
     const currentStatus = request.status;

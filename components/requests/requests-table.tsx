@@ -43,11 +43,15 @@ type RequestStatus =
   | "pending"
   | "approved"
   | "rejected"
+  | "recheck"
   | "ready_for_cc"
   | "cc_rejected"
   | "cc_pending"
   | "cc_approved"
   | "ready_for_po"
+  | "pending_po"
+  | "rejected_po"
+  | "ready_for_delivery"
   | "delivery_stage"
   | "delivered"
   | "partially_processed";
@@ -398,6 +402,12 @@ export function RequestsTable({
             Approved
           </Badge>
         );
+      case "recheck":
+        return (
+          <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-950 dark:text-orange-300 dark:border-orange-800">
+            Recheck
+          </Badge>
+        );
       case "ready_for_cc":
         return (
           <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-800">
@@ -416,10 +426,34 @@ export function RequestsTable({
             CC Approved
           </Badge>
         );
+      case "cc_rejected":
+        return (
+          <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200 dark:bg-red-950 dark:text-red-300 dark:border-red-800">
+            CC Rejected
+          </Badge>
+        );
       case "ready_for_po":
         return (
-          <Badge variant="outline" className="bg-cyan-50 text-cyan-700 border-cyan-200 dark:bg-cyan-950 dark:text-cyan-300 dark:border-cyan-800">
+          <Badge variant="outline" className="bg-teal-50 text-teal-700 border-teal-200 dark:bg-teal-950 dark:text-teal-300 dark:border-teal-800">
             Ready for PO
+          </Badge>
+        );
+      case "pending_po":
+        return (
+          <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-800">
+            Pending PO
+          </Badge>
+        );
+      case "rejected_po":
+        return (
+          <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200 dark:bg-red-950 dark:text-red-300 dark:border-red-800">
+            PO Rejected
+          </Badge>
+        );
+      case "ready_for_delivery":
+        return (
+          <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-950 dark:text-indigo-300 dark:border-indigo-800">
+            Ready for Delivery
           </Badge>
         );
       case "delivery_stage":
@@ -436,7 +470,7 @@ export function RequestsTable({
         );
       case "delivered":
         return (
-          <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-800">
+          <Badge variant="outline" className="bg-slate-50 text-slate-700 border-slate-200 dark:bg-slate-950 dark:text-slate-300 dark:border-slate-800">
             Delivered
           </Badge>
         );
@@ -457,10 +491,13 @@ export function RequestsTable({
       case "pending": return "text-yellow-600 hover:text-yellow-700 hover:bg-yellow-50 dark:text-yellow-400 dark:hover:bg-yellow-950";
       case "approved": return "text-green-600 hover:text-green-700 hover:bg-green-50 dark:text-green-400 dark:hover:bg-green-950";
       case "ready_for_cc": return "text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-950";
+      case "recheck": return "text-orange-600 hover:text-orange-700 hover:bg-orange-50 dark:text-orange-400 dark:hover:bg-orange-950";
       case "cc_pending": return "text-purple-600 hover:text-purple-700 hover:bg-purple-50 dark:text-purple-400 dark:hover:bg-purple-950";
+      case "pending_po": return "text-amber-600 hover:text-amber-700 hover:bg-amber-50 dark:text-amber-400 dark:hover:bg-amber-950";
       case "cc_approved": return "text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 dark:text-indigo-400 dark:hover:bg-indigo-950";
-      case "ready_for_po": return "text-cyan-600 hover:text-cyan-700 hover:bg-cyan-50 dark:text-cyan-400 dark:hover:bg-cyan-950";
-      case "delivery_stage": return "text-orange-600 hover:text-orange-700 hover:bg-orange-50 dark:text-orange-400 dark:hover:bg-orange-950";
+      case "ready_for_po": return "text-teal-600 hover:text-teal-700 hover:bg-teal-50 dark:text-teal-400 dark:hover:bg-teal-950";
+      case "delivery_stage":
+      case "ready_for_delivery": return "text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 dark:text-indigo-400 dark:hover:bg-indigo-950";
       case "rejected":
       case "cc_rejected":
         return "text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950";
@@ -583,6 +620,23 @@ export function RequestsTable({
                   </div>
                 </div>
               </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setSelectedRequestNumberForNotes(requestNumber);
+                }}
+                className="relative h-7 w-7 p-0 rounded-full hover:bg-muted"
+                title="View Notes"
+              >
+                <NotebookPen className="h-4 w-4 text-muted-foreground mr-0" />
+                {firstItem.notesCount !== undefined && firstItem.notesCount > 0 && (
+                  <span className="absolute top-0 right-0 flex h-3 w-3 items-center justify-center rounded-full bg-destructive text-[8px] text-destructive-foreground">
+                    {firstItem.notesCount}
+                  </span>
+                )}
+              </Button>
               {hasMultipleItems && (
                 <Button
                   variant="outline"
@@ -622,10 +676,9 @@ export function RequestsTable({
                       key={item._id}
                       className={cn(
                         "p-3 rounded-lg border shadow-sm",
-                        item.status === "approved" && "bg-green-50 border-green-200 dark:bg-green-950/20 dark:border-green-800",
-                        item.status === "rejected" && "bg-red-50 border-red-200 dark:bg-red-950/20 dark:border-red-800",
-                        item.status === "cc_rejected" && "bg-red-50 border-red-200 dark:bg-red-950/20 dark:border-red-800",
-                        !["approved", "rejected", "cc_rejected"].includes(item.status) && "bg-card/50"
+                        (item.status === "approved" || item.status === "cc_approved" || item.status === "delivered") && "bg-green-50 border-green-200 dark:bg-green-950/20 dark:border-green-800",
+                        (item.status === "rejected" || item.status === "cc_rejected" || item.status === "rejected_po") && "bg-red-50 border-red-200 dark:bg-red-950/20 dark:border-red-800",
+                        !["approved", "cc_approved", "delivered", "rejected", "cc_rejected", "rejected_po"].includes(item.status) && "bg-card/50"
                       )}
                     >
                       <div className="flex items-start justify-between gap-2 mb-2">
@@ -741,6 +794,20 @@ export function RequestsTable({
                                 </Button>
                               ) : null}
                             </>
+                          )}
+                          {onViewDetails && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onViewDetails(item._id);
+                              }}
+                              className="h-6 px-2 text-xs hover:bg-muted"
+                            >
+                              <Eye className="h-3 w-3 mr-1" />
+                              View
+                            </Button>
                           )}
                         </div>
                       </div>

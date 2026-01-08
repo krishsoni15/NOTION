@@ -12,6 +12,7 @@ import { api } from "@/convex/_generated/api";
 import { RequestsTable } from "@/components/requests/requests-table";
 import { RequestDetailsDialog } from "@/components/requests/request-details-dialog";
 import { CostComparisonDialog } from "@/components/purchase/cost-comparison-dialog";
+import { CheckDialog } from "@/components/purchase/check-dialog";
 import { useViewMode } from "@/hooks/use-view-mode";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -42,6 +43,7 @@ type RequestStatus =
 export function ManagerRequestsContent() {
   const [selectedRequestId, setSelectedRequestId] = useState<Id<"requests"> | null>(null);
   const [ccRequestId, setCCRequestId] = useState<Id<"requests"> | null>(null);
+  const [checkRequestId, setCheckRequestId] = useState<Id<"requests"> | null>(null);
   const [ccRequestIds, setCCRequestIds] = useState<Id<"requests">[] | undefined>(undefined); // For batch CC viewing
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [workFilter, setWorkFilter] = useState<string>("all");
@@ -443,6 +445,7 @@ export function ManagerRequestsContent() {
           }
         }}
         requestId={selectedRequestId}
+        onCheck={(requestId) => setCheckRequestId(requestId)}
       />
 
       <CostComparisonDialog
@@ -456,6 +459,14 @@ export function ManagerRequestsContent() {
         requestId={ccRequestId!}
         requestIds={ccRequestIds}
       />
+
+      {checkRequestId && (
+        <CheckDialog
+          open={!!checkRequestId}
+          onOpenChange={(open) => !open && setCheckRequestId(null)}
+          requestId={checkRequestId}
+        />
+      )}
     </>
   );
 }

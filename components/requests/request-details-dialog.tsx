@@ -26,7 +26,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Separator } from "@/components/ui/separator";
-import { AlertCircle, CheckCircle, XCircle, Package, ShoppingCart, MapPin, PackageX, Sparkles, FileText } from "lucide-react";
+import { AlertCircle, CheckCircle, XCircle, Package, ShoppingCart, MapPin, PackageX, Sparkles, FileText, PieChart } from "lucide-react";
 import { useUserRole } from "@/hooks/use-user-role";
 import { CompactImageGallery } from "@/components/ui/image-gallery";
 import { ROLES } from "@/lib/auth/roles";
@@ -42,12 +42,14 @@ interface RequestDetailsDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   requestId: Id<"requests"> | null;
+  onCheck?: (requestId: Id<"requests">) => void;
 }
 
 export function RequestDetailsDialog({
   open,
   onOpenChange,
   requestId,
+  onCheck,
 }: RequestDetailsDialogProps) {
   const userRole = useUserRole();
   const request = useQuery(
@@ -62,6 +64,8 @@ export function RequestDetailsDialog({
   const updateStatus = useMutation(api.requests.updateRequestStatus);
   const bulkUpdateStatus = useMutation(api.requests.bulkUpdateRequestStatus);
   const markDelivery = useMutation(api.requests.markDelivery);
+  const upsertCC = useMutation(api.costComparisons.upsertCostComparison);
+  const approveSplit = useMutation(api.costComparisons.approveSplitFulfillment);
   // Fetch latest note for this request
   const notes = useQuery(api.notes.getNotes, request?.requestNumber ? { requestNumber: request.requestNumber } : "skip");
   const latestNote = notes && notes.length > 0 ? notes[0] : null;
@@ -83,6 +87,8 @@ export function RequestDetailsDialog({
   const [showItemDirectPOConfirm, setShowItemDirectPOConfirm] = useState<Id<"requests"> | null>(null);
   const [showDirectDeliveryConfirm, setShowDirectDeliveryConfirm] = useState(false);
   const [showItemDirectDeliveryConfirm, setShowItemDirectDeliveryConfirm] = useState<Id<"requests"> | null>(null);
+  const [showSplitConfirm, setShowSplitConfirm] = useState<Id<"requests"> | null>(null);
+  const [showBulkSplitConfirm, setShowBulkSplitConfirm] = useState(false);
   const [showNotesTimeline, setShowNotesTimeline] = useState(false);
   const hasRefreshedRef = useRef(false);
 
@@ -303,6 +309,7 @@ export function RequestDetailsDialog({
       setShowDirectPOConfirm(false);
       setShowItemApproveConfirm(null);
       setShowItemDirectPOConfirm(null);
+      setShowSplitConfirm(null);
       setRejectionReason("");
       setShowRejectionInput(false);
       hasRefreshedRef.current = false;
@@ -1175,10 +1182,11 @@ export function RequestDetailsDialog({
                                   <div className="flex gap-1 mt-3 pt-2 border-t">
                                     {(() => {
                                       const status = inventoryStatus?.[item.itemName];
-                                      // Check if ANY stock is available (> 0) rather than requiring full sufficiency
-                                      const hasStock = status && (status.centralStock > 0);
+                                      const stock = status?.centralStock || 0;
+                                      const isPartial = stock > 0 && stock < item.quantity;
+                                      const isFull = stock >= item.quantity;
 
-                                      if (hasStock) {
+                                      if (isFull) {
                                         return (
                                           <Button
                                             variant="outline"
@@ -1189,6 +1197,22 @@ export function RequestDetailsDialog({
                                           >
                                             <Package className="h-3 w-3 mr-1" />
                                             Delivery
+                                          </Button>
+                                        );
+                                      }
+
+                                      if (isPartial) {
+                                        return (
+                                          <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => setShowSplitConfirm(item._id)}
+                                            disabled={isLoading || !onCheck}
+                                            className="flex-1 text-xs h-7 px-1 border-indigo-200 text-indigo-700 hover:bg-indigo-50 dark:border-indigo-800 dark:text-indigo-300"
+                                            title="Split Fulfillment / Check"
+                                          >
+                                            <PieChart className="h-3 w-3 mr-1" />
+                                            Split
                                           </Button>
                                         );
                                       }
@@ -1450,61 +1474,86 @@ export function RequestDetailsDialog({
                       {/* Main Action Buttons - Always Visible */}
                       <div className="flex flex-col sm:flex-row gap-3">
                         {(() => {
-                          // Calculate stock status for deciding between Direct PO and Delivery
                           const itemsToCheck = selectedItemsForAction.size > 0
                             ? pendingItems.filter(item => selectedItemsForAction.has(item._id))
                             : pendingItems;
 
-                          const allItemsHaveStock = itemsToCheck.every(item => {
+                          const isAllFullStock = itemsToCheck.every(item => {
                             const status = inventoryStatus?.[item.itemName];
-                            if (!status) return false;
-                            return status.centralStock > 0;
+                            return status && status.centralStock >= item.quantity;
                           });
 
-                          const someItemsHaveStock = itemsToCheck.some(item => {
+                          const isAllNoStock = itemsToCheck.every(item => {
                             const status = inventoryStatus?.[item.itemName];
-                            // Check if status is missing or stock is 0 (returns false). 
-                            // If status missing, assume 0? The .every() returned false if status missing.
-                            return status && status.centralStock > 0;
+                            return !status || status.centralStock <= 0;
                           });
 
-                          // If some items have stock but not all, we have a mixed state. 
-                          // User wants to disable "Direct PO" in this case so they process items individually or select homogeneously.
-                          const isMixedStock = !allItemsHaveStock && someItemsHaveStock;
+                          const isAllPartialStock = itemsToCheck.every(item => {
+                            const status = inventoryStatus?.[item.itemName];
+                            return status && status.centralStock > 0 && status.centralStock < item.quantity;
+                          });
 
+                          if (isAllFullStock) {
+                            return (
+                              <Button
+                                onClick={() => setShowDirectDeliveryConfirm(true)}
+                                disabled={isLoading}
+                                size="lg"
+                                variant="outline"
+                                className="flex-1 sm:w-1/5 border-purple-300 text-purple-700 hover:bg-purple-50 dark:border-purple-600 dark:text-purple-300 dark:hover:bg-purple-950 font-semibold py-4"
+                              >
+                                <Package className="h-5 w-5 mr-2" />
+                                {selectedItemsForAction.size > 0
+                                  ? `Direct Delivery (${selectedItemsForAction.size})`
+                                  : "Delivery All"
+                                }
+                              </Button>
+                            );
+                          }
+
+                          if (isAllNoStock) {
+                            return (
+                              <Button
+                                onClick={() => setShowDirectPOConfirm(true)}
+                                disabled={isLoading}
+                                size="lg"
+                                variant="outline"
+                                className="flex-1 sm:w-1/5 border-blue-300 text-blue-700 hover:bg-blue-50 dark:border-blue-600 dark:text-blue-300 dark:hover:bg-blue-950 font-semibold py-4"
+                              >
+                                <ShoppingCart className="h-5 w-5 mr-2" />
+                                {selectedItemsForAction.size > 0
+                                  ? `Direct PO (${selectedItemsForAction.size})`
+                                  : "Direct PO All"
+                                }
+                              </Button>
+                            );
+                          }
+
+                          if (isAllPartialStock) {
+                            return (
+                              <Button
+                                onClick={() => setShowBulkSplitConfirm(true)}
+                                size="lg"
+                                variant="outline"
+                                className="flex-1 sm:w-1/5 border-indigo-300 text-indigo-700 hover:bg-indigo-50 dark:border-indigo-600 dark:text-indigo-300 dark:hover:bg-indigo-950 font-semibold py-4"
+                              >
+                                <PieChart className="h-5 w-5 mr-2" />
+                                Confirm Splits All
+                              </Button>
+                            );
+                          }
+
+                          // Mixed Status - Disable Button
                           return (
                             <Button
-                              onClick={() => {
-                                if (itemsToCheck.length > 0) {
-                                  if (allItemsHaveStock) {
-                                    setShowDirectDeliveryConfirm(true);
-                                  } else {
-                                    setShowDirectPOConfirm(true);
-                                  }
-                                }
-                              }}
-                              disabled={isLoading || isMixedStock}
+                              disabled
                               size="lg"
                               variant="outline"
-                              className={`flex-1 sm:w-1/5 border-blue-300 text-blue-700 hover:bg-blue-50 dark:border-blue-600 dark:text-blue-300 dark:hover:bg-blue-950 font-semibold py-4 ${isMixedStock ? 'opacity-50 cursor-not-allowed' : ''}`}
+                              className="flex-1 sm:w-1/5 border-gray-200 text-gray-400 bg-gray-50/50 cursor-not-allowed font-semibold py-4"
+                              title="Items have different fulfillment status (Full, Partial, or No Stock). Please select matching items or manage individually."
                             >
-                              {allItemsHaveStock ? (
-                                <>
-                                  <Package className="h-5 w-5 mr-2" />
-                                  {selectedItemsForAction.size > 0
-                                    ? `Direct Delivery (${selectedItemsForAction.size})`
-                                    : "Delivery All"
-                                  }
-                                </>
-                              ) : (
-                                <>
-                                  <ShoppingCart className="h-5 w-5 mr-2" />
-                                  {selectedItemsForAction.size > 0
-                                    ? `Direct PO (${selectedItemsForAction.size})`
-                                    : "Direct PO All"
-                                  }
-                                </>
-                              )}
+                              <AlertCircle className="h-5 w-5 mr-2" />
+                              Mixed Actions
                             </Button>
                           );
                         })()}
@@ -1593,6 +1642,51 @@ export function RequestDetailsDialog({
                         </div>
                       )}
 
+                      {/* Split Confirmation */}
+                      {showSplitConfirm && (
+                        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+                          <div className="w-full max-w-md mx-4 bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 shadow-xl">
+                            <div className="p-6">
+                              <div className="flex items-center gap-3 mb-4">
+                                <div className="flex-shrink-0 w-12 h-12 bg-indigo-100 dark:bg-indigo-900/20 rounded-full flex items-center justify-center">
+                                  <PieChart className="h-6 w-6 text-indigo-600 dark:text-indigo-400" />
+                                </div>
+                                <div>
+                                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                                    Manage Split Fulfillment
+                                  </h3>
+                                  <p className="text-sm text-gray-600 dark:text-gray-300 mt-1">
+                                    This item has partial stock available. Do you want to open the Split/Check Dialog to manage fulfillment?
+                                  </p>
+                                </div>
+                              </div>
+                              <div className="flex gap-3">
+                                <Button
+                                  onClick={() => {
+                                    if (onCheck && showSplitConfirm) {
+                                      onCheck(showSplitConfirm);
+                                      setShowSplitConfirm(null);
+                                    }
+                                  }}
+                                  disabled={isLoading}
+                                  className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white"
+                                >
+                                  <CheckCircle className="h-4 w-4 mr-2" />
+                                  Confirm
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  onClick={() => setShowSplitConfirm(null)}
+                                  disabled={isLoading}
+                                  className="flex-1"
+                                >
+                                  Cancel
+                                </Button>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
                       {/* Approval Confirmation */}
                       {showApproveConfirm && (
                         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
@@ -1700,6 +1794,85 @@ export function RequestDetailsDialog({
                                 <Button
                                   variant="outline"
                                   onClick={() => setShowDirectPOConfirm(false)}
+                                  disabled={isLoading}
+                                  className="flex-1"
+                                >
+                                  Cancel
+                                </Button>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Bulk Split Confirmation */}
+                      {showBulkSplitConfirm && (
+                        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+                          <div className="w-full max-w-md mx-4 bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 shadow-xl">
+                            <div className="p-6">
+                              <div className="flex items-center gap-3 mb-4">
+                                <div className="flex-shrink-0 w-12 h-12 bg-indigo-100 dark:bg-indigo-900/20 rounded-full flex items-center justify-center">
+                                  <PieChart className="h-6 w-6 text-indigo-600 dark:text-indigo-400" />
+                                </div>
+                                <div>
+                                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                                    Approve Splits for {selectedItemsForAction.size > 0 ? selectedItemsForAction.size : 'All'} Items?
+                                  </h3>
+                                  <p className="text-sm text-gray-600 dark:text-gray-300 mt-1">
+                                    This will automatically set inventory fulfillment to the <strong>maximum available stock</strong> for each item and approve the split plan.
+                                  </p>
+                                </div>
+                              </div>
+                              <div className="flex gap-3">
+                                <Button
+                                  onClick={async () => {
+                                    const itemsToProcess = selectedItemsForAction.size > 0
+                                      ? pendingItems.filter(item => selectedItemsForAction.has(item._id))
+                                      : pendingItems;
+
+                                    let processedCount = 0;
+                                    try {
+                                      await Promise.all(itemsToProcess.map(async (item) => {
+                                        const status = inventoryStatus?.[item.itemName];
+                                        if (status && status.centralStock > 0) {
+                                          const maxStock = Math.min(status.centralStock, item.quantity);
+                                          // Upsert CC with max inventory
+                                          await upsertCC({
+                                            requestId: item._id,
+                                            vendorQuotes: item.vendorQuotes?.map(q => ({
+                                              vendorId: q.vendorId,
+                                              unitPrice: q.unitPrice,
+                                              amount: q.amount,
+                                              unit: q.unit,
+                                              discountPercent: (q as any).discountPercent,
+                                              gstPercent: (q as any).gstPercent
+                                            })) || [], // Map strict types
+                                            isDirectDelivery: false,
+                                            inventoryFulfillmentQuantity: maxStock
+                                          });
+                                          // Approve Split
+                                          await approveSplit({ requestId: item._id });
+                                          processedCount++;
+                                        }
+                                      }));
+
+                                      setShowBulkSplitConfirm(false);
+                                      setSelectedItemsForAction(new Set());
+                                      onOpenChange(false); // Close main dialog too? Or just refresh? Let's close for "done" feel.
+                                      toast.success(`${processedCount} items split and approved`);
+                                    } catch (error: any) {
+                                      toast.error("Failed to batch process: " + error.message);
+                                    }
+                                  }}
+                                  disabled={isLoading}
+                                  className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white"
+                                >
+                                  <CheckCircle className="h-4 w-4 mr-2" />
+                                  Confirm All
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  onClick={() => setShowBulkSplitConfirm(false)}
                                   disabled={isLoading}
                                   className="flex-1"
                                 >
@@ -1950,11 +2123,12 @@ export function RequestDetailsDialog({
               </div>
             </div>
           </DialogFooter>
-        </DialogContent>
+        </DialogContent >
 
         {/* User Info Dialog */}
-        <UserInfoDialog
-          open={!!selectedUserId}
+        < UserInfoDialog
+          open={!!selectedUserId
+          }
           onOpenChange={(open) => {
             if (!open) setSelectedUserId(null);
           }}
@@ -1962,7 +2136,7 @@ export function RequestDetailsDialog({
         />
 
         {/* Item Info Dialog */}
-        <ItemInfoDialog
+        < ItemInfoDialog
           open={!!selectedItemName}
           onOpenChange={(open) => {
             if (!open) setSelectedItemName(null);
@@ -1971,7 +2145,7 @@ export function RequestDetailsDialog({
         />
 
         {/* Site Info Dialog */}
-        <SiteInfoDialog
+        < SiteInfoDialog
           open={!!selectedSiteId}
           onOpenChange={(open) => {
             if (!open) setSelectedSiteId(null);
@@ -1980,14 +2154,16 @@ export function RequestDetailsDialog({
         />
 
         {/* Notes Timeline Dialog */}
-        {request?.requestNumber && (
-          <NotesTimelineDialog
-            requestNumber={request.requestNumber}
-            open={showNotesTimeline}
-            onOpenChange={setShowNotesTimeline}
-          />
-        )}
-      </Dialog>
+        {
+          request?.requestNumber && (
+            <NotesTimelineDialog
+              requestNumber={request.requestNumber}
+              open={showNotesTimeline}
+              onOpenChange={setShowNotesTimeline}
+            />
+          )
+        }
+      </Dialog >
     </div >
   );
 }

@@ -207,13 +207,15 @@ export const upsertCostComparison = mutation({
       })
     ),
     isDirectDelivery: v.boolean(),
+    inventoryFulfillmentQuantity: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     const currentUser = await getCurrentUser(ctx);
 
-    // Only purchase officers can create/update cost comparisons
-    if (currentUser.role !== "purchase_officer") {
-      throw new Error("Unauthorized: Only purchase officers can create cost comparisons");
+    // Only purchase officers can create/update cost comparisons,
+    // BUT managers can also do it for split fulfillment approval flows.
+    if (currentUser.role !== "purchase_officer" && currentUser.role !== "manager") {
+      throw new Error("Unauthorized: Only purchase officers or managers can create cost comparisons");
     }
 
     // Verify request exists and is in correct status
@@ -222,8 +224,9 @@ export const upsertCostComparison = mutation({
       throw new Error("Request not found");
     }
 
-    if (request.status !== "ready_for_cc" && request.status !== "cc_pending") {
-      throw new Error("Request must be in ready_for_cc or cc_pending status");
+    const allowedStatuses = ["ready_for_cc", "cc_pending", "recheck", "pending"];
+    if (!allowedStatuses.includes(request.status)) {
+      throw new Error(`Request must be in one of the following statuses: ${allowedStatuses.join(", ")}`);
     }
 
     // Check if cost comparison already exists
@@ -239,6 +242,7 @@ export const upsertCostComparison = mutation({
       await ctx.db.patch(existing._id, {
         vendorQuotes: args.vendorQuotes,
         isDirectDelivery: args.isDirectDelivery,
+        inventoryFulfillmentQuantity: args.inventoryFulfillmentQuantity,
         updatedAt: now,
       });
       return existing._id;
@@ -250,6 +254,7 @@ export const upsertCostComparison = mutation({
         vendorQuotes: args.vendorQuotes,
         status: "draft",
         isDirectDelivery: args.isDirectDelivery,
+        inventoryFulfillmentQuantity: args.inventoryFulfillmentQuantity,
         createdAt: now,
         updatedAt: now,
       });
@@ -483,3 +488,46 @@ export const resubmitCostComparison = mutation({
   },
 });
 
+
+/**
+ * Approve split fulfillment plan (Manager only)
+ * Sets a note in the cost comparison to indicate approval for partial inventory usage.
+ */
+export const approveSplitFulfillment = mutation({
+  args: {
+    requestId: v.id("requests"),
+  },
+  handler: async (ctx, args) => {
+    const currentUser = await getCurrentUser(ctx);
+
+    // Only managers can review
+    if (currentUser.role !== "manager") {
+      throw new Error("Unauthorized: Only managers can approve split fulfillment");
+    }
+
+    // Get cost comparison
+    const costComparison = await ctx.db
+      .query("costComparisons")
+      .withIndex("by_request_id", (q) => q.eq("requestId", args.requestId))
+      .first();
+
+    if (!costComparison) {
+      throw new Error("Cost comparison not found");
+    }
+
+    const now = Date.now();
+
+    // Update cost comparison with approval note
+    await ctx.db.patch(costComparison._id, {
+      managerNotes: "Split Fulfillment Approved",
+      approvedBy: currentUser._id,
+      approvedAt: now,
+      updatedAt: now,
+    });
+
+    // We don't change the status to cc_approved yet because a vendor might not be selected for the remaining part.
+    // However, this note acts as a flag to unlock the Inventory Deduction action in the UI.
+
+    return { success: true };
+  },
+});

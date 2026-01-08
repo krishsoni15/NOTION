@@ -14,75 +14,49 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandSeparator } from "@/components/ui/command";
+import { Check } from "lucide-react";
 import { RequestDetailsDialog } from "@/components/requests/request-details-dialog";
 import { ItemInfoDialog } from "@/components/requests/item-info-dialog";
 import { SiteInfoDialog } from "@/components/requests/site-info-dialog";
 import { toast } from "sonner";
 import Link from "next/link";
 import type { Id } from "@/convex/_generated/dataModel";
-import { Clock, FileText, ShoppingCart, Truck, Search, Filter, LayoutGrid, Table as TableIcon, Eye, AlertCircle, FileText as FileTextIcon, Edit, Zap } from "lucide-react";
+import { Clock, FileText, ShoppingCart, Truck, Search, Filter, LayoutGrid, Table as TableIcon, Eye, AlertCircle, FileText as FileTextIcon, Edit, Zap, CheckCircle, XCircle } from "lucide-react";
 import { RequestCardWithCC } from "./request-card-with-cc";
 import { PurchaseRequestGroupCard } from "./purchase-request-group-card";
 import { CostComparisonDialog } from "./cost-comparison-dialog";
 import { CompactImageGallery } from "@/components/ui/image-gallery";
 import { cn } from "@/lib/utils";
 import { DirectPODialog } from "./direct-po-dialog";
+import { CheckDialog } from "./check-dialog";
 import { useViewMode } from "@/hooks/use-view-mode";
 import { RequestsTable } from "@/components/requests/requests-table";
 
 // Enhanced status configuration with better visual hierarchy
 const statusConfig: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline"; icon: any; color: string }> = {
+  draft: { label: "Draft", variant: "outline", icon: FileTextIcon, color: "gray" },
+  pending: { label: "Pending Approval", variant: "secondary", icon: Clock, color: "yellow" },
+  rejected: { label: "Rejected", variant: "destructive", icon: XCircle, color: "red" },
+  recheck: { label: "Recheck", variant: "default", icon: AlertCircle, color: "orange" },
   ready_for_cc: { label: "Ready for CC", variant: "default", icon: FileText, color: "blue" },
-  cc_rejected: { label: "CC Rejected", variant: "destructive", icon: FileText, color: "red" },
   cc_pending: { label: "CC Pending", variant: "secondary", icon: Clock, color: "amber" },
+  cc_approved: { label: "CC Approved", variant: "default", icon: CheckCircle, color: "green" },
+  cc_rejected: { label: "CC Rejected", variant: "destructive", icon: XCircle, color: "red" },
   ready_for_po: { label: "Ready for PO", variant: "default", icon: ShoppingCart, color: "emerald" },
+  pending_po: { label: "Pending PO", variant: "secondary", icon: Clock, color: "amber" },
+  rejected_po: { label: "PO Rejected", variant: "destructive", icon: XCircle, color: "red" },
+  ready_for_delivery: { label: "Ready for Delivery", variant: "default", icon: Truck, color: "indigo" },
+  delivered: { label: "Delivered", variant: "secondary", icon: CheckCircle, color: "slate" },
   delivery_stage: { label: "Delivery Stage", variant: "outline", icon: Truck, color: "orange" },
 };
-
-// Stage configuration for better UI
-const stageConfig = [
-  {
-    id: "all",
-    label: "All Requests",
-    icon: Eye,
-    description: "View all purchase requests",
-    color: "slate"
-  },
-  {
-    id: "new",
-    label: "New Requests",
-    icon: FileText,
-    description: "Ready for CC or rejected items",
-    color: "blue"
-  },
-  {
-    id: "cc_pending",
-    label: "CC Pending",
-    icon: Clock,
-    description: "Under cost comparison review",
-    color: "amber"
-  },
-  {
-    id: "ready_for_po",
-    label: "Ready for PO",
-    icon: ShoppingCart,
-    description: "Approved, ready for purchase order",
-    color: "emerald"
-  },
-  {
-    id: "delivery",
-    label: "Delivery Stage",
-    icon: Truck,
-    description: "Items in delivery process",
-    color: "orange"
-  }
-];
 
 export function PurchaseRequestsContent() {
   const [selectedRequestId, setSelectedRequestId] = useState<Id<"requests"> | null>(null);
   const [ccRequestId, setCCRequestId] = useState<Id<"requests"> | null>(null);
-  const [activeTab, setActiveTab] = useState<string>("ready_for_po");
+  const [checkRequestId, setCheckRequestId] = useState<Id<"requests"> | null>(null);
+  const [filterStatus, setFilterStatus] = useState<string[]>([]);
   const { viewMode, toggleViewMode } = useViewMode();
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [selectedItemName, setSelectedItemName] = useState<string | null>(null);
@@ -97,17 +71,10 @@ export function PurchaseRequestsContent() {
 
     let filtered = allRequests;
 
-    // Filter by active tab
-    if (activeTab !== "all") {
-      if (activeTab === "new") {
-        filtered = filtered.filter((r) => r.status === "ready_for_cc" || (r.status as string) === "cc_rejected");
-      } else if (activeTab === "cc_pending") {
-        filtered = filtered.filter((r) => r.status === "cc_pending");
-      } else if (activeTab === "ready_for_po") {
-        filtered = filtered.filter((r) => r.status === "ready_for_po");
-      } else if (activeTab === "delivery") {
-        filtered = filtered.filter((r) => r.status === "delivery_stage");
-      }
+    // Filter by status dropdown
+    // Filter by status dropdown
+    if (filterStatus.length > 0) {
+      filtered = filtered.filter((r) => filterStatus.includes(r.status));
     }
 
     // Apply search filter
@@ -156,47 +123,7 @@ export function PurchaseRequestsContent() {
       });
 
     return groupedRequestsArray;
-  }, [allRequests, activeTab, searchQuery]);
-
-  // Calculate stats for each tab (counting unique request groups)
-  const stats = useMemo(() => {
-    if (!allRequests) return { all: 0, new: 0, cc_pending: 0, ready_for_po: 0, delivery: 0 };
-
-    // Group requests by requestNumber to count unique requests
-    const requestGroups = new Map<string, any[]>();
-    allRequests.forEach((request) => {
-      const group = requestGroups.get(request.requestNumber) || [];
-      group.push(request);
-      requestGroups.set(request.requestNumber, group);
-    });
-
-    // Count groups by status
-    let newCount = 0;
-    let ccPendingCount = 0;
-    let readyForPoCount = 0;
-    let deliveryCount = 0;
-
-    requestGroups.forEach((items) => {
-      const firstItem = items[0];
-      if (firstItem.status === "ready_for_cc" || firstItem.status === "cc_rejected") {
-        newCount++;
-      } else if (firstItem.status === "cc_pending") {
-        ccPendingCount++;
-      } else if (firstItem.status === "ready_for_po") {
-        readyForPoCount++;
-      } else if (firstItem.status === "delivery_stage") {
-        deliveryCount++;
-      }
-    });
-
-    return {
-      all: requestGroups.size,
-      new: newCount,
-      cc_pending: ccPendingCount,
-      ready_for_po: readyForPoCount,
-      delivery: deliveryCount,
-    };
-  }, [allRequests]);
+  }, [allRequests, filterStatus, searchQuery]);
 
   const directToPO = useMutation(api.requests.directToPO);
   const updatePurchaseStatus = useMutation(api.requests.updatePurchaseRequestStatus);
@@ -212,11 +139,24 @@ export function PurchaseRequestsContent() {
 
   const handleDirectDelivery = async (requestId: Id<"requests">) => {
     try {
-      await updatePurchaseStatus({ requestId, status: "delivery_stage" });
+      await updatePurchaseStatus({ requestId, status: "ready_for_delivery" });
       toast.success("Request moved to Delivery Stage");
     } catch (error) {
       toast.error("Failed to update status");
     }
+  };
+
+  const handleMoveToCC = async (requestId: Id<"requests">) => {
+    try {
+      await updatePurchaseStatus({ requestId, status: "ready_for_cc" });
+      toast.success("Request moved to Ready for CC");
+    } catch (error) {
+      toast.error("Failed to update status");
+    }
+  };
+
+  const handleCheck = (requestId: Id<"requests">) => {
+    setCheckRequestId(requestId);
   };
 
   return (
@@ -239,48 +179,6 @@ export function PurchaseRequestsContent() {
           </Button>
         </div>
 
-        {/* Enhanced Stages - Card-based approach */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
-          {stageConfig.map((stage) => {
-            const Icon = stage.icon;
-            const isActive = activeTab === stage.id;
-            const count = stats[stage.id as keyof typeof stats] || 0;
-
-            return (
-              <Card
-                key={stage.id}
-                className={cn(
-                  "cursor-pointer transition-all duration-200 hover:shadow-md touch-manipulation",
-                  isActive
-                    ? "ring-2 ring-primary shadow-md bg-primary/5"
-                    : "hover:bg-muted/50"
-                )}
-                onClick={() => setActiveTab(stage.id)}
-              >
-                <CardContent className="p-4 text-center">
-                  <div className={cn(
-                    "inline-flex items-center justify-center w-10 h-10 rounded-lg mb-2 mx-auto",
-                    isActive
-                      ? "bg-primary text-primary-foreground"
-                      : "bg-muted text-muted-foreground"
-                  )}>
-                    <Icon className="h-5 w-5" />
-                  </div>
-                  <div className="space-y-1">
-                    <h3 className="font-semibold text-sm leading-tight">{stage.label}</h3>
-                    <Badge
-                      variant={isActive ? "default" : "secondary"}
-                      className="text-xs font-medium"
-                    >
-                      {count}
-                    </Badge>
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          })}
-        </div>
-
         {/* Search and Controls */}
         <Card>
           <CardContent className="pt-6">
@@ -295,6 +193,112 @@ export function PurchaseRequestsContent() {
                     className="pl-10"
                   />
                 </div>
+
+                {/* Status Filter */}
+                <div className="w-full sm:w-[250px]">
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        role="combobox"
+                        className="w-full justify-between"
+                      >
+                        {filterStatus.length > 0
+                          ? `${filterStatus.length} selected`
+                          : "Filter by status"}
+                        <Filter className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-[200px] p-0" align="start">
+                      <Command>
+                        <CommandInput placeholder="Search status..." />
+                        <CommandList>
+                          <CommandEmpty>No status found.</CommandEmpty>
+                          <CommandGroup>
+                            <CommandItem
+                              onSelect={() => setFilterStatus([])}
+                              className="font-medium"
+                            >
+                              <div
+                                className={cn(
+                                  "mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-primary",
+                                  filterStatus.length === 0
+                                    ? "bg-primary text-primary-foreground"
+                                    : "opacity-50 [&_svg]:invisible"
+                                )}
+                              >
+                                <Check className={cn("h-4 w-4")} />
+                              </div>
+                              All Statuses
+                            </CommandItem>
+                            {/* Draft (My Drafts) Special Case */}
+                            <CommandItem
+                              onSelect={() => {
+                                setFilterStatus((prev) =>
+                                  prev.includes("draft")
+                                    ? prev.filter((s) => s !== "draft")
+                                    : [...prev, "draft"]
+                                );
+                              }}
+                            >
+                              <div
+                                className={cn(
+                                  "mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-primary",
+                                  filterStatus.includes("draft")
+                                    ? "bg-primary text-primary-foreground"
+                                    : "opacity-50 [&_svg]:invisible"
+                                )}
+                              >
+                                <Check className={cn("h-4 w-4")} />
+                              </div>
+                              Draft (My Drafts)
+                            </CommandItem>
+                            {Object.entries(statusConfig)
+                              .filter(([key]) => key !== "draft") // Already handled above
+                              .map(([key, config]) => (
+                                <CommandItem
+                                  key={key}
+                                  onSelect={() => {
+                                    setFilterStatus((prev) =>
+                                      prev.includes(key)
+                                        ? prev.filter((s) => s !== key)
+                                        : [...prev, key]
+                                    );
+                                  }}
+                                >
+                                  <div
+                                    className={cn(
+                                      "mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-primary",
+                                      filterStatus.includes(key)
+                                        ? "bg-primary text-primary-foreground"
+                                        : "opacity-50 [&_svg]:invisible"
+                                    )}
+                                  >
+                                    <Check className={cn("h-4 w-4")} />
+                                  </div>
+                                  {config.label}
+                                </CommandItem>
+                              ))}
+                          </CommandGroup>
+                          {filterStatus.length > 0 && (
+                            <>
+                              <CommandSeparator />
+                              <CommandGroup>
+                                <CommandItem
+                                  onSelect={() => setFilterStatus([])}
+                                  className="justify-center text-center"
+                                >
+                                  Clear filters
+                                </CommandItem>
+                              </CommandGroup>
+                            </>
+                          )}
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
+                </div>
+
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-medium text-muted-foreground hidden sm:inline mr-2">View:</span>
                   <Button
@@ -334,7 +338,7 @@ export function PurchaseRequestsContent() {
                   <p className="text-sm text-muted-foreground mt-1">
                     {searchQuery
                       ? "Try adjusting your search criteria"
-                      : `No ${activeTab === "all" ? "" : stageConfig.find(s => s.id === activeTab)?.label.toLowerCase() + " "}requests at this stage`
+                      : "No requests found with current status filter"
                     }
                   </p>
                 </div>
@@ -363,7 +367,7 @@ export function PurchaseRequestsContent() {
                 : true;
 
               const overallStatus = allItemsHaveSameStatus ? items[0].status : "partially_processed";
-              const statusInfo = statusConfig[overallStatus] || statusConfig.ready_for_cc;
+              const statusInfo = statusConfig[overallStatus] || { label: overallStatus, variant: "outline", icon: FileText, color: "gray" };
 
               // Count urgent items
               const urgentCount = items.filter((item) => item.isUrgent).length;
@@ -384,6 +388,8 @@ export function PurchaseRequestsContent() {
                   canEditVendor={true}
                   onDirectPO={handleDirectPO}
                   onDirectDelivery={handleDirectDelivery}
+                  onMoveToCC={handleMoveToCC}
+                  onCheck={handleCheck}
                 />
               );
             })}
@@ -402,15 +408,25 @@ export function PurchaseRequestsContent() {
         requestId={selectedRequestId}
       />
 
-      <CostComparisonDialog
-        open={!!ccRequestId}
-        onOpenChange={(open) => {
-          if (!open) {
-            setCCRequestId(null);
-          }
-        }}
-        requestId={ccRequestId!}
-      />
+      {ccRequestId && (
+        <CostComparisonDialog
+          open={!!ccRequestId}
+          onOpenChange={(open) => {
+            if (!open) {
+              setCCRequestId(null);
+            }
+          }}
+          requestId={ccRequestId}
+        />
+      )}
+
+      {checkRequestId && (
+        <CheckDialog
+          open={!!checkRequestId}
+          onOpenChange={(open) => !open && setCheckRequestId(null)}
+          requestId={checkRequestId}
+        />
+      )}
 
       <ItemInfoDialog
         open={!!selectedItemName}

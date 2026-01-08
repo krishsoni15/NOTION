@@ -15,7 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { AlertCircle, Eye, FileText, MapPin, Search, X, Sparkles, Building, Plus, Save, Edit, Check, Truck, Package, PackageX, NotebookPen, ShoppingCart } from "lucide-react";
+import { AlertCircle, Eye, FileText, MapPin, Search, X, Sparkles, Building, Plus, Save, Edit, Check, Truck, Package, PackageX, NotebookPen, ShoppingCart, ChevronDown, ChevronRight, CheckCircle, PieChart } from "lucide-react";
 import { CompactImageGallery } from "@/components/ui/image-gallery";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
@@ -58,6 +58,7 @@ interface RequestItem {
     unit?: string;
   }>;
   notesCount?: number;
+  isSplitApproved?: boolean;
   directAction?: "po" | "delivery";
 }
 
@@ -95,6 +96,9 @@ interface PurchaseRequestGroupCardProps {
   canEditVendor?: boolean;
   onDirectPO?: (requestId: Id<"requests">) => void;
   onDirectDelivery?: (requestId: Id<"requests">) => void;
+
+  onMoveToCC?: (requestId: Id<"requests">) => void;
+  onCheck?: (requestId: Id<"requests">) => void;
 }
 
 // Helper function to collect photos
@@ -143,6 +147,12 @@ const getStatusBadge = (status: string) => {
           Approved
         </Badge>
       );
+    case "recheck":
+      return (
+        <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-950 dark:text-orange-300 dark:border-orange-800 text-xs">
+          Recheck
+        </Badge>
+      );
     case "ready_for_cc":
       return (
         <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950 dark:text-blue-300 dark:border-blue-800 text-xs">
@@ -151,20 +161,56 @@ const getStatusBadge = (status: string) => {
       );
     case "cc_pending":
       return (
-        <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950 dark:text-purple-300 dark:border-purple-800 text-xs">
+        <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-800 text-xs">
           CC Pending
+        </Badge>
+      );
+    case "cc_approved":
+      return (
+        <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 dark:bg-green-950 dark:text-green-300 dark:border-green-800 text-xs">
+          CC Approved
+        </Badge>
+      );
+    case "cc_rejected":
+      return (
+        <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200 dark:bg-red-950 dark:text-red-300 dark:border-red-800 text-xs">
+          CC Rejected
         </Badge>
       );
     case "ready_for_po":
       return (
-        <Badge variant="outline" className="bg-teal-50 text-teal-700 border-teal-200 dark:bg-teal-950 dark:text-teal-300 dark:border-teal-800 text-xs">
+        <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950 dark:text-emerald-300 dark:border-emerald-800 text-xs">
           Ready for PO
+        </Badge>
+      );
+    case "pending_po":
+      return (
+        <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950 dark:text-amber-300 dark:border-amber-800 text-xs">
+          Pending PO
+        </Badge>
+      );
+    case "rejected_po":
+      return (
+        <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200 dark:bg-red-950 dark:text-red-300 dark:border-red-800 text-xs">
+          PO Rejected
+        </Badge>
+      );
+    case "ready_for_delivery":
+      return (
+        <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-950 dark:text-indigo-300 dark:border-indigo-800 text-xs">
+          Ready for Delivery
+        </Badge>
+      );
+    case "delivered":
+      return (
+        <Badge variant="outline" className="bg-slate-50 text-slate-700 border-slate-200 dark:bg-slate-950 dark:text-slate-300 dark:border-slate-800 text-xs">
+          Delivered
         </Badge>
       );
     case "delivery_stage":
       return (
         <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-950 dark:text-orange-300 dark:border-orange-800 text-xs">
-          Delivery
+          Delivery Stage
         </Badge>
       );
     case "rejected":
@@ -358,7 +404,9 @@ export function PurchaseRequestGroupCard({
   onItemClick,
   canEditVendor = true,
   onDirectPO,
-  onDirectDelivery
+  onDirectDelivery,
+  onMoveToCC,
+  onCheck,
 }: PurchaseRequestGroupCardProps) {
   const StatusIcon = statusInfo.icon;
 
@@ -453,6 +501,7 @@ export function PurchaseRequestGroupCard({
   const [itemsWithVendor, setItemsWithVendor] = useState<ItemWithVendor[]>([]);
   const [isNotesOpen, setIsNotesOpen] = useState(false);
   const [vendorSearchQuery, setVendorSearchQuery] = useState("");
+  const [isExpanded, setIsExpanded] = useState(false);
 
   // Initialize items with vendor data
   useEffect(() => {
@@ -602,29 +651,54 @@ export function PurchaseRequestGroupCard({
             )}
           </Button>
           {hasMultipleItems && (
-            <Badge variant="secondary" className="text-xs px-1.5 py-0.5 h-5 flex-shrink-0">
-              {items.length} items
-            </Badge>
+            <Button
+              variant="outline"
+              size="sm"
+              className="shrink-0 text-xs touch-manipulation min-h-[32px] ml-1"
+              onClick={() => setIsExpanded(!isExpanded)}
+            >
+              {isExpanded ? (
+                <>
+                  <ChevronDown className="h-3 w-3 mr-1" />
+                  <span className="hidden sm:inline">Collapse</span>
+                </>
+              ) : (
+                <>
+                  <ChevronRight className="h-3 w-3 mr-1" />
+                  <span className="hidden sm:inline">Expand ({items.length})</span>
+                  <span className="sm:hidden">+{items.length - 1}</span>
+                </>
+              )}
+            </Button>
           )}
         </div>
       </div>
 
       {/* Items List */}
       <div className="space-y-3 mb-3">
-        {itemsWithVendor.map((item, idx) => {
+        {(isExpanded ? itemsWithVendor : itemsWithVendor.slice(0, 1)).map((item, idx) => {
           const displayNumber = item.itemOrder ?? (items.length - idx);
           const itemPhotos = getItemPhotos(item);
           const isEditing = editingItemId === item._id;
+
+          // Check if item has partial stock (some but not enough)
+          const itemInventory = inventoryStatus && inventoryStatus[item.itemName];
+          const hasPartialStock = !!(
+            itemInventory &&
+            itemInventory.centralStock > 0 &&
+            itemInventory.centralStock < item.quantity
+          );
+          const disableDirectActions = hasPartialStock;
+          const directActionDisabledReason = hasPartialStock ? "Partial stock available - please manage via CC" : undefined;
 
           return (
             <div
               key={item._id}
               className={cn(
                 "p-3 rounded-lg border shadow-sm",
-                item.status === "approved" && "bg-green-50 border-green-200 dark:bg-green-950/20 dark:border-green-800",
-                item.status === "rejected" && "bg-red-50 border-red-200 dark:bg-red-950/20 dark:border-red-800",
-                item.status === "cc_rejected" && "bg-red-50 border-red-200 dark:bg-red-950/20 dark:border-red-800",
-                !["approved", "rejected", "cc_rejected"].includes(item.status) && "bg-card/50"
+                (item.status === "approved" || item.status === "cc_approved" || item.status === "delivered") && "bg-green-50 border-green-200 dark:bg-green-950/20 dark:border-green-800",
+                (item.status === "rejected" || item.status === "cc_rejected" || item.status === "rejected_po") && "bg-red-50 border-red-200 dark:bg-red-950/20 dark:border-red-800",
+                !["approved", "cc_approved", "delivered", "rejected", "cc_rejected", "rejected_po"].includes(item.status) && "bg-card/50"
               )}
             >
               <div className="flex items-start justify-between gap-2 mb-2">
@@ -885,41 +959,162 @@ export function PurchaseRequestGroupCard({
                     </Badge>
                   )}
                   {item.status !== 'approved' && item.status !== 'rejected' && item.status !== 'cc_approved' && item.status !== 'cc_rejected' && getStatusBadge(item.status)}
+                  {/* Approved Split Badge */}
+                  {item.isSplitApproved && (
+                    <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200 text-xs flex-shrink-0 flex items-center gap-1">
+                      <CheckCircle className="h-3 w-3" />
+                      Split Approved
+                    </Badge>
+                  )}
                 </div>
                 <div className="flex items-center gap-2">
                   {/* Per-item action button */}
-                  {(item.status === "ready_for_cc" || item.status === "cc_pending") && (
+                  {(item.status === "recheck") && (
                     <>
-                      {item.directAction === "po" && onDirectPO ? (
+                      {/* Always show Ready for CC option */}
+                      {onMoveToCC && (
                         <Button
                           size="sm"
-                          onClick={() => onDirectPO?.(item._id)}
-                          className="text-xs h-7 px-2 bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200"
+                          onClick={() => onMoveToCC(item._id)}
+                          className="text-xs h-7 px-2"
+                        >
+                          <FileText className="h-3 w-3 mr-1" />
+                          Ready for CC
+                        </Button>
+                      )}
+
+                      {/* Check Button */}
+                      {onCheck && (
+                        <Button
+                          size="sm"
+                          onClick={() => onCheck(item._id)}
+                          className="text-xs h-7 px-2 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200"
+                          variant="outline"
+                        >
+                          <CheckCircle className="h-3 w-3 mr-1" />
+                          Check
+                        </Button>
+                      )}
+
+                      {/* Show additional direct action buttons if applicable */}
+                      {item.directAction === "po" && onDirectPO && (
+                        <Button
+                          size="sm"
+                          onClick={() => onDirectPO(item._id)}
+                          disabled={hasPartialStock}
+                          title={hasPartialStock ? "Cannot perform direct action on partially stocked items." : ""}
+                          className="text-xs h-7 px-2 bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 disabled:opacity-50 disabled:cursor-not-allowed"
                           variant="outline"
                         >
                           <ShoppingCart className="h-3 w-3 mr-1" />
-                          Direct PO
+                          Ready for PO
                         </Button>
-                      ) : item.directAction === "delivery" && onDirectDelivery ? (
+                      )}
+
+                      {item.directAction === "delivery" && onDirectDelivery && (
                         <Button
                           size="sm"
-                          onClick={() => onDirectDelivery?.(item._id)}
-                          className="text-xs h-7 px-2 bg-orange-50 text-orange-700 hover:bg-orange-100 border border-orange-200"
+                          onClick={() => onDirectDelivery(item._id)}
+                          disabled={hasPartialStock}
+                          title={hasPartialStock ? "Cannot perform direct action on partially stocked items." : ""}
+                          className="text-xs h-7 px-2 bg-orange-50 text-orange-700 hover:bg-orange-100 border border-orange-200 disabled:opacity-50 disabled:cursor-not-allowed"
                           variant="outline"
                         >
                           <Truck className="h-3 w-3 mr-1" />
-                          Delivery
+                          Ready for Delivery
                         </Button>
-                      ) : onOpenCC ? (
+                      )}
+                    </>
+                  )}
+
+                  {(item.status === "ready_for_cc" || item.status === "cc_pending") && (
+                    <>
+                      {/* Inventory-based Action Buttons */}
+                      {itemInventory && (itemInventory.centralStock || 0) >= item.quantity ? (
+                        /* Full Stock -> Direct Delivery */
+                        onDirectDelivery && (
+                          <Button
+                            size="sm"
+                            onClick={() => onDirectDelivery?.(item._id)}
+                            className="text-xs h-7 px-2 bg-orange-50 text-orange-700 hover:bg-orange-100 border border-orange-200"
+                            variant="outline"
+                          >
+                            <Truck className="h-3 w-3 mr-1" />
+                            Delivery
+                          </Button>
+                        )
+                      ) : (!itemInventory || (itemInventory.centralStock || 0) === 0) ? (
+                        /* No Stock -> Direct PO */
+                        onDirectPO && (
+                          <Button
+                            size="sm"
+                            onClick={() => onDirectPO?.(item._id)}
+                            className="text-xs h-7 px-2 bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200"
+                            variant="outline"
+                          >
+                            <ShoppingCart className="h-3 w-3 mr-1" />
+                            Direct PO
+                          </Button>
+                        )
+                      ) : (
+                        /* Partial Stock -> Split Fulfillment option */
+                        /* Partial Stock Logic */
+                        item.isSplitApproved ? (
+                          /* Approved Split -> Enable Delivery (for inventory portion) */
+                          <Button
+                            size="sm"
+                            onClick={() => onDirectDelivery?.(item._id)}
+                            className="text-xs h-7 px-2 bg-green-50 text-green-700 hover:bg-green-100 border border-green-200"
+                            variant="outline"
+                            title="Split Approved - Process Inventory Delivery"
+                          >
+                            <Truck className="h-3 w-3 mr-1" />
+                            Delivery
+                          </Button>
+                        ) : onCheck ? (
+                          <Button
+                            size="sm"
+                            onClick={() => onCheck(item._id)}
+                            className="text-xs h-7 px-2 bg-purple-50 text-purple-700 hover:bg-purple-100 border border-purple-200"
+                            variant="outline"
+                            title="Partial stock available - Manage split fulfillment"
+                          >
+                            <PieChart className="h-3 w-3 mr-1" />
+                            Split / Check
+                          </Button>
+                        ) : (
+                          <Button
+                            size="sm"
+                            disabled
+                            className="text-xs h-7 px-2 bg-orange-50/50 text-orange-700/50 border border-orange-200/50 cursor-not-allowed"
+                            variant="outline"
+                            title="Partial stock available - Use Check/Approve to manage split fulfillment"
+                          >
+                            <Truck className="h-3 w-3 mr-1" />
+                            Delivery
+                          </Button>
+                        )
+                      )}
+
+                      {/* Fallback to CC if no direct action is taken, or always available? 
+                          Original code showed CC as fallback. Let's keep specific CC button if we want options. 
+                          But typically Check covers it. Let's just show CC if no direct action rendered above? 
+                          Actually, the logic above covers all cases (Full, No, Partial).
+                          So 'CC' button might disappear? 
+                          Let's add CC button as an option if Direct PO is shown (choice between Direct PO and CC).
+                      */}
+                      {(!itemInventory || (itemInventory.centralStock || 0) === 0) && onOpenCC && (
+                        /* Show CC option alongside Direct PO */
                         <Button
                           size="sm"
                           onClick={() => onOpenCC?.(item._id)}
                           className="text-xs h-7 px-2"
+                          variant="outline"
                         >
                           <FileText className="h-3 w-3 mr-1" />
                           CC
                         </Button>
-                      ) : null}
+                      )}
                     </>
                   )}
                   <Button

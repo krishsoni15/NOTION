@@ -1071,15 +1071,22 @@ export const saveMultipleMaterialRequestsAsDraft = mutation({
 export const updateRequestStatus = mutation({
   args: {
     requestId: v.id("requests"),
-    status: v.union(v.literal("approved"), v.literal("rejected"), v.literal("direct_po"), v.literal("delivery_stage")), // Added delivery_stage
+    status: v.union(
+      v.literal("approved"),
+      v.literal("rejected"),
+      v.literal("direct_po"),
+      v.literal("delivery_stage"),
+      v.literal("ready_for_po")
+    ),
     rejectionReason: v.optional(v.string()),
+    directAction: v.optional(v.union(v.literal("delivery"), v.literal("po"))),
   },
   handler: async (ctx, args) => {
     const currentUser = await getCurrentUser(ctx);
 
-    // Only managers can approve/reject requests
-    if (currentUser.role !== "manager") {
-      throw new Error("Unauthorized: Only managers can update request status");
+    // Only managers can approve/reject, Purchase Officers can mark direct PO
+    if (currentUser.role !== "manager" && !(currentUser.role === "purchase_officer" && args.status === "ready_for_po")) {
+      throw new Error("Unauthorized: Only managers (or Purchase Officers for Direct PO) can update request status");
     }
 
     const request = await ctx.db.get(args.requestId);
@@ -1087,38 +1094,50 @@ export const updateRequestStatus = mutation({
       throw new Error("Request not found");
     }
 
-    if (request.status !== "pending") {
-      throw new Error("Request status can only be updated from pending");
+    // Status validation
+    if (currentUser.role === "manager") {
+      if (request.status !== "pending") throw new Error("Request status can only be updated from pending");
+    } else {
+      // Purchase Officer
+      const allowed = ["recheck", "ready_for_cc", "cc_pending", "cc_rejected"];
+      if (!allowed.includes(request.status)) throw new Error("Purchase Officer can only update from recheck/cc stages");
     }
 
     const now = Date.now();
 
     // Determine new status based on action
-    // Logic updated: All approved requests go to 'recheck' first for Purchase Officer review
-    let newStatus: "recheck" | "rejected";
-    let directAction: "po" | "delivery" | undefined = undefined;
+    let newStatus: string = args.status;
+    let directAction = args.directAction;
 
-    if (args.status === "approved") {
-      newStatus = "recheck"; // Normal approval -> Recheck
-    } else if (args.status === "direct_po") {
-      newStatus = "recheck"; // Goes to Purchaser (Recheck) with PO flag
-      directAction = "po";
-    } else if (args.status === "delivery_stage") {
-      newStatus = "recheck"; // Goes to Purchaser (Recheck) with Delivery flag
-      directAction = "delivery";
-    } else {
-      newStatus = "rejected";
+    if (currentUser.role === "manager") {
+      if (args.status === "approved") {
+        newStatus = "recheck"; // Normal approval -> Recheck
+      } else if (args.status === "direct_po") {
+        newStatus = "recheck"; // Goes to Purchaser (Recheck) with PO flag
+        directAction = "po";
+      } else if (args.status === "delivery_stage") {
+        newStatus = "recheck"; // Goes to Purchaser (Recheck) with Delivery flag
+        directAction = "delivery";
+      } else {
+        newStatus = "rejected";
+      }
+    } else if (args.status === "ready_for_po") {
+      // Purchase Officer Direct PO
+      newStatus = "ready_for_po";
+      if (!directAction) directAction = "po";
     }
 
     // Update request
     const updates: any = {
       status: newStatus,
-      approvedBy: currentUser._id,
-      approvedAt: now,
-      rejectionReason:
-        args.status === "rejected" ? args.rejectionReason : undefined,
       updatedAt: now,
     };
+
+    if (currentUser.role === "manager") {
+      updates.approvedBy = currentUser._id;
+      updates.approvedAt = now;
+      updates.rejectionReason = args.status === "rejected" ? args.rejectionReason : undefined;
+    }
 
     if (directAction) {
       updates.directAction = directAction;
@@ -1614,9 +1633,9 @@ export const directToPO = mutation({
       throw new Error("Request not found");
     }
 
-    // Only allow for approved requests that are ready for CC
-    if (request.status !== "approved" && request.status !== "ready_for_cc") {
-      throw new Error("Can only use direct to PO for approved requests ready for cost comparison");
+    // Only allow for approved requests that are ready for CC or recheck
+    if (request.status !== "approved" && request.status !== "ready_for_cc" && request.status !== "recheck") {
+      throw new Error("Can only use direct to PO for approved requests ready for cost comparison or recheck");
     }
 
     await ctx.db.patch(args.requestId, {
@@ -1716,7 +1735,7 @@ export const updatePurchaseRequestStatus = mutation({
 
     // Validate status transitions
     const validTransitions: Record<string, string[]> = {
-      recheck: ["ready_for_cc", "rejected"],
+      recheck: ["ready_for_cc", "rejected", "ready_for_po", "ready_for_delivery", "delivery_stage"],
       ready_for_cc: ["cc_pending", "cc_rejected", "ready_for_po", "delivery_stage", "ready_for_delivery"],
       cc_pending: ["cc_approved", "cc_rejected", "ready_for_cc"],
       cc_approved: ["ready_for_po"],
@@ -1746,3 +1765,62 @@ export const updatePurchaseRequestStatus = mutation({
   },
 });
 
+
+/**
+ * Split request and deliver inventory portion
+ * Creates a new request for the inventory portion and updates original request
+ */
+export const splitAndDeliverInventory = mutation({
+  args: {
+    requestId: v.id("requests"),
+    inventoryQuantity: v.number(),
+  },
+  handler: async (ctx, args) => {
+    const currentUser = await getCurrentUser(ctx);
+    if (currentUser.role !== "purchase_officer") {
+      throw new Error("Unauthorized");
+    }
+
+    const request = await ctx.db.get(args.requestId);
+    if (!request) throw new Error("Request not found");
+
+    if (args.inventoryQuantity <= 0 || args.inventoryQuantity >= request.quantity) {
+      throw new Error("Invalid split quantity");
+    }
+
+    const inventoryItem = await ctx.db
+      .query("inventory")
+      .filter((q) => q.eq(q.field("itemName"), request.itemName))
+      .first();
+
+    if (!inventoryItem || (inventoryItem.centralStock || 0) < args.inventoryQuantity) {
+      throw new Error("Insufficient inventory");
+    }
+
+    const now = Date.now();
+
+    // 1. Deduct inventory
+    await ctx.db.patch(inventoryItem._id, {
+      centralStock: (inventoryItem.centralStock || 0) - args.inventoryQuantity,
+      updatedAt: now,
+    });
+
+    // 2. Create new request for delivery portion
+    const deliveryRequestId = await ctx.db.insert("requests", {
+      ...request,
+      quantity: args.inventoryQuantity,
+      status: "delivery_stage",
+      directAction: "delivery",
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    // 3. Update original request (remaining quantity)
+    await ctx.db.patch(request._id, {
+      quantity: request.quantity - args.inventoryQuantity,
+      updatedAt: now,
+    });
+
+    return { deliveryRequestId };
+  },
+});

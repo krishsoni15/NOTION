@@ -87,7 +87,6 @@ export function RequestDetailsDialog({
   const [showItemDirectPOConfirm, setShowItemDirectPOConfirm] = useState<Id<"requests"> | null>(null);
   const [showDirectDeliveryConfirm, setShowDirectDeliveryConfirm] = useState(false);
   const [showItemDirectDeliveryConfirm, setShowItemDirectDeliveryConfirm] = useState<Id<"requests"> | null>(null);
-  const [showSplitConfirm, setShowSplitConfirm] = useState<Id<"requests"> | null>(null);
   const [showBulkSplitConfirm, setShowBulkSplitConfirm] = useState(false);
   const [showNotesTimeline, setShowNotesTimeline] = useState(false);
   const hasRefreshedRef = useRef(false);
@@ -309,7 +308,7 @@ export function RequestDetailsDialog({
       setShowDirectPOConfirm(false);
       setShowItemApproveConfirm(null);
       setShowItemDirectPOConfirm(null);
-      setShowSplitConfirm(null);
+      setShowBulkSplitConfirm(false);
       setRejectionReason("");
       setShowRejectionInput(false);
       hasRefreshedRef.current = false;
@@ -373,9 +372,9 @@ export function RequestDetailsDialog({
         requestId: itemId,
         status: "direct_po",
       });
-      toast.success("Item sent directly to PO stage");
+      toast.success("Item marked for Direct PO");
     } catch (error: any) {
-      toast.error(error.message || "Failed to process Direct PO");
+      toast.error(error.message || "Failed to mark for Direct PO");
     } finally {
       setIsLoading(false);
     }
@@ -459,7 +458,7 @@ export function RequestDetailsDialog({
       : pendingItems.map((item) => item._id);
 
     if (itemsToDirectPO.length === 0) {
-      toast.error("No items selected to send to Direct PO");
+      toast.error("No items selected to mark as Ready for CC");
       return;
     }
 
@@ -469,11 +468,11 @@ export function RequestDetailsDialog({
         requestIds: itemsToDirectPO,
         status: "direct_po",
       });
-      toast.success(`${itemsToDirectPO.length} item(s) sent directly to PO stage`);
+      toast.success(`${itemsToDirectPO.length} item(s) marked for Direct PO`);
       setSelectedItemsForAction(new Set()); // Clear selection after action
       closeAndRefresh();
     } catch (error: any) {
-      toast.error(error.message || "Failed to process Direct PO for items");
+      toast.error(error.message || "Failed to mark items for Direct PO");
     } finally {
       setIsLoading(false);
     }
@@ -614,10 +613,10 @@ export function RequestDetailsDialog({
         requestId,
         status: "direct_po",
       });
-      toast.success("Request sent directly to PO stage");
+      toast.success("Request marked for Direct PO");
       onOpenChange(false);
     } catch (error: any) {
-      toast.error(error.message || "Failed to process Direct PO");
+      toast.error(error.message || "Failed to mark for Direct PO");
     } finally {
       setIsLoading(false);
     }
@@ -1206,13 +1205,13 @@ export function RequestDetailsDialog({
                                           <Button
                                             variant="outline"
                                             size="sm"
-                                            onClick={() => setShowSplitConfirm(item._id)}
+                                            onClick={() => onCheck?.(item._id)}
                                             disabled={isLoading || !onCheck}
                                             className="flex-1 text-xs h-7 px-1 border-indigo-200 text-indigo-700 hover:bg-indigo-50 dark:border-indigo-800 dark:text-indigo-300"
-                                            title="Split Fulfillment / Check"
+                                            title="Check/Split Fulfillment"
                                           >
                                             <PieChart className="h-3 w-3 mr-1" />
-                                            Split
+                                            Check/Split
                                           </Button>
                                         );
                                       }
@@ -1223,7 +1222,7 @@ export function RequestDetailsDialog({
                                           size="sm"
                                           onClick={() => setShowItemDirectPOConfirm(item._id)}
                                           disabled={isLoading}
-                                          className="flex-1 text-xs h-7 px-1 border-blue-200 text-blue-700 hover:bg-blue-50 dark:border-blue-800 dark:text-blue-300"
+                                          className="flex-1 text-xs h-7 px-1 border-orange-200 text-orange-700 hover:bg-orange-50 dark:border-orange-800 dark:text-orange-300"
                                         >
                                           <ShoppingCart className="h-3 w-3 mr-1" />
                                           Direct PO
@@ -1518,7 +1517,7 @@ export function RequestDetailsDialog({
                                 disabled={isLoading}
                                 size="lg"
                                 variant="outline"
-                                className="flex-1 sm:w-1/5 border-blue-300 text-blue-700 hover:bg-blue-50 dark:border-blue-600 dark:text-blue-300 dark:hover:bg-blue-950 font-semibold py-4"
+                                className="flex-1 sm:w-1/5 border-orange-300 text-orange-700 hover:bg-orange-50 dark:border-orange-600 dark:text-orange-300 dark:hover:bg-orange-950 font-semibold py-4"
                               >
                                 <ShoppingCart className="h-5 w-5 mr-2" />
                                 {selectedItemsForAction.size > 0
@@ -1538,7 +1537,7 @@ export function RequestDetailsDialog({
                                 className="flex-1 sm:w-1/5 border-indigo-300 text-indigo-700 hover:bg-indigo-50 dark:border-indigo-600 dark:text-indigo-300 dark:hover:bg-indigo-950 font-semibold py-4"
                               >
                                 <PieChart className="h-5 w-5 mr-2" />
-                                Confirm Splits All
+                                Check/Split All
                               </Button>
                             );
                           }
@@ -1642,51 +1641,7 @@ export function RequestDetailsDialog({
                         </div>
                       )}
 
-                      {/* Split Confirmation */}
-                      {showSplitConfirm && (
-                        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-                          <div className="w-full max-w-md mx-4 bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 shadow-xl">
-                            <div className="p-6">
-                              <div className="flex items-center gap-3 mb-4">
-                                <div className="flex-shrink-0 w-12 h-12 bg-indigo-100 dark:bg-indigo-900/20 rounded-full flex items-center justify-center">
-                                  <PieChart className="h-6 w-6 text-indigo-600 dark:text-indigo-400" />
-                                </div>
-                                <div>
-                                  <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                                    Manage Split Fulfillment
-                                  </h3>
-                                  <p className="text-sm text-gray-600 dark:text-gray-300 mt-1">
-                                    This item has partial stock available. Do you want to open the Split/Check Dialog to manage fulfillment?
-                                  </p>
-                                </div>
-                              </div>
-                              <div className="flex gap-3">
-                                <Button
-                                  onClick={() => {
-                                    if (onCheck && showSplitConfirm) {
-                                      onCheck(showSplitConfirm);
-                                      setShowSplitConfirm(null);
-                                    }
-                                  }}
-                                  disabled={isLoading}
-                                  className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white"
-                                >
-                                  <CheckCircle className="h-4 w-4 mr-2" />
-                                  Confirm
-                                </Button>
-                                <Button
-                                  variant="outline"
-                                  onClick={() => setShowSplitConfirm(null)}
-                                  disabled={isLoading}
-                                  className="flex-1"
-                                >
-                                  Cancel
-                                </Button>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      )}
+
                       {/* Approval Confirmation */}
                       {showApproveConfirm && (
                         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
@@ -1760,7 +1715,7 @@ export function RequestDetailsDialog({
                                     Confirm Direct PO
                                   </h3>
                                   <p className="text-sm text-gray-600 dark:text-gray-300 mt-1">
-                                    Send {selectedItemsForAction.size > 0 ? selectedItemsForAction.size : 'all'} items directly to PO? This skips cost comparison.
+                                    Mark {selectedItemsForAction.size > 0 ? selectedItemsForAction.size : 'all'} items for Direct PO? This will bypass Cost Comparison as no stock is available.
                                   </p>
                                 </div>
                               </div>
@@ -1780,9 +1735,9 @@ export function RequestDetailsDialog({
                                         requestIds: itemsToProcess,
                                         status: "direct_po",
                                       });
-                                      toast.success(`${itemsToProcess.length} items sent to Direct PO`);
+                                      toast.success(`${itemsToProcess.length} items marked for Direct PO`);
                                     } catch (error: any) {
-                                      toast.error(error.message || "Failed to process Direct PO");
+                                      toast.error(error.message || "Failed to process Ready for CC");
                                     }
                                   }}
                                   disabled={isLoading}
@@ -1816,7 +1771,7 @@ export function RequestDetailsDialog({
                                 </div>
                                 <div>
                                   <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                                    Approve Splits for {selectedItemsForAction.size > 0 ? selectedItemsForAction.size : 'All'} Items?
+                                    Check & Approve Splits for {selectedItemsForAction.size > 0 ? selectedItemsForAction.size : 'All'} Items?
                                   </h3>
                                   <p className="text-sm text-gray-600 dark:text-gray-300 mt-1">
                                     This will automatically set inventory fulfillment to the <strong>maximum available stock</strong> for each item and approve the split plan.
@@ -1944,7 +1899,7 @@ export function RequestDetailsDialog({
                                     Confirm Direct PO
                                   </h3>
                                   <p className="text-sm text-gray-600 dark:text-gray-300 mt-1">
-                                    Send this individual item directly to PO? This skips cost comparison.
+                                    Create a Direct PO for this item? This will bypass Cost Comparison as no stock is available.
                                   </p>
                                 </div>
                               </div>

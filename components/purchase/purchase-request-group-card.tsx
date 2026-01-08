@@ -502,6 +502,9 @@ export function PurchaseRequestGroupCard({
   const [isNotesOpen, setIsNotesOpen] = useState(false);
   const [vendorSearchQuery, setVendorSearchQuery] = useState("");
   const [isExpanded, setIsExpanded] = useState(false);
+  const [showReadyForCCConfirm, setShowReadyForCCConfirm] = useState<Id<"requests"> | null>(null);
+  const [showReadyForPOConfirm, setShowReadyForPOConfirm] = useState<Id<"requests"> | null>(null);
+  const [showReadyForDeliveryConfirm, setShowReadyForDeliveryConfirm] = useState<Id<"requests"> | null>(null);
 
   // Initialize items with vendor data
   useEffect(() => {
@@ -971,14 +974,44 @@ export function PurchaseRequestGroupCard({
                   {/* Per-item action button */}
                   {(item.status === "recheck") && (
                     <>
+                      {/* Show additional direct action buttons first (Leftmost) */}
+                      {item.directAction === "delivery" && onDirectDelivery && (
+                        <Button
+                          size="sm"
+                          onClick={() => setShowReadyForDeliveryConfirm(item._id)}
+                          disabled={hasPartialStock}
+                          title={hasPartialStock ? "Cannot perform direct action on partially stocked items." : ""}
+                          className="text-xs h-7 px-3 bg-orange-50 text-orange-700 border-orange-200 hover:bg-orange-600 hover:text-white hover:border-orange-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed font-medium shadow-sm dark:bg-orange-900/20 dark:text-orange-300 dark:border-orange-800 dark:hover:bg-orange-600"
+                          variant="outline"
+                        >
+                          <Truck className="h-3.5 w-3.5 mr-1.5" />
+                          Ready for Delivery
+                        </Button>
+                      )}
+
+                      {item.directAction === "po" && onDirectPO && (
+                        <Button
+                          size="sm"
+                          onClick={() => setShowReadyForPOConfirm(item._id)}
+                          disabled={hasPartialStock}
+                          title={hasPartialStock ? "Cannot perform direct action on partially stocked items." : ""}
+                          className="text-xs h-7 px-3 bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-600 hover:text-white hover:border-emerald-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed font-medium shadow-sm dark:bg-emerald-900/20 dark:text-emerald-300 dark:border-emerald-800 dark:hover:bg-emerald-600"
+                          variant="outline"
+                        >
+                          <ShoppingCart className="h-3.5 w-3.5 mr-1.5" />
+                          Ready for PO
+                        </Button>
+                      )}
+
                       {/* Always show Ready for CC option */}
                       {onMoveToCC && (
                         <Button
                           size="sm"
-                          onClick={() => onMoveToCC(item._id)}
-                          className="text-xs h-7 px-2"
+                          onClick={() => setShowReadyForCCConfirm(item._id)}
+                          className="text-xs h-7 px-3 bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-600 hover:text-white hover:border-blue-600 transition-all shadow-sm font-medium dark:bg-blue-900/20 dark:text-blue-300 dark:border-blue-800 dark:hover:bg-blue-600"
+                          variant="outline"
                         >
-                          <FileText className="h-3 w-3 mr-1" />
+                          <FileText className="h-3.5 w-3.5 mr-1.5" />
                           Ready for CC
                         </Button>
                       )}
@@ -988,142 +1021,36 @@ export function PurchaseRequestGroupCard({
                         <Button
                           size="sm"
                           onClick={() => onCheck(item._id)}
-                          className="text-xs h-7 px-2 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 border border-indigo-200"
+                          className="text-xs h-7 px-3 bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-600 hover:text-white hover:border-purple-600 transition-all shadow-sm font-medium dark:bg-purple-900/20 dark:text-purple-300 dark:border-purple-800 dark:hover:bg-purple-600"
                           variant="outline"
                         >
-                          <CheckCircle className="h-3 w-3 mr-1" />
-                          Check
-                        </Button>
-                      )}
-
-                      {/* Show additional direct action buttons if applicable */}
-                      {item.directAction === "po" && onDirectPO && (
-                        <Button
-                          size="sm"
-                          onClick={() => onDirectPO(item._id)}
-                          disabled={hasPartialStock}
-                          title={hasPartialStock ? "Cannot perform direct action on partially stocked items." : ""}
-                          className="text-xs h-7 px-2 bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200 disabled:opacity-50 disabled:cursor-not-allowed"
-                          variant="outline"
-                        >
-                          <ShoppingCart className="h-3 w-3 mr-1" />
-                          Ready for PO
-                        </Button>
-                      )}
-
-                      {item.directAction === "delivery" && onDirectDelivery && (
-                        <Button
-                          size="sm"
-                          onClick={() => onDirectDelivery(item._id)}
-                          disabled={hasPartialStock}
-                          title={hasPartialStock ? "Cannot perform direct action on partially stocked items." : ""}
-                          className="text-xs h-7 px-2 bg-orange-50 text-orange-700 hover:bg-orange-100 border border-orange-200 disabled:opacity-50 disabled:cursor-not-allowed"
-                          variant="outline"
-                        >
-                          <Truck className="h-3 w-3 mr-1" />
-                          Ready for Delivery
+                          <PieChart className="h-3.5 w-3.5 mr-1.5" />
+                          Check/Split
                         </Button>
                       )}
                     </>
                   )}
 
-                  {(item.status === "ready_for_cc" || item.status === "cc_pending") && (
-                    <>
-                      {/* Inventory-based Action Buttons */}
-                      {itemInventory && (itemInventory.centralStock || 0) >= item.quantity ? (
-                        /* Full Stock -> Direct Delivery */
-                        onDirectDelivery && (
-                          <Button
-                            size="sm"
-                            onClick={() => onDirectDelivery?.(item._id)}
-                            className="text-xs h-7 px-2 bg-orange-50 text-orange-700 hover:bg-orange-100 border border-orange-200"
-                            variant="outline"
-                          >
-                            <Truck className="h-3 w-3 mr-1" />
-                            Delivery
-                          </Button>
-                        )
-                      ) : (!itemInventory || (itemInventory.centralStock || 0) === 0) ? (
-                        /* No Stock -> Direct PO */
-                        onDirectPO && (
-                          <Button
-                            size="sm"
-                            onClick={() => onDirectPO?.(item._id)}
-                            className="text-xs h-7 px-2 bg-blue-50 text-blue-700 hover:bg-blue-100 border border-blue-200"
-                            variant="outline"
-                          >
-                            <ShoppingCart className="h-3 w-3 mr-1" />
-                            Direct PO
-                          </Button>
-                        )
-                      ) : (
-                        /* Partial Stock -> Split Fulfillment option */
-                        /* Partial Stock Logic */
-                        item.isSplitApproved ? (
-                          /* Approved Split -> Enable Delivery (for inventory portion) */
-                          <Button
-                            size="sm"
-                            onClick={() => onDirectDelivery?.(item._id)}
-                            className="text-xs h-7 px-2 bg-green-50 text-green-700 hover:bg-green-100 border border-green-200"
-                            variant="outline"
-                            title="Split Approved - Process Inventory Delivery"
-                          >
-                            <Truck className="h-3 w-3 mr-1" />
-                            Delivery
-                          </Button>
-                        ) : onCheck ? (
-                          <Button
-                            size="sm"
-                            onClick={() => onCheck(item._id)}
-                            className="text-xs h-7 px-2 bg-purple-50 text-purple-700 hover:bg-purple-100 border border-purple-200"
-                            variant="outline"
-                            title="Partial stock available - Manage split fulfillment"
-                          >
-                            <PieChart className="h-3 w-3 mr-1" />
-                            Split / Check
-                          </Button>
-                        ) : (
-                          <Button
-                            size="sm"
-                            disabled
-                            className="text-xs h-7 px-2 bg-orange-50/50 text-orange-700/50 border border-orange-200/50 cursor-not-allowed"
-                            variant="outline"
-                            title="Partial stock available - Use Check/Approve to manage split fulfillment"
-                          >
-                            <Truck className="h-3 w-3 mr-1" />
-                            Delivery
-                          </Button>
-                        )
-                      )}
 
-                      {/* Fallback to CC if no direct action is taken, or always available? 
-                          Original code showed CC as fallback. Let's keep specific CC button if we want options. 
-                          But typically Check covers it. Let's just show CC if no direct action rendered above? 
-                          Actually, the logic above covers all cases (Full, No, Partial).
-                          So 'CC' button might disappear? 
-                          Let's add CC button as an option if Direct PO is shown (choice between Direct PO and CC).
-                      */}
-                      {(!itemInventory || (itemInventory.centralStock || 0) === 0) && onOpenCC && (
-                        /* Show CC option alongside Direct PO */
-                        <Button
-                          size="sm"
-                          onClick={() => onOpenCC?.(item._id)}
-                          className="text-xs h-7 px-2"
-                          variant="outline"
-                        >
-                          <FileText className="h-3 w-3 mr-1" />
-                          CC
-                        </Button>
-                      )}
-                    </>
+
+                  {(item.status === "ready_for_cc" || item.status === "cc_pending") && (
+                    <Button
+                      size="sm"
+                      onClick={() => (onOpenCC || onCheck)?.(item._id)}
+                      className="text-xs h-7 px-3 bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-600 hover:text-white hover:border-blue-600 transition-all shadow-sm font-medium dark:bg-blue-900/20 dark:text-blue-300 dark:border-blue-800 dark:hover:bg-blue-600"
+                      variant="outline"
+                    >
+                      <FileText className="h-3.5 w-3.5 mr-1.5" />
+                      CC
+                    </Button>
                   )}
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={() => onViewDetails(item._id)}
-                    className="text-xs h-7 px-2"
+                    className="text-xs h-7 px-3 bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-800 hover:text-white hover:border-slate-800 transition-all shadow-sm font-medium dark:bg-slate-800/50 dark:text-slate-300 dark:border-slate-700 dark:hover:bg-slate-700"
                   >
-                    <Eye className="h-3 w-3 mr-1" />
+                    <Eye className="h-3.5 w-3.5 mr-1.5" />
                     View
                   </Button>
                 </div>
@@ -1138,6 +1065,129 @@ export function PurchaseRequestGroupCard({
         open={isNotesOpen}
         onOpenChange={setIsNotesOpen}
       />
+
+      {/* Ready for CC Confirmation Dialog */}
+      {showReadyForCCConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-200" onClick={(e) => e.stopPropagation()}>
+          <div className="w-full max-w-sm mx-4 bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 shadow-2xl p-6 transform transition-all scale-100">
+            <div className="flex flex-col items-center text-center gap-4 mb-6">
+              <div className="w-16 h-16 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center ring-8 ring-blue-50 dark:ring-blue-900/10">
+                <FileText className="h-8 w-8 text-blue-600 dark:text-blue-400" />
+              </div>
+              <div className="space-y-2">
+                <h3 className="text-xl font-bold text-gray-900 dark:text-white tracking-tight">
+                  Ready for Cost Comparison
+                </h3>
+                <p className="text-sm text-gray-500 dark:text-gray-400 max-w-[260px] mx-auto leading-relaxed">
+                  Are you sure you want to mark this item as ready for cost comparison?
+                </p>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <Button
+                variant="outline"
+                onClick={() => setShowReadyForCCConfirm(null)}
+                className="w-full h-11 font-medium border-gray-200 hover:bg-gray-50 hover:text-gray-900 dark:border-gray-700 dark:hover:bg-gray-800 dark:hover:text-white transition-colors"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={() => {
+                  if (onMoveToCC && showReadyForCCConfirm) {
+                    onMoveToCC(showReadyForCCConfirm);
+                    setShowReadyForCCConfirm(null);
+                  }
+                }}
+                className="w-full h-11 font-medium bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-blue-500/20 transition-all hover:scale-[1.02]"
+              >
+                Confirm
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Ready for PO Confirmation Dialog */}
+      {showReadyForPOConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-200" onClick={(e) => e.stopPropagation()}>
+          <div className="w-full max-w-sm mx-4 bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 shadow-2xl p-6 transform transition-all scale-100">
+            <div className="flex flex-col items-center text-center gap-4 mb-6">
+              <div className="w-16 h-16 bg-emerald-100 dark:bg-emerald-900/30 rounded-full flex items-center justify-center ring-8 ring-emerald-50 dark:ring-emerald-900/10">
+                <ShoppingCart className="h-8 w-8 text-emerald-600 dark:text-emerald-400" />
+              </div>
+              <div>
+                <h3 className="text-xl font-bold text-gray-900 dark:text-white tracking-tight">
+                  Confirm Direct PO
+                </h3>
+                <p className="text-sm text-gray-500 dark:text-gray-400 max-w-[260px] mx-auto leading-relaxed mt-2">
+                  This item will be marked for <span className="font-semibold text-emerald-600 dark:text-emerald-400">Direct Purchase Order</span>.
+                </p>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <Button
+                variant="outline"
+                onClick={() => setShowReadyForPOConfirm(null)}
+                className="w-full h-11 font-medium border-gray-200 hover:bg-gray-50 hover:text-gray-900 dark:border-gray-700 dark:hover:bg-gray-800 dark:hover:text-white transition-colors"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={() => {
+                  if (onDirectPO && showReadyForPOConfirm) {
+                    onDirectPO(showReadyForPOConfirm);
+                    setShowReadyForPOConfirm(null);
+                  }
+                }}
+                className="w-full h-11 font-medium bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg shadow-emerald-500/20 transition-all hover:scale-[1.02]"
+              >
+                Confirm PO
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Ready for Delivery Confirmation Dialog */}
+      {showReadyForDeliveryConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-200" onClick={(e) => e.stopPropagation()}>
+          <div className="w-full max-w-sm mx-4 bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 shadow-2xl p-6 transform transition-all scale-100">
+            <div className="flex flex-col items-center text-center gap-4 mb-6">
+              <div className="w-16 h-16 bg-orange-100 dark:bg-orange-900/30 rounded-full flex items-center justify-center ring-8 ring-orange-50 dark:ring-orange-900/10">
+                <Truck className="h-8 w-8 text-orange-600 dark:text-orange-400" />
+              </div>
+              <div>
+                <h3 className="text-xl font-bold text-gray-900 dark:text-white tracking-tight">
+                  Confirm Direct Delivery
+                </h3>
+                <p className="text-sm text-gray-500 dark:text-gray-400 max-w-[260px] mx-auto leading-relaxed mt-2">
+                  This item will be marked for <span className="font-semibold text-orange-600 dark:text-orange-400">Direct Delivery</span> from inventory.
+                </p>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <Button
+                variant="outline"
+                onClick={() => setShowReadyForDeliveryConfirm(null)}
+                className="w-full h-11 font-medium border-gray-200 hover:bg-gray-50 hover:text-gray-900 dark:border-gray-700 dark:hover:bg-gray-800 dark:hover:text-white transition-colors"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={() => {
+                  if (onDirectDelivery && showReadyForDeliveryConfirm) {
+                    onDirectDelivery(showReadyForDeliveryConfirm);
+                    setShowReadyForDeliveryConfirm(null);
+                  }
+                }}
+                className="w-full h-11 font-medium bg-orange-600 hover:bg-orange-700 text-white shadow-lg shadow-orange-500/20 transition-all hover:scale-[1.02]"
+              >
+                Confirm Delivery
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div >
   );
 }

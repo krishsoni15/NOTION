@@ -208,6 +208,7 @@ export const upsertCostComparison = mutation({
     ),
     isDirectDelivery: v.boolean(),
     inventoryFulfillmentQuantity: v.optional(v.number()),
+    managerNotes: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const currentUser = await getCurrentUser(ctx);
@@ -243,6 +244,7 @@ export const upsertCostComparison = mutation({
         vendorQuotes: args.vendorQuotes,
         isDirectDelivery: args.isDirectDelivery,
         inventoryFulfillmentQuantity: args.inventoryFulfillmentQuantity,
+        managerNotes: args.managerNotes !== undefined ? args.managerNotes : existing.managerNotes,
         updatedAt: now,
       });
       return existing._id;
@@ -255,6 +257,7 @@ export const upsertCostComparison = mutation({
         status: "draft",
         isDirectDelivery: args.isDirectDelivery,
         inventoryFulfillmentQuantity: args.inventoryFulfillmentQuantity,
+        managerNotes: args.managerNotes,
         createdAt: now,
         updatedAt: now,
       });
@@ -496,6 +499,7 @@ export const resubmitCostComparison = mutation({
 export const approveSplitFulfillment = mutation({
   args: {
     requestId: v.id("requests"),
+    inventoryQuantity: v.optional(v.number()), // Optional argument to explicitly pass the inventory quantity for immediate status calculation
   },
   handler: async (ctx, args) => {
     const currentUser = await getCurrentUser(ctx);
@@ -516,17 +520,43 @@ export const approveSplitFulfillment = mutation({
     }
 
     const now = Date.now();
+    const currentNotes = costComparison.managerNotes || "";
+    // Append tag if not present, preserving existing notes
+    const newNotes = currentNotes.includes("Split Fulfillment Approved")
+      ? currentNotes
+      : (currentNotes ? `${currentNotes}\n\nSplit Fulfillment Approved` : "Split Fulfillment Approved");
 
     // Update cost comparison with approval note
     await ctx.db.patch(costComparison._id, {
-      managerNotes: "Split Fulfillment Approved",
+      managerNotes: newNotes,
       approvedBy: currentUser._id,
       approvedAt: now,
       updatedAt: now,
     });
 
-    // We don't change the status to cc_approved yet because a vendor might not be selected for the remaining part.
-    // However, this note acts as a flag to unlock the Inventory Deduction action in the UI.
+    // Update request status based on fulfillment logic
+    const request = await ctx.db.get(args.requestId);
+    if (request) {
+      // Use provided quantity or fallback to DB value
+      const inventoryQty = args.inventoryQuantity !== undefined
+        ? args.inventoryQuantity
+        : (costComparison.inventoryFulfillmentQuantity || 0);
+
+      // If fully fulfilled from inventory, move to delivery stage
+      if (inventoryQty >= request.quantity) {
+        await ctx.db.patch(args.requestId, {
+          status: "delivery_stage",
+          updatedAt: now,
+        });
+      } else {
+        // If partial or no inventory (mixed fulfillment), move to Recheck
+        // This is the standard "Manager Approved" state, handing it over to Purchase Officers
+        await ctx.db.patch(args.requestId, {
+          status: "recheck",
+          updatedAt: now,
+        });
+      }
+    }
 
     return { success: true };
   },

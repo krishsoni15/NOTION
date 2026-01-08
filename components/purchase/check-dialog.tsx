@@ -44,7 +44,7 @@ import { VendorCreationForm } from "./vendor-creation-form";
 import { LazyImage } from "@/components/ui/lazy-image";
 import { ImageSlider } from "@/components/ui/image-slider";
 import type { Id } from "@/convex/_generated/dataModel";
-import { Edit, Check, X } from "lucide-react";
+import { Edit, Check, X, ShoppingCart, Truck } from "lucide-react";
 
 interface CheckDialogProps {
     open: boolean;
@@ -132,7 +132,34 @@ export function CheckDialog({
     const [selectedVendorIndex, setSelectedVendorIndex] = useState(-1);
     const [editingQuoteIndex, setEditingQuoteIndex] = useState(-1); // -1 = adding new, >= 0 = editing existing
     const [showSaveConfirm, setShowSaveConfirm] = useState(false);
+    const [showDirectPOConfirm, setShowDirectPOConfirm] = useState(false);
     const [showSplitApproveConfirm, setShowSplitApproveConfirm] = useState(false);
+
+    const handleDirectPO = async () => {
+        setIsSaving(true);
+        try {
+            // Upsert CC to persist the "Buy All" intent (Inventory=0)
+            await upsertCC({
+                requestId: activeRequestId,
+                vendorQuotes: vendorQuotes,
+                isDirectDelivery: false,
+                inventoryFulfillmentQuantity: 0
+            });
+
+            await updateStatus({
+                requestId: activeRequestId,
+                status: "ready_for_po",
+                directAction: "po"
+            });
+
+            toast.success("Marked for Direct Purchase");
+            onOpenChange(false);
+        } catch (error: any) {
+            toast.error("Failed to mark direct PO: " + error.message);
+        } finally {
+            setIsSaving(false);
+        }
+    };
 
     // Inventory-based fulfillment state (skip vendor comparison)
     const [useInventoryStock, setUseInventoryStock] = useState(false);
@@ -162,7 +189,10 @@ export function CheckDialog({
     // Manager review state
     const [selectedFinalVendor, setSelectedFinalVendor] = useState<Id<"vendors"> | "">("");
     const [managerNotes, setManagerNotes] = useState("");
-    const [isReviewing, setIsReviewing] = useState(false);
+
+
+    // New mutation for split delivery
+    const splitAndDeliverInventory = useMutation(api.requests.splitAndDeliverInventory);
 
     const userRole = useUserRole();
     const isManager = userRole === ROLES.MANAGER;
@@ -201,6 +231,7 @@ export function CheckDialog({
     const submitCC = useMutation(api.costComparisons.submitCostComparison);
     const resubmitCC = useMutation(api.costComparisons.resubmitCostComparison);
     const updateRequestDetails = useMutation(api.requests.updateRequestDetails);
+    const updateStatus = useMutation(api.requests.updateRequestStatus);
     const updatePurchaseRequestStatus = useMutation(api.requests.updatePurchaseRequestStatus);
     const deductInventoryStock = useMutation(api.inventory.deductInventoryStockByName);
 
@@ -704,6 +735,38 @@ export function CheckDialog({
         }
     };
 
+    const handleSplitAndDeliver = async () => {
+        if (!request) return;
+        if (quantityFromInventory <= 0) {
+            toast.error("Please specify a quantity to deliver from inventory");
+            return;
+        }
+
+        setIsCreatingDirectPO(true);
+        try {
+            await splitAndDeliverInventory({
+                requestId: activeRequestId,
+                inventoryQuantity: quantityFromInventory,
+            });
+
+            toast.success(`${quantityFromInventory} items moved to Delivery Stage. Please continue with the remaining ${quantityToBuy} items.`);
+
+            // Refresh logic or update local state if needed (dialog might stay open for the remaining part)
+            // Ideally, we re-fetch context or just reset quantities for the NEW remaining amount
+            // But since 'request' prop will update from convex, we just need to wait.
+            // Actually, we might want to close if it was 100%, but this function is for PARTIAL.
+            // If partial, the dialog should remain open to process the REST.
+            // BUT, the requestId might change or data might refresh. 
+            // The activeRequestId points to the ORIGINAL request, which now has REDUCED quantity.
+            // So we should re-calculate needs.
+
+        } catch (error: any) {
+            toast.error(error.message || "Failed to split and deliver");
+        } finally {
+            setIsCreatingDirectPO(false);
+        }
+    };
+
     const openImageSlider = (images: Array<{ imageUrl: string; imageKey: string }>, itemName: string, initialIndex: number = 0) => {
         setImageSliderImages(images);
         setImageSliderItemName(itemName);
@@ -764,550 +827,536 @@ export function CheckDialog({
                         )}
                     </DialogHeader>
 
-                    <div className="space-y-3">
-                        {/* Item Information Card */}
-                        {request && (
-                            <div className="p-3 bg-muted/30 border rounded-lg space-y-2">
-                                <div className="flex items-center justify-between">
-                                    <h4 className="font-medium text-sm">Item Details</h4>
-                                    {canEdit && !isManager && !isEditingItem && (
-                                        <Button
-                                            variant="ghost"
-                                            size="sm"
-                                            onClick={handleStartEditItem}
-                                            className="h-6 w-6 p-0"
-                                        >
-                                            <Edit className="h-3 w-3" />
-                                        </Button>
-                                    )}
-                                </div>
-                                <div className="space-y-3 text-sm">
-                                    {/* Item Name Row - Full Width */}
-                                    <div>
-                                        <div className="flex items-center justify-between">
-                                            <span className="text-muted-foreground">Item:</span>
-
-                                        </div>
-                                        {isEditingItem ? (
-                                            <div className="relative mt-1">
-                                                <Input
-                                                    type="text"
-                                                    value={editItemName}
-                                                    onChange={(e) => handleItemNameInputChange(e.target.value)}
-                                                    onKeyDown={handleItemNameKeyDown}
-                                                    onFocus={handleItemNameFocus}
-                                                    onBlur={handleItemNameBlur}
-                                                    placeholder="Enter item name..."
-                                                    className="text-sm"
-                                                    disabled={isUpdatingItem}
-                                                />
-                                                {showItemNameSuggestions && getFilteredItemNameSuggestions(editItemName).length > 0 && (
-                                                    <div className="absolute top-full left-0 right-0 z-50 mt-1 bg-background border border-border rounded-md shadow-lg max-h-40 overflow-y-auto">
-                                                        {getFilteredItemNameSuggestions(editItemName).map((item, index) => (
-                                                            <button
-                                                                key={item._id}
-                                                                type="button"
-                                                                onClick={() => handleItemNameSuggestionClick(item.itemName)}
-                                                                className={`w-full px-3 py-1.5 text-left text-xs hover:bg-muted transition-colors ${index === selectedItemNameIndex ? 'bg-muted font-medium' : ''
-                                                                    }`}
-                                                            >
-                                                                <div className="flex items-center justify-between w-full">
-                                                                    <span>{item.itemName}</span>
-                                                                    <span className="text-muted-foreground ml-2">
-                                                                        ({item.centralStock || 0} {item.unit || 'units'})
-                                                                    </span>
-                                                                </div>
-                                                            </button>
-                                                        ))}
-                                                    </div>
-                                                )}
-                                            </div>
-                                        ) : (
-                                            <p className="font-medium mt-1">{request.itemName}</p>
+                    {/* Loading State */}
+                    {!request ? (
+                        <div className="flex flex-col items-center justify-center h-[300px] space-y-4">
+                            <div className="h-8 w-8 border-4 border-primary/30 border-t-primary rounded-full animate-spin" />
+                            <p className="text-sm text-muted-foreground">Loading request details...</p>
+                        </div>
+                    ) : (
+                        <div className="space-y-3">
+                            {/* Item Information Card */}
+                            {request && (
+                                <div className="p-3 bg-muted/30 border rounded-lg space-y-2">
+                                    <div className="flex items-center justify-between">
+                                        <h4 className="font-medium text-sm">Item Details</h4>
+                                        {canEdit && !isManager && !isEditingItem && (
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={handleStartEditItem}
+                                                className="h-6 w-6 p-0"
+                                            >
+                                                <Edit className="h-3 w-3" />
+                                            </Button>
                                         )}
                                     </div>
+                                    <div className="space-y-3 text-sm">
+                                        {/* Item Name Row - Full Width */}
+                                        <div>
+                                            <div className="flex items-center justify-between">
+                                                <span className="text-muted-foreground">Item:</span>
 
-                                    {/* Quantity and Unit Row - 50/50 */}
-                                    <div className="grid grid-cols-2 gap-3">
-                                        <div>
-                                            <span className="text-muted-foreground">Quantity:</span>
-                                            {isEditingItem ? (
-                                                <Input
-                                                    type="number"
-                                                    min="1"
-                                                    step="any"
-                                                    value={editQuantity}
-                                                    onChange={(e) => setEditQuantity(e.target.value)}
-                                                    className="h-7 text-xs mt-1"
-                                                    disabled={isUpdatingItem}
-                                                />
-                                            ) : (
-                                                <p className="font-medium mt-1">{request.quantity}</p>
-                                            )}
-                                        </div>
-                                        <div>
-                                            <span className="text-muted-foreground">Unit:</span>
+                                            </div>
                                             {isEditingItem ? (
                                                 <div className="relative mt-1">
                                                     <Input
                                                         type="text"
-                                                        placeholder="unit"
-                                                        value={editUnit}
-                                                        onChange={(e) => handleUnitInputChange(e.target.value)}
-                                                        onKeyDown={handleUnitKeyDown}
-                                                        onFocus={handleUnitFocus}
-                                                        onBlur={handleUnitBlur}
-                                                        className="h-7 text-xs"
+                                                        value={editItemName}
+                                                        onChange={(e) => handleItemNameInputChange(e.target.value)}
+                                                        onKeyDown={handleItemNameKeyDown}
+                                                        onFocus={handleItemNameFocus}
+                                                        onBlur={handleItemNameBlur}
+                                                        placeholder="Enter item name..."
+                                                        className="text-sm"
                                                         disabled={isUpdatingItem}
                                                     />
-                                                    {showUnitSuggestions && getFilteredUnitSuggestions(editUnit).length > 0 && (
+                                                    {showItemNameSuggestions && getFilteredItemNameSuggestions(editItemName).length > 0 && (
                                                         <div className="absolute top-full left-0 right-0 z-50 mt-1 bg-background border border-border rounded-md shadow-lg max-h-40 overflow-y-auto">
-                                                            {getFilteredUnitSuggestions(editUnit).map((suggestion, index) => (
+                                                            {getFilteredItemNameSuggestions(editItemName).map((item, index) => (
                                                                 <button
-                                                                    key={suggestion}
+                                                                    key={item._id}
                                                                     type="button"
-                                                                    onClick={() => handleUnitSuggestionClick(suggestion)}
-                                                                    className={`w-full px-3 py-1.5 text-left text-xs hover:bg-muted transition-colors ${index === selectedUnitIndex ? 'bg-muted font-medium' : ''
+                                                                    onClick={() => handleItemNameSuggestionClick(item.itemName)}
+                                                                    className={`w-full px-3 py-1.5 text-left text-xs hover:bg-muted transition-colors ${index === selectedItemNameIndex ? 'bg-muted font-medium' : ''
                                                                         }`}
                                                                 >
-                                                                    {suggestion}
+                                                                    <div className="flex items-center justify-between w-full">
+                                                                        <span>{item.itemName}</span>
+                                                                        <span className="text-muted-foreground ml-2">
+                                                                            ({item.centralStock || 0} {item.unit || 'units'})
+                                                                        </span>
+                                                                    </div>
                                                                 </button>
                                                             ))}
                                                         </div>
                                                     )}
                                                 </div>
                                             ) : (
-                                                <p className="font-medium mt-1">{request.unit || itemInInventory?.unit || 'units'}</p>
+                                                <p className="font-medium mt-1">{request.itemName}</p>
+                                            )}
+                                        </div>
+
+                                        {/* Quantity and Unit Row - 50/50 */}
+                                        <div className="grid grid-cols-2 gap-3">
+                                            <div>
+                                                <span className="text-muted-foreground">Quantity:</span>
+                                                {isEditingItem ? (
+                                                    <Input
+                                                        type="number"
+                                                        min="1"
+                                                        step="any"
+                                                        value={editQuantity}
+                                                        onChange={(e) => setEditQuantity(e.target.value)}
+                                                        className="h-7 text-xs mt-1"
+                                                        disabled={isUpdatingItem}
+                                                    />
+                                                ) : (
+                                                    <p className="font-medium mt-1">{request.quantity}</p>
+                                                )}
+                                            </div>
+                                            <div>
+                                                <span className="text-muted-foreground">Unit:</span>
+                                                {isEditingItem ? (
+                                                    <div className="relative mt-1">
+                                                        <Input
+                                                            type="text"
+                                                            placeholder="unit"
+                                                            value={editUnit}
+                                                            onChange={(e) => handleUnitInputChange(e.target.value)}
+                                                            onKeyDown={handleUnitKeyDown}
+                                                            onFocus={handleUnitFocus}
+                                                            onBlur={handleUnitBlur}
+                                                            className="h-7 text-xs"
+                                                            disabled={isUpdatingItem}
+                                                        />
+                                                        {showUnitSuggestions && getFilteredUnitSuggestions(editUnit).length > 0 && (
+                                                            <div className="absolute top-full left-0 right-0 z-50 mt-1 bg-background border border-border rounded-md shadow-lg max-h-40 overflow-y-auto">
+                                                                {getFilteredUnitSuggestions(editUnit).map((suggestion, index) => (
+                                                                    <button
+                                                                        key={suggestion}
+                                                                        type="button"
+                                                                        onClick={() => handleUnitSuggestionClick(suggestion)}
+                                                                        className={`w-full px-3 py-1.5 text-left text-xs hover:bg-muted transition-colors ${index === selectedUnitIndex ? 'bg-muted font-medium' : ''
+                                                                            }`}
+                                                                    >
+                                                                        {suggestion}
+                                                                    </button>
+                                                                ))}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                ) : (
+                                                    <p className="font-medium mt-1">{request.unit || itemInInventory?.unit || 'units'}</p>
+                                                )}
+                                            </div>
+                                        </div>
+                                        {/* Description Row - Full Width */}
+                                        <div>
+                                            <span className="text-muted-foreground">Description:</span>
+                                            {isEditingItem ? (
+                                                <Textarea
+                                                    value={editDescription}
+                                                    onChange={(e) => setEditDescription(e.target.value)}
+                                                    placeholder="Enter item description..."
+                                                    className="mt-1 text-xs min-h-[60px]"
+                                                    disabled={isUpdatingItem}
+                                                />
+                                            ) : (
+                                                <p className="text-sm mt-1">{request.description || "No description provided"}</p>
+                                            )}
+                                        </div>
+                                        {/* Save/Cancel Edit Buttons */}
+                                        {isEditingItem && (
+                                            <div className="flex gap-2 justify-end pt-2">
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    onClick={handleCancelEditItem}
+                                                    disabled={isUpdatingItem}
+                                                    className="h-7 text-xs"
+                                                >
+                                                    Cancel
+                                                </Button>
+                                                <Button
+                                                    variant="default"
+                                                    size="sm"
+                                                    onClick={handleSaveItemDetails}
+                                                    disabled={isUpdatingItem}
+                                                    className="h-7 text-xs"
+                                                >
+                                                    Save
+                                                </Button>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Direct Delivery - Shows when item is in inventory with sufficient stock */}
+                            {hasSufficientInventory && canEdit && !isManager && (
+                                <div className="p-4 bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-950/30 dark:to-emerald-950/30 border border-green-300 dark:border-green-700 rounded-lg">
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-3">
+                                            <div className="p-2 bg-green-100 dark:bg-green-900/50 rounded-full">
+                                                <CheckCircle className="h-6 w-6 text-green-600 dark:text-green-400" />
+                                            </div>
+                                            <div>
+                                                <h3 className="font-semibold text-green-700 dark:text-green-300">
+                                                    ✓ Item Available in Inventory
+                                                </h3>
+                                                <p className="text-sm text-green-600 dark:text-green-400">
+                                                    Stock: <span className="font-bold">{itemInInventory?.centralStock || 0}</span> {itemInInventory?.unit || 'units'}
+                                                    <span className="mx-2">•</span>
+                                                    Required: <span className="font-bold">{request?.quantity || 0}</span> {request?.unit || 'units'}
+                                                </p>
+                                            </div>
+                                        </div>
+                                        <Button
+                                            onClick={() => setShowDirectDeliveryConfirm(true)}
+                                            className="bg-green-600 hover:bg-green-700 text-white"
+                                            size="sm"
+                                        >
+                                            <Package className="h-4 w-4 mr-2" />
+                                            Direct Delivery
+                                        </Button>
+                                    </div>
+                                    <p className="text-xs text-green-600 dark:text-green-400 mt-3 pl-14">
+                                        No vendor comparison needed. Click "Direct Delivery" to move directly to delivery stage.
+                                    </p>
+                                </div>
+                            )}
+
+                            {/* Smart Fulfillment - Unified Split Plan Card */}
+                            {itemInInventory && !hasSufficientInventory && (itemInInventory.centralStock || 0) > 0 && (canEdit || isManager) && (
+                                <div className="p-4 bg-gradient-to-br from-blue-50/80 to-indigo-50/80 dark:from-blue-950/30 dark:to-indigo-950/30 border border-blue-200 dark:border-blue-800 rounded-xl shadow-sm space-y-4">
+                                    <div className="flex items-center justify-between border-b border-blue-100 dark:border-blue-900/50 pb-3">
+                                        <div className="flex items-center gap-3">
+                                            <div className="p-2 bg-blue-100 dark:bg-blue-900/50 rounded-lg">
+                                                <Package className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                                            </div>
+                                            <div>
+                                                <h3 className="font-semibold text-blue-950 dark:text-blue-100">
+                                                    Mixed Fulfillment Plan
+                                                </h3>
+                                                <p className="text-xs text-blue-600 dark:text-blue-400">
+                                                    Item partially available in inventory
+                                                </p>
+                                            </div>
+                                        </div>
+                                        <div className="px-3 py-1 bg-white/60 dark:bg-black/20 rounded-full border border-blue-100 dark:border-blue-900 text-xs font-medium text-blue-800 dark:text-blue-200">
+                                            Required: {request?.quantity} {request?.unit}
+                                        </div>
+                                    </div>
+
+                                    {/* Split Visualizer */}
+                                    <div className="grid grid-cols-2 gap-4">
+                                        {/* Inventory Portion */}
+                                        <div className="p-4 bg-white/60 dark:bg-black/20 rounded-lg border border-green-100 dark:border-green-900/30 flex flex-col items-center justify-center text-center relative group">
+                                            <span className="text-xs font-semibold uppercase tracking-wider text-green-600 dark:text-green-500 mb-2">
+                                                From Inventory
+                                            </span>
+                                            {isManager ? (
+                                                <div className="flex items-baseline gap-1">
+                                                    <span className="text-3xl font-bold text-green-700 dark:text-green-400">
+                                                        {quantityFromInventory}
+                                                    </span>
+                                                    <span className="text-xs text-muted-foreground">{itemInInventory.unit}</span>
+                                                </div>
+                                            ) : (
+                                                <div className="flex flex-col items-center gap-2 w-full">
+                                                    <div className="flex items-center gap-2">
+                                                        <Input
+                                                            type="number"
+                                                            min="0"
+                                                            max={itemInInventory.centralStock || 0}
+                                                            value={quantityFromInventory}
+                                                            onChange={(e) => {
+                                                                const val = Math.max(0, Math.min(Number(e.target.value), itemInInventory.centralStock || 0));
+                                                                setQuantityFromInventory(val);
+                                                                const newNeeded = Math.max(0, (request?.quantity || 0) - val);
+                                                                setQuantityFromVendor(newNeeded);
+                                                                setQuantityToBuy(Math.max(newNeeded, quantityToBuy < newNeeded ? newNeeded : quantityToBuy));
+                                                            }}
+                                                            className="h-10 w-24 text-center font-bold text-lg bg-green-50/50 border-green-200"
+                                                        />
+                                                    </div>
+                                                    <div className="flex flex-col gap-1 w-full px-2">
+                                                        <span className="text-xs text-green-600">Max: {itemInInventory.centralStock}</span>
+                                                        {quantityFromInventory > 0 && (
+                                                            <Button
+                                                                size="sm"
+                                                                onClick={handleSplitAndDeliver}
+                                                                disabled={isCreatingDirectPO}
+                                                                className="h-6 text-[10px] bg-green-600 hover:bg-green-700 text-white w-full shadow-sm mt-1"
+                                                            >
+                                                                Direct Delivery
+                                                            </Button>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        {/* Vendor Portion */}
+                                        <div className="p-4 bg-white/60 dark:bg-black/20 rounded-lg border border-amber-100 dark:border-amber-900/30 flex flex-col items-center justify-center text-center">
+                                            <span className="text-xs font-semibold uppercase tracking-wider text-amber-600 dark:text-amber-500 mb-2">
+                                                Buy from Vendor
+                                            </span>
+                                            {isManager ? (
+                                                <div className="flex items-baseline gap-1">
+                                                    <span className="text-3xl font-bold text-amber-700 dark:text-amber-400">
+                                                        {quantityToBuy}
+                                                    </span>
+                                                    <span className="text-xs text-muted-foreground">{request?.unit}</span>
+                                                </div>
+                                            ) : (
+                                                <div className="flex flex-col items-center gap-2 w-full">
+                                                    <div className="flex items-center gap-2">
+                                                        <Input
+                                                            type="number"
+                                                            min="1"
+                                                            value={quantityToBuy}
+                                                            onChange={(e) => setQuantityToBuy(Math.max(1, Number(e.target.value) || 0))}
+                                                            className="h-10 w-24 text-center font-bold text-lg bg-amber-50/50 border-amber-200"
+                                                        />
+                                                    </div>
+                                                    <span className="text-xs text-amber-600">Min: {quantityFromVendor}</span>
+                                                </div>
                                             )}
                                         </div>
                                     </div>
-                                    {/* Description Row - Full Width */}
-                                    <div>
-                                        <span className="text-muted-foreground">Description:</span>
-                                        {isEditingItem ? (
-                                            <Textarea
-                                                value={editDescription}
-                                                onChange={(e) => setEditDescription(e.target.value)}
-                                                placeholder="Enter item description..."
-                                                className="mt-1 text-xs min-h-[60px]"
-                                                disabled={isUpdatingItem}
-                                            />
-                                        ) : (
-                                            <p className="text-sm mt-1">{request.description || "No description provided"}</p>
-                                        )}
-                                    </div>
-                                    {/* Save/Cancel Edit Buttons */}
-                                    {isEditingItem && (
-                                        <div className="flex gap-2 justify-end pt-2">
+
+                                    {/* Manager Action - Visible directly in card */}
+                                    {isManager && (
+                                        <div className="space-y-3 pt-2 border-t border-blue-100 dark:border-blue-900/50 mt-2">
+                                            <div className="grid gap-2">
+                                                <Label htmlFor="manager-note" className="text-xs font-semibold text-blue-800 dark:text-blue-200">
+                                                    Approval Note (Optional)
+                                                </Label>
+                                                <Textarea
+                                                    id="manager-note"
+                                                    placeholder="Add any notes about this mixed fulfillment approve..."
+                                                    value={managerNotes}
+                                                    onChange={(e) => setManagerNotes(e.target.value)}
+                                                    className="bg-white/80 dark:bg-black/40 border-blue-200 dark:border-blue-900 min-h-[60px] text-xs resize-none"
+                                                />
+                                            </div>
                                             <Button
-                                                variant="ghost"
-                                                size="sm"
-                                                onClick={handleCancelEditItem}
-                                                disabled={isUpdatingItem}
-                                                className="h-7 text-xs"
+                                                onClick={() => setShowSplitApproveConfirm(true)}
+                                                className="w-full h-11 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-md transition-all"
                                             >
-                                                Cancel
-                                            </Button>
-                                            <Button
-                                                variant="default"
-                                                size="sm"
-                                                onClick={handleSaveItemDetails}
-                                                disabled={isUpdatingItem}
-                                                className="h-7 text-xs"
-                                            >
-                                                Save
+                                                <CheckCircle className="h-5 w-5 mr-2" />
+                                                Confirm Split & Approve
                                             </Button>
                                         </div>
                                     )}
-                                </div>
-                            </div>
-                        )}
 
-                        {/* Direct Delivery - Shows when item is in inventory with sufficient stock */}
-                        {hasSufficientInventory && canEdit && !isManager && (
-                            <div className="p-4 bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-950/30 dark:to-emerald-950/30 border border-green-300 dark:border-green-700 rounded-lg">
-                                <div className="flex items-center justify-between">
-                                    <div className="flex items-center gap-3">
-                                        <div className="p-2 bg-green-100 dark:bg-green-900/50 rounded-full">
-                                            <CheckCircle className="h-6 w-6 text-green-600 dark:text-green-400" />
-                                        </div>
-                                        <div>
-                                            <h3 className="font-semibold text-green-700 dark:text-green-300">
-                                                ✓ Item Available in Inventory
-                                            </h3>
-                                            <p className="text-sm text-green-600 dark:text-green-400">
-                                                Stock: <span className="font-bold">{itemInInventory?.centralStock || 0}</span> {itemInInventory?.unit || 'units'}
-                                                <span className="mx-2">•</span>
-                                                Required: <span className="font-bold">{request?.quantity || 0}</span> {request?.unit || 'units'}
-                                            </p>
-                                        </div>
-                                    </div>
-                                    <Button
-                                        onClick={() => setShowDirectDeliveryConfirm(true)}
-                                        className="bg-green-600 hover:bg-green-700 text-white"
-                                        size="sm"
-                                    >
-                                        <Package className="h-4 w-4 mr-2" />
-                                        Direct Delivery
-                                    </Button>
-                                </div>
-                                <p className="text-xs text-green-600 dark:text-green-400 mt-3 pl-14">
-                                    No vendor comparison needed. Click "Direct Delivery" to move directly to delivery stage.
-                                </p>
-                            </div>
-                        )}
-
-                        {/* Smart Fulfillment - Shows when item is in inventory but with partial stock */}
-                        {itemInInventory && !hasSufficientInventory && canEdit && !isManager && (itemInInventory.centralStock || 0) > 0 && (
-                            <div className="p-4 bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-950/30 dark:to-purple-950/30 border border-blue-300 dark:border-blue-700 rounded-lg space-y-4">
-                                <div className="flex items-center justify-between">
-                                    <div className="flex items-center gap-2">
-                                        <Package className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-                                        <span className="font-semibold text-sm text-blue-700 dark:text-blue-300">
-                                            Smart Fulfillment
-                                        </span>
-                                    </div>
-                                    <span className="text-xs bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 px-2 py-1 rounded">
-                                        Partial Stock Available
-                                    </span>
-                                </div>
-
-                                {/* Current Status */}
-                                <div className="grid grid-cols-3 gap-3 text-xs">
-                                    <div className="bg-green-100 dark:bg-green-900/30 p-3 rounded text-center">
-                                        <span className="text-green-600 dark:text-green-400 font-medium block">📦 In Stock</span>
-                                        <span className="font-bold text-green-700 dark:text-green-300 text-xl">{itemInInventory.centralStock || 0}</span>
-                                        <span className="text-green-600 dark:text-green-400 block">{itemInInventory.unit || 'units'}</span>
-                                    </div>
-                                    <div className="bg-blue-100 dark:bg-blue-900/30 p-3 rounded text-center">
-                                        <span className="text-blue-600 dark:text-blue-400 font-medium block">🎯 Required</span>
-                                        <span className="font-bold text-blue-700 dark:text-blue-300 text-xl">{request?.quantity || 0}</span>
-                                        <span className="text-blue-600 dark:text-blue-400 block">{request?.unit || 'units'}</span>
-                                    </div>
-                                    <div className="bg-amber-100 dark:bg-amber-900/30 p-3 rounded text-center">
-                                        <span className="text-amber-600 dark:text-amber-400 font-medium block">🛒 Need to Buy</span>
-                                        <span className="font-bold text-amber-700 dark:text-amber-300 text-xl">{quantityFromVendor}</span>
-                                        <span className="text-amber-600 dark:text-amber-400 block">{itemInInventory.unit || 'units'}</span>
-                                    </div>
-                                </div>
-
-                                {/* Smart Controls */}
-                                <div className="grid grid-cols-2 gap-4">
-                                    {/* From Inventory - Direct Delivery */}
-                                    <div className="p-3 bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded-lg">
-                                        <div className="flex items-center gap-2 mb-2">
-                                            <Package className="h-4 w-4 text-green-600" />
-                                            <span className="font-medium text-sm text-green-700 dark:text-green-300">From Inventory</span>
-                                        </div>
-                                        <div className="flex items-center gap-2">
-                                            <Input
-                                                type="number"
-                                                min="0"
-                                                max={itemInInventory.centralStock || 0}
-                                                value={quantityFromInventory}
-                                                onChange={(e) => {
-                                                    const val = Math.max(0, Math.min(Number(e.target.value), itemInInventory.centralStock || 0));
-                                                    setQuantityFromInventory(val);
-                                                    const newNeeded = Math.max(0, (request?.quantity || 0) - val);
+                                    {/* User Action Controls */}
+                                    {!isManager && (
+                                        <div className="grid grid-cols-2 gap-2 pt-2">
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={() => {
+                                                    setQuantityFromInventory(itemInInventory.centralStock || 0);
+                                                    const newNeeded = Math.max(0, (request?.quantity || 0) - (itemInInventory.centralStock || 0));
                                                     setQuantityFromVendor(newNeeded);
-                                                    setQuantityToBuy(Math.max(newNeeded, quantityToBuy < newNeeded ? newNeeded : quantityToBuy));
+                                                    setQuantityToBuy(newNeeded);
                                                 }}
-                                                className="w-20 text-center font-bold"
-                                            />
-                                            <span className="text-sm text-green-600 dark:text-green-400">{itemInInventory.unit || 'units'}</span>
+                                                className="text-xs bg-white hover:bg-green-50 text-green-700 border-green-200"
+                                            >
+                                                Use Max Stock ({itemInInventory.centralStock})
+                                            </Button>
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={() => {
+                                                    setQuantityFromInventory(0);
+                                                    setQuantityFromVendor(request?.quantity || 0);
+                                                    setQuantityToBuy(request?.quantity || 0);
+                                                }}
+                                                className="text-xs bg-white hover:bg-amber-50 text-amber-700 border-amber-200"
+                                            >
+                                                Max from Vendor
+                                            </Button>
                                         </div>
-                                        <p className="text-xs text-green-600 dark:text-green-400 mt-1">
-                                            Available: {itemInInventory.centralStock || 0}
-                                        </p>
-                                        {quantityFromInventory > 0 && (
-                                            <>
-                                                {/* Gate Direct Delivery: Allowed if NOT mixed plan OR if mixed plan is approved */}
-                                                {(quantityToBuy === 0 || existingCC?.managerNotes?.includes("Split Fulfillment Approved")) ? (
-                                                    <Button
-                                                        onClick={() => setShowDirectDeliveryConfirm(true)}
-                                                        className="mt-2 w-full bg-green-600 hover:bg-green-700 text-white"
-                                                        size="sm"
-                                                    >
-                                                        <Package className="h-3 w-3 mr-1" />
-                                                        Direct Delivery ({quantityFromInventory})
-                                                    </Button>
-                                                ) : (
-                                                    <div className="mt-2 p-2 bg-amber-50 border border-amber-200 rounded text-xs text-amber-700 text-center flex items-center justify-center gap-2">
-                                                        <AlertCircle className="h-3 w-3" />
-                                                        <span>Waiting for Manager Approval</span>
-                                                    </div>
-                                                )}
-                                            </>
-                                        )}
-                                    </div>
-
-                                    {/* From Vendors - Can buy more than needed */}
-                                    <div className="p-3 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-lg">
-                                        <div className="flex items-center gap-2 mb-2">
-                                            <Building className="h-4 w-4 text-blue-600" />
-                                            <span className="font-medium text-sm text-blue-700 dark:text-blue-300">Purchase from Vendors</span>
-                                        </div>
-                                        <div className="flex items-center gap-2">
-                                            <Input
-                                                type="number"
-                                                min="1"
-                                                value={quantityToBuy}
-                                                onChange={(e) => setQuantityToBuy(Math.max(1, Number(e.target.value) || 0))}
-                                                className="w-20 text-center font-bold"
-                                            />
-                                            <span className="text-sm text-blue-600 dark:text-blue-400">{request?.unit || 'units'}</span>
-                                        </div>
-                                        <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
-                                            Min: {quantityFromVendor} required (can buy more)
-                                        </p>
-                                        {quantityToBuy < quantityFromVendor && quantityToBuy > 0 && (
-                                            <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
-                                                ⚠️ Need at least {quantityFromVendor} to fulfill request
-                                            </p>
-                                        )}
-                                    </div>
-                                </div>
-
-                                {/* Extra to Inventory Preview */}
-                                {quantityToBuy > quantityFromVendor && (
-                                    <div className="p-3 bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-800 rounded-lg">
-                                        <div className="flex items-center justify-between">
-                                            <div className="flex items-center gap-2">
-                                                <span className="text-purple-600 dark:text-purple-400">📈</span>
-                                                <span className="text-sm font-medium text-purple-700 dark:text-purple-300">Extra → Inventory</span>
-                                            </div>
-                                            <span className="font-bold text-purple-700 dark:text-purple-300">
-                                                +{quantityToBuy - quantityFromVendor} {itemInInventory.unit || 'units'}
-                                            </span>
-                                        </div>
-                                        <p className="text-xs text-purple-600 dark:text-purple-400 mt-1">
-                                            After delivery, inventory will have: {Math.max(0, (itemInInventory.centralStock || 0) - quantityFromInventory) + (quantityToBuy - quantityFromVendor)} {itemInInventory.unit || 'units'}
-                                        </p>
-                                    </div>
-                                )}
-
-                                {/* Quick Actions */}
-                                <div className="flex gap-2 flex-wrap">
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() => {
-                                            setQuantityFromInventory(itemInInventory.centralStock || 0);
-                                            const newNeeded = Math.max(0, (request?.quantity || 0) - (itemInInventory.centralStock || 0));
-                                            setQuantityFromVendor(newNeeded);
-                                            setQuantityToBuy(newNeeded);
-                                        }}
-                                        className="text-xs"
-                                    >
-                                        Use All Stock
-                                    </Button>
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() => {
-                                            setQuantityFromInventory(0);
-                                            setQuantityFromVendor(request?.quantity || 0);
-                                            setQuantityToBuy(request?.quantity || 0);
-                                        }}
-                                        className="text-xs"
-                                    >
-                                        Buy All from Vendors
-                                    </Button>
-                                </div>
-                            </div>
-                        )}
-
-                        {/* Out of Stock - Item in inventory but 0 stock */}
-                        {itemInInventory && !hasSufficientInventory && (itemInInventory.centralStock || 0) === 0 && canEdit && !isManager && (
-                            <div className="p-4 bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-950/30 dark:to-orange-950/30 border border-amber-300 dark:border-amber-700 rounded-lg space-y-4">
-                                <div className="flex items-center justify-between">
-                                    <div className="flex items-center gap-2">
-                                        <AlertCircle className="h-5 w-5 text-amber-600 dark:text-amber-400" />
-                                        <span className="font-semibold text-sm text-amber-700 dark:text-amber-300">
-                                            Out of Stock - Purchase Required
-                                        </span>
-                                    </div>
-                                    <span className="text-xs bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300 px-2 py-1 rounded">
-                                        0 in inventory
-                                    </span>
-                                </div>
-
-                                {/* Quantity Controls */}
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="bg-blue-100 dark:bg-blue-900/30 p-3 rounded text-center">
-                                        <span className="text-blue-600 dark:text-blue-400 font-medium block text-xs">🎯 Required</span>
-                                        <span className="font-bold text-blue-700 dark:text-blue-300 text-xl">{request?.quantity || 0}</span>
-                                        <span className="text-blue-600 dark:text-blue-400 block text-xs">{request?.unit || 'units'}</span>
-                                    </div>
-                                    <div className="bg-green-100 dark:bg-green-900/30 p-3 rounded">
-                                        <span className="text-green-600 dark:text-green-400 font-medium block text-xs text-center">🛒 Quantity to Buy</span>
-                                        <div className="flex items-center justify-center gap-2 mt-1">
-                                            <Input
-                                                type="number"
-                                                min="1"
-                                                value={quantityToBuy}
-                                                onChange={(e) => setQuantityToBuy(Math.max(1, Number(e.target.value)))}
-                                                className="w-20 text-center font-bold"
-                                            />
-                                            <span className="text-sm text-green-600 dark:text-green-400">{request?.unit || 'units'}</span>
-                                        </div>
-                                        <p className="text-xs text-green-600 dark:text-green-400 mt-1 text-center">
-                                            Min: {request?.quantity || 0} (can buy more)
-                                        </p>
-                                    </div>
-                                </div>
-
-                                {/* Extra to Inventory Preview */}
-                                {quantityToBuy > (request?.quantity || 0) && (
-                                    <div className="p-3 bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-800 rounded-lg">
-                                        <div className="flex items-center justify-between">
-                                            <div className="flex items-center gap-2">
-                                                <span className="text-purple-600 dark:text-purple-400">📈</span>
-                                                <span className="text-sm font-medium text-purple-700 dark:text-purple-300">Extra → Inventory</span>
-                                            </div>
-                                            <span className="font-bold text-purple-700 dark:text-purple-300">
-                                                +{quantityToBuy - (request?.quantity || 0)} {itemInInventory.unit || 'units'}
-                                            </span>
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-                        )}
-
-                        {/* New Item - Not in inventory */}
-                        {!itemInInventory && canEdit && !isManager && (
-                            <div className="p-4 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/30 dark:to-indigo-950/30 border border-blue-300 dark:border-blue-700 rounded-lg space-y-4">
-                                <div className="flex items-center justify-between">
-                                    <div className="flex items-center gap-2">
-                                        <Package className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-                                        <span className="font-semibold text-sm text-blue-700 dark:text-blue-300">
-                                            New Item - Will be Added to Inventory
-                                        </span>
-                                    </div>
-                                    <span className="text-xs bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 px-2 py-1 rounded">
-                                        Not in inventory
-                                    </span>
-                                </div>
-
-                                {/* Quantity Controls */}
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="bg-blue-100 dark:bg-blue-900/30 p-3 rounded text-center">
-                                        <span className="text-blue-600 dark:text-blue-400 font-medium block text-xs">🎯 Required</span>
-                                        <span className="font-bold text-blue-700 dark:text-blue-300 text-xl">{request?.quantity || 0}</span>
-                                        <span className="text-blue-600 dark:text-blue-400 block text-xs">{request?.unit || 'units'}</span>
-                                    </div>
-                                    <div className="bg-green-100 dark:bg-green-900/30 p-3 rounded">
-                                        <span className="text-green-600 dark:text-green-400 font-medium block text-xs text-center">🛒 Quantity to Buy</span>
-                                        <div className="flex items-center justify-center gap-2 mt-1">
-                                            <Input
-                                                type="number"
-                                                min="1"
-                                                value={quantityToBuy}
-                                                onChange={(e) => setQuantityToBuy(Math.max(1, Number(e.target.value)))}
-                                                className="w-20 text-center font-bold"
-                                            />
-                                            <span className="text-sm text-green-600 dark:text-green-400">{request?.unit || 'units'}</span>
-                                        </div>
-                                        <p className="text-xs text-green-600 dark:text-green-400 mt-1 text-center">
-                                            Min: {request?.quantity || 0} (can buy more)
-                                        </p>
-                                    </div>
-                                </div>
-
-                                {/* Extra to Inventory Preview */}
-                                {quantityToBuy > (request?.quantity || 0) && (
-                                    <div className="p-3 bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-800 rounded-lg">
-                                        <div className="flex items-center justify-between">
-                                            <div className="flex items-center gap-2">
-                                                <span className="text-purple-600 dark:text-purple-400">📈</span>
-                                                <span className="text-sm font-medium text-purple-700 dark:text-purple-300">Extra → Inventory</span>
-                                            </div>
-                                            <span className="font-bold text-purple-700 dark:text-purple-300">
-                                                +{quantityToBuy - (request?.quantity || 0)} {request?.unit || 'units'}
-                                            </span>
-                                        </div>
-                                    </div>
-                                )}
-
-                                <div className="p-2 bg-blue-100/50 dark:bg-blue-900/30 rounded text-xs text-blue-600 dark:text-blue-400">
-                                    💡 After purchase, this item will be added to inventory with the selected vendor relationship.
-                                </div>
-                            </div>
-                        )}
-
-
-
-
-
-
-                        {/* Manager Approval for Mixed Fulfillment */}
-                        {isManager && (existingCC?.inventoryFulfillmentQuantity || 0) > 0 && !existingCC?.managerNotes?.includes("Split Fulfillment Approved") && (
-                            <div className="space-y-2 pt-1 border-t mt-4">
-                                <Button
-                                    onClick={async () => {
-                                        setIsSaving(true);
-                                        try {
-                                            await approveSplit({ requestId: activeRequestId });
-                                            toast.success("Mixed Fulfillment Approved");
-                                        } catch (error: any) {
-                                            toast.error("Failed to approve: " + error.message);
-                                        } finally {
-                                            setIsSaving(false);
-                                        }
-                                    }}
-                                    className="w-full bg-purple-600 hover:bg-purple-700 text-white"
-                                    size="sm"
-                                    disabled={isSaving}
-                                >
-                                    <CheckCircle className="h-3.5 w-3.5 mr-1.5" />
-                                    Approve Mixed Fulfillment
-                                </Button>
-                            </div>
-                        )}
-
-                        {/* Main Action Buttons */}
-                        {canEdit && (
-                            <div className="space-y-2 pt-1 border-t mt-4">
-                                {/* Auto-save indicator */}
-                                {isSaving && (
-                                    <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
-                                        <div className="h-3 w-3 border-2 border-muted-foreground/30 border-t-muted-foreground rounded-full animate-spin" />
-                                        Auto-saving...
-                                    </div>
-                                )}
-                                <div className="flex gap-2 justify-end">
-                                    <Button
-                                        variant="ghost"
-                                        onClick={() => onOpenChange(false)}
-                                        size="sm"
-                                    >
-                                        Cancel
-                                    </Button>
-                                    {isManager && quantityFromInventory > 0 && quantityToBuy > 0 ? (
-                                        <Button
-                                            onClick={() => setShowSplitApproveConfirm(true)}
-                                            disabled={isSaving || isSubmitting}
-                                            size="sm"
-                                            className="bg-purple-600 hover:bg-purple-700 text-white"
-                                        >
-                                            <CheckCircle className="h-3.5 w-3.5 mr-1.5" />
-                                            Confirm Split & Approve
-                                        </Button>
-                                    ) : (
-                                        <Button
-                                            onClick={() => setShowSaveConfirm(true)}
-                                            disabled={isSaving || isSubmitting}
-                                            size="sm"
-                                            className="bg-green-600 hover:bg-green-700 text-white"
-                                        >
-                                            <CheckCircle className="h-3.5 w-3.5 mr-1.5" />
-                                            Save
-                                        </Button>
                                     )}
                                 </div>
-                            </div>
-                        )}
-                    </div>
+                            )}
+
+                            {/* Out of Stock - Item in inventory but 0 stock */}
+                            {itemInInventory && !hasSufficientInventory && (itemInInventory.centralStock || 0) === 0 && canEdit && !isManager && (
+                                <div className="p-4 bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-950/30 dark:to-orange-950/30 border border-amber-300 dark:border-amber-700 rounded-lg space-y-4">
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-2">
+                                            <AlertCircle className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+                                            <span className="font-semibold text-sm text-amber-700 dark:text-amber-300">
+                                                Out of Stock - Purchase Required
+                                            </span>
+                                        </div>
+                                        <span className="text-xs bg-red-100 dark:bg-red-900/50 text-red-700 dark:text-red-300 px-2 py-1 rounded">
+                                            0 in inventory
+                                        </span>
+                                    </div>
+
+                                    {/* Quantity Controls */}
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="bg-blue-100 dark:bg-blue-900/30 p-3 rounded text-center">
+                                            <span className="text-blue-600 dark:text-blue-400 font-medium block text-xs">🎯 Required</span>
+                                            <span className="font-bold text-blue-700 dark:text-blue-300 text-xl">{request?.quantity || 0}</span>
+                                            <span className="text-blue-600 dark:text-blue-400 block text-xs">{request?.unit || 'units'}</span>
+                                        </div>
+                                        <div className="bg-green-100 dark:bg-green-900/30 p-3 rounded">
+                                            <span className="text-green-600 dark:text-green-400 font-medium block text-xs text-center">🛒 Quantity to Buy</span>
+                                            <div className="flex items-center justify-center gap-2 mt-1">
+                                                <Input
+                                                    type="number"
+                                                    min="1"
+                                                    value={quantityToBuy}
+                                                    onChange={(e) => setQuantityToBuy(Math.max(1, Number(e.target.value)))}
+                                                    className="w-20 text-center font-bold"
+                                                />
+                                                <span className="text-sm text-green-600 dark:text-green-400">{request?.unit || 'units'}</span>
+                                            </div>
+                                            <p className="text-xs text-green-600 dark:text-green-400 mt-1 text-center">
+                                                Min: {request?.quantity || 0} (can buy more)
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    {/* Extra to Inventory Preview */}
+                                    {quantityToBuy > (request?.quantity || 0) && (
+                                        <div className="p-3 bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-800 rounded-lg">
+                                            <div className="flex items-center justify-between">
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-purple-600 dark:text-purple-400">📈</span>
+                                                    <span className="text-sm font-medium text-purple-700 dark:text-purple-300">Extra → Inventory</span>
+                                                </div>
+                                                <span className="font-bold text-purple-700 dark:text-purple-300">
+                                                    +{quantityToBuy - (request?.quantity || 0)} {itemInInventory.unit || 'units'}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            {/* New Item - Not in inventory */}
+                            {!itemInInventory && canEdit && !isManager && (
+                                <div className="p-4 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/30 dark:to-indigo-950/30 border border-blue-300 dark:border-blue-700 rounded-lg space-y-4">
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-2">
+                                            <Package className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                                            <span className="font-semibold text-sm text-blue-700 dark:text-blue-300">
+                                                New Item - Will be Added to Inventory
+                                            </span>
+                                        </div>
+                                        <span className="text-xs bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300 px-2 py-1 rounded">
+                                            Not in inventory
+                                        </span>
+                                    </div>
+
+                                    {/* Quantity Controls */}
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <div className="bg-blue-100 dark:bg-blue-900/30 p-3 rounded text-center">
+                                            <span className="text-blue-600 dark:text-blue-400 font-medium block text-xs">🎯 Required</span>
+                                            <span className="font-bold text-blue-700 dark:text-blue-300 text-xl">{request?.quantity || 0}</span>
+                                            <span className="text-blue-600 dark:text-blue-400 block text-xs">{request?.unit || 'units'}</span>
+                                        </div>
+                                        <div className="bg-green-100 dark:bg-green-900/30 p-3 rounded">
+                                            <span className="text-green-600 dark:text-green-400 font-medium block text-xs text-center">🛒 Quantity to Buy</span>
+                                            <div className="flex items-center justify-center gap-2 mt-1">
+                                                <Input
+                                                    type="number"
+                                                    min="1"
+                                                    value={quantityToBuy}
+                                                    onChange={(e) => setQuantityToBuy(Math.max(1, Number(e.target.value)))}
+                                                    className="w-20 text-center font-bold"
+                                                />
+                                                <span className="text-sm text-green-600 dark:text-green-400">{request?.unit || 'units'}</span>
+                                            </div>
+                                            <p className="text-xs text-green-600 dark:text-green-400 mt-1 text-center">
+                                                Min: {request?.quantity || 0} (can buy more)
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    {/* Extra to Inventory Preview */}
+                                    {quantityToBuy > (request?.quantity || 0) && (
+                                        <div className="p-3 bg-purple-50 dark:bg-purple-950/30 border border-purple-200 dark:border-purple-800 rounded-lg">
+                                            <div className="flex items-center justify-between">
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-purple-600 dark:text-purple-400">📈</span>
+                                                    <span className="text-sm font-medium text-purple-700 dark:text-purple-300">Extra → Inventory</span>
+                                                </div>
+                                                <span className="font-bold text-purple-700 dark:text-purple-300">
+                                                    +{quantityToBuy - (request?.quantity || 0)} {request?.unit || 'units'}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    <div className="p-2 bg-blue-100/50 dark:bg-blue-900/30 rounded text-xs text-blue-600 dark:text-blue-400">
+                                        💡 After purchase, this item will be added to inventory with the selected vendor relationship.
+                                    </div>
+                                </div>
+                            )}
+
+
+
+
+
+
+
+
+                            {/* Main Action Buttons */}
+                            {canEdit && (
+                                <div className="space-y-2 pt-1 border-t mt-4">
+                                    {/* Auto-save indicator */}
+                                    {isSaving && (
+                                        <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
+                                            <div className="h-3 w-3 border-2 border-muted-foreground/30 border-t-muted-foreground rounded-full animate-spin" />
+                                            Auto-saving...
+                                        </div>
+                                    )}
+                                    <div className="flex gap-2 justify-end">
+                                        <Button
+                                            variant="ghost"
+                                            onClick={() => onOpenChange(false)}
+                                            size="sm"
+                                        >
+                                            Cancel
+                                        </Button>
+
+                                        {isManager && quantityFromInventory > 0 && quantityToBuy > 0 ? (
+                                            null // Action is in the Split Card above
+                                        ) : (!itemInInventory || (itemInInventory.centralStock || 0) === 0) ? (
+                                            <Button
+                                                onClick={() => setShowDirectPOConfirm(true)}
+                                                disabled={isSaving || isSubmitting}
+                                                size="sm"
+                                                className="bg-orange-600 hover:bg-orange-700 text-white"
+                                            >
+                                                <ShoppingCart className="h-3.5 w-3.5 mr-1.5" />
+                                                Direct PO
+                                            </Button>
+                                        ) : (
+                                            <Button
+                                                onClick={() => setShowSaveConfirm(true)}
+                                                disabled={isSaving || isSubmitting}
+                                                size="sm"
+                                                className="bg-blue-600 hover:bg-blue-700 text-white"
+                                            >
+                                                <CheckCircle className="h-3.5 w-3.5 mr-1.5" />
+                                                Ready for CC
+                                            </Button>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    )}
                 </DialogContent>
             </Dialog>
 
@@ -1329,6 +1378,24 @@ export function CheckDialog({
                 </AlertDialogContent>
             </AlertDialog>
 
+            {/* Direct PO Confirmation */}
+            <AlertDialog open={showDirectPOConfirm} onOpenChange={setShowDirectPOConfirm}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Confirm Direct Purchase</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            This will create a request for Direct Purchase Order. No split approval will be required.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction onClick={handleDirectPO} className="bg-blue-600 hover:bg-blue-700">
+                            Confirm PO
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+
             {/* Save/Ready for CC Confirmation */}
             <AlertDialog open={showSaveConfirm} onOpenChange={setShowSaveConfirm}>
                 <AlertDialogContent>
@@ -1340,8 +1407,35 @@ export function CheckDialog({
                     </AlertDialogHeader>
                     <AlertDialogFooter>
                         <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        <AlertDialogAction onClick={handleCompleteCheck} className="bg-blue-600 hover:bg-blue-700">
-                            Confirm & Save
+                        <AlertDialogAction onClick={async () => {
+                            // Save first
+                            await handleSave(true);
+                            // Then submit if needed
+                            if (vendorQuotes.length > 0 || quantityToBuy > 0) {
+                                try {
+                                    // If we have quotes, we can actually submit
+                                    if (vendorQuotes.length > 0) {
+                                        await submitCC({ requestId: activeRequestId });
+                                        toast.success("Submitted for Approval");
+                                    } else {
+                                        // If no quotes but quantity needed (maybe just setting up for others), just status update?
+                                        // For now, let's assume they might need to go to pending
+                                        await updatePurchaseRequestStatus({
+                                            requestId: activeRequestId,
+                                            status: "cc_pending"
+                                        });
+                                        toast.success("Marked as Pending Approval");
+                                    }
+                                    onOpenChange(false);
+                                } catch (e: any) {
+                                    toast.error("Failed to submit: " + e.message);
+                                }
+                            } else {
+                                onOpenChange(false);
+                                toast.success("Saved");
+                            }
+                        }} className="bg-blue-600 hover:bg-blue-700">
+                            Confirm & Send for Approval
                         </AlertDialogAction>
                     </AlertDialogFooter>
                 </AlertDialogContent>
@@ -1367,11 +1461,15 @@ export function CheckDialog({
                                         requestId: activeRequestId,
                                         vendorQuotes: vendorQuotes,
                                         isDirectDelivery: false,
-                                        inventoryFulfillmentQuantity: quantityFromInventory
+                                        inventoryFulfillmentQuantity: quantityFromInventory,
+                                        managerNotes: managerNotes,
                                     });
 
                                     // 2. Approve the split
-                                    await approveSplit({ requestId: activeRequestId });
+                                    await approveSplit({
+                                        requestId: activeRequestId,
+                                        inventoryQuantity: quantityFromInventory
+                                    });
 
                                     setShowSplitApproveConfirm(false);
                                     onOpenChange(false);

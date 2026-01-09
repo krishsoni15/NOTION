@@ -68,6 +68,7 @@ export const getCostComparisonByRequestId = query({
           unit: quote.unit,
           discountPercent: quote.discountPercent,
           gstPercent: quote.gstPercent,
+          perUnitBasis: quote.perUnitBasis,
           vendor: vendor
             ? {
               _id: vendor._id,
@@ -152,6 +153,7 @@ export const getPendingCostComparisons = query({
               unit: quote.unit,
               discountPercent: quote.discountPercent,
               gstPercent: quote.gstPercent,
+              perUnitBasis: quote.perUnitBasis,
               vendor: vendor
                 ? {
                   _id: vendor._id,
@@ -204,6 +206,7 @@ export const upsertCostComparison = mutation({
         unit: v.optional(v.string()),
         discountPercent: v.optional(v.number()),
         gstPercent: v.optional(v.number()),
+        perUnitBasis: v.optional(v.number()),
       })
     ),
     isDirectDelivery: v.boolean(),
@@ -445,6 +448,7 @@ export const resubmitCostComparison = mutation({
         unit: v.optional(v.string()),
         discountPercent: v.optional(v.number()),
         gstPercent: v.optional(v.number()),
+        perUnitBasis: v.optional(v.float64()),
       })
     ),
     isDirectDelivery: v.boolean(),
@@ -499,7 +503,8 @@ export const resubmitCostComparison = mutation({
 export const approveSplitFulfillment = mutation({
   args: {
     requestId: v.id("requests"),
-    inventoryQuantity: v.optional(v.number()), // Optional argument to explicitly pass the inventory quantity for immediate status calculation
+    inventoryQuantity: v.optional(v.number()),
+    notes: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const currentUser = await getCurrentUser(ctx);
@@ -522,21 +527,31 @@ export const approveSplitFulfillment = mutation({
     const now = Date.now();
     const currentNotes = costComparison.managerNotes || "";
     // Append tag if not present, preserving existing notes
-    const newNotes = currentNotes.includes("Split Fulfillment Approved")
-      ? currentNotes
-      : (currentNotes ? `${currentNotes}\n\nSplit Fulfillment Approved` : "Split Fulfillment Approved");
+    const noteContent = args.notes || currentNotes;
+    const finalNotes = noteContent.includes("Split Fulfillment Approved")
+      ? noteContent
+      : (noteContent ? `${noteContent}\n\nSplit Fulfillment Approved` : "Split Fulfillment Approved");
 
     // Update cost comparison with approval note
     await ctx.db.patch(costComparison._id, {
-      managerNotes: newNotes,
+      managerNotes: finalNotes,
       approvedBy: currentUser._id,
       approvedAt: now,
       updatedAt: now,
     });
 
-    // Update request status based on fulfillment logic
+    // Add approval note to timeline
     const request = await ctx.db.get(args.requestId);
     if (request) {
+      await ctx.db.insert("request_notes", {
+        requestNumber: request.requestNumber,
+        userId: currentUser._id,
+        role: currentUser.role,
+        status: "split_approved",
+        content: `Split Fulfillment Approved: ${args.notes || "Partial inventory approved"}`,
+        createdAt: now,
+      });
+
       // Use provided quantity or fallback to DB value
       const inventoryQty = args.inventoryQuantity !== undefined
         ? args.inventoryQuantity

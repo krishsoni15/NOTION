@@ -6,7 +6,7 @@
  * Dialog for creating/editing cost comparisons with multiple vendor quotes.
  */
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import {
@@ -59,6 +59,7 @@ interface VendorQuote {
   unit?: string;
   discountPercent?: number;  // Optional discount percentage
   gstPercent?: number;       // Optional GST percentage
+  perUnitBasis?: number;     // Optional basis for price (e.g. price per 50 units)
 }
 
 // Common unit suggestions for autocomplete
@@ -88,6 +89,13 @@ const UNIT_SUGGESTIONS = [
   "tube", "tubes",
   "unit", "units",
   "each"
+];
+
+// Common units for suggestions (expanded list)
+const COMMON_UNITS = [
+  "bags", "kg", "g", "gm", "ton", "mm", "cm", "m", "km",
+  "nos", "pieces", "pcs", "liters", "l", "ml", "sqft", "sqm",
+  "cft", "cum", "boxes", "cartons", "bundles", "rolls", "sheets", "units",
 ];
 
 export function CostComparisonDialog({
@@ -123,6 +131,7 @@ export function CostComparisonDialog({
   const [quoteUnit, setQuoteUnit] = useState("");
   const [quoteDiscount, setQuoteDiscount] = useState("");  // Discount percentage
   const [quoteGst, setQuoteGst] = useState("");            // GST percentage
+  const [perUnitBasis, setPerUnitBasis] = useState("1");   // Per unit basis for price (e.g. price per 1 unit, or per 50 units)
   const [showVendorDetails, setShowVendorDetails] = useState<string | null>(null);
   const [showDirectDeliveryConfirm, setShowDirectDeliveryConfirm] = useState(false);
   const [showCreateVendorDialog, setShowCreateVendorDialog] = useState(false);
@@ -142,6 +151,8 @@ export function CostComparisonDialog({
   // Unit suggestions state
   const [showUnitSuggestions, setShowUnitSuggestions] = useState(false);
   const [selectedUnitIndex, setSelectedUnitIndex] = useState(-1);
+
+
 
   // Item details edit state
   const [isEditingItem, setIsEditingItem] = useState(false);
@@ -207,6 +218,10 @@ export function CostComparisonDialog({
         existingCC.vendorQuotes.map((q) => ({
           vendorId: q.vendorId,
           unitPrice: q.unitPrice,
+          amount: q.amount,
+          unit: q.unit,
+          discountPercent: q.discountPercent,
+          gstPercent: q.gstPercent,
         }))
       );
       setIsDirectDelivery(existingCC.isDirectDelivery);
@@ -281,13 +296,16 @@ export function CostComparisonDialog({
       return;
     }
 
-    const price = parseFloat(unitPrice);
-    if (isNaN(price) || price < 0) {
+    const basis = parseFloat(perUnitBasis) || 1;
+    const enteredPrice = parseFloat(unitPrice);
+
+    if (isNaN(enteredPrice) || enteredPrice < 0) {
       toast.error("Please enter a valid unit price");
       return;
     }
 
-    // Check for duplicate vendor (only when adding new, not editing)
+    const price = enteredPrice / basis; // Normalize price per 1 unit
+
     if (editingQuoteIndex === -1 && vendorQuotes.some((q) => q.vendorId === selectedVendorId)) {
       toast.error("This vendor is already added");
       return;
@@ -298,6 +316,16 @@ export function CostComparisonDialog({
     const discount = parseFloat(quoteDiscount) || 0;
     const gst = parseFloat(quoteGst) || 0;
 
+    if (discount < 0 || discount > 100) {
+      toast.error("Discount must be between 0% and 100%");
+      return;
+    }
+
+    if (gst < 0 || gst > 100) {
+      toast.error("GST must be between 0% and 100%");
+      return;
+    }
+
     const newQuote: VendorQuote = {
       vendorId: selectedVendorId as Id<"vendors">,
       unitPrice: price,
@@ -305,6 +333,7 @@ export function CostComparisonDialog({
       unit: unit,
       discountPercent: discount > 0 ? discount : undefined,
       gstPercent: gst > 0 ? gst : undefined,
+      perUnitBasis: basis,
     };
 
     let newQuotes: VendorQuote[];
@@ -328,13 +357,51 @@ export function CostComparisonDialog({
     setSelectedVendorId("");
     setUnitPrice("");
     setQuoteAmount("1");
-    setQuoteUnit("");
+    const defaultUnit = request?.unit || itemInInventory?.unit || "units";
+    setQuoteUnit(defaultUnit);
+
     setQuoteDiscount("");
     setQuoteGst("");
     setEditingQuoteIndex(-1);
     setVendorSearchTerm("");
     setVendorDialogOpen(false);
   };
+
+  // Get related units based on selected item's unit
+  const getRelatedUnits = (itemUnit: string): string[] => {
+    if (!itemUnit) return [];
+    const cleanedUnit = itemUnit.replace(/\d+/g, '').trim();
+    if (!cleanedUnit) return [];
+    const unit = cleanedUnit.toLowerCase();
+
+    if (unit === "kg" || unit === "kilogram" || unit === "kilograms") return ["kg", "gm", "g", "ton", "quintal"];
+    if (unit === "g" || unit === "gm" || unit === "gram" || unit === "grams") return ["g", "gm", "kg"];
+    if (unit === "ton" || unit === "tonne") return ["ton", "kg", "quintal"];
+    if (unit === "m" || unit === "meter" || unit === "meters" || unit === "metre" || unit === "metres") return ["m", "cm", "mm", "km", "ft", "inch"];
+    if (unit === "cm" || unit === "centimeter") return ["cm", "mm", "m", "inch"];
+    if (unit === "mm" || unit === "millimeter") return ["mm", "cm", "m"];
+    if (unit === "ft" || unit === "feet" || unit === "foot") return ["ft", "inch", "m", "cm"];
+    if (unit === "l" || unit === "liter" || unit === "liters" || unit === "litre") return ["l", "ml", "cft", "cum"];
+    if (unit === "ml" || unit === "milliliter") return ["ml", "l"];
+    if (unit === "cft") return ["cft", "cum", "l"];
+    if (unit === "cum") return ["cum", "cft", "l"];
+    if (unit === "sqft") return ["sqft", "sqm", "acre"];
+    if (unit === "sqm") return ["sqm", "sqft", "acre"];
+    if (unit === "nos" || unit === "number" || unit === "numbers") return ["nos", "pcs", "pieces", "units"];
+    if (unit === "pcs" || unit === "pieces" || unit === "piece") return ["pcs", "pieces", "nos", "units"];
+    if (unit === "units" || unit === "unit") return ["units", "nos", "pcs", "pieces"];
+    if (unit === "bags" || unit === "bag") return ["bags", "kg", "ton"];
+    if (unit === "boxes" || unit === "box") return ["boxes", "cartons", "nos", "pcs"];
+    if (unit === "cartons" || unit === "carton") return ["cartons", "boxes", "nos"];
+    if (unit === "bundles" || unit === "bundle") return ["bundles", "nos", "pcs"];
+    if (unit === "rolls" || unit === "roll") return ["rolls", "nos", "m", "ft"];
+    if (unit === "sheets" || unit === "sheet") return ["sheets", "nos", "sqft", "sqm"];
+
+    return [unit, ...COMMON_UNITS.filter(u => u !== unit).slice(0, 5)];
+  };
+
+
+
 
   // Edit vendor quote - populate form with existing data
   const handleEditQuote = (index: number) => {
@@ -344,9 +411,11 @@ export function CostComparisonDialog({
     setEditingQuoteIndex(index);
     setSelectedVendorId(quote.vendorId);
     setVendorSearchTerm(getVendorName(quote.vendorId));
-    setUnitPrice(quote.unitPrice.toString());
+    setPerUnitBasis((quote.perUnitBasis || 1).toString());
+    setUnitPrice((quote.unitPrice * (quote.perUnitBasis || 1)).toString());
     setQuoteAmount((quote.amount || 1).toString());
     setQuoteUnit(quote.unit || "");
+
     setQuoteDiscount(quote.discountPercent?.toString() || "");
     setQuoteGst(quote.gstPercent?.toString() || "");
     setVendorDialogOpen(true);
@@ -358,18 +427,12 @@ export function CostComparisonDialog({
     setVendorQuotes(newQuotes);
     toast.success("Quote removed");
     // Save immediately if there are still quotes
-    if (newQuotes.length > 0) {
-      handleSave(true, newQuotes);
-    }
+    handleSave(true, newQuotes);
   };
 
   // Save cost comparison (silent mode for auto-save, accepts quotes parameter for immediate save)
   const handleSave = async (silent: boolean = false, quotesToSave?: VendorQuote[]) => {
     const quotes = quotesToSave || vendorQuotes;
-    if (quotes.length === 0) {
-      if (!silent) toast.error("Please add at least one vendor quote");
-      return;
-    }
 
     setIsSaving(true);
     try {
@@ -456,12 +519,17 @@ export function CostComparisonDialog({
     return finalUnitPrice * quantity;
   };
 
+  // Helper for determining best price (memoized calculation for render)
+  const calculatedTotals = vendorQuotes.map(q => calculateQuoteTotal(q, request?.quantity || 0));
+
+
   // Item edit handlers
   const handleStartEditItem = () => {
     setIsEditingItem(true);
     setEditQuantity(request?.quantity.toString() || "");
-    setEditUnit(request?.unit || "");
+    setEditUnit(request?.unit || itemInInventory?.unit || "");
     setEditDescription(request?.description || "");
+    setEditItemName(request?.itemName || "");
   };
 
   const handleCancelEditItem = () => {
@@ -505,11 +573,26 @@ export function CostComparisonDialog({
   };
 
   // Unit autocomplete handlers
+  /* Unit autocomplete handlers */
   const getFilteredUnitSuggestions = (input: string) => {
-    if (!input.trim()) return UNIT_SUGGESTIONS.slice(0, 8); // Show first 8 when empty
+    // If we have a current unit, try to suggest related units first
+    const currentUnit = request?.unit || itemInInventory?.unit || "";
+    if (currentUnit) {
+      const related = getRelatedUnits(currentUnit);
+      if (related.length > 0) {
+        // If input is empty, show related units. If not, filter related units + common units
+        if (!input.trim()) return related.slice(0, 8);
+        return [...related, ...COMMON_UNITS].filter(u =>
+          u.toLowerCase().includes(input.toLowerCase())
+        ).slice(0, 8);
+      }
+    }
+
+    // Fallback if no specific context
+    if (!input.trim()) return UNIT_SUGGESTIONS.slice(0, 8);
     return UNIT_SUGGESTIONS.filter(unit =>
       unit.toLowerCase().includes(input.toLowerCase())
-    ).slice(0, 8); // Limit to 8 suggestions
+    ).slice(0, 8);
   };
 
   const handleUnitInputChange = (value: string) => {
@@ -531,7 +614,7 @@ export function CostComparisonDialog({
       setSelectedUnitIndex(prev => prev > 0 ? prev - 1 : -1);
     } else if (e.key === 'Enter' && selectedUnitIndex >= 0) {
       e.preventDefault();
-      setEditUnit(suggestions[selectedUnitIndex]);
+      setEditUnit(suggestions[selectedUnitIndex] || editUnit);
       setShowUnitSuggestions(false);
       setSelectedUnitIndex(-1);
     } else if (e.key === 'Escape') {
@@ -750,203 +833,222 @@ export function CostComparisonDialog({
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader className="pb-3">
-            <DialogTitle className="text-lg">Cost Comparison - {request?.requestNumber}</DialogTitle>
-            <DialogDescription className="text-xs">
-              {request?.itemName} • {request?.quantity} {request?.unit}
-            </DialogDescription>
+          <DialogHeader className="pb-4 border-b">
+            <div className="flex items-start justify-between">
+              <div>
+                <DialogTitle className="text-xl font-bold tracking-tight">Cost Comparison</DialogTitle>
+                <DialogDescription className="text-sm mt-1 flex items-center gap-2">
+                  <span className="font-medium text-foreground">{request?.requestNumber}</span>
+                  <span className="text-muted-foreground">•</span>
+                  <span>{request?.itemName}</span>
+                </DialogDescription>
+              </div>
+              <Badge variant={
+                request?.status === "delivered" ? "default" :
+                  (request?.status === "rejected" || request?.status === "rejected_po" || request?.status === "cc_rejected") ? "destructive" :
+                    "outline"
+              }>
+                {request?.status?.replace("_", " ") || "Pending"}
+              </Badge>
+            </div>
 
             {/* CC Navigation Tabs - shown when there are multiple CCs */}
             {hasMultipleCCs && (
-              <div className="flex items-center gap-2 pt-2 border-t mt-2">
-                <span className="text-xs text-muted-foreground">Items:</span>
-                <div className="flex items-center gap-1">
+              <div className="flex items-center gap-2 pt-3 mt-1">
+                <div className="flex items-center gap-1 p-1 bg-muted rounded-lg">
                   {ccRequestIds.map((_, index) => (
                     <Button
                       key={index}
-                      variant={currentCCIndex === index ? "default" : "outline"}
+                      variant={currentCCIndex === index ? "default" : "ghost"}
                       size="sm"
                       onClick={() => setCurrentCCIndex(index)}
-                      className={`h-7 px-3 text-xs font-medium ${currentCCIndex === index
-                        ? "bg-primary text-primary-foreground"
-                        : "hover:bg-muted"
+                      className={`h-7 px-3 text-xs font-medium rounded-md transition-all ${currentCCIndex === index
+                        ? "shadow-sm"
+                        : "hover:bg-background/50"
                         }`}
                     >
-                      CC{index + 1}
+                      Item {index + 1}
                     </Button>
                   ))}
                 </div>
                 <span className="text-xs text-muted-foreground ml-2">
-                  ({currentCCIndex + 1}/{ccRequestIds.length})
+                  Viewing {currentCCIndex + 1} of {ccRequestIds.length} items
                 </span>
               </div>
             )}
           </DialogHeader>
 
           <div className="space-y-3">
-            {/* Item Information Card */}
+            {/* Item Information Card - Compact & Clean */}
             {request && (
-              <div className="p-3 bg-muted/30 border rounded-lg space-y-2">
-                <div className="flex items-center justify-between">
-                  <h4 className="font-medium text-sm">Item Details</h4>
-                  {canEdit && !isManager && !isEditingItem && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={handleStartEditItem}
-                      className="h-6 w-6 p-0"
-                    >
-                      <Edit className="h-3 w-3" />
-                    </Button>
-                  )}
-                  {isEditingItem && (
-                    <div className="flex gap-1">
+              <div className="bg-muted/30 rounded-lg p-1">
+                <div className="bg-card border rounded-md p-4 shadow-sm transition-all hover:shadow-md">
+                  <div className="flex items-center justify-between mb-3">
+                    <h4 className="font-semibold text-sm flex items-center gap-2">
+                      <Package className="h-4 w-4 text-primary" />
+                      Item Details
+                    </h4>
+                    {canEdit && !isManager && !isEditingItem && (
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={handleSaveItemDetails}
-                        disabled={isUpdatingItem}
-                        className="h-6 w-6 p-0 text-green-600 hover:text-green-700"
+                        onClick={handleStartEditItem}
+                        className="h-7 w-7 p-0 hover:bg-muted"
                       >
-                        <Check className="h-3 w-3" />
+                        <Edit className="h-3.5 w-3.5" />
                       </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={handleCancelEditItem}
-                        disabled={isUpdatingItem}
-                        className="h-6 w-6 p-0 text-red-600 hover:text-red-700"
-                      >
-                        <X className="h-3 w-3" />
-                      </Button>
-                    </div>
-                  )}
-                </div>
-                <div className="space-y-3 text-sm">
-                  {/* Item Name Row - Full Width */}
-                  <div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-muted-foreground">Item:</span>
-                      {!isEditingItem && (
+                    )}
+                    {isEditingItem && (
+                      <div className="flex gap-1">
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => setInventoryInfoOpen(true)}
-                          className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
-                          title="View inventory information"
-                        >
-                          <Info className="h-3 w-3" />
-                        </Button>
-                      )}
-                    </div>
-                    {isEditingItem ? (
-                      <div className="relative mt-1">
-                        <Input
-                          type="text"
-                          value={editItemName}
-                          onChange={(e) => handleItemNameInputChange(e.target.value)}
-                          onKeyDown={handleItemNameKeyDown}
-                          onFocus={handleItemNameFocus}
-                          onBlur={handleItemNameBlur}
-                          placeholder="Enter item name..."
-                          className="text-sm"
+                          onClick={handleSaveItemDetails}
                           disabled={isUpdatingItem}
-                        />
-                        {showItemNameSuggestions && getFilteredItemNameSuggestions(editItemName).length > 0 && (
-                          <div className="absolute top-full left-0 right-0 z-50 mt-1 bg-background border border-border rounded-md shadow-lg max-h-40 overflow-y-auto">
-                            {getFilteredItemNameSuggestions(editItemName).map((item, index) => (
-                              <button
-                                key={item._id}
-                                type="button"
-                                onClick={() => handleItemNameSuggestionClick(item.itemName)}
-                                className={`w-full px-3 py-1.5 text-left text-xs hover:bg-muted transition-colors ${index === selectedItemNameIndex ? 'bg-muted font-medium' : ''
-                                  }`}
-                              >
-                                <div className="flex items-center justify-between w-full">
-                                  <span>{item.itemName}</span>
-                                  <span className="text-muted-foreground ml-2">
-                                    ({item.centralStock || 0} {item.unit || 'units'})
-                                  </span>
-                                </div>
-                              </button>
-                            ))}
-                          </div>
-                        )}
+                          className="h-7 w-7 p-0 text-green-600 hover:text-green-700 hover:bg-green-50"
+                        >
+                          <Check className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={handleCancelEditItem}
+                          disabled={isUpdatingItem}
+                          className="h-7 w-7 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </Button>
                       </div>
-                    ) : (
-                      <p className="font-medium mt-1">{request.itemName}</p>
                     )}
                   </div>
 
-                  {/* Quantity and Unit Row - 50/50 */}
-                  <div className="grid grid-cols-2 gap-3">
-                    <div>
-                      <span className="text-muted-foreground">Quantity:</span>
+                  <div className="grid grid-cols-1 gap-y-4 text-sm">
+                    {/* Item Name */}
+                    <div className="space-y-1">
+                      <span className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Item Name</span>
                       {isEditingItem ? (
-                        <Input
-                          type="number"
-                          min="1"
-                          step="any"
-                          value={editQuantity}
-                          onChange={(e) => setEditQuantity(e.target.value)}
-                          className="h-7 text-xs mt-1"
-                          disabled={isUpdatingItem}
-                        />
-                      ) : (
-                        <p className="font-medium mt-1">{request.quantity}</p>
-                      )}
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground">Unit:</span>
-                      {isEditingItem ? (
-                        <div className="relative mt-1">
+                        <div className="relative">
                           <Input
                             type="text"
-                            placeholder="unit"
-                            value={editUnit}
-                            onChange={(e) => handleUnitInputChange(e.target.value)}
-                            onKeyDown={handleUnitKeyDown}
-                            onFocus={handleUnitFocus}
-                            onBlur={handleUnitBlur}
-                            className="h-7 text-xs"
+                            value={editItemName}
+                            onChange={(e) => handleItemNameInputChange(e.target.value)}
+                            onKeyDown={handleItemNameKeyDown}
+                            onFocus={handleItemNameFocus}
+                            onBlur={handleItemNameBlur}
+                            placeholder="Enter item name..."
+                            className="text-sm h-8"
                             disabled={isUpdatingItem}
                           />
-                          {showUnitSuggestions && getFilteredUnitSuggestions(editUnit).length > 0 && (
+                          {showItemNameSuggestions && getFilteredItemNameSuggestions(editItemName).length > 0 && (
                             <div className="absolute top-full left-0 right-0 z-50 mt-1 bg-background border border-border rounded-md shadow-lg max-h-40 overflow-y-auto">
-                              {getFilteredUnitSuggestions(editUnit).map((suggestion, index) => (
+                              {getFilteredItemNameSuggestions(editItemName).map((item, index) => (
                                 <button
-                                  key={suggestion}
+                                  key={item._id}
                                   type="button"
-                                  onClick={() => handleUnitSuggestionClick(suggestion)}
-                                  className={`w-full px-3 py-1.5 text-left text-xs hover:bg-muted transition-colors ${index === selectedUnitIndex ? 'bg-muted font-medium' : ''
+                                  onClick={() => handleItemNameSuggestionClick(item.itemName)}
+                                  className={`w-full px-3 py-1.5 text-left text-xs hover:bg-muted transition-colors ${index === selectedItemNameIndex ? 'bg-muted font-medium' : ''
                                     }`}
                                 >
-                                  {suggestion}
+                                  <div className="flex items-center justify-between w-full">
+                                    <span>{item.itemName}</span>
+                                    <span className="text-muted-foreground ml-2">
+                                      ({item.centralStock || 0} {item.unit || 'units'})
+                                    </span>
+                                  </div>
                                 </button>
                               ))}
                             </div>
                           )}
                         </div>
                       ) : (
-                        <p className="font-medium mt-1">{request.unit || itemInInventory?.unit || 'units'}</p>
+                        <p className="font-medium text-base truncate" title={request.itemName}>{request.itemName}</p>
                       )}
                     </div>
-                  </div>
-                  {/* Description Row - Full Width */}
-                  <div>
-                    <span className="text-muted-foreground">Description:</span>
-                    {isEditingItem ? (
-                      <Textarea
-                        value={editDescription}
-                        onChange={(e) => setEditDescription(e.target.value)}
-                        placeholder="Enter item description..."
-                        className="mt-1 text-xs min-h-[60px]"
-                        disabled={isUpdatingItem}
-                      />
-                    ) : (
-                      <p className="text-sm mt-1">{request.description || "No description provided"}</p>
+
+                    {/* Quantity & Unit */}
+                    <div className="space-y-1">
+                      <span className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Quantity</span>
+                      {isEditingItem ? (
+                        <div className="flex gap-2">
+                          <Input
+                            type="number"
+                            min="1"
+                            step="any"
+                            value={editQuantity}
+                            onChange={(e) => setEditQuantity(e.target.value)}
+                            className="h-8 text-sm w-32"
+                            disabled={isUpdatingItem}
+                            placeholder="Qty"
+                          />
+                          <div className="relative flex-1">
+                            <Input
+                              type="text"
+                              placeholder="Unit"
+                              value={editUnit}
+                              onChange={(e) => handleUnitInputChange(e.target.value)}
+                              onKeyDown={handleUnitKeyDown}
+                              onFocus={handleUnitFocus}
+                              onBlur={handleUnitBlur}
+                              className="h-8 text-sm"
+                              disabled={isUpdatingItem}
+                            />
+                            {showUnitSuggestions && getFilteredUnitSuggestions(editUnit).length > 0 && (
+                              <div className="absolute top-full left-0 right-0 z-50 mt-1 bg-background border border-border rounded-md shadow-lg max-h-40 overflow-y-auto w-full min-w-[100px]">
+                                {getFilteredUnitSuggestions(editUnit).map((suggestion, index) => (
+                                  <button
+                                    key={suggestion}
+                                    type="button"
+                                    onClick={() => handleUnitSuggestionClick(suggestion)}
+                                    className={`w-full px-3 py-1.5 text-left text-xs hover:bg-muted transition-colors ${index === selectedUnitIndex ? 'bg-muted font-medium' : ''
+                                      }`}
+                                  >
+                                    {suggestion}
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex items-baseline gap-1">
+                          <p className="font-bold text-lg">{request.quantity}</p>
+                          <p className="text-muted-foreground">{request.unit || itemInInventory?.unit || 'units'}</p>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Description - Full Width */}
+                    {request.description && (
+                      <div className="space-y-1">
+                        <span className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Description</span>
+                        {isEditingItem ? (
+                          <Textarea
+                            value={editDescription}
+                            onChange={(e) => setEditDescription(e.target.value)}
+                            placeholder="Enter item description..."
+                            className="mt-1 text-sm min-h-[60px]"
+                            disabled={isUpdatingItem}
+                          />
+                        ) : (
+                          <p className="text-sm text-muted-foreground leading-relaxed">{request.description}</p>
+                        )}
+                      </div>
                     )}
                   </div>
+
+                  {!isEditingItem && (
+                    <div className="mt-4 pt-3 border-t flex justify-end">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setInventoryInfoOpen(true)}
+                        className="text-xs h-7 gap-1.5"
+                      >
+                        <Info className="h-3.5 w-3.5" />
+                        View Inventory Details
+                      </Button>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -1269,785 +1371,327 @@ export function CostComparisonDialog({
 
             {/* Vendor Quotes - Only show when there's NOT sufficient inventory (need to purchase from vendors) */}
             {(!hasSufficientInventory || isManagerReview) && (
-              <div className="space-y-3">
+              <div className="space-y-4 pt-2">
                 <div className="flex items-center justify-between">
-                  <Label className="text-xs font-medium">
+                  <h3 className="text-sm font-semibold flex items-center gap-2">
+                    <Building className="h-4 w-4 text-primary" />
                     {isManagerReview ? "Select Final Vendor" : "Vendor Quotes"}
-                  </Label>
-                  {canEdit && !isManagerReview && (
+                  </h3>
+                  {/* Create/Add Vendor Button */}
+                  {canEdit && !isManagerReview && vendorQuotes.length > 0 && (
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => setVendorDialogOpen(true)}
-                      className="text-xs h-7"
+                      onClick={() => {
+                        setQuoteAmount((quantityToBuy || 0).toString());
+                        const bestUnit = itemInInventory?.unit || request?.unit || "";
+                        if (bestUnit) setQuoteUnit(bestUnit);
+                        setVendorDialogOpen(true);
+                      }}
+                      className="h-8 gap-1 border-dashed border-2 hover:border-primary hover:text-primary hover:bg-primary/5 transition-all"
                     >
-                      <Plus className="h-3 w-3 mr-1" />
-                      Add Vendor Quote
+                      <Plus className="h-3.5 w-3.5" />
+                      Add Quote
                     </Button>
                   )}
                 </div>
-                {vendorQuotes.length > 0 ? (
+
+                {/* Empty State / Add First Vendor Button */}
+                {vendorQuotes.length === 0 && canEdit && !isManagerReview && (
+                  <button
+                    onClick={() => {
+                      setQuoteAmount((quantityToBuy || 0).toString());
+                      const bestUnit = itemInInventory?.unit || request?.unit || "";
+                      if (bestUnit) setQuoteUnit(bestUnit);
+                      setVendorDialogOpen(true);
+                    }}
+                    className="w-full flex flex-col items-center justify-center p-8 border-2 border-dashed rounded-lg border-muted-foreground/20 hover:border-primary/50 hover:bg-muted/30 transition-all group cursor-pointer"
+                  >
+                    <div className="h-10 w-10 bg-muted rounded-full flex items-center justify-center mb-3 group-hover:scale-110 transition-transform group-hover:bg-primary/10">
+                      <Plus className="h-5 w-5 text-muted-foreground group-hover:text-primary" />
+                    </div>
+                    <h4 className="font-medium text-foreground group-hover:text-primary">Add Vendor Quote</h4>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      No quotes added yet. Add at least 2 quotes for comparison.
+                    </p>
+                  </button>
+                )}
+
+                {/* Empty State Text for Viewers */}
+                {vendorQuotes.length === 0 && (!canEdit || isManagerReview) && (
+                  <div className="text-xs text-muted-foreground text-center py-6 border rounded-lg bg-muted/30">
+                    <p>No vendor quotes available.</p>
+                  </div>
+                )}
+
+                {vendorQuotes.length > 0 && (
                   <div className="space-y-4">
-                    {vendorQuotes.length === 1 && (
-                      <div className="text-xs text-amber-600 dark:text-amber-400 text-center py-2 px-3 bg-amber-50 dark:bg-amber-950/50 rounded border border-amber-200 dark:border-amber-800">
-                        <AlertCircle className="h-3 w-3 inline mr-1" />
-                        Add 1 more vendor to enable cost comparison submission
+                    {vendorQuotes.length === 1 && !isManagerReview && (
+                      <div className="flex items-start gap-3 p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg">
+                        <AlertCircle className="h-5 w-5 text-amber-600 mt-0.5 shrink-0" />
+                        <div>
+                          <p className="font-medium text-amber-800 dark:text-amber-300 text-sm">One more quote needed</p>
+                          <p className="text-xs text-amber-600 dark:text-amber-400 mt-0.5">
+                            Add at least 1 more vendor quote to enable submission for cost comparison.
+                          </p>
+                        </div>
                       </div>
                     )}
-                    {isManagerReview ? (
-                      // Manager view: Clickable cards to select/deselect final vendor
-                      <div className="space-y-3">
-                        {vendorQuotes.map((quote) => (
+
+                    {/* Quotes Grid */}
+                    <div className="grid grid-cols-1 gap-3">
+                      {vendorQuotes.map((quote, index) => {
+                        // Determine if this is the best price
+                        const isBestPrice = index === 0 && vendorQuotes.length > 1 &&
+                          (calculateQuoteTotal(vendorQuotes[0], request?.quantity || 0) < calculateQuoteTotal(vendorQuotes[1], request?.quantity || 0) ||
+                            (vendorQuotes.every((q, i) => i === 0 || calculateQuoteTotal(q, request?.quantity || 0) >= calculateQuoteTotal(quote, request?.quantity || 0))));
+
+                        const totalAmount = calculateQuoteTotal(quote, request?.quantity || 0);
+
+                        return (
                           <div
                             key={quote.vendorId}
-                            onClick={() => {
-                              // Toggle behavior: click to select, click again to deselect
-                              if (selectedFinalVendor === quote.vendorId) {
-                                setSelectedFinalVendor("");
-                              } else {
-                                setSelectedFinalVendor(quote.vendorId);
-                              }
-                            }}
-                            className={`p-4 border rounded-lg transition-colors cursor-pointer ${selectedFinalVendor === quote.vendorId
-                              ? "border-primary bg-primary/5 ring-2 ring-primary/30"
-                              : "hover:bg-muted/50 border-border"
-                              }`}
+                            className={`relative group bg-card border rounded-lg p-4 transition-all duration-200 ${isManagerReview && selectedFinalVendor === quote.vendorId
+                              ? "border-primary ring-1 ring-primary shadow-md bg-primary/5"
+                              : "hover:border-primary/50 hover:shadow-sm"
+                              } ${isBestPrice && !isManagerReview ? "border-green-200 dark:border-green-800 bg-green-50/30 dark:bg-green-950/10" : ""}`}
+                            onClick={isManagerReview ? () => setSelectedFinalVendor(prev => prev === quote.vendorId ? "" : quote.vendorId) : undefined}
                           >
-                            <div className="flex items-start gap-3">
-                              <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center mt-1 ${selectedFinalVendor === quote.vendorId
-                                ? "border-primary bg-primary"
-                                : "border-muted-foreground/30"
-                                }`}>
-                                {selectedFinalVendor === quote.vendorId && (
-                                  <div className="w-2 h-2 rounded-full bg-white" />
+                            {/* Best Price Badge */}
+                            {isBestPrice && (
+                              <div className="absolute -top-2.5 right-4 px-2 py-0.5 bg-green-100 dark:bg-green-900 text-green-700 dark:text-green-300 text-[10px] font-bold uppercase tracking-wide rounded-full border border-green-200 dark:border-green-800 shadow-sm flex items-center gap-1">
+                                <span className="text-xs">★</span> Best Price
+                              </div>
+                            )}
+
+                            {/* Card Content */}
+                            <div className="flex items-start justify-between gap-4">
+                              <div className="flex-1 min-w-0">
+                                {/* Header */}
+                                <div className="flex items-center gap-2 mb-2">
+                                  {isManagerReview && (
+                                    <div className={`w-4 h-4 rounded-full border flex items-center justify-center ${selectedFinalVendor === quote.vendorId ? "border-primary bg-primary text-primary-foreground" : "border-muted-foreground"}`}>
+                                      {selectedFinalVendor === quote.vendorId && <Check className="w-2.5 h-2.5" />}
+                                    </div>
+                                  )}
+                                  <h4 className="font-semibold text-lg truncate text-foreground">{getVendorName(quote.vendorId)}</h4>
+                                </div>
+
+                                {/* Details Stack - One item per row */}
+                                <div className="space-y-1 text-sm">
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-muted-foreground w-20">Quantity:</span>
+                                    <span className="font-medium text-foreground">{quote.amount || 1} {quote.unit || 'units'}</span>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-muted-foreground w-20">Price:</span>
+                                    <span className="font-medium">
+                                      ₹{(quote.unitPrice * (quote.perUnitBasis || 1)).toFixed(2)} / {quote.perUnitBasis || 1} {quote.unit || 'unit'}
+                                    </span>
+                                  </div>
+
+                                  {(quote.discountPercent || 0) > 0 && (
+                                    <div className="flex items-center gap-2 text-green-600 dark:text-green-400">
+                                      <span className="w-20">Discount:</span>
+                                      <span className="font-medium">-{quote.discountPercent}%</span>
+                                    </div>
+                                  )}
+
+                                  {(quote.gstPercent || 0) > 0 && (
+                                    <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400">
+                                      <span className="w-20">GST:</span>
+                                      <span className="font-medium">+{quote.gstPercent}%</span>
+                                    </div>
+                                  )}
+
+                                  <div className="flex items-center gap-2 pt-1 mt-1 border-t border-dashed border-muted-foreground/30">
+                                    <span className="text-muted-foreground w-20 font-medium">Net Price:</span>
+                                    <span className="font-semibold text-foreground">
+                                      ₹{calculateFinalPrice(quote.unitPrice * (quote.perUnitBasis || 1), quote.discountPercent, quote.gstPercent).toFixed(2)} / {quote.perUnitBasis || 1} {quote.unit || 'unit'}
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Total & Actions */}
+                              <div className="flex flex-col items-end justify-between h-full gap-4">
+                                <div className="text-right bg-muted/30 p-2 rounded-lg border border-border/50">
+                                  <p className="text-xs text-muted-foreground mb-0.5 font-medium uppercase tracking-wider">Total Amount</p>
+                                  <p className="text-xl font-bold tracking-tight text-primary">₹{totalAmount.toFixed(2)}</p>
+                                </div>
+
+                                {canEdit && !isManagerReview && (
+                                  <div className="flex items-center gap-1">
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleEditQuote(index);
+                                      }}
+                                      className="h-8 w-8 p-0 text-muted-foreground hover:text-primary"
+                                      title="Edit quote"
+                                    >
+                                      <Edit className="h-4 w-4" />
+                                    </Button>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleRemoveVendor(quote.vendorId);
+                                      }}
+                                      className="h-8 w-8 p-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                                      title="Remove quote"
+                                    >
+                                      <X className="h-4 w-4" />
+                                    </Button>
+                                  </div>
                                 )}
                               </div>
-                              <div className="flex-1">
-                                <div className="space-y-2">
-                                  <p className="font-semibold text-base">{getVendorName(quote.vendorId)}</p>
-
-                                  {/* Price breakdown */}
-                                  <div className="flex flex-wrap items-center gap-2 text-sm">
-                                    <span className="text-muted-foreground">
-                                      Base: ₹{quote.unitPrice.toFixed(2)}/{quote.amount || 1} {quote.unit || 'units'}
-                                    </span>
-                                    {quote.discountPercent && quote.discountPercent > 0 && (
-                                      <span className="px-2 py-0.5 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded text-xs font-medium">
-                                        -{quote.discountPercent}% Discount
-                                      </span>
-                                    )}
-                                    {quote.gstPercent && quote.gstPercent > 0 && (
-                                      <span className="px-2 py-0.5 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 rounded text-xs font-medium">
-                                        +{quote.gstPercent}% GST
-                                      </span>
-                                    )}
-                                  </div>
-
-                                  {/* Final calculated price */}
-                                  <div className="flex items-center justify-between border-t pt-2">
-                                    <span className="text-sm text-muted-foreground">
-                                      Final Unit Price: ₹{calculateFinalPrice(quote.unitPrice, quote.discountPercent, quote.gstPercent).toFixed(2)}
-                                    </span>
-                                    <p className="text-lg font-bold text-green-600 dark:text-green-400">
-                                      Total: ₹{calculateQuoteTotal(quote, request?.quantity || 0).toFixed(2)}
-                                    </p>
-                                  </div>
-                                </div>
-                              </div>
                             </div>
                           </div>
-                        ))}
-                      </div>
-                    ) : (
-                      // Purchase Officer view: List with remove buttons
-                      <div className="border rounded-lg divide-y overflow-hidden">
-                        {vendorQuotes.map((quote, index) => (
-                          <div key={quote.vendorId} className="p-3 hover:bg-muted/50 transition-colors">
-                            <div className="flex items-start justify-between">
-                              <div className="flex-1 min-w-0 space-y-2">
-                                <div className="flex items-center justify-between">
-                                  <p className="font-semibold text-base truncate">{getVendorName(quote.vendorId)}</p>
-                                </div>
+                        );
+                      })}
+                    </div>
 
-                                {/* Price breakdown */}
-                                <div className="flex flex-wrap items-center gap-2 text-sm">
-                                  <span className="text-muted-foreground">
-                                    ₹{quote.unitPrice.toFixed(2)}/{quote.amount || 1} {quote.unit || 'units'}
-                                  </span>
-                                  {quote.discountPercent && quote.discountPercent > 0 && (
-                                    <span className="px-2 py-0.5 bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 rounded text-xs font-medium">
-                                      -{quote.discountPercent}% Discount
-                                    </span>
-                                  )}
-                                  {quote.gstPercent && quote.gstPercent > 0 && (
-                                    <span className="px-2 py-0.5 bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 rounded text-xs font-medium">
-                                      +{quote.gstPercent}% GST
-                                    </span>
-                                  )}
-                                </div>
-
-                                {/* Final price */}
-                                <div className="flex items-center justify-between">
-                                  <div className="text-xs text-muted-foreground">
-                                    {(quote.discountPercent || quote.gstPercent) && (
-                                      <span>
-                                        Final: ₹{calculateFinalPrice(quote.unitPrice, quote.discountPercent, quote.gstPercent).toFixed(2)}/{quote.amount || 1} {quote.unit || 'units'}
-                                      </span>
-                                    )}
-                                  </div>
-                                  <p className="text-lg font-bold text-green-600 dark:text-green-400">
-                                    Total: ₹{calculateQuoteTotal(quote, request?.quantity || 0).toFixed(2)}
-                                  </p>
-                                </div>
-                              </div>
-                              {canEdit && (
-                                <div className="flex gap-1 shrink-0 ml-3">
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => handleEditQuote(index)}
-                                    className="h-8 w-8 p-0 hover:bg-blue-100 hover:text-blue-600 dark:hover:bg-blue-900/30"
-                                    title="Edit quote"
-                                  >
-                                    <Edit className="h-4 w-4" />
-                                  </Button>
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    onClick={() => handleRemoveVendor(quote.vendorId)}
-                                    className="h-8 w-8 p-0 hover:bg-destructive/10 hover:text-destructive"
-                                    title="Remove vendor"
-                                  >
-                                    <X className="h-4 w-4" />
-                                  </Button>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-
-                    {/* Best Price Recommendation */}
+                    {/* Cost Savings Recommendation */}
                     {vendorQuotes.length >= 2 && (
                       <div className="mt-4 p-3 bg-green-50 dark:bg-green-950/50 border border-green-200 dark:border-green-800 rounded-lg">
-                        <div className="flex items-center gap-2 mb-2">
-                          <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                          <span className="text-sm font-medium text-green-700 dark:text-green-300">Recommendation (Based on Final Price)</span>
-                        </div>
                         {(() => {
-                          // Sort by final calculated price (after discount and GST)
+                          // Sort by final calculated price
                           const sortedQuotes = [...vendorQuotes].sort((a, b) =>
-                            calculateFinalPrice(a.unitPrice, a.discountPercent, a.gstPercent) -
-                            calculateFinalPrice(b.unitPrice, b.discountPercent, b.gstPercent)
+                            calculateQuoteTotal(a, request?.quantity || 0) - calculateQuoteTotal(b, request?.quantity || 0)
                           );
                           const bestQuote = sortedQuotes[0];
                           const nextBestQuote = sortedQuotes[1];
                           const bestVendor = getVendorName(bestQuote.vendorId);
-                          const bestFinalPrice = calculateFinalPrice(bestQuote.unitPrice, bestQuote.discountPercent, bestQuote.gstPercent);
-                          const nextFinalPrice = calculateFinalPrice(nextBestQuote.unitPrice, nextBestQuote.discountPercent, nextBestQuote.gstPercent);
-                          const savings = nextFinalPrice - bestFinalPrice;
-                          const totalSavings = savings * (request?.quantity || 0);
+                          const bestTotal = calculateQuoteTotal(bestQuote, request?.quantity || 0);
+                          const nextTotal = calculateQuoteTotal(nextBestQuote, request?.quantity || 0);
+                          const totalSavings = nextTotal - bestTotal;
+
+                          // If difference is negligible
+                          if (totalSavings < 0.01) {
+                            return (
+                              <div className="flex items-center gap-2 text-sm text-green-700 dark:text-green-300">
+                                <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                                <span>Best vendors have similar pricing. Choose based on reliability.</span>
+                              </div>
+                            );
+                          }
 
                           return (
-                            <div className="text-sm text-green-600 dark:text-green-400 space-y-1">
-                              <p className="font-medium">Best Price: {bestVendor}</p>
-                              <p>
-                                Final: ₹{bestFinalPrice.toFixed(2)}/{bestQuote.amount || 1} {bestQuote.unit || 'unit'}
-                                {bestQuote.discountPercent && bestQuote.discountPercent > 0 && (
-                                  <span className="text-xs"> (after {bestQuote.discountPercent}% discount)</span>
-                                )}
-                                {bestQuote.gstPercent && bestQuote.gstPercent > 0 && (
-                                  <span className="text-xs"> (+{bestQuote.gstPercent}% GST)</span>
-                                )}
-                              </p>
-                              <p className="font-semibold">
-                                💰 Save ₹{savings.toFixed(2)}/unit • Total Savings: ₹{totalSavings.toFixed(2)}
-                              </p>
+                            <div className="space-y-1">
+                              <div className="flex items-center gap-2 mb-1">
+                                <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                                <span className="text-sm font-semibold text-green-700 dark:text-green-300">Recommendation</span>
+                              </div>
+                              <div className="text-sm text-green-600 dark:text-green-400 pl-4">
+                                <p>
+                                  <span className="font-medium">{bestVendor}</span> offers the best price.
+                                </p>
+                                <p className="font-semibold mt-1">
+                                  💰 Save ₹{totalSavings.toFixed(2)} by choosing this vendor.
+                                </p>
+                              </div>
                             </div>
                           );
                         })()}
                       </div>
                     )}
                   </div>
-                ) : (
-                  <div className="text-xs text-muted-foreground text-center py-3 space-y-1">
-                    <p>No vendors added</p>
-                    <p>Add at least 2 vendors to enable cost comparison submission</p>
-                  </div>
                 )}
+              </div>
+            )}
+          </div>
 
-                {/* Simplified Vendor Selection Dialog */}
-                <Dialog open={vendorDialogOpen && canEdit} onOpenChange={(open) => {
-                  if (canEdit) {
-                    setVendorDialogOpen(open);
-                    // Reset form when closing
-                    if (!open) {
-                      setSelectedVendorId("");
-                      setUnitPrice("");
-                      setQuoteAmount("1");
-                      setQuoteUnit(request?.unit || itemInInventory?.unit || "");
-                      setShowVendorDetails(null);
-                      setShowCreateVendorDialog(false);
-                      setVendorSearchTerm("");
-                      setShowVendorDropdown(false);
-                      setSelectedVendorIndex(-1);
-                      setShowUnitSuggestions(false);
-                      setSelectedUnitIndex(-1);
-                      setShowUnitSuggestions(false);
-                      setSelectedUnitIndex(-1);
+          {/* Manager Review Actions */}
+          {isManagerReview && (
+            <div className="space-y-3 pt-2 border-t mt-4">
+              <div>
+                <Label className="text-xs font-medium">
+                  Manager Notes / Rejection Reason <span className="text-red-500">*</span>
+                </Label>
+                <Textarea
+                  value={managerNotes}
+                  onChange={(e) => setManagerNotes(e.target.value)}
+                  placeholder="Required: Please provide a detailed reason for rejecting this cost comparison..."
+                  className="mt-1 text-sm min-h-[80px]"
+                  rows={3}
+                />
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  variant="outline"
+                  className="border-red-300 text-red-600 hover:bg-red-50 hover:border-red-400"
+                  onClick={async () => {
+                    if (!managerNotes.trim()) {
+                      toast.error("Please provide a reason for rejection");
+                      return;
                     }
-                  }
-                }}>
-                  <DialogContent className="sm:max-w-md">
-                    <DialogHeader>
-                      <DialogTitle>{editingQuoteIndex >= 0 ? 'Edit Vendor Quote' : 'Add Vendor Quote'}</DialogTitle>
-                      <DialogDescription>
-                        {editingQuoteIndex >= 0 ? 'Update the quote details.' : 'Select vendor and enter quote details.'}
-                      </DialogDescription>
-                    </DialogHeader>
 
-                    <div className="space-y-4">
-                      {/* Vendor Selection Row */}
-                      <div className="space-y-2">
-                        <Label className="text-sm font-medium">Vendor</Label>
-                        <div className="flex gap-2">
-                          <div className="flex-1 relative">
-                            <Input
-                              type="text"
-                              placeholder="Search and select vendor..."
-                              value={vendorSearchTerm}
-                              onChange={(e) => setVendorSearchTerm(e.target.value)}
-                              onKeyDown={(e) => {
-                                const suggestions = vendorSearchTerm.trim() ? [
-                                  ...filteredVendors,
-                                  { _id: 'create', companyName: `Create "${vendorSearchTerm}" as new vendor` }
-                                ] : filteredVendors;
-
-                                if (e.key === 'ArrowDown') {
-                                  e.preventDefault();
-                                  setSelectedVendorIndex(prev =>
-                                    prev < suggestions.length - 1 ? prev + 1 : prev
-                                  );
-                                } else if (e.key === 'ArrowUp') {
-                                  e.preventDefault();
-                                  setSelectedVendorIndex(prev => prev > 0 ? prev - 1 : -1);
-                                } else if (e.key === 'Enter' && selectedVendorIndex >= 0) {
-                                  e.preventDefault();
-                                  const selected = suggestions[selectedVendorIndex];
-                                  if (selected._id === 'create') {
-                                    setShowCreateVendorDialog(true);
-                                    setShowVendorDropdown(false);
-                                  } else {
-                                    setSelectedVendorId(selected._id as Id<"vendors">);
-                                    setVendorSearchTerm(selected.companyName);
-                                    setShowVendorDropdown(false);
-                                  }
-                                  setSelectedVendorIndex(-1);
-                                } else if (e.key === 'Escape') {
-                                  setShowVendorDropdown(false);
-                                  setSelectedVendorIndex(-1);
-                                }
-                              }}
-                              className="text-sm"
-                              onFocus={() => setShowVendorDropdown(true)}
-                              onBlur={() => setTimeout(() => setShowVendorDropdown(false), 200)}
-                              required
-                            />
-                            {showVendorDropdown && (
-                              <div className="absolute top-full left-0 right-0 z-50 mt-1 bg-background border border-border rounded-md shadow-lg max-h-40 overflow-y-auto">
-                                {filteredVendors.length > 0 ? (
-                                  filteredVendors.map((vendor, index) => (
-                                    <div
-                                      key={vendor._id}
-                                      onClick={() => {
-                                        setSelectedVendorId(vendor._id);
-                                        setVendorSearchTerm(vendor.companyName);
-                                        setShowVendorDropdown(false);
-                                      }}
-                                      className={`w-full px-3 py-2 text-left text-sm hover:bg-muted transition-colors flex items-center justify-between cursor-pointer ${index === selectedVendorIndex ? 'bg-muted' : ''
-                                        }`}
-                                    >
-                                      <span>{vendor.companyName}</span>
-                                      <div
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          setShowVendorDetails(vendor._id);
-                                        }}
-                                        className="opacity-60 hover:opacity-100 p-1 rounded"
-                                      >
-                                        <Info className="h-3 w-3" />
-                                      </div>
-                                    </div>
-                                  ))
-                                ) : vendorSearchTerm.trim() ? (
-                                  <div
-                                    onClick={() => {
-                                      setShowCreateVendorDialog(true);
-                                      setShowVendorDropdown(false);
-                                    }}
-                                    className={`w-full px-3 py-2 text-left text-sm text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/50 transition-colors cursor-pointer ${filteredVendors.length === selectedVendorIndex ? 'bg-blue-50 dark:bg-blue-950/50' : ''
-                                      }`}
-                                  >
-                                    <Plus className="h-3 w-3 inline mr-1" />
-                                    Create "{vendorSearchTerm}" as new vendor
-                                  </div>
-                                ) : (
-                                  <div className="px-3 py-2 text-sm text-muted-foreground">
-                                    No vendors available
-                                  </div>
-                                )}
-                              </div>
-                            )}
-                          </div>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => {
-                              setVendorSearchTerm("");
-                              setSelectedVendorId("");
-                            }}
-                            disabled={!vendorSearchTerm}
-                            className="px-3 opacity-60 hover:opacity-100"
-                            title="Clear vendor selection"
-                          >
-                            <X className="h-4 w-4" />
-                          </Button>
-                        </div>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setShowCreateVendorDialog(true)}
-                          className="px-3"
-                          title="Add new vendor"
-                        >
-                          <Plus className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </div>
-
-                    {/* Amount, Unit, Price Row */}
-                    <div className="grid grid-cols-3 gap-3">
-                      <div className="space-y-2">
-                        <Label className="text-sm font-medium">Amount *</Label>
-                        <Input
-                          type="number"
-                          min="1"
-                          step="any"
-                          value={quoteAmount}
-                          onChange={(e) => setQuoteAmount(e.target.value)}
-                          placeholder="1"
-                          className="text-sm"
-                          required
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label className="text-sm font-medium">Unit *</Label>
-                        <div className="relative">
-                          <Input
-                            type="text"
-                            value={quoteUnit}
-                            onChange={(e) => handleQuoteUnitInputChange(e.target.value)}
-                            onKeyDown={handleQuoteUnitKeyDown}
-                            onFocus={handleQuoteUnitFocus}
-                            onBlur={handleQuoteUnitBlur}
-                            placeholder={request?.unit || itemInInventory?.unit || "kg"}
-                            className="text-sm"
-                            required
-                          />
-                          {showUnitSuggestions && getFilteredUnitSuggestionsForQuote(quoteUnit).length > 0 && (
-                            <div className="absolute top-full left-0 right-0 z-50 mt-1 bg-background border border-border rounded-md shadow-lg max-h-40 overflow-y-auto">
-                              {getFilteredUnitSuggestionsForQuote(quoteUnit).map((suggestion, index) => (
-                                <button
-                                  key={suggestion}
-                                  type="button"
-                                  onClick={() => handleQuoteUnitSuggestionClick(suggestion)}
-                                  className={`w-full px-3 py-1.5 text-left text-xs hover:bg-muted transition-colors ${index === selectedUnitIndex ? 'bg-muted font-medium' : ''
-                                    }`}
-                                >
-                                  {suggestion}
-                                </button>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                      <div className="space-y-2">
-                        <Label className="text-sm font-medium">Price (₹) *</Label>
-                        <Input
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          value={unitPrice}
-                          onChange={(e) => setUnitPrice(e.target.value)}
-                          placeholder="0.00"
-                          className="text-sm font-semibold"
-                          required
-                        />
-                      </div>
-                    </div>
-
-                    {/* Discount and GST Row (Optional) */}
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="space-y-2">
-                        <Label className="text-sm font-medium">Discount %</Label>
-                        <Input
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          max="100"
-                          value={quoteDiscount}
-                          onChange={(e) => setQuoteDiscount(e.target.value)}
-                          placeholder="0"
-                          className="text-sm"
-                        />
-                        <p className="text-xs text-muted-foreground">Optional discount percentage</p>
-                      </div>
-                      <div className="space-y-2">
-                        <Label className="text-sm font-medium">GST %</Label>
-                        <Input
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          value={quoteGst}
-                          onChange={(e) => setQuoteGst(e.target.value)}
-                          placeholder="0"
-                          className="text-sm"
-                        />
-                        <p className="text-xs text-muted-foreground">Optional GST percentage</p>
-                      </div>
-                    </div>
-
-                    {/* Price Calculation Preview */}
-                    {unitPrice && (
-                      <div className="p-3 bg-muted/50 rounded-lg space-y-2">
-                        <p className="text-xs font-medium text-muted-foreground">Price Calculation Preview</p>
-                        <div className="grid grid-cols-2 gap-2 text-sm">
-                          <div className="flex justify-between">
-                            <span className="text-muted-foreground">Base Price:</span>
-                            <span className="font-medium">₹{parseFloat(unitPrice || "0").toFixed(2)}</span>
-                          </div>
-                          {parseFloat(quoteDiscount || "0") > 0 && (
-                            <div className="flex justify-between text-green-600">
-                              <span>Discount ({quoteDiscount}%):</span>
-                              <span>-₹{(parseFloat(unitPrice || "0") * parseFloat(quoteDiscount || "0") / 100).toFixed(2)}</span>
-                            </div>
-                          )}
-                          {parseFloat(quoteDiscount || "0") > 0 && (
-                            <div className="flex justify-between">
-                              <span className="text-muted-foreground">After Discount:</span>
-                              <span className="font-medium">₹{calculatePriceAfterDiscount(parseFloat(unitPrice || "0"), parseFloat(quoteDiscount || "0")).toFixed(2)}</span>
-                            </div>
-                          )}
-                          {parseFloat(quoteGst || "0") > 0 && (
-                            <div className="flex justify-between text-amber-600">
-                              <span>GST ({quoteGst}%):</span>
-                              <span>+₹{calculateGstAmount(calculatePriceAfterDiscount(parseFloat(unitPrice || "0"), parseFloat(quoteDiscount || "0")), parseFloat(quoteGst || "0")).toFixed(2)}</span>
-                            </div>
-                          )}
-                        </div>
-                        <div className="flex justify-between pt-2 border-t border-muted-foreground/20">
-                          <span className="font-semibold">Final Price:</span>
-                          <span className="font-bold text-lg text-primary">
-                            ₹{calculateFinalPrice(parseFloat(unitPrice || "0"), parseFloat(quoteDiscount || "0"), parseFloat(quoteGst || "0")).toFixed(2)}
-                          </span>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Action buttons */}
-                    <div className="flex justify-end gap-2 pt-4 border-t">
-                      <Button variant="outline" onClick={() => {
-                        setVendorDialogOpen(false);
-                        setEditingQuoteIndex(-1);
-                        setSelectedVendorId("");
-                        setUnitPrice("");
-                        setQuoteAmount("1");
-                        setQuoteUnit("");
-                        setQuoteDiscount("");
-                        setQuoteGst("");
-                        setVendorSearchTerm("");
-                      }}>
-                        Cancel
-                      </Button>
-                      <Button
-                        onClick={handleAddVendor}
-                        disabled={!selectedVendorId || !unitPrice}
-                      >
-                        {editingQuoteIndex >= 0 ? (
-                          <>
-                            <Check className="h-4 w-4 mr-2" />
-                            Update Quote
-                          </>
-                        ) : (
-                          <>
-                            <Plus className="h-4 w-4 mr-2" />
-                            Add Quote
-                          </>
-                        )}
-                      </Button>
-                    </div>
-                  </DialogContent>
-                </Dialog>
-
-                {/* Create Vendor Dialog */}
-                <Dialog open={showCreateVendorDialog} onOpenChange={setShowCreateVendorDialog}>
-                  <DialogContent className="sm:max-w-lg">
-                    <DialogHeader>
-                      <DialogTitle>Create New Vendor</DialogTitle>
-                      <DialogDescription>
-                        Add a new vendor for this quote.
-                      </DialogDescription>
-                    </DialogHeader>
-
-                    <VendorCreationForm
-                      onVendorCreated={(vendorId) => {
-                        const newVendor = vendors?.find(v => v._id === vendorId);
-                        if (newVendor) {
-                          setSelectedVendorId(vendorId);
-                          setVendorSearchTerm(newVendor.companyName);
-                          setShowCreateVendorDialog(false);
-                          toast.success("Vendor created! You can now add the quote details.");
-                        }
-                      }}
-                      onCancel={() => setShowCreateVendorDialog(false)}
-                      itemName={request?.itemName}
-                      initialCompanyName={vendorSearchTerm}
-                    />
-                  </DialogContent>
-                </Dialog>
-
-                {/* Inventory Information Dialog */}
-                <Dialog open={inventoryInfoOpen} onOpenChange={setInventoryInfoOpen}>
-                  <DialogContent className="sm:max-w-md">
-                    <DialogHeader>
-                      <DialogTitle className="flex items-center gap-2">
-                        <Package className="h-5 w-5" />
-                        Inventory Information
-                      </DialogTitle>
-                      <DialogDescription>
-                        Details for "{request?.itemName}"
-                      </DialogDescription>
-                    </DialogHeader>
-
-                    <div className="space-y-4">
-                      {itemInInventory ? (
-                        <div className="space-y-4">
-                          <div className="flex items-center gap-2 text-green-700 dark:text-green-300">
-                            <CheckCircle className="h-4 w-4" />
-                            <span className="font-medium">Item exists in inventory</span>
-                          </div>
-
-                          <div className="space-y-3 p-3 bg-muted/50 rounded-lg">
-                            <div className="grid grid-cols-2 gap-4 text-sm">
-                              <div>
-                                <span className="text-muted-foreground">Central Stock:</span>
-                                <p className="font-medium">{itemInInventory.centralStock || 0} {itemInInventory.unit || 'units'}</p>
-                              </div>
-                              <div>
-                                <span className="text-muted-foreground">Unit:</span>
-                                <p className="font-medium">{itemInInventory.unit || 'Not specified'}</p>
-                              </div>
-                            </div>
-
-                            {itemInInventory.vendorIds && itemInInventory.vendorIds.length > 0 && (
-                              <div>
-                                <span className="text-muted-foreground text-sm">Associated Vendors:</span>
-                                <div className="mt-1 space-y-1">
-                                  {itemInInventory.vendorIds.map((vendorId) => {
-                                    const vendor = vendors?.find(v => v._id === vendorId);
-                                    return vendor ? (
-                                      <div key={vendorId} className="flex items-center gap-2 text-sm">
-                                        <Building className="h-3 w-3 text-muted-foreground" />
-                                        <span>{vendor.companyName}</span>
-                                      </div>
-                                    ) : null;
-                                  })}
-                                </div>
-                              </div>
-                            )}
-
-                            {itemInInventory.images && itemInInventory.images.length > 0 && (
-                              <div>
-                                <span className="text-muted-foreground text-sm">Images:</span>
-                                <div className="mt-2 flex flex-wrap gap-2">
-                                  {itemInInventory.images.slice(0, 4).map((image, index) => (
-                                    <div key={image.imageKey} className="relative group">
-                                      <button
-                                        type="button"
-                                        onClick={() => openImageSlider(itemInInventory.images || [], request?.itemName || 'Item', index)}
-                                        className="block"
-                                      >
-                                        <LazyImage
-                                          src={image.imageUrl}
-                                          alt={`Image ${index + 1}`}
-                                          width={60}
-                                          height={45}
-                                          className="rounded border hover:border-primary transition-colors object-cover"
-                                        />
-                                      </button>
-                                      {index === 3 && itemInInventory.images && itemInInventory.images.length > 4 && (
-                                        <div className="absolute inset-0 bg-black/50 rounded flex items-center justify-center">
-                                          <span className="text-white text-xs font-medium">
-                                            +{itemInInventory.images.length - 4}
-                                          </span>
-                                        </div>
-                                      )}
-                                    </div>
-                                  ))}
-                                </div>
-                                <p className="text-xs text-muted-foreground mt-1">
-                                  {itemInInventory.images.length} image{itemInInventory.images.length !== 1 ? 's' : ''} • Click to view
-                                </p>
-                              </div>
-                            )}
-                          </div>
-
-                          <div className="flex items-center justify-between p-3 bg-blue-50 dark:bg-blue-950/50 border border-blue-200 dark:border-blue-800 rounded-lg">
-                            <div className="text-sm">
-                              <p className="font-medium text-blue-700 dark:text-blue-300">Stock Status</p>
-                              <p className="text-blue-600 dark:text-blue-400">
-                                {(itemInInventory.centralStock || 0) >= (request?.quantity || 0)
-                                  ? 'Sufficient stock available'
-                                  : 'Insufficient stock - may need to reorder'
-                                }
-                              </p>
-                            </div>
-                            <div className="text-right">
-                              <p className="text-sm font-medium">
-                                {(itemInInventory.centralStock || 0)} / {request?.quantity || 0}
-                              </p>
-                              <p className="text-xs text-muted-foreground">Available / Required</p>
-                            </div>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="space-y-4">
-                          <div className="flex items-center gap-2 text-amber-700 dark:text-amber-300">
-                            <AlertCircle className="h-4 w-4" />
-                            <span className="font-medium">Item not found in inventory</span>
-                          </div>
-
-                          <div className="p-3 bg-muted/50 rounded-lg text-center">
-                            <Package className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
-                            <p className="text-sm text-muted-foreground mb-3">
-                              This item is not currently in your inventory system.
-                            </p>
-                            <p className="text-xs text-muted-foreground">
-                              You may want to add this item to inventory or check if it exists under a different name.
-                            </p>
-                          </div>
-
-                          <Button
-                            onClick={() => {
-                              // Navigate to inventory page
-                              window.location.href = '/dashboard/inventory';
-                            }}
-                            className="w-full"
-                            variant="outline"
-                          >
-                            <ExternalLink className="h-4 w-4 mr-2" />
-                            Check Inventory
-                          </Button>
-                        </div>
-                      )}
-                    </div>
-
-                    <DialogFooter>
-                      <Button variant="outline" onClick={() => setInventoryInfoOpen(false)}>
-                        Close
-                      </Button>
-                    </DialogFooter>
-                  </DialogContent>
-                </Dialog>
+                    setIsReviewing(true);
+                    try {
+                      await reviewCC({
+                        requestId,
+                        action: "reject",
+                        notes: managerNotes.trim(),
+                      });
+                      toast.success("Cost comparison rejected");
+                      onOpenChange(false);
+                    } catch (error: any) {
+                      toast.error(error.message || "Failed to reject");
+                    } finally {
+                      setIsReviewing(false);
+                    }
+                  }}
+                  disabled={isReviewing}
+                  size="sm"
+                >
+                  <X className="h-3.5 w-3.5 mr-1.5" />
+                  Reject CC
+                </Button>
+                <Button
+                  onClick={async () => {
+                    if (!selectedFinalVendor) {
+                      toast.error("Please select a final vendor");
+                      return;
+                    }
+                    setIsReviewing(true);
+                    try {
+                      await reviewCC({
+                        requestId,
+                        action: "approve",
+                        selectedVendorId: selectedFinalVendor as Id<"vendors">,
+                        notes: managerNotes.trim() || undefined,
+                      });
+                      toast.success("Cost comparison approved");
+                      onOpenChange(false);
+                    } catch (error: any) {
+                      toast.error(error.message || "Failed to approve");
+                    } finally {
+                      setIsReviewing(false);
+                    }
+                  }}
+                  disabled={isReviewing || !selectedFinalVendor}
+                  size="sm"
+                  className="flex-1"
+                >
+                  <CheckCircle className="h-3.5 w-3.5 mr-1.5" />
+                  Approve & Select Vendor
+                </Button>
               </div>
-            )}
+            </div>
+          )
+          }
 
-            {/* Manager Review Actions */}
-            {isManagerReview && (
-              <div className="space-y-3 pt-2 border-t">
-                <div>
-                  <Label className="text-xs font-medium">
-                    Manager Notes / Rejection Reason <span className="text-red-500">*</span>
-                  </Label>
-                  <Textarea
-                    value={managerNotes}
-                    onChange={(e) => setManagerNotes(e.target.value)}
-                    placeholder="Required: Please provide a detailed reason for rejecting this cost comparison..."
-                    className="mt-1 text-sm min-h-[80px]"
-                    rows={3}
-                  />
-                </div>
-                <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    className="border-red-300 text-red-600 hover:bg-red-50 hover:border-red-400"
-                    onClick={async () => {
-                      if (!managerNotes.trim()) {
-                        toast.error("Please provide a reason for rejection");
-                        return;
-                      }
-
-                      setIsReviewing(true);
-                      try {
-                        await reviewCC({
-                          requestId,
-                          action: "reject",
-                          notes: managerNotes.trim(),
-                        });
-                        toast.success("Cost comparison rejected");
-                        onOpenChange(false);
-                      } catch (error: any) {
-                        toast.error(error.message || "Failed to reject");
-                      } finally {
-                        setIsReviewing(false);
-                      }
-                    }}
-                    disabled={isReviewing}
-                    size="sm"
-                  >
-                    <X className="h-3.5 w-3.5 mr-1.5" />
-                    Reject CC
-                  </Button>
-                  <Button
-                    onClick={async () => {
-                      if (!selectedFinalVendor) {
-                        toast.error("Please select a final vendor");
-                        return;
-                      }
-                      setIsReviewing(true);
-                      try {
-                        await reviewCC({
-                          requestId,
-                          action: "approve",
-                          selectedVendorId: selectedFinalVendor as Id<"vendors">,
-                          notes: managerNotes.trim() || undefined,
-                        });
-                        toast.success("Cost comparison approved");
-                        onOpenChange(false);
-                      } catch (error: any) {
-                        toast.error(error.message || "Failed to approve");
-                      } finally {
-                        setIsReviewing(false);
-                      }
-                    }}
-                    disabled={isReviewing || !selectedFinalVendor}
-                    size="sm"
-                    className="flex-1"
-                  >
-                    <CheckCircle className="h-3.5 w-3.5 mr-1.5" />
-                    Approve & Select Vendor
-                  </Button>
-                </div>
-              </div>
-            )}
-
-            {/* Purchase Officer Actions - Only show vendor workflow when insufficient inventory */}
-            {canEdit && !isSubmitted && !isManager && !hasSufficientInventory && (
-              <div className="space-y-2 pt-1">
+          {/* Purchase Officer Actions - Only show vendor workflow when insufficient inventory */}
+          {
+            canEdit && !isSubmitted && !isManager && !hasSufficientInventory && (
+              <div className="space-y-2 pt-4 border-t mt-2">
                 {/* Auto-save indicator */}
                 {isSaving && (
-                  <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
+                  <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground mb-2">
                     <div className="h-3 w-3 border-2 border-muted-foreground/30 border-t-muted-foreground rounded-full animate-spin" />
                     Auto-saving...
                   </div>
@@ -2055,12 +1699,11 @@ export function CostComparisonDialog({
                 <div className="flex gap-2">
                   <Button
                     variant="outline"
-                    onClick={() => setVendorDialogOpen(true)}
+                    onClick={() => onOpenChange(false)}
                     className="flex-1"
                     size="sm"
                   >
-                    <Plus className="h-3.5 w-3.5 mr-1.5" />
-                    Add Vendor
+                    Cancel
                   </Button>
                   <Button
                     onClick={handleSubmit}
@@ -2073,28 +1716,577 @@ export function CostComparisonDialog({
                   </Button>
                 </div>
               </div>
-            )}
+            )
+          }
 
-            {isSubmitted && !isManagerReview && (
-              <p className="text-xs text-muted-foreground text-center py-2">
+          {
+            isSubmitted && !isManagerReview && (
+              <p className="text-xs text-muted-foreground text-center py-4 border-t mt-2">
                 Submitted for manager approval
               </p>
-            )}
-          </div >
-        </DialogContent >
+            )
+          }
+        </DialogContent>
+      </Dialog>
 
-        {/* Image Slider */}
-        < ImageSlider
-          images={imageSliderImages}
-          initialIndex={imageSliderInitialIndex}
-          open={imageSliderOpen}
-          onOpenChange={setImageSliderOpen}
-          itemName={imageSliderItemName}
-        />
-      </Dialog >
+      {/* Simplified Vendor Selection Dialog */}
+      <Dialog open={vendorDialogOpen && canEdit} onOpenChange={(open) => {
+        if (canEdit) {
+          setVendorDialogOpen(open);
+          // Reset form when closing
+          if (!open) {
+            setSelectedVendorId("");
+            setUnitPrice("");
+            setQuoteAmount("1");
+            const defaultUnit = request?.unit || itemInInventory?.unit || "";
+            setQuoteUnit(defaultUnit);
+            setPerUnitBasis("1");
+
+            setShowVendorDetails(null);
+            setShowCreateVendorDialog(false);
+            setVendorSearchTerm("");
+            setShowVendorDropdown(false);
+            setSelectedVendorIndex(-1);
+            setShowUnitSuggestions(false);
+            setSelectedUnitIndex(-1);
+          }
+        }
+      }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>{editingQuoteIndex >= 0 ? 'Edit Vendor Quote' : 'Add Vendor Quote'}</DialogTitle>
+            <DialogDescription>
+              {editingQuoteIndex >= 0 ? 'Update the quote details.' : 'Select vendor and enter quote details.'}
+            </DialogDescription>
+          </DialogHeader>
+
+          {/* Auto-fill quote amount from quantityToBuy when adding new quote */}
+          {useEffect(() => {
+            if (vendorDialogOpen && editingQuoteIndex === -1) {
+              setQuoteAmount(quantityToBuy.toString());
+              // Also ensure unit is synced with current preference
+              const bestUnit = itemInInventory?.unit || request?.unit || "";
+              if (bestUnit) setQuoteUnit(bestUnit);
+            }
+          }, [vendorDialogOpen, editingQuoteIndex, quantityToBuy, itemInInventory, request]) as unknown as React.ReactNode}
+
+          <div className="space-y-4">
+            {/* Vendor Selection Row */}
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Vendor<span className="text-red-500">*</span></Label>
+              <div className="flex items-center gap-2">
+                <div className="flex-1 relative">
+                  <div className="relative">
+                    <Input
+                      type="text"
+                      placeholder="Search and select vendor..."
+                      value={vendorSearchTerm}
+                      onChange={(e) => {
+                        setVendorSearchTerm(e.target.value);
+                        setShowVendorDropdown(true);
+                      }}
+                      onKeyDown={(e) => {
+                        const suggestions = vendorSearchTerm.trim() ? [
+                          ...filteredVendors,
+                          { _id: 'create', companyName: `Create "${vendorSearchTerm}" as new vendor` }
+                        ] : filteredVendors;
+
+                        if (e.key === 'ArrowDown') {
+                          e.preventDefault();
+                          setSelectedVendorIndex(prev =>
+                            prev < suggestions.length - 1 ? prev + 1 : prev
+                          );
+                        } else if (e.key === 'ArrowUp') {
+                          e.preventDefault();
+                          setSelectedVendorIndex(prev => prev > 0 ? prev - 1 : -1);
+                        } else if (e.key === 'Enter' && selectedVendorIndex >= 0) {
+                          e.preventDefault();
+                          const selected = suggestions[selectedVendorIndex];
+                          if (selected._id === 'create') {
+                            setShowCreateVendorDialog(true);
+                            setShowVendorDropdown(false);
+                          } else {
+                            setSelectedVendorId(selected._id as Id<"vendors">);
+                            setVendorSearchTerm(selected.companyName);
+                            setShowVendorDropdown(false);
+                          }
+                          setSelectedVendorIndex(-1);
+                        } else if (e.key === 'Escape') {
+                          setShowVendorDropdown(false);
+                          setSelectedVendorIndex(-1);
+                        }
+                      }}
+                      className="text-sm pr-9"
+                      onFocus={() => setShowVendorDropdown(true)}
+                      onBlur={() => setTimeout(() => setShowVendorDropdown(false), 200)}
+                      required
+                      autoFocus={editingQuoteIndex === -1}
+                    />
+                    {vendorSearchTerm && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          setVendorSearchTerm("");
+                          setSelectedVendorId("");
+                        }}
+                        className="absolute right-0 top-0 h-full px-3 hover:bg-transparent text-muted-foreground hover:text-foreground"
+                        title="Clear vendor selection"
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
+                    )}
+                  </div>
+                  {showVendorDropdown && (
+                    <div className="absolute top-full left-0 right-0 z-50 mt-1 bg-background border border-border rounded-md shadow-lg max-h-40 overflow-y-auto">
+                      {filteredVendors.length > 0 ? (
+                        filteredVendors.map((vendor, index) => (
+                          <div
+                            key={vendor._id}
+                            onClick={() => {
+                              setSelectedVendorId(vendor._id);
+                              setVendorSearchTerm(vendor.companyName);
+                              setShowVendorDropdown(false);
+                            }}
+                            className={`w-full px-3 py-2 text-left text-sm hover:bg-muted transition-colors flex items-center justify-between cursor-pointer ${index === selectedVendorIndex ? 'bg-muted' : ''
+                              }`}
+                          >
+                            <span>{vendor.companyName}</span>
+                            <div
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setShowVendorDetails(vendor._id);
+                              }}
+                              className="opacity-60 hover:opacity-100 p-1 rounded"
+                            >
+                              <Info className="h-3 w-3" />
+                            </div>
+                          </div>
+                        ))
+                      ) : vendorSearchTerm.trim() ? (
+                        <div
+                          onClick={() => {
+                            setShowCreateVendorDialog(true);
+                            setShowVendorDropdown(false);
+                          }}
+                          className={`w-full px-3 py-2 text-left text-sm text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-950/50 transition-colors cursor-pointer ${filteredVendors.length === selectedVendorIndex ? 'bg-blue-50 dark:bg-blue-950/50' : ''
+                            }`}
+                        >
+                          <Plus className="h-3 w-3 inline mr-1" />
+                          Create "{vendorSearchTerm}" as new vendor
+                        </div>
+                      ) : (
+                        <div className="px-3 py-2 text-sm text-muted-foreground">
+                          No vendors available
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+                <Button
+                  variant="outline"
+                  size="icon"
+                  onClick={() => setShowCreateVendorDialog(true)}
+                  className="h-9 w-9 shrink-0"
+                  title="Add new vendor"
+                >
+                  <Plus className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          </div>
+
+          {/* Total Quantity Row */}
+          <div className="space-y-2">
+            <Label className="text-sm font-medium">Total Quantity <span className="text-red-500">*</span></Label>
+            <Input
+              type="number"
+              min="0"
+              step="any"
+              value={quoteAmount}
+              onChange={(e) => setQuoteAmount(e.target.value)}
+              placeholder="Total quantity to buy"
+              className="text-sm border-2 hover:border-primary/30 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all duration-200"
+              required
+            />
+          </div>
+
+          {/* Unit Price Configuration Row */}
+          <div className="grid grid-cols-3 gap-3">
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Per <span className="text-red-500">*</span></Label>
+              <Input
+                type="number"
+                min="1"
+                step="any"
+                value={perUnitBasis}
+                onChange={(e) => setPerUnitBasis(e.target.value)}
+                placeholder="1"
+                className="text-sm border-2 hover:border-primary/30 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all duration-200"
+                required
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Unit <span className="text-red-500">*</span></Label>
+              <div className="relative">
+                <Input
+                  type="text"
+                  value={quoteUnit}
+                  onChange={(e) => handleQuoteUnitInputChange(e.target.value)}
+                  onKeyDown={handleQuoteUnitKeyDown}
+                  onFocus={handleQuoteUnitFocus}
+                  onBlur={handleQuoteUnitBlur}
+                  placeholder="e.g. kg"
+                  autoComplete="off"
+                  className={`text-sm border-2 hover:border-primary/30 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all duration-200 ${!quoteUnit.trim() ? "border-red-300 focus-visible:ring-red-500" : ""}`}
+                />
+                {showUnitSuggestions && (
+                  <div className="absolute top-full left-0 right-0 z-[100] mt-1 bg-popover text-popover-foreground shadow-xl rounded-md border ring-1 ring-border/50 max-h-[200px] overflow-y-auto overflow-x-hidden animate-in fade-in-0 zoom-in-95 duration-100">
+                    {getFilteredUnitSuggestionsForQuote(quoteUnit).length > 0 ? (
+                      <div className="p-1">
+                        {getFilteredUnitSuggestionsForQuote(quoteUnit).map((suggestion, index) => (
+                          <div
+                            key={suggestion}
+                            onMouseDown={(e) => {
+                              e.preventDefault();
+                              handleQuoteUnitSuggestionClick(suggestion);
+                            }}
+                            className={`px-3 py-2 text-sm rounded-sm cursor-pointer transition-colors flex items-center justify-between ${selectedUnitIndex === index
+                              ? "bg-accent text-accent-foreground font-medium"
+                              : "hover:bg-muted/80 text-foreground/80"
+                              }`}
+                          >
+                            <span>{suggestion}</span>
+                            {selectedUnitIndex === index && (
+                              <Check className="h-3.5 w-3.5 opacity-70" />
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="p-3 text-xs text-muted-foreground text-center italic">
+                        Use "{quoteUnit}" as custom unit
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Price (₹) <span className="text-red-500">*</span></Label>
+              <Input
+                type="number"
+                step="0.01"
+                min="0"
+                value={unitPrice}
+                onChange={(e) => setUnitPrice(e.target.value)}
+                placeholder="0.00"
+                className="text-sm font-semibold border-2 hover:border-primary/30 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all duration-200"
+                required
+                autoFocus={editingQuoteIndex >= 0}
+              />
+            </div>
+          </div>
+
+          {/* Discount and GST Row (Optional) */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Discount %</Label>
+              <Input
+                type="number"
+                step="0.01"
+                min="0"
+                max="100"
+                value={quoteDiscount}
+                onChange={(e) => setQuoteDiscount(e.target.value)}
+                placeholder="0"
+                className="text-sm"
+              />
+              <p className="text-xs text-muted-foreground">Optional discount percentage</p>
+            </div>
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">GST %</Label>
+              <Input
+                type="number"
+                step="0.01"
+                min="0"
+                value={quoteGst}
+                onChange={(e) => setQuoteGst(e.target.value)}
+                placeholder="0"
+                className="text-sm"
+              />
+              <p className="text-xs text-muted-foreground">Optional GST percentage</p>
+            </div>
+          </div>
+
+
+          {/* Price Calculation Preview */}
+          {unitPrice && (
+            <div className="p-3 bg-muted/50 rounded-lg space-y-2">
+              <p className="text-xs font-medium text-muted-foreground">Price Calculation Preview</p>
+              <div className="grid grid-cols-2 gap-2 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Price per {quoteUnit || 'unit'}:</span>
+                  <span className="font-medium">₹{(parseFloat(unitPrice || "0") / (parseFloat(perUnitBasis || "1"))).toFixed(2)}</span>
+                </div>
+                {parseFloat(quoteDiscount || "0") > 0 && (
+                  <div className="flex justify-between text-green-600">
+                    <span>Discount ({quoteDiscount}%):</span>
+                    <span>-₹{((parseFloat(unitPrice || "0") / (parseFloat(perUnitBasis || "1"))) * parseFloat(quoteDiscount || "0") / 100).toFixed(2)}</span>
+                  </div>
+                )}
+                {parseFloat(quoteDiscount || "0") > 0 && (
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Price after Discount:</span>
+                    <span className="font-medium">₹{calculatePriceAfterDiscount((parseFloat(unitPrice || "0") / (parseFloat(perUnitBasis || "1"))), parseFloat(quoteDiscount || "0")).toFixed(2)}</span>
+                  </div>
+                )}
+                {parseFloat(quoteGst || "0") > 0 && (
+                  <div className="flex justify-between text-amber-600">
+                    <span>GST ({quoteGst}%):</span>
+                    <span>+₹{calculateGstAmount(calculatePriceAfterDiscount((parseFloat(unitPrice || "0") / (parseFloat(perUnitBasis || "1"))), parseFloat(quoteDiscount || "0")), parseFloat(quoteGst || "0")).toFixed(2)}</span>
+                  </div>
+                )}
+              </div>
+              <div className="flex justify-between pt-2 border-t border-muted-foreground/20">
+                <span className="font-semibold">Final Price per {quoteUnit || 'unit'}:</span>
+                <span className="font-bold text-primary">
+                  ₹{calculateFinalPrice((parseFloat(unitPrice || "0") / (parseFloat(perUnitBasis || "1"))), parseFloat(quoteDiscount || "0"), parseFloat(quoteGst || "0")).toFixed(2)}
+                </span>
+              </div>
+
+              {/* Total Amount Preview based on Quantity */}
+              <div className="flex justify-between pt-2 border-t-2 border-dashed border-muted-foreground/20 mt-1">
+                <span className="font-bold text-lg">Total Amount ({quoteAmount || 0} {quoteUnit || 'units'}):</span>
+                <span className="font-bold text-xl text-primary">
+                  ₹{(calculateFinalPrice((parseFloat(unitPrice || "0") / (parseFloat(perUnitBasis || "1"))), parseFloat(quoteDiscount || "0"), parseFloat(quoteGst || "0")) * (parseFloat(quoteAmount) || 0)).toFixed(2)}
+                </span>
+              </div>
+            </div>
+          )}
+
+          {/* Action buttons */}
+          <div className="flex justify-end gap-2 pt-4 border-t">
+            <Button variant="outline" onClick={() => {
+              setVendorDialogOpen(false);
+              setEditingQuoteIndex(-1);
+              setSelectedVendorId("");
+              setUnitPrice("");
+              setQuoteAmount("1");
+              setQuoteUnit("");
+
+              setQuoteDiscount("");
+              setQuoteGst("");
+              setVendorSearchTerm("");
+            }}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleAddVendor}
+              disabled={!selectedVendorId || !unitPrice}
+            >
+              {editingQuoteIndex >= 0 ? (
+                <>
+                  <Check className="h-4 w-4 mr-2" />
+                  Update Quote
+                </>
+              ) : (
+                <>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Quote
+                </>
+              )}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Create Vendor Dialog */}
+      <Dialog open={showCreateVendorDialog} onOpenChange={setShowCreateVendorDialog}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Create New Vendor</DialogTitle>
+            <DialogDescription>
+              Add a new vendor for this quote.
+            </DialogDescription>
+          </DialogHeader>
+
+          <VendorCreationForm
+            onVendorCreated={(vendorId) => {
+              const newVendor = vendors?.find(v => v._id === vendorId);
+              if (newVendor) {
+                setSelectedVendorId(vendorId);
+                setVendorSearchTerm(newVendor.companyName);
+                setShowCreateVendorDialog(false);
+                toast.success("Vendor created! You can now add the quote details.");
+              }
+            }}
+            onCancel={() => setShowCreateVendorDialog(false)}
+            itemName={request?.itemName}
+            initialCompanyName={vendorSearchTerm}
+          />
+        </DialogContent>
+      </Dialog>
+
+      {/* Inventory Information Dialog */}
+      <Dialog open={inventoryInfoOpen} onOpenChange={setInventoryInfoOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Package className="h-5 w-5" />
+              Inventory Information
+            </DialogTitle>
+            <DialogDescription>
+              Details for "{request?.itemName}"
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            {itemInInventory ? (
+              <div className="space-y-4">
+                <div className="flex items-center gap-2 text-green-700 dark:text-green-300">
+                  <CheckCircle className="h-4 w-4" />
+                  <span className="font-medium">Item exists in inventory</span>
+                </div>
+
+                <div className="space-y-3 p-3 bg-muted/50 rounded-lg">
+                  <div className="grid grid-cols-2 gap-4 text-sm">
+                    <div>
+                      <span className="text-muted-foreground">Central Stock:</span>
+                      <p className="font-medium">{itemInInventory.centralStock || 0} {itemInInventory.unit || 'units'}</p>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Unit:</span>
+                      <p className="font-medium">{itemInInventory.unit || 'Not specified'}</p>
+                    </div>
+                  </div>
+
+                  {itemInInventory.vendorIds && itemInInventory.vendorIds.length > 0 && (
+                    <div>
+                      <span className="text-muted-foreground text-sm">Associated Vendors:</span>
+                      <div className="mt-1 space-y-1">
+                        {itemInInventory.vendorIds.map((vendorId) => {
+                          const vendor = vendors?.find(v => v._id === vendorId);
+                          return vendor ? (
+                            <div key={vendorId} className="flex items-center gap-2 text-sm">
+                              <Building className="h-3 w-3 text-muted-foreground" />
+                              <span>{vendor.companyName}</span>
+                            </div>
+                          ) : null;
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {itemInInventory.images && itemInInventory.images.length > 0 && (
+                    <div>
+                      <span className="text-muted-foreground text-sm">Images:</span>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {itemInInventory.images.slice(0, 4).map((image, index) => (
+                          <div key={image.imageKey} className="relative group">
+                            <button
+                              type="button"
+                              onClick={() => openImageSlider(itemInInventory.images || [], request?.itemName || 'Item', index)}
+                              className="block"
+                            >
+                              <LazyImage
+                                src={image.imageUrl}
+                                alt={`Image ${index + 1}`}
+                                width={60}
+                                height={45}
+                                className="rounded border hover:border-primary transition-colors object-cover"
+                              />
+                            </button>
+                            {index === 3 && itemInInventory.images && itemInInventory.images.length > 4 && (
+                              <div className="absolute inset-0 bg-black/50 rounded flex items-center justify-center">
+                                <span className="text-white text-xs font-medium">
+                                  +{itemInInventory.images.length - 4}
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {itemInInventory.images.length} image{itemInInventory.images.length !== 1 ? 's' : ''} • Click to view
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex items-center justify-between p-3 bg-blue-50 dark:bg-blue-950/50 border border-blue-200 dark:border-blue-800 rounded-lg">
+                  <div className="text-sm">
+                    <p className="font-medium text-blue-700 dark:text-blue-300">Stock Status</p>
+                    <p className="text-blue-600 dark:text-blue-400">
+                      {(itemInInventory.centralStock || 0) >= (request?.quantity || 0)
+                        ? 'Sufficient stock available'
+                        : 'Insufficient stock - may need to reorder'
+                      }
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm font-medium">
+                      {(itemInInventory.centralStock || 0)} / {request?.quantity || 0}
+                    </p>
+                    <p className="text-xs text-muted-foreground">Available / Required</p>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="flex items-center gap-2 text-amber-700 dark:text-amber-300">
+                  <AlertCircle className="h-4 w-4" />
+                  <span className="font-medium">Item not found in inventory</span>
+                </div>
+
+                <div className="p-3 bg-muted/50 rounded-lg text-center">
+                  <Package className="h-8 w-8 mx-auto mb-2 text-muted-foreground" />
+                  <p className="text-sm text-muted-foreground mb-3">
+                    This item is not currently in your inventory system.
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    You may want to add this item to inventory or check if it exists under a different name.
+                  </p>
+                </div>
+
+                <Button
+                  onClick={() => {
+                    // Navigate to inventory page
+                    window.location.href = '/dashboard/inventory';
+                  }}
+                  className="w-full"
+                  variant="outline"
+                >
+                  <ExternalLink className="h-4 w-4 mr-2" />
+                  Check Inventory
+                </Button>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setInventoryInfoOpen(false)}>
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+
+
+      {/* Image Slider */}
+      <ImageSlider
+        images={imageSliderImages}
+        initialIndex={imageSliderInitialIndex}
+        open={imageSliderOpen}
+        onOpenChange={setImageSliderOpen}
+        itemName={imageSliderItemName}
+      />
 
       {/* Direct Delivery Confirmation Dialog */}
-      < AlertDialog open={showDirectDeliveryConfirm} onOpenChange={setShowDirectDeliveryConfirm} >
+      <AlertDialog open={showDirectDeliveryConfirm} onOpenChange={setShowDirectDeliveryConfirm}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2">
@@ -2165,11 +2357,10 @@ export function CostComparisonDialog({
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
-      </AlertDialog >
+      </AlertDialog>
 
       {/* Vendor Details Dialog */}
-      < Dialog open={!!showVendorDetails
-      } onOpenChange={() => setShowVendorDetails(null)}>
+      <Dialog open={!!showVendorDetails} onOpenChange={() => setShowVendorDetails(null)}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -2235,8 +2426,7 @@ export function CostComparisonDialog({
             </Button>
           </DialogFooter>
         </DialogContent>
-      </Dialog >
-
+      </Dialog>
     </>
   );
 }

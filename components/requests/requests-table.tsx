@@ -1159,6 +1159,8 @@ export function RequestsTable({
                                 <div className="space-y-2">
                                   {items.map((item, idx) => {
                                     const displayNumber = item.itemOrder ?? (items.length - idx);
+                                    const currItemInventory = inventoryStatus && inventoryStatus[item.itemName];
+                                    const hasFullStock = !!(currItemInventory && currItemInventory.centralStock >= item.quantity);
                                     return (
                                       <div key={item._id} className="p-2 rounded-md border bg-card">
                                         <div className="space-y-1.5 text-sm">
@@ -1217,7 +1219,9 @@ export function RequestsTable({
                                                           e.stopPropagation();
                                                           onDirectDelivery(item._id);
                                                         }}
-                                                        className="h-5 px-1.5 text-[10px] border-orange-200 text-orange-700 hover:bg-orange-50"
+                                                        disabled={!hasFullStock}
+                                                        title={!hasFullStock ? "Insufficient stock for direct delivery" : ""}
+                                                        className="h-5 px-1.5 text-[10px] border-orange-200 text-orange-700 hover:bg-orange-50 disabled:opacity-50 disabled:cursor-not-allowed"
                                                       >
                                                         <Truck className="h-3 w-3 mr-0.5" />
                                                         Delivery
@@ -1230,7 +1234,9 @@ export function RequestsTable({
                                                           e.stopPropagation();
                                                           onOpenCC(item._id);
                                                         }}
-                                                        className="h-5 px-1.5 text-[10px]"
+                                                        disabled={hasFullStock}
+                                                        title={hasFullStock ? "Full stock available. Use Direct Delivery." : ""}
+                                                        className="h-5 px-1.5 text-[10px] disabled:opacity-50 disabled:cursor-not-allowed"
                                                       >
                                                         <FileText className="h-3 w-3 mr-0.5" />
                                                         CC

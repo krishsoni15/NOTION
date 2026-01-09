@@ -34,6 +34,13 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
 import { toast } from "sonner";
 import { Plus, Save, Send, AlertCircle, Package, CheckCircle, Building, Info, ExternalLink, Mail, Phone, Hash, MapPin } from "lucide-react";
 import { useUserRole } from "@/hooks/use-user-role";
@@ -44,7 +51,7 @@ import { VendorCreationForm } from "./vendor-creation-form";
 import { LazyImage } from "@/components/ui/lazy-image";
 import { ImageSlider } from "@/components/ui/image-slider";
 import type { Id } from "@/convex/_generated/dataModel";
-import { Edit, Check, X, ShoppingCart, Truck } from "lucide-react";
+import { Edit, Check, X, ShoppingCart, Truck, FileText, Search } from "lucide-react";
 
 interface CheckDialogProps {
     open: boolean;
@@ -134,6 +141,7 @@ export function CheckDialog({
     const [showSaveConfirm, setShowSaveConfirm] = useState(false);
     const [showDirectPOConfirm, setShowDirectPOConfirm] = useState(false);
     const [showSplitApproveConfirm, setShowSplitApproveConfirm] = useState(false);
+    const [showSplitDeliverConfirm, setShowSplitDeliverConfirm] = useState(false);
 
     const handleDirectPO = async () => {
         setIsSaving(true);
@@ -316,6 +324,11 @@ export function CheckDialog({
             return;
         }
 
+        if (!quoteUnit.trim()) {
+            toast.error("Please enter a unit");
+            return;
+        }
+
         const price = parseFloat(unitPrice);
         if (isNaN(price) || price < 0) {
             toast.error("Please enter a valid unit price");
@@ -329,7 +342,7 @@ export function CheckDialog({
         }
 
         const amount = parseFloat(quoteAmount) || 1;
-        const unit = quoteUnit.trim() || request?.unit || itemInInventory?.unit || "units";
+        const unit = quoteUnit.trim();
         const discount = parseFloat(quoteDiscount) || 0;
         const gst = parseFloat(quoteGst) || 0;
 
@@ -419,8 +432,19 @@ export function CheckDialog({
         }
     };
 
-    // Auto-save state - moved isInitialLoad state here
+    // Auto-save state
     const [isInitialLoad, setIsInitialLoad] = useState(true);
+
+    // Auto-save when inventory quantity changes (debounced)
+    useEffect(() => {
+        if (isInitialLoad) return;
+        const timer = setTimeout(() => {
+            if (open) {
+                handleSave(true);
+            }
+        }, 1000);
+        return () => clearTimeout(timer);
+    }, [quantityFromInventory, quantityToBuy]);
 
     // Reset initial load flag when dialog closes
     useEffect(() => {
@@ -1016,6 +1040,7 @@ export function CheckDialog({
                                             onClick={() => setShowDirectDeliveryConfirm(true)}
                                             className="bg-green-600 hover:bg-green-700 text-white"
                                             size="sm"
+                                            disabled={isEditingItem}
                                         >
                                             <Package className="h-4 w-4 mr-2" />
                                             Direct Delivery
@@ -1027,45 +1052,28 @@ export function CheckDialog({
                                 </div>
                             )}
 
-                            {/* Smart Fulfillment - Unified Split Plan Card */}
                             {itemInInventory && !hasSufficientInventory && (itemInInventory.centralStock || 0) > 0 && (canEdit || isManager) && (
-                                <div className="p-4 bg-gradient-to-br from-blue-50/80 to-indigo-50/80 dark:from-blue-950/30 dark:to-indigo-950/30 border border-blue-200 dark:border-blue-800 rounded-xl shadow-sm space-y-4">
-                                    <div className="flex items-center justify-between border-b border-blue-100 dark:border-blue-900/50 pb-3">
-                                        <div className="flex items-center gap-3">
-                                            <div className="p-2 bg-blue-100 dark:bg-blue-900/50 rounded-lg">
-                                                <Package className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-                                            </div>
-                                            <div>
-                                                <h3 className="font-semibold text-blue-950 dark:text-blue-100">
-                                                    Mixed Fulfillment Plan
-                                                </h3>
-                                                <p className="text-xs text-blue-600 dark:text-blue-400">
-                                                    Item partially available in inventory
-                                                </p>
-                                            </div>
-                                        </div>
-                                        <div className="px-3 py-1 bg-white/60 dark:bg-black/20 rounded-full border border-blue-100 dark:border-blue-900 text-xs font-medium text-blue-800 dark:text-blue-200">
-                                            Required: {request?.quantity} {request?.unit}
-                                        </div>
+                                <div className="p-5 bg-gradient-to-br from-white to-blue-50 dark:from-gray-950 dark:to-blue-950/20 border border-blue-100 dark:border-blue-900 rounded-xl shadow-sm space-y-4">
+                                    <div className="space-y-1">
+                                        <h3 className="font-semibold text-lg text-foreground tracking-tight">Mixed Fulfillment Plan</h3>
+                                        <p className="text-sm text-muted-foreground">Item partially available in inventory</p>
                                     </div>
 
-                                    {/* Split Visualizer */}
-                                    <div className="grid grid-cols-2 gap-4">
-                                        {/* Inventory Portion */}
-                                        <div className="p-4 bg-white/60 dark:bg-black/20 rounded-lg border border-green-100 dark:border-green-900/30 flex flex-col items-center justify-center text-center relative group">
-                                            <span className="text-xs font-semibold uppercase tracking-wider text-green-600 dark:text-green-500 mb-2">
-                                                From Inventory
-                                            </span>
-                                            {isManager ? (
-                                                <div className="flex items-baseline gap-1">
-                                                    <span className="text-3xl font-bold text-green-700 dark:text-green-400">
-                                                        {quantityFromInventory}
-                                                    </span>
-                                                    <span className="text-xs text-muted-foreground">{itemInInventory.unit}</span>
-                                                </div>
-                                            ) : (
-                                                <div className="flex flex-col items-center gap-2 w-full">
-                                                    <div className="flex items-center gap-2">
+                                    <div className="p-4 bg-white/50 dark:bg-black/20 rounded-lg border border-border/50 space-y-4">
+                                        <div className="flex items-center justify-between">
+                                            <span className="text-sm font-medium text-muted-foreground">Required</span>
+                                            <span className="font-bold text-foreground">{request?.quantity} {request?.unit}</span>
+                                        </div>
+
+                                        <div className="space-y-3 pt-2 border-t border-border/50">
+                                            <div className="flex items-center justify-between group">
+                                                <Label className="text-sm text-orange-700 dark:text-orange-400 font-medium">From Inventory</Label>
+                                                <div className="flex items-center gap-2">
+                                                    {isManager ? (
+                                                        <span className="font-bold text-orange-700 dark:text-orange-400 text-lg">
+                                                            {quantityFromInventory}
+                                                        </span>
+                                                    ) : (
                                                         <Input
                                                             type="number"
                                                             min="0"
@@ -1078,75 +1086,131 @@ export function CheckDialog({
                                                                 setQuantityFromVendor(newNeeded);
                                                                 setQuantityToBuy(Math.max(newNeeded, quantityToBuy < newNeeded ? newNeeded : quantityToBuy));
                                                             }}
-                                                            className="h-10 w-24 text-center font-bold text-lg bg-green-50/50 border-green-200"
+                                                            className="h-8 w-24 text-right font-bold text-orange-700 bg-orange-50/50 border-orange-200 focus-visible:ring-orange-500"
                                                         />
-                                                    </div>
-                                                    <div className="flex flex-col gap-1 w-full px-2">
-                                                        <span className="text-xs text-green-600">Max: {itemInInventory.centralStock}</span>
-                                                        {quantityFromInventory > 0 && (
-                                                            <Button
-                                                                size="sm"
-                                                                onClick={handleSplitAndDeliver}
-                                                                disabled={isCreatingDirectPO}
-                                                                className="h-6 text-[10px] bg-green-600 hover:bg-green-700 text-white w-full shadow-sm mt-1"
-                                                            >
-                                                                Direct Delivery
-                                                            </Button>
-                                                        )}
-                                                    </div>
+                                                    )}
+                                                    <span className="text-xs text-muted-foreground w-8">{itemInInventory.unit}</span>
+                                                </div>
+                                            </div>
+
+                                            {!isManager && quantityFromInventory > 0 && (
+                                                <div className="flex justify-end -mt-1 mb-2">
+                                                    <Button
+                                                        onClick={() => setShowSplitDeliverConfirm(true)}
+                                                        size="sm"
+                                                        disabled={isEditingItem}
+                                                        className="w-full h-7 bg-orange-600 hover:bg-orange-700 text-white text-xs"
+                                                        title="Deliver this amount from Inventory"
+                                                    >
+                                                        <Package className="h-3 w-3 mr-1.5" />
+                                                        Deliver {quantityFromInventory} {itemInInventory.unit}
+                                                    </Button>
                                                 </div>
                                             )}
-                                        </div>
 
-                                        {/* Vendor Portion */}
-                                        <div className="p-4 bg-white/60 dark:bg-black/20 rounded-lg border border-amber-100 dark:border-amber-900/30 flex flex-col items-center justify-center text-center">
-                                            <span className="text-xs font-semibold uppercase tracking-wider text-amber-600 dark:text-amber-500 mb-2">
-                                                Buy from Vendor
-                                            </span>
-                                            {isManager ? (
-                                                <div className="flex items-baseline gap-1">
-                                                    <span className="text-3xl font-bold text-amber-700 dark:text-amber-400">
-                                                        {quantityToBuy}
-                                                    </span>
-                                                    <span className="text-xs text-muted-foreground">{request?.unit}</span>
-                                                </div>
-                                            ) : (
-                                                <div className="flex flex-col items-center gap-2 w-full">
-                                                    <div className="flex items-center gap-2">
+                                            <div className="flex items-center justify-between">
+                                                <Label className="text-sm text-emerald-700 dark:text-emerald-400 font-medium">Buy from Vendor</Label>
+                                                <div className="flex items-center gap-2">
+                                                    {isManager ? (
+                                                        <span className="font-bold text-emerald-700 dark:text-emerald-400 text-lg">
+                                                            {quantityToBuy}
+                                                        </span>
+                                                    ) : (
                                                         <Input
                                                             type="number"
                                                             min="1"
                                                             value={quantityToBuy}
+
                                                             onChange={(e) => setQuantityToBuy(Math.max(1, Number(e.target.value) || 0))}
-                                                            className="h-10 w-24 text-center font-bold text-lg bg-amber-50/50 border-amber-200"
+                                                            className="h-8 w-24 text-right font-bold text-emerald-700 bg-emerald-50/50 border-emerald-200 focus-visible:ring-emerald-500"
                                                         />
-                                                    </div>
-                                                    <span className="text-xs text-amber-600">Min: {quantityFromVendor}</span>
+                                                    )}
+                                                    <span className="text-xs text-muted-foreground w-8">{request?.unit}</span>
+                                                </div>
+                                            </div>
+
+                                            {/* Total Status */}
+                                            <div className="flex justify-end text-xs font-medium pt-1 px-1">
+                                                {quantityFromInventory + quantityToBuy < (request?.quantity || 0) ? (
+                                                    <span className="text-amber-600 dark:text-amber-400 flex items-center gap-1">
+                                                        <AlertCircle className="h-3 w-3" />
+                                                        Total: {quantityFromInventory + quantityToBuy} (Less than needed)
+                                                    </span>
+                                                ) : quantityFromInventory + quantityToBuy > (request?.quantity || 0) ? (
+                                                    <span className="text-purple-600 dark:text-purple-400 flex items-center gap-1">
+                                                        <CheckCircle className="h-3 w-3" />
+                                                        Total: {quantityFromInventory + quantityToBuy} (+{quantityFromInventory + quantityToBuy - (request?.quantity || 0)} Extra)
+                                                    </span>
+                                                ) : (
+                                                    <span className="text-green-600 dark:text-green-400 flex items-center gap-1">
+                                                        <CheckCircle className="h-3 w-3" />
+                                                        Total: {quantityFromInventory + quantityToBuy} (Matches required)
+                                                    </span>
+                                                )}
+                                            </div>
+                                            {!isManager && quantityToBuy > 0 && (
+                                                <div className="mt-2">
+                                                    {request?.directAction === "po" ? (
+                                                        <div className="grid grid-cols-2 gap-2">
+                                                            <Button
+                                                                onClick={(e) => {
+                                                                    e.preventDefault();
+                                                                    e.stopPropagation();
+                                                                    setShowDirectPOConfirm(true);
+                                                                }}
+                                                                size="sm"
+                                                                disabled={isEditingItem}
+                                                                className="w-full h-7 bg-emerald-600 hover:bg-emerald-700 text-white text-xs"
+                                                                title="Create Direct PO for this quantity"
+                                                            >
+                                                                <ShoppingCart className="h-3 w-3 mr-1.5" />
+                                                                Direct PO
+                                                            </Button>
+                                                            <Button
+                                                                onClick={(e) => {
+                                                                    e.preventDefault();
+                                                                    e.stopPropagation();
+                                                                    setShowSaveConfirm(true);
+                                                                }}
+                                                                size="sm"
+                                                                disabled={isEditingItem}
+                                                                className="w-full h-7 bg-blue-600 hover:bg-blue-700 text-white text-xs"
+                                                                title="Send this quantity for Cost Comparison"
+                                                            >
+                                                                <FileText className="h-3 w-3 mr-1.5" />
+                                                                Ready for CC
+                                                            </Button>
+                                                        </div>
+                                                    ) : (
+                                                        <Button
+                                                            onClick={(e) => {
+                                                                e.preventDefault();
+                                                                e.stopPropagation();
+                                                                setShowSaveConfirm(true);
+                                                            }}
+                                                            size="sm"
+                                                            disabled={isEditingItem}
+                                                            className="w-full h-7 bg-blue-600 hover:bg-blue-700 text-white text-xs"
+                                                            title="Send this quantity for Cost Comparison"
+                                                        >
+                                                            <FileText className="h-3 w-3 mr-1.5" />
+                                                            Ready for CC ({quantityToBuy})
+                                                        </Button>
+                                                    )}
                                                 </div>
                                             )}
                                         </div>
                                     </div>
 
-                                    {/* Manager Action - Visible directly in card */}
+                                    {/* Manager Action */}
                                     {isManager && (
-                                        <div className="space-y-3 pt-2 border-t border-blue-100 dark:border-blue-900/50 mt-2">
-                                            <div className="grid gap-2">
-                                                <Label htmlFor="manager-note" className="text-xs font-semibold text-blue-800 dark:text-blue-200">
-                                                    Approval Note (Optional)
-                                                </Label>
-                                                <Textarea
-                                                    id="manager-note"
-                                                    placeholder="Add any notes about this mixed fulfillment approve..."
-                                                    value={managerNotes}
-                                                    onChange={(e) => setManagerNotes(e.target.value)}
-                                                    className="bg-white/80 dark:bg-black/40 border-blue-200 dark:border-blue-900 min-h-[60px] text-xs resize-none"
-                                                />
-                                            </div>
+                                        <div className="space-y-3 pt-2">
+
                                             <Button
                                                 onClick={() => setShowSplitApproveConfirm(true)}
-                                                className="w-full h-11 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-md transition-all"
+                                                className="w-full h-10 bg-blue-600 hover:bg-blue-700 text-white shadow-sm transition-all"
                                             >
-                                                <CheckCircle className="h-5 w-5 mr-2" />
+                                                <CheckCircle className="h-4 w-4 mr-2" />
                                                 Confirm Split & Approve
                                             </Button>
                                         </div>
@@ -1154,7 +1218,7 @@ export function CheckDialog({
 
                                     {/* User Action Controls */}
                                     {!isManager && (
-                                        <div className="grid grid-cols-2 gap-2 pt-2">
+                                        <div className="grid grid-cols-2 gap-3 pt-2">
                                             <Button
                                                 variant="outline"
                                                 size="sm"
@@ -1164,9 +1228,9 @@ export function CheckDialog({
                                                     setQuantityFromVendor(newNeeded);
                                                     setQuantityToBuy(newNeeded);
                                                 }}
-                                                className="text-xs bg-white hover:bg-green-50 text-green-700 border-green-200"
+                                                className="text-xs h-8"
                                             >
-                                                Use Max Stock ({itemInInventory.centralStock})
+                                                Max Inventory
                                             </Button>
                                             <Button
                                                 variant="outline"
@@ -1176,9 +1240,9 @@ export function CheckDialog({
                                                     setQuantityFromVendor(request?.quantity || 0);
                                                     setQuantityToBuy(request?.quantity || 0);
                                                 }}
-                                                className="text-xs bg-white hover:bg-amber-50 text-amber-700 border-amber-200"
+                                                className="text-xs h-8"
                                             >
-                                                Max from Vendor
+                                                Max Vendor
                                             </Button>
                                         </div>
                                     )}
@@ -1303,6 +1367,9 @@ export function CheckDialog({
                                 </div>
                             )}
 
+                            {/* Vendor Quotes Section */}
+
+
 
 
 
@@ -1329,39 +1396,49 @@ export function CheckDialog({
                                             Cancel
                                         </Button>
 
-                                        {isManager && quantityFromInventory > 0 && quantityToBuy > 0 ? (
-                                            null // Action is in the Split Card above
-                                        ) : (!itemInInventory || (itemInInventory.centralStock || 0) === 0) ? (
+                                        <Button
+                                            variant="outline"
+                                            onClick={async () => {
+                                                await handleSave(true);
+                                                toast.success("Changes Saved");
+                                            }}
+                                            disabled={isSaving || isSubmitting}
+                                            size="sm"
+                                        >
+                                            <Save className="h-3.5 w-3.5 mr-1.5" />
+                                            Save
+                                        </Button>
+
+                                        {request?.directAction === "po" && (
                                             <Button
                                                 onClick={() => setShowDirectPOConfirm(true)}
-                                                disabled={isSaving || isSubmitting}
+                                                disabled={isSaving || isSubmitting || (quantityFromInventory > 0 && quantityToBuy > 0)}
                                                 size="sm"
-                                                className="bg-orange-600 hover:bg-orange-700 text-white"
+                                                className="bg-emerald-600 hover:bg-emerald-700 text-white"
                                             >
                                                 <ShoppingCart className="h-3.5 w-3.5 mr-1.5" />
                                                 Direct PO
                                             </Button>
-                                        ) : (
-                                            <Button
-                                                onClick={() => setShowSaveConfirm(true)}
-                                                disabled={isSaving || isSubmitting}
-                                                size="sm"
-                                                className="bg-blue-600 hover:bg-blue-700 text-white"
-                                            >
-                                                <CheckCircle className="h-3.5 w-3.5 mr-1.5" />
-                                                Ready for CC
-                                            </Button>
                                         )}
+                                        <Button
+                                            onClick={() => setShowSaveConfirm(true)}
+                                            disabled={isSaving || isSubmitting}
+                                            size="sm"
+                                            className="bg-blue-600 hover:bg-blue-700 text-white"
+                                        >
+                                            <CheckCircle className="h-3.5 w-3.5 mr-1.5" />
+                                            Ready for CC
+                                        </Button>
                                     </div>
                                 </div>
                             )}
                         </div>
                     )}
                 </DialogContent>
-            </Dialog>
+            </Dialog >
 
             {/* Direct Delivery Confirmation */}
-            <AlertDialog open={showDirectDeliveryConfirm} onOpenChange={setShowDirectDeliveryConfirm}>
+            < AlertDialog open={showDirectDeliveryConfirm} onOpenChange={setShowDirectDeliveryConfirm} >
                 <AlertDialogContent>
                     <AlertDialogHeader>
                         <AlertDialogTitle>Confirm Direct Delivery</AlertDialogTitle>
@@ -1376,10 +1453,10 @@ export function CheckDialog({
                         </AlertDialogAction>
                     </AlertDialogFooter>
                 </AlertDialogContent>
-            </AlertDialog>
+            </AlertDialog >
 
             {/* Direct PO Confirmation */}
-            <AlertDialog open={showDirectPOConfirm} onOpenChange={setShowDirectPOConfirm}>
+            < AlertDialog open={showDirectPOConfirm} onOpenChange={setShowDirectPOConfirm} >
                 <AlertDialogContent>
                     <AlertDialogHeader>
                         <AlertDialogTitle>Confirm Direct Purchase</AlertDialogTitle>
@@ -1394,10 +1471,10 @@ export function CheckDialog({
                         </AlertDialogAction>
                     </AlertDialogFooter>
                 </AlertDialogContent>
-            </AlertDialog>
+            </AlertDialog >
 
             {/* Save/Ready for CC Confirmation */}
-            <AlertDialog open={showSaveConfirm} onOpenChange={setShowSaveConfirm}>
+            < AlertDialog open={showSaveConfirm} onOpenChange={setShowSaveConfirm} >
                 <AlertDialogContent>
                     <AlertDialogHeader>
                         <AlertDialogTitle>Ready for Cost Comparison?</AlertDialogTitle>
@@ -1408,41 +1485,48 @@ export function CheckDialog({
                     <AlertDialogFooter>
                         <AlertDialogCancel>Cancel</AlertDialogCancel>
                         <AlertDialogAction onClick={async () => {
-                            // Save first
-                            await handleSave(true);
-                            // Then submit if needed
-                            if (vendorQuotes.length > 0 || quantityToBuy > 0) {
-                                try {
-                                    // If we have quotes, we can actually submit
+                            try {
+                                // 1. Handle Split if needed (Mixed Fulfillment)
+                                if (quantityFromInventory > 0 && quantityToBuy > 0) {
+                                    await splitAndDeliverInventory({
+                                        requestId: activeRequestId,
+                                        inventoryQuantity: quantityFromInventory
+                                    });
+                                    toast.success("Inventory split processed");
+                                }
+
+                                // 2. Save
+                                await handleSave(true);
+
+                                // 3. Submit/Update Status
+                                if (vendorQuotes.length > 0 || quantityToBuy > 0) {
                                     if (vendorQuotes.length > 0) {
                                         await submitCC({ requestId: activeRequestId });
                                         toast.success("Submitted for Approval");
                                     } else {
-                                        // If no quotes but quantity needed (maybe just setting up for others), just status update?
-                                        // For now, let's assume they might need to go to pending
                                         await updatePurchaseRequestStatus({
                                             requestId: activeRequestId,
-                                            status: "cc_pending"
+                                            status: "ready_for_cc"
                                         });
-                                        toast.success("Marked as Pending Approval");
+                                        toast.success("Marked as Ready for CC");
                                     }
                                     onOpenChange(false);
-                                } catch (e: any) {
-                                    toast.error("Failed to submit: " + e.message);
+                                } else {
+                                    onOpenChange(false);
+                                    toast.success("Saved");
                                 }
-                            } else {
-                                onOpenChange(false);
-                                toast.success("Saved");
+                            } catch (e: any) {
+                                toast.error("Failed: " + e.message);
                             }
                         }} className="bg-blue-600 hover:bg-blue-700">
                             Confirm & Send for Approval
                         </AlertDialogAction>
                     </AlertDialogFooter>
                 </AlertDialogContent>
-            </AlertDialog>
+            </AlertDialog >
 
             {/* Manager Split Approval Confirmation */}
-            <AlertDialog open={showSplitApproveConfirm} onOpenChange={setShowSplitApproveConfirm}>
+            < AlertDialog open={showSplitApproveConfirm} onOpenChange={setShowSplitApproveConfirm} >
                 <AlertDialogContent>
                     <AlertDialogHeader>
                         <AlertDialogTitle>Approve Mixed Fulfillment?</AlertDialogTitle>
@@ -1450,6 +1534,20 @@ export function CheckDialog({
                             This will save the split plan ({quantityFromInventory} from Inventory, {quantityToBuy} to Buy) and immediately approve it for processing.
                         </AlertDialogDescription>
                     </AlertDialogHeader>
+                    <div className="grid gap-4 py-2">
+                        <div className="grid gap-2">
+                            <Label htmlFor="split-approve-note" className="text-sm font-medium">
+                                Approval Note (Optional)
+                            </Label>
+                            <Textarea
+                                id="split-approve-note"
+                                placeholder="Add any notes about this mixed fulfillment approval..."
+                                value={managerNotes}
+                                onChange={(e) => setManagerNotes(e.target.value)}
+                                className="bg-background border-input min-h-[80px] text-sm resize-none focus-visible:ring-blue-500"
+                            />
+                        </div>
+                    </div>
                     <AlertDialogFooter>
                         <AlertDialogCancel>Cancel</AlertDialogCancel>
                         <AlertDialogAction
@@ -1468,7 +1566,8 @@ export function CheckDialog({
                                     // 2. Approve the split
                                     await approveSplit({
                                         requestId: activeRequestId,
-                                        inventoryQuantity: quantityFromInventory
+                                        inventoryQuantity: quantityFromInventory,
+                                        notes: managerNotes
                                     });
 
                                     setShowSplitApproveConfirm(false);
@@ -1486,7 +1585,30 @@ export function CheckDialog({
                         </AlertDialogAction>
                     </AlertDialogFooter>
                 </AlertDialogContent>
-            </AlertDialog>
+            </AlertDialog >
+
+            {/* Split Deliver Confirmation */}
+            < AlertDialog open={showSplitDeliverConfirm} onOpenChange={setShowSplitDeliverConfirm} >
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Confirm Inventory Delivery</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            This will deliver <strong>{quantityFromInventory} {itemInInventory?.unit}</strong> from inventory immediately.
+                            The remaining quantity ({quantityFromVendor} {request?.unit}) will proceed to vendor purchase.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction onClick={() => {
+                            handleSplitAndDeliver();
+                            setShowSplitDeliverConfirm(false);
+                        }} className="bg-green-600 hover:bg-green-700">
+                            Confirm Delivery
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog >
+
         </>
     );
 }

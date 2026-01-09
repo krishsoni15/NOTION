@@ -1806,8 +1806,9 @@ export const splitAndDeliverInventory = mutation({
     });
 
     // 2. Create new request for delivery portion
+    const { _id, _creationTime, ...requestData } = request;
     const deliveryRequestId = await ctx.db.insert("requests", {
-      ...request,
+      ...requestData,
       quantity: args.inventoryQuantity,
       status: "delivery_stage",
       directAction: "delivery",

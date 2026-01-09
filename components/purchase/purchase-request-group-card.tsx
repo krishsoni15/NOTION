@@ -691,6 +691,10 @@ export function PurchaseRequestGroupCard({
             itemInventory.centralStock > 0 &&
             itemInventory.centralStock < item.quantity
           );
+          const hasFullStock = !!(
+            itemInventory &&
+            itemInventory.centralStock >= item.quantity
+          );
           const disableDirectActions = hasPartialStock;
           const directActionDisabledReason = hasPartialStock ? "Partial stock available - please manage via CC" : undefined;
 
@@ -751,7 +755,7 @@ export function PurchaseRequestGroupCard({
               </div>
 
               {/* Vendor Details Section */}
-              {canEditVendor && (
+              {canEditVendor && (item.selectedVendorId || (item.vendorQuotes && item.vendorQuotes.length > 0) || isEditing) && (
                 <div className="mt-3 pt-3 border-t border-border/50">
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2">
@@ -934,9 +938,7 @@ export function PurchaseRequestGroupCard({
                             {item.vendorQuotes.length > 2 && ` +${item.vendorQuotes.length - 2} more`}
                           </div>
                         </>
-                      ) : (
-                        <span className="italic">No vendor selected</span>
-                      )}
+                      ) : null}
                     </div>
                   )}
                 </div>
@@ -979,8 +981,8 @@ export function PurchaseRequestGroupCard({
                         <Button
                           size="sm"
                           onClick={() => setShowReadyForDeliveryConfirm(item._id)}
-                          disabled={hasPartialStock}
-                          title={hasPartialStock ? "Cannot perform direct action on partially stocked items." : ""}
+                          disabled={!hasFullStock}
+                          title={!hasFullStock ? "Insufficient stock for direct delivery." : ""}
                           className="text-xs h-7 px-3 bg-orange-50 text-orange-700 border-orange-200 hover:bg-orange-600 hover:text-white hover:border-orange-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed font-medium shadow-sm dark:bg-orange-900/20 dark:text-orange-300 dark:border-orange-800 dark:hover:bg-orange-600"
                           variant="outline"
                         >
@@ -993,8 +995,8 @@ export function PurchaseRequestGroupCard({
                         <Button
                           size="sm"
                           onClick={() => setShowReadyForPOConfirm(item._id)}
-                          disabled={hasPartialStock}
-                          title={hasPartialStock ? "Cannot perform direct action on partially stocked items." : ""}
+                          disabled={hasFullStock}
+                          title={hasFullStock ? "Full stock available in inventory." : ""}
                           className="text-xs h-7 px-3 bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-600 hover:text-white hover:border-emerald-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed font-medium shadow-sm dark:bg-emerald-900/20 dark:text-emerald-300 dark:border-emerald-800 dark:hover:bg-emerald-600"
                           variant="outline"
                         >

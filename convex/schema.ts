@@ -287,6 +287,7 @@ export default defineSchema({
         unit: v.optional(v.string()), // Unit of measurement
         discountPercent: v.optional(v.number()), // Optional discount percentage
         gstPercent: v.optional(v.number()), // Optional GST percentage
+        perUnitBasis: v.optional(v.number()), // Optional basis for price (e.g. price per 50 units)
       })
     ),
     selectedVendorId: v.optional(v.id("vendors")), // Selected by manager

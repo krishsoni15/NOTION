@@ -751,7 +751,7 @@ export function RequestsTable({
                           )}
                           {item.status !== 'draft' && !['approved', 'rejected', 'cc_approved', 'cc_rejected'].includes(item.status) && getStatusBadge(item.status)}
                           {/* Per-item action button */}
-                          {(item.status === 'cc_pending' || item.status === 'ready_for_cc') && (
+                          {item.status === 'ready_for_cc' && (
                             <>
                               {item.directAction === 'po' && onDirectPO ? (
                                 <Button
@@ -794,6 +794,20 @@ export function RequestsTable({
                                 </Button>
                               ) : null}
                             </>
+                          )}
+                          {item.status === 'cc_rejected' && onOpenCC && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onOpenCC(item._id);
+                              }}
+                              className="h-6 px-2 text-xs border-orange-200 text-orange-700 hover:bg-orange-50"
+                            >
+                              <AlertCircle className="h-3 w-3 mr-1" />
+                              Recheck CC
+                            </Button>
                           )}
                           {onViewDetails && (
                             <Button
@@ -1196,7 +1210,7 @@ export function RequestsTable({
                                                 )}
                                                 {getStatusBadge(item.status)}
                                                 {/* Per-item action button in table view */}
-                                                {(item.status === 'cc_pending' || item.status === 'ready_for_cc') && (
+                                                {item.status === 'ready_for_cc' && (
                                                   <>
                                                     {item.directAction === 'po' && onDirectPO ? (
                                                       <Button
@@ -1243,6 +1257,20 @@ export function RequestsTable({
                                                       </Button>
                                                     ) : null}
                                                   </>
+                                                )}
+                                                {item.status === 'cc_rejected' && onOpenCC && (
+                                                  <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    onClick={(e) => {
+                                                      e.stopPropagation();
+                                                      onOpenCC(item._id);
+                                                    }}
+                                                    className="h-5 px-1.5 text-[10px] border-orange-200 text-orange-700 hover:bg-orange-50"
+                                                  >
+                                                    <AlertCircle className="h-3 w-3 mr-1" />
+                                                    Recheck CC
+                                                  </Button>
                                                 )}
                                               </div>
                                             </div>
@@ -1304,10 +1332,7 @@ export function RequestsTable({
                             </div>
                           </TableCell>
                           <TableCell>
-                            {(allItemsHaveSameStatus || overallStatus === "partially_processed")
-                              ? getStatusBadge(overallStatus || firstItem.status)
-                              : null
-                            }
+                            {getStatusBadge(overallStatus || firstItem.status)}
                           </TableCell>
                           <TableCell className="hidden lg:table-cell">
                             <div className="flex gap-2 flex-wrap">
@@ -1406,8 +1431,8 @@ export function RequestsTable({
                                     )}
                                   </>
                                 )}
-                                {/* CC button for cost comparison statuses - Only show when CC is actually pending (created by purchase) */}
-                                {firstItem.status === "cc_pending" && onOpenCC && (
+                                {/* CC button for cost comparison statuses - Only show when ready for CC */}
+                                {firstItem.status === "ready_for_cc" && onOpenCC && (
                                   <Button
                                     variant="outline"
                                     size="sm"
@@ -1418,6 +1443,21 @@ export function RequestsTable({
                                   >
                                     <FileText className="h-4 w-4 mr-1" />
                                     CC
+                                  </Button>
+                                )}
+                                {/* Recheck button for rejected CC */}
+                                {firstItem.status === "cc_rejected" && onOpenCC && (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      onOpenCC(firstItem._id);
+                                    }}
+                                    className="border-orange-200 text-orange-700 hover:bg-orange-50"
+                                  >
+                                    <AlertCircle className="h-4 w-4 mr-1" />
+                                    Recheck CC
                                   </Button>
                                 )}
                                 {/* View button - show for first item */}

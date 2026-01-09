@@ -108,10 +108,18 @@ export default defineSchema({
     totalAmount: v.number(), // Total amount after discount and GST
     notes: v.optional(v.string()),
     status: v.union(
+      v.literal("pending_approval"),
+      v.literal("approved"),
+      v.literal("rejected"),
       v.literal("ordered"),
       v.literal("delivered"),
       v.literal("cancelled")
     ),
+    perUnitBasis: v.optional(v.number()),
+    perUnitBasisUnit: v.optional(v.string()),
+    approvedBy: v.optional(v.id("users")),
+    approvedAt: v.optional(v.number()),
+    rejectionReason: v.optional(v.string()),
     isDirect: v.optional(v.boolean()), // Flag to indicate Direct PO (bypasses approval)
     validTill: v.optional(v.number()), // PO expiry date (for Direct PO)
     expectedDeliveryDate: v.optional(v.number()),

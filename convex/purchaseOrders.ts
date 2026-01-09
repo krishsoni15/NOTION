@@ -183,6 +183,9 @@ export const createDirectPO = mutation({
         gstTaxRate: v.number(),
         validTill: v.number(),
         notes: v.optional(v.string()),
+        discountPercent: v.optional(v.number()),
+        perUnitBasis: v.optional(v.number()),
+        perUnitBasisUnit: v.optional(v.string()),
     },
     handler: async (ctx, args) => {
         const currentUser = await getCurrentUser(ctx);
@@ -216,9 +219,19 @@ export const createDirectPO = mutation({
         }
 
         // Calculate total amount
-        const subtotal = args.quantity * args.unitRate;
-        const taxAmount = (subtotal * args.gstTaxRate) / 100;
-        const totalAmount = subtotal + taxAmount;
+        const basis = args.perUnitBasis || 1;
+        const discount = args.discountPercent || 0;
+
+        // Calculate amount based on basis
+        const baseAmount = (args.quantity / basis) * args.unitRate;
+
+        // Apply discount
+        const discountAmount = (baseAmount * discount) / 100;
+        const taxableAmount = baseAmount - discountAmount;
+
+        // Calculate tax
+        const taxAmount = (taxableAmount * args.gstTaxRate) / 100;
+        const totalAmount = taxableAmount + taxAmount;
 
         // Generate PO number
         const poNumber = await generatePONumber(ctx);
@@ -235,13 +248,15 @@ export const createDirectPO = mutation({
             unit: args.unit,
             hsnSacCode: args.hsnSacCode,
             unitRate: args.unitRate,
-            discountPercent: undefined, // No discount for Direct PO
+            discountPercent: args.discountPercent,
             gstTaxRate: args.gstTaxRate,
             totalAmount,
             notes: args.notes,
-            status: "ordered",
+            status: "pending_approval", // Direct POs now go for approval
             isDirect: true,
             validTill: args.validTill,
+            perUnitBasis: args.perUnitBasis,
+            perUnitBasisUnit: args.perUnitBasisUnit,
             createdAt: now,
             updatedAt: now,
         });
@@ -316,5 +331,54 @@ export const cancelPO = mutation({
         });
 
         return args.poId;
+    },
+});
+
+/**
+ * Approve Direct PO
+ */
+export const approveDirectPO = mutation({
+    args: { poId: v.id("purchaseOrders") },
+    handler: async (ctx, args) => {
+        const currentUser = await getCurrentUser(ctx);
+        if (currentUser.role !== "manager") {
+            throw new Error("Unauthorized: Only Managers can approve POs");
+        }
+
+        const po = await ctx.db.get(args.poId);
+        if (!po) throw new Error("PO not found");
+        if (po.status !== "pending_approval") throw new Error("PO is not pending approval");
+
+        await ctx.db.patch(args.poId, {
+            status: "ordered",
+            approvedBy: currentUser._id,
+            approvedAt: Date.now(),
+            updatedAt: Date.now(),
+        });
+    },
+});
+
+/**
+ * Reject Direct PO
+ */
+export const rejectDirectPO = mutation({
+    args: { poId: v.id("purchaseOrders"), reason: v.string() },
+    handler: async (ctx, args) => {
+        const currentUser = await getCurrentUser(ctx);
+        if (currentUser.role !== "manager") {
+            throw new Error("Unauthorized: Only Managers can reject POs");
+        }
+
+        const po = await ctx.db.get(args.poId);
+        if (!po) throw new Error("PO not found");
+        if (po.status !== "pending_approval") throw new Error("PO is not pending approval");
+
+        await ctx.db.patch(args.poId, {
+            status: "rejected",
+            rejectionReason: args.reason,
+            approvedBy: currentUser._id,
+            approvedAt: Date.now(),
+            updatedAt: Date.now(),
+        });
     },
 });

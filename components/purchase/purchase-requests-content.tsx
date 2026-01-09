@@ -42,7 +42,6 @@ const statusConfig: Record<string, { label: string; variant: "default" | "second
   recheck: { label: "Recheck", variant: "default", icon: AlertCircle, color: "orange" },
   ready_for_cc: { label: "Ready for CC", variant: "default", icon: FileText, color: "blue" },
   cc_pending: { label: "CC Pending", variant: "secondary", icon: Clock, color: "amber" },
-  cc_approved: { label: "CC Approved", variant: "default", icon: CheckCircle, color: "green" },
   cc_rejected: { label: "CC Rejected", variant: "destructive", icon: XCircle, color: "red" },
   ready_for_po: { label: "Ready for PO", variant: "default", icon: ShoppingCart, color: "emerald" },
   pending_po: { label: "Pending PO", variant: "secondary", icon: Clock, color: "amber" },
@@ -157,6 +156,10 @@ export function PurchaseRequestsContent() {
 
   const handleCheck = (requestId: Id<"requests">) => {
     setCheckRequestId(requestId);
+  };
+
+  const handleCreatePO = (requestId: Id<"requests">) => {
+    setShowDirectPODialog(true);
   };
 
   return (
@@ -390,6 +393,7 @@ export function PurchaseRequestsContent() {
                   onDirectDelivery={handleDirectDelivery}
                   onMoveToCC={handleMoveToCC}
                   onCheck={handleCheck}
+                  onCreatePO={handleCreatePO}
                 />
               );
             })}

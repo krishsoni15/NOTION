@@ -60,6 +60,7 @@ interface RequestItem {
   notesCount?: number;
   isSplitApproved?: boolean;
   directAction?: "po" | "delivery";
+  rejectionReason?: string;
 }
 
 interface Vendor {
@@ -99,6 +100,7 @@ interface PurchaseRequestGroupCardProps {
 
   onMoveToCC?: (requestId: Id<"requests">) => void;
   onCheck?: (requestId: Id<"requests">) => void;
+  onCreatePO?: (requestId: Id<"requests">) => void;
 }
 
 // Helper function to collect photos
@@ -407,6 +409,7 @@ export function PurchaseRequestGroupCard({
   onDirectDelivery,
   onMoveToCC,
   onCheck,
+  onCreatePO,
 }: PurchaseRequestGroupCardProps) {
   const StatusIcon = statusInfo.icon;
 
@@ -754,6 +757,23 @@ export function PurchaseRequestGroupCard({
                 </div>
               </div>
 
+              {/* Rejection Reason Display */}
+              {((item.status === 'rejected' || item.status === 'cc_rejected' || item.status === 'rejected_po') && item.rejectionReason) && (
+                <div className="mt-3 p-3 bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-800 rounded-md">
+                  <div className="flex items-start gap-2">
+                    <AlertCircle className="h-4 w-4 text-red-600 dark:text-red-400 mt-0.5" />
+                    <div className="flex-1">
+                      <h4 className="text-xs font-semibold text-red-700 dark:text-red-300 mb-1">
+                        Reason for Rejection:
+                      </h4>
+                      <p className="text-xs text-red-600 dark:text-red-400 leading-relaxed">
+                        {item.rejectionReason}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Vendor Details Section */}
               {canEditVendor && (item.selectedVendorId || (item.vendorQuotes && item.vendorQuotes.length > 0) || isEditing) && (
                 <div className="mt-3 pt-3 border-t border-border/50">
@@ -1035,7 +1055,7 @@ export function PurchaseRequestGroupCard({
 
 
 
-                  {(item.status === "ready_for_cc" || item.status === "cc_pending") && (
+                  {item.status === "ready_for_cc" && (
                     <Button
                       size="sm"
                       onClick={() => (onOpenCC || onCheck)?.(item._id)}
@@ -1044,6 +1064,30 @@ export function PurchaseRequestGroupCard({
                     >
                       <FileText className="h-3.5 w-3.5 mr-1.5" />
                       CC
+                    </Button>
+                  )}
+
+                  {item.status === "cc_rejected" && (
+                    <Button
+                      size="sm"
+                      onClick={() => (onOpenCC || onCheck)?.(item._id)}
+                      className="text-xs h-7 px-3 bg-orange-50 text-orange-700 border-orange-200 hover:bg-orange-600 hover:text-white hover:border-orange-600 transition-all shadow-sm font-medium dark:bg-orange-900/20 dark:text-orange-300 dark:border-orange-800 dark:hover:bg-orange-600"
+                      variant="outline"
+                    >
+                      <AlertCircle className="h-3.5 w-3.5 mr-1.5" />
+                      Recheck CC
+                    </Button>
+                  )}
+
+                  {item.status === "ready_for_po" && onCreatePO && (
+                    <Button
+                      size="sm"
+                      onClick={() => onCreatePO(item._id)}
+                      className="text-xs h-7 px-3 bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-600 hover:text-white hover:border-emerald-600 transition-all shadow-sm font-medium dark:bg-emerald-900/20 dark:text-emerald-300 dark:border-emerald-800 dark:hover:bg-emerald-600"
+                      variant="outline"
+                    >
+                      <ShoppingCart className="h-3.5 w-3.5 mr-1.5" />
+                      Create PO
                     </Button>
                   )}
                   <Button

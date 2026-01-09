@@ -410,9 +410,10 @@ export const reviewCostComparison = mutation({
         updatedAt: now,
       });
 
-      // Update request status back to ready_for_cc
+      // Update request status to cc_rejected so it appears in the rejected section
       await ctx.db.patch(args.requestId, {
-        status: "ready_for_cc",
+        status: "cc_rejected",
+        rejectionReason: args.notes.trim(),
         updatedAt: now,
       });
 

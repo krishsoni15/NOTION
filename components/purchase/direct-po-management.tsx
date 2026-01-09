@@ -13,6 +13,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import {
     Table,
     TableBody,
@@ -31,6 +32,14 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import {
@@ -45,41 +54,70 @@ import {
     Clock,
     Eye,
     Zap,
+    AlertTriangle,
+    Check,
+    X,
 } from "lucide-react";
 import type { Id } from "@/convex/_generated/dataModel";
 import { cn } from "@/lib/utils";
 
 // Status configuration
-const statusConfig = {
+const statusConfig: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline"; icon: any; className?: string }> = {
+    pending_approval: {
+        label: "Pending Approval",
+        variant: "secondary",
+        icon: AlertTriangle,
+        className: "bg-amber-100 text-amber-700 hover:bg-amber-100/80 border-amber-200",
+    },
+    approved: { // Not effectively used if we skip to Ordered, but good to have
+        label: "Approved",
+        variant: "default",
+        icon: CheckCircle2,
+        className: "bg-emerald-600 text-white hover:bg-emerald-700",
+    },
     ordered: {
         label: "Ordered",
-        variant: "default" as const,
+        variant: "default",
         icon: Clock,
-        color: "blue",
+        className: "bg-blue-600 text-white hover:bg-blue-700",
     },
     delivered: {
         label: "Delivered",
-        variant: "default" as const,
+        variant: "default",
         icon: CheckCircle2,
-        color: "green",
+        className: "bg-green-600 text-white hover:bg-green-700",
     },
     cancelled: {
         label: "Cancelled",
-        variant: "destructive" as const,
+        variant: "destructive",
         icon: XCircle,
-        color: "red",
+        className: "",
+    },
+    rejected: {
+        label: "Rejected",
+        variant: "destructive",
+        icon: XCircle,
+        className: "",
     },
 };
 
 export function DirectPOManagement() {
     const directPOs = useQuery(api.purchaseOrders.getDirectPurchaseOrders);
+    const currentUser = useQuery(api.users.getCurrentUser);
+
     const updatePOStatus = useMutation(api.purchaseOrders.updatePOStatus);
     const cancelPO = useMutation(api.purchaseOrders.cancelPO);
+    const approvePO = useMutation(api.purchaseOrders.approveDirectPO);
+    const rejectPO = useMutation(api.purchaseOrders.rejectDirectPO);
 
     const [searchQuery, setSearchQuery] = useState("");
     const [selectedPO, setSelectedPO] = useState<any | null>(null);
     const [showCancelDialog, setShowCancelDialog] = useState(false);
+    const [showRejectDialog, setShowRejectDialog] = useState(false);
+    const [rejectReason, setRejectReason] = useState("");
     const [isLoading, setIsLoading] = useState(false);
+
+    const isManager = currentUser?.role === "manager";
 
     // Filter POs based on search
     const filteredPOs = useMemo(() => {
@@ -99,15 +137,16 @@ export function DirectPOManagement() {
 
     // Calculate stats
     const stats = useMemo(() => {
-        if (!directPOs) return { total: 0, ordered: 0, delivered: 0, cancelled: 0, totalValue: 0 };
+        if (!directPOs) return { total: 0, pending: 0, ordered: 0, delivered: 0, cancelled: 0, totalValue: 0 };
 
         const total = directPOs.length;
+        const pending = directPOs.filter((po) => po.status === "pending_approval").length;
         const ordered = directPOs.filter((po) => po.status === "ordered").length;
         const delivered = directPOs.filter((po) => po.status === "delivered").length;
-        const cancelled = directPOs.filter((po) => po.status === "cancelled").length;
+        const cancelled = directPOs.filter((po) => po.status === "cancelled" || po.status === "rejected").length;
         const totalValue = directPOs.reduce((sum, po) => sum + po.totalAmount, 0);
 
-        return { total, ordered, delivered, cancelled, totalValue };
+        return { total, pending, ordered, delivered, cancelled, totalValue };
     }, [directPOs]);
 
     const handleMarkDelivered = async (poId: Id<"purchaseOrders">) => {
@@ -142,6 +181,37 @@ export function DirectPOManagement() {
         }
     };
 
+    const handleApprovePO = async (poId: Id<"purchaseOrders">) => {
+        setIsLoading(true);
+        try {
+            await approvePO({ poId });
+            toast.success("Direct PO Approved", {
+                description: "The PO has been marked as ordered.",
+            });
+        } catch (err) {
+            toast.error(err instanceof Error ? err.message : "Failed to approve PO");
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+    const handleRejectPO = async () => {
+        if (!selectedPO || !rejectReason.trim()) return;
+
+        setIsLoading(true);
+        try {
+            await rejectPO({ poId: selectedPO._id, reason: rejectReason });
+            toast.success("Direct PO Rejected");
+            setShowRejectDialog(false);
+            setSelectedPO(null);
+            setRejectReason("");
+        } catch (err) {
+            toast.error(err instanceof Error ? err.message : "Failed to reject PO");
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
     return (
         <>
             <div className="space-y-6">
@@ -152,17 +222,26 @@ export function DirectPOManagement() {
                         <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Direct Purchase Orders</h1>
                     </div>
                     <p className="text-sm text-muted-foreground">
-                        Emergency procurement orders created without approval workflow
+                        Manage Direct Purchase Orders and Approvals
                     </p>
                 </div>
 
                 {/* Stats Cards */}
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
                     <Card>
                         <CardContent className="pt-6">
                             <div className="text-center space-y-2">
                                 <div className="text-2xl font-bold">{stats.total}</div>
                                 <div className="text-xs text-muted-foreground">Total POs</div>
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    <Card className="bg-amber-50 dark:bg-amber-900/10 border-amber-200 dark:border-amber-800">
+                        <CardContent className="pt-6">
+                            <div className="text-center space-y-2">
+                                <div className="text-2xl font-bold text-amber-600 dark:text-amber-500">{stats.pending}</div>
+                                <div className="text-xs text-amber-600/80 dark:text-amber-500/80 font-medium">Pending Approval</div>
                             </div>
                         </CardContent>
                     </Card>
@@ -189,7 +268,7 @@ export function DirectPOManagement() {
                         <CardContent className="pt-6">
                             <div className="text-center space-y-2">
                                 <div className="text-2xl font-bold text-red-600">{stats.cancelled}</div>
-                                <div className="text-xs text-muted-foreground">Cancelled</div>
+                                <div className="text-xs text-muted-foreground">Cancelled/Rejected</div>
                             </div>
                         </CardContent>
                     </Card>
@@ -253,7 +332,6 @@ export function DirectPOManagement() {
                                             <TableHead>Site</TableHead>
                                             <TableHead>Quantity</TableHead>
                                             <TableHead>Amount</TableHead>
-                                            <TableHead>Valid Till</TableHead>
                                             <TableHead>Status</TableHead>
                                             <TableHead>Created</TableHead>
                                             <TableHead className="text-right">Actions</TableHead>
@@ -261,9 +339,8 @@ export function DirectPOManagement() {
                                     </TableHeader>
                                     <TableBody>
                                         {filteredPOs.map((po) => {
-                                            const status = statusConfig[po.status];
+                                            const status = statusConfig[po.status] || statusConfig.ordered;
                                             const StatusIcon = status.icon;
-                                            const isExpired = po.validTill && po.validTill < Date.now();
 
                                             return (
                                                 <TableRow key={po._id}>
@@ -300,31 +377,48 @@ export function DirectPOManagement() {
                                                         ₹{po.totalAmount.toLocaleString()}
                                                     </TableCell>
                                                     <TableCell>
-                                                        {po.validTill ? (
-                                                            <div className={cn(
-                                                                "text-sm",
-                                                                isExpired && "text-red-600 font-medium"
-                                                            )}>
-                                                                {format(new Date(po.validTill), "MMM dd, yyyy")}
-                                                                {isExpired && (
-                                                                    <div className="text-xs">(Expired)</div>
-                                                                )}
-                                                            </div>
-                                                        ) : (
-                                                            "N/A"
-                                                        )}
-                                                    </TableCell>
-                                                    <TableCell>
-                                                        <Badge variant={status.variant} className="gap-1">
+                                                        <Badge variant={status.variant} className={cn("gap-1", status.className)}>
                                                             <StatusIcon className="h-3 w-3" />
                                                             {status.label}
                                                         </Badge>
+                                                        {po.status === 'rejected' && po.rejectionReason && (
+                                                            <div className="text-xs text-red-600 mt-1 max-w-[150px] truncate" title={po.rejectionReason}>
+                                                                Reason: {po.rejectionReason}
+                                                            </div>
+                                                        )}
                                                     </TableCell>
                                                     <TableCell className="text-sm text-muted-foreground">
                                                         {format(new Date(po.createdAt), "MMM dd, yyyy")}
                                                     </TableCell>
                                                     <TableCell className="text-right">
                                                         <div className="flex items-center justify-end gap-2">
+                                                            {po.status === "pending_approval" && isManager && (
+                                                                <>
+                                                                    <Button
+                                                                        size="sm"
+                                                                        onClick={() => handleApprovePO(po._id)}
+                                                                        disabled={isLoading}
+                                                                        className="bg-green-600 hover:bg-green-700 text-white h-8 px-2"
+                                                                    >
+                                                                        <Check className="h-4 w-4 mr-1" />
+                                                                        Approve
+                                                                    </Button>
+                                                                    <Button
+                                                                        size="sm"
+                                                                        variant="destructive"
+                                                                        onClick={() => {
+                                                                            setSelectedPO(po);
+                                                                            setShowRejectDialog(true);
+                                                                        }}
+                                                                        disabled={isLoading}
+                                                                        className="h-8 px-2"
+                                                                    >
+                                                                        <X className="h-4 w-4 mr-1" />
+                                                                        Reject
+                                                                    </Button>
+                                                                </>
+                                                            )}
+
                                                             {po.status === "ordered" && (
                                                                 <>
                                                                     <Button
@@ -384,6 +478,34 @@ export function DirectPOManagement() {
                     </AlertDialogFooter>
                 </AlertDialogContent>
             </AlertDialog>
+
+            {/* Reject Dialog */}
+            <Dialog open={showRejectDialog} onOpenChange={setShowRejectDialog}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Reject Direct PO</DialogTitle>
+                        <DialogDescription>
+                            Please provide a reason for rejecting this Purchase Order.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="py-4">
+                        <Textarea
+                            placeholder="Rejection reason..."
+                            value={rejectReason}
+                            onChange={(e) => setRejectReason(e.target.value)}
+                            rows={4}
+                        />
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setShowRejectDialog(false)} disabled={isLoading}>
+                            Cancel
+                        </Button>
+                        <Button variant="destructive" onClick={handleRejectPO} disabled={!rejectReason.trim() || isLoading}>
+                            {isLoading ? "Rejecting..." : "Reject PO"}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </>
     );
 }

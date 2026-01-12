@@ -29,10 +29,11 @@ import { PurchaseRequestGroupCard } from "./purchase-request-group-card";
 import { CostComparisonDialog } from "./cost-comparison-dialog";
 import { CompactImageGallery } from "@/components/ui/image-gallery";
 import { cn } from "@/lib/utils";
-import { DirectPODialog } from "./direct-po-dialog";
+import { DirectPODialog, type DirectPOInitialData } from "./direct-po-dialog";
 import { CheckDialog } from "./check-dialog";
 import { useViewMode } from "@/hooks/use-view-mode";
 import { RequestsTable } from "@/components/requests/requests-table";
+import { PDFPreviewDialog } from "./pdf-preview-dialog";
 
 // Enhanced status configuration with better visual hierarchy
 const statusConfig: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline"; icon: any; color: string }> = {
@@ -63,6 +64,8 @@ export function PurchaseRequestsContent() {
   const [selectedItemName, setSelectedItemName] = useState<string | null>(null);
   const [selectedSiteId, setSelectedSiteId] = useState<Id<"sites"> | null>(null);
   const [showDirectPODialog, setShowDirectPODialog] = useState(false);
+  const [directPOInitialData, setDirectPOInitialData] = useState<DirectPOInitialData | null>(null);
+  const [pdfPreviewPoNumber, setPdfPreviewPoNumber] = useState<string | null>(null);
 
   const allRequests = useQuery(api.requests.getPurchaseRequestsByStatus, {});
 
@@ -161,6 +164,38 @@ export function PurchaseRequestsContent() {
   };
 
   const handleCreatePO = (requestId: Id<"requests">) => {
+    const request = allRequests?.find(r => r._id === requestId);
+
+    if (request) {
+      let unitPrice = 0;
+      let vendorId = request.selectedVendorId;
+
+      // Try to find price from selected vendor quote
+      if (vendorId && request.vendorQuotes) {
+        const quote = request.vendorQuotes.find(q => q.vendorId === vendorId);
+        if (quote) {
+          unitPrice = quote.unitPrice || 0;
+        }
+      }
+
+      setDirectPOInitialData({
+        requestNumber: request.requestNumber,
+        vendorId: vendorId || undefined,
+        deliverySiteId: request.site?._id,
+        deliverySiteName: request.site?.name,
+        items: [{
+          requestId: request._id,
+          itemDescription: request.itemName,
+          description: request.description,
+          quantity: request.quantity,
+          unit: request.unit,
+          unitPrice: unitPrice,
+        }]
+      });
+    } else {
+      setDirectPOInitialData(null);
+    }
+
     setShowDirectPODialog(true);
   };
 
@@ -396,6 +431,7 @@ export function PurchaseRequestsContent() {
                   onMoveToCC={handleMoveToCC}
                   onCheck={handleCheck}
                   onCreatePO={handleCreatePO}
+                  onViewPDF={setPdfPreviewPoNumber}
                 />
               );
             })}
@@ -452,7 +488,17 @@ export function PurchaseRequestsContent() {
 
       <DirectPODialog
         open={showDirectPODialog}
-        onOpenChange={setShowDirectPODialog}
+        onOpenChange={(open) => {
+          setShowDirectPODialog(open);
+          if (!open) setDirectPOInitialData(null);
+        }}
+        initialData={directPOInitialData}
+      />
+
+      <PDFPreviewDialog
+        open={!!pdfPreviewPoNumber}
+        onOpenChange={(open) => !open && setPdfPreviewPoNumber(null)}
+        poNumber={pdfPreviewPoNumber}
       />
     </>
   );

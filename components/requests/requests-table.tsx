@@ -547,536 +547,552 @@ export function RequestsTable({
 
   // Card View Component
   const CardView = () => (
-    <div className="grid grid-cols-[repeat(auto-fit,minmax(350px,1fr))] min-[1500px]:grid-cols-3 gap-3 sm:gap-4">
-      {groupedRequestsArray.map((group) => {
-        const { requestNumber, items, firstItem } = group;
-        const isExpanded = expandedGroups.has(requestNumber);
-        const isNewlySent = newlySentRequestNumbers.has(requestNumber);
-        const hasMultipleItems = items.length > 1;
-        const urgentCount = items.filter((item) => item.isUrgent).length;
-        const totalItems = items.length;
+    <>
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(350px,1fr))] min-[1500px]:grid-cols-3 gap-3 sm:gap-4">
+        {groupedRequestsArray.map((group) => {
+          const { requestNumber, items, firstItem } = group;
+          const isExpanded = expandedGroups.has(requestNumber);
+          const isNewlySent = newlySentRequestNumbers.has(requestNumber);
+          const hasMultipleItems = items.length > 1;
+          const urgentCount = items.filter((item) => item.isUrgent).length;
+          const totalItems = items.length;
 
-        // Count items with cc_pending status for group CC button
-        const ccPendingItems = items.filter((item) => item.status === 'cc_pending');
-        const ccPendingCount = ccPendingItems.length;
-        const ccPendingIds = ccPendingItems.map((item) => item._id);
+          // Count items with cc_pending status for group CC button
+          const ccPendingItems = items.filter((item) => item.status === 'cc_pending');
+          const ccPendingCount = ccPendingItems.length;
+          const ccPendingIds = ccPendingItems.map((item) => item._id);
 
-        // Check if all items in the group have the same status
-        const allItemsHaveSameStatus = items.length > 0
-          ? items.every((item) => item.status === items[0].status)
-          : true;
+          // Check if all items in the group have the same status
+          const allItemsHaveSameStatus = items.length > 0
+            ? items.every((item) => item.status === items[0].status)
+            : true;
 
-        // Determine overall request status
-        const getOverallStatus = () => {
-          if (allItemsHaveSameStatus) {
-            return items[0].status;
-          }
+          // Determine overall request status
+          const getOverallStatus = () => {
+            if (allItemsHaveSameStatus) {
+              return items[0].status;
+            }
 
-          // Check if we have mixed processed statuses (not pending/draft)
-          const processedStatuses = items.filter(item =>
-            !["pending", "draft"].includes(item.status)
-          );
+            // Check if we have mixed processed statuses (not pending/draft)
+            const processedStatuses = items.filter(item =>
+              !["pending", "draft"].includes(item.status)
+            );
 
-          if (processedStatuses.length > 0 && processedStatuses.length < items.length) {
-            // Some items processed, some still pending - partially processed
-            return "partially_processed";
-          }
+            if (processedStatuses.length > 0 && processedStatuses.length < items.length) {
+              // Some items processed, some still pending - partially processed
+              return "partially_processed";
+            }
 
-          // All items are pending/draft or truly mixed
-          return null;
-        };
+            // All items are pending/draft or truly mixed
+            return null;
+          };
 
-        const overallStatus = getOverallStatus();
+          const overallStatus = getOverallStatus();
 
-        return (
-          <div
-            key={requestNumber}
-            className={cn(
-              "border rounded-lg p-3 sm:p-4 bg-card shadow-sm grouped-card-hover touch-manipulation",
-              isNewlySent && "bg-primary/10 border-l-4 border-l-primary shadow-md"
-            )}
-          >
-            {/* Card Header */}
-            <div className="flex items-start justify-between mb-3">
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 mb-1 flex-nowrap overflow-x-auto">
-                  <span className="font-mono text-xs font-semibold text-primary flex-shrink-0">
-                    #{requestNumber}
-                  </span>
-                  {(allItemsHaveSameStatus || overallStatus === "partially_processed") && (
-                    <div className="flex-shrink-0">
-                      {getStatusBadge(overallStatus || firstItem.status)}
-                    </div>
-                  )}
-                  {urgentCount > 0 && (
-                    <Badge
-                      variant="destructive"
-                      className="flex items-center gap-1 text-xs flex-shrink-0"
-                    >
-                      <AlertCircle className="h-3 w-3" />
-                      {urgentCount}/{totalItems} urgent{urgentCount > 1 ? 's' : ''}
-                    </Badge>
-                  )}
-                </div>
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    {firstItem.site?.address && (
-                      <button
-                        onClick={() => handleOpenInMap(firstItem.site?.address || '')}
-                        className="text-primary hover:text-primary/80 hover:bg-primary/10 rounded-full p-2 transition-colors shrink-0 border border-primary/20 hover:border-primary/40"
-                        title="Open in Maps"
-                      >
-                        <MapPin className="h-3.5 w-3.5" />
-                      </button>
+          return (
+            <div
+              key={requestNumber}
+              className={cn(
+                "border rounded-lg p-3 sm:p-4 bg-card shadow-sm grouped-card-hover touch-manipulation",
+                isNewlySent && "bg-primary/10 border-l-4 border-l-primary shadow-md"
+              )}
+            >
+              {/* Card Header */}
+              <div className="flex items-start justify-between mb-3">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1 flex-nowrap overflow-x-auto">
+                    <span className="font-mono text-xs font-semibold text-primary flex-shrink-0">
+                      #{requestNumber}
+                    </span>
+                    {(allItemsHaveSameStatus || overallStatus === "partially_processed") && (
+                      <div className="flex-shrink-0">
+                        {getStatusBadge(overallStatus || firstItem.status)}
+                      </div>
                     )}
-                    {firstItem.site ? (
-                      <button
-                        onClick={() => setSelectedSiteId(firstItem.site!._id)}
-                        className="font-semibold text-sm text-foreground hover:text-primary hover:bg-muted/50 rounded-full px-3 py-1.5 -mx-2 -my-1 transition-colors cursor-pointer text-left truncate flex-1 border border-transparent hover:border-primary/20"
+                    {urgentCount > 0 && (
+                      <Badge
+                        variant="destructive"
+                        className="flex items-center gap-1 text-xs flex-shrink-0"
                       >
-                        {firstItem.site.name}
-                      </button>
+                        <AlertCircle className="h-3 w-3" />
+                        {urgentCount}/{totalItems} urgent{urgentCount > 1 ? 's' : ''}
+                      </Badge>
+                    )}
+                  </div>
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      {firstItem.site?.address && (
+                        <button
+                          onClick={() => handleOpenInMap(firstItem.site?.address || '')}
+                          className="text-primary hover:text-primary/80 hover:bg-primary/10 rounded-full p-2 transition-colors shrink-0 border border-primary/20 hover:border-primary/40"
+                          title="Open in Maps"
+                        >
+                          <MapPin className="h-3.5 w-3.5" />
+                        </button>
+                      )}
+                      {firstItem.site ? (
+                        <button
+                          onClick={() => setSelectedSiteId(firstItem.site!._id)}
+                          className="font-semibold text-sm text-foreground hover:text-primary hover:bg-muted/50 rounded-full px-3 py-1.5 -mx-2 -my-1 transition-colors cursor-pointer text-left truncate flex-1 border border-transparent hover:border-primary/20"
+                        >
+                          {firstItem.site.name}
+                        </button>
+                      ) : (
+                        "—"
+                      )}
+                    </div>
+                    {/* Summary Counts */}
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground ml-1">
+                      <span>{items.length} items</span>
+                      {items.filter(i => i.status === 'pending').length > 0 && (
+                        <span className="text-yellow-600 font-medium dark:text-yellow-400">
+                          • {items.filter(i => i.status === 'pending').length} pending
+                        </span>
+                      )}
+                    </div>
+                    {/* Rejection Reason */}
+                    {(firstItem.status === 'rejected' || firstItem.status === 'cc_rejected' || firstItem.status === 'rejected_po') && firstItem.rejectionReason && (
+                      <div className="text-xs text-destructive mt-1 font-medium bg-destructive/10 px-2 py-1 rounded-md border border-destructive/20">
+                        Rejected: {firstItem.rejectionReason}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {hasMultipleItems && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="shrink-0 text-xs touch-manipulation min-h-[32px]"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      toggleGroup(requestNumber);
+                    }}
+                  >
+                    {isExpanded ? (
+                      <ChevronDown className="h-4 w-4" />
                     ) : (
-                      "—"
+                      <>
+                        <ChevronRight className="h-4 w-4 mr-1" />
+                        <span className="font-semibold">({items.length})</span>
+                      </>
                     )}
-                  </div>
-                  {/* Summary Counts */}
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground ml-1">
-                    <span>{items.length} items</span>
-                    {items.filter(i => i.status === 'pending').length > 0 && (
-                      <span className="text-yellow-600 font-medium dark:text-yellow-400">
-                        • {items.filter(i => i.status === 'pending').length} pending
-                      </span>
-                    )}
-                  </div>
-                  {/* Rejection Reason */}
-                  {(firstItem.status === 'rejected' || firstItem.status === 'cc_rejected' || firstItem.status === 'rejected_po') && firstItem.rejectionReason && (
-                    <div className="text-xs text-destructive mt-1 font-medium bg-destructive/10 px-2 py-1 rounded-md border border-destructive/20">
-                      Rejected: {firstItem.rejectionReason}
-                    </div>
-                  )}
-                </div>
+                  </Button>
+                )}
               </div>
 
-              {hasMultipleItems && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="shrink-0 text-xs touch-manipulation min-h-[32px]"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    toggleGroup(requestNumber);
-                  }}
-                >
-                  {isExpanded ? (
-                    <ChevronDown className="h-4 w-4" />
-                  ) : (
-                    <>
-                      <ChevronRight className="h-4 w-4 mr-1" />
-                      <span className="font-semibold">({items.length})</span>
-                    </>
-                  )}
-                </Button>
-              )}
-            </div>
-
-            {/* Items List */}
-            <div
-              className={cn("space-y-3 mb-3", hasMultipleItems && "cursor-pointer")}
-              onClick={() => hasMultipleItems && toggleGroup(requestNumber)}
-            >
-              {isExpanded ? (
-                items.map((item, idx) => {
-                  const displayNumber = item.itemOrder ?? (items.length - idx);
-                  return (
-                    <div
-                      key={item._id}
-                      className={cn(
-                        "p-3 rounded-lg border shadow-sm",
-                        (item.status === "approved" || item.status === "cc_approved" || item.status === "delivered") && "bg-green-50 border-green-200 dark:bg-green-950/20 dark:border-green-800",
-                        (item.status === "rejected" || item.status === "cc_rejected" || item.status === "rejected_po") && "bg-red-50 border-red-200 dark:bg-red-950/20 dark:border-red-800",
-                        !["approved", "cc_approved", "delivered", "rejected", "cc_rejected", "rejected_po"].includes(item.status) && "bg-card/50"
-                      )}
-                    >
-                      <div className="flex items-start justify-between gap-2 mb-2">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-1">
-                            <Badge variant="outline" className="text-xs px-1.5 py-0.5 h-5 min-w-[24px] flex items-center justify-center flex-shrink-0">
-                              {displayNumber}
-                            </Badge>
-                            <div className="space-y-1 text-sm flex-1 min-w-0">
-                              <div className="break-words">
-                                <span className="font-medium text-muted-foreground">Item:</span>{" "}
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setSelectedItemName(item.itemName);
-                                  }}
-                                  className="font-semibold text-sm text-foreground hover:text-primary hover:bg-muted/50 rounded-full px-3 py-1.5 -mx-2 -my-1 transition-colors cursor-pointer text-left border border-transparent hover:border-primary/20 whitespace-normal"
-                                >
-                                  {item.itemName}
-                                </button>
-                              </div>
-                              {item.description && (
-                                <div className="text-xs text-muted-foreground break-words whitespace-normal">
-                                  <span className="font-medium">Dis:</span> {item.description}
+              {/* Items List */}
+              <div
+                className={cn("space-y-3 mb-3", hasMultipleItems && "cursor-pointer")}
+                onClick={() => hasMultipleItems && toggleGroup(requestNumber)}
+              >
+                {isExpanded ? (
+                  items.map((item, idx) => {
+                    const displayNumber = item.itemOrder ?? (items.length - idx);
+                    return (
+                      <div
+                        key={item._id}
+                        className={cn(
+                          "p-3 rounded-lg border shadow-sm",
+                          (item.status === "approved" || item.status === "cc_approved" || item.status === "delivered") && "bg-green-50 border-green-200 dark:bg-green-950/20 dark:border-green-800",
+                          (item.status === "rejected" || item.status === "cc_rejected" || item.status === "rejected_po") && "bg-red-50 border-red-200 dark:bg-red-950/20 dark:border-red-800",
+                          !["approved", "cc_approved", "delivered", "rejected", "cc_rejected", "rejected_po"].includes(item.status) && "bg-card/50"
+                        )}
+                      >
+                        <div className="flex items-start justify-between gap-2 mb-2">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-1">
+                              <Badge variant="outline" className="text-xs px-1.5 py-0.5 h-5 min-w-[24px] flex items-center justify-center flex-shrink-0">
+                                {displayNumber}
+                              </Badge>
+                              <div className="space-y-1 text-sm flex-1 min-w-0">
+                                <div className="break-words">
+                                  <span className="font-medium text-muted-foreground">Item:</span>{" "}
+                                  <button
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setSelectedItemName(item.itemName);
+                                    }}
+                                    className="font-semibold text-sm text-foreground hover:text-primary hover:bg-muted/50 rounded-full px-3 py-1.5 -mx-2 -my-1 transition-colors cursor-pointer text-left border border-transparent hover:border-primary/20 whitespace-normal"
+                                  >
+                                    {item.itemName}
+                                  </button>
                                 </div>
-                              )}
-                              <div className="text-xs text-muted-foreground flex flex-wrap items-center gap-2">
-                                <span><span className="font-medium">Quantity:</span> {item.quantity} {item.unit}</span>
-                                {item.specsBrand && (
-                                  <span className="text-primary">• {item.specsBrand}</span>
+                                {item.description && (
+                                  <div className="text-xs text-muted-foreground break-words whitespace-normal">
+                                    <span className="font-medium">Dis:</span> {item.description}
+                                  </div>
                                 )}
-                                {getInventoryStatusBadge(item.itemName, item.quantity, item.unit)}
+                                <div className="text-xs text-muted-foreground flex flex-wrap items-center gap-2">
+                                  <span><span className="font-medium">Quantity:</span> {item.quantity} {item.unit}</span>
+                                  {item.specsBrand && (
+                                    <span className="text-primary">• {item.specsBrand}</span>
+                                  )}
+                                  {getInventoryStatusBadge(item.itemName, item.quantity, item.unit)}
+                                </div>
                               </div>
                             </div>
                           </div>
-                        </div>
-                        <div className="flex items-center gap-1 flex-shrink-0">
-                          <CompactImageGallery
-                            images={getItemPhotos(item)}
-                            maxDisplay={1}
-                            size="md"
-                          />
-                        </div>
-                      </div>
-                      {/* Urgent and Status badges on new line */}
-                      <div className="flex items-center justify-between pt-2 border-t mt-2">
-                        <div className="flex items-center gap-2">
-                          {item.isUrgent && (
-                            <Badge variant="destructive" className="text-xs flex-shrink-0">
-                              <AlertCircle className="h-3 w-3 mr-1" />
-                              Urgent
-                            </Badge>
-                          )}
-                          {(item.status === 'approved' || item.status === 'cc_approved') && (
-                            <Badge variant="default" className="bg-green-600 hover:bg-green-700 text-white text-xs flex-shrink-0">
-                              ✓ Approved
-                            </Badge>
-                          )}
-                          {(item.status === 'rejected' || item.status === 'cc_rejected') && (
-                            <Badge variant="destructive" className="text-xs flex-shrink-0">
-                              ✗ Rejected
-                            </Badge>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-2">
-                          {item.status === 'draft' && (
-                            <Badge variant="outline" className="bg-gray-50 text-gray-700 border-gray-200 dark:bg-gray-950 dark:text-gray-300 dark:border-gray-800 text-xs flex-shrink-0">
-                              Draft
-                            </Badge>
-                          )}
-                          {item.status !== 'draft' && !['approved', 'rejected', 'cc_approved', 'cc_rejected'].includes(item.status) && getStatusBadge(item.status)}
-                          {/* Per-item action button */}
-                          {item.status === 'ready_for_cc' && (
-                            <>
-                              {item.directAction === 'po' && onDirectPO ? (
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    onDirectPO(item._id);
-                                  }}
-                                  className="h-6 px-2 text-xs border-blue-200 text-blue-700 hover:bg-blue-50"
-                                >
-                                  <ShoppingCart className="h-3 w-3 mr-1" />
-                                  Direct PO
-                                </Button>
-                              ) : item.directAction === 'delivery' && onDirectDelivery ? (
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    onDirectDelivery(item._id);
-                                  }}
-                                  className="h-6 px-2 text-xs border-orange-200 text-orange-700 hover:bg-orange-50"
-                                >
-                                  <Truck className="h-3 w-3 mr-1" />
-                                  Delivery
-                                </Button>
-                              ) : onOpenCC ? (
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    onOpenCC(item._id);
-                                  }}
-                                  className="h-6 px-2 text-xs"
-                                >
-                                  <FileText className="h-3 w-3 mr-1" />
-                                  CC
-                                </Button>
-                              ) : null}
-                            </>
-                          )}
-                          {item.status === 'cc_rejected' && onOpenCC && (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                onOpenCC(item._id);
-                              }}
-                              className="h-6 px-2 text-xs border-orange-200 text-orange-700 hover:bg-orange-50"
-                            >
-                              <AlertCircle className="h-3 w-3 mr-1" />
-                              Recheck CC
-                            </Button>
-                          )}
-                          {onViewDetails && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                onViewDetails(item._id);
-                              }}
-                              className="h-6 px-2 text-xs hover:bg-muted"
-                            >
-                              <Eye className="h-3 w-3 mr-1" />
-                              View
-                            </Button>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })
-              ) : (
-                <div className="p-3 rounded-lg border bg-card/50 shadow-sm">
-                  <div className="flex items-start justify-between gap-2 mb-2">
-                    <div className="flex items-center gap-2 flex-1 min-w-0">
-                      <Badge variant="outline" className="text-xs px-1.5 py-0.5 h-5 min-w-[24px] flex items-center justify-center flex-shrink-0">
-                        {items[0].itemOrder ?? items.length}
-                      </Badge>
-                      <div className="space-y-1 text-sm flex-1 min-w-0">
-                        <div className="break-words">
-                          <span className="font-medium text-muted-foreground">Item:</span>{" "}
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setSelectedItemName(items[0].itemName);
-                            }}
-                            className="font-semibold text-sm text-foreground hover:text-primary hover:bg-muted/50 rounded-full px-3 py-1.5 -mx-2 -my-1 transition-colors cursor-pointer text-left border border-transparent hover:border-primary/20 whitespace-normal"
-                          >
-                            {items[0].itemName}
-                          </button>
-                        </div>
-                        {items[0].description && (
-                          <div className="text-xs text-muted-foreground break-words whitespace-normal">
-                            <span className="font-medium">Dis:</span> {items[0].description}
+                          <div className="flex items-center gap-1 flex-shrink-0">
+                            <CompactImageGallery
+                              images={getItemPhotos(item)}
+                              maxDisplay={1}
+                              size="md"
+                            />
                           </div>
-                        )}
-                        <div className="text-xs text-muted-foreground flex flex-wrap items-center gap-2">
-                          <span><span className="font-medium">Quantity:</span> {items[0].quantity} {items[0].unit}</span>
-                          {getInventoryStatusBadge(items[0].itemName, items[0].quantity, items[0].unit)}
+                        </div>
+                        {/* Urgent and Status badges on new line */}
+                        <div className="flex items-center justify-between pt-2 border-t mt-2">
+                          <div className="flex items-center gap-2">
+                            {item.isUrgent && (
+                              <Badge variant="destructive" className="text-xs flex-shrink-0">
+                                <AlertCircle className="h-3 w-3 mr-1" />
+                                Urgent
+                              </Badge>
+                            )}
+                            {(item.status === 'approved' || item.status === 'cc_approved') && (
+                              <Badge variant="default" className="bg-green-600 hover:bg-green-700 text-white text-xs flex-shrink-0">
+                                ✓ Approved
+                              </Badge>
+                            )}
+                            {(item.status === 'rejected' || item.status === 'cc_rejected') && (
+                              <Badge variant="destructive" className="text-xs flex-shrink-0">
+                                ✗ Rejected
+                              </Badge>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {item.status === 'draft' && (
+                              <Badge variant="outline" className="bg-gray-50 text-gray-700 border-gray-200 dark:bg-gray-950 dark:text-gray-300 dark:border-gray-800 text-xs flex-shrink-0">
+                                Draft
+                              </Badge>
+                            )}
+                            {item.status !== 'draft' && !['approved', 'rejected', 'cc_approved', 'cc_rejected'].includes(item.status) && getStatusBadge(item.status)}
+                            {/* Per-item action button */}
+                            {item.status === 'ready_for_cc' && (
+                              <>
+                                {item.directAction === 'po' && onDirectPO ? (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      onDirectPO(item._id);
+                                    }}
+                                    className="h-6 px-2 text-xs border-blue-200 text-blue-700 hover:bg-blue-50"
+                                  >
+                                    <ShoppingCart className="h-3 w-3 mr-1" />
+                                    Direct PO
+                                  </Button>
+                                ) : item.directAction === 'delivery' && onDirectDelivery ? (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      onDirectDelivery(item._id);
+                                    }}
+                                    className="h-6 px-2 text-xs border-orange-200 text-orange-700 hover:bg-orange-50"
+                                  >
+                                    <Truck className="h-3 w-3 mr-1" />
+                                    Delivery
+                                  </Button>
+                                ) : onOpenCC ? (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      onOpenCC(item._id);
+                                    }}
+                                    className="h-6 px-2 text-xs"
+                                  >
+                                    <FileText className="h-3 w-3 mr-1" />
+                                    CC
+                                  </Button>
+                                ) : null}
+                              </>
+                            )}
+                            {item.status === 'cc_rejected' && onOpenCC && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onOpenCC(item._id);
+                                }}
+                                className="h-6 px-2 text-xs border-orange-200 text-orange-700 hover:bg-orange-50"
+                              >
+                                <AlertCircle className="h-3 w-3 mr-1" />
+                                Recheck CC
+                              </Button>
+                            )}
+                            {onViewDetails && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onViewDetails?.(item._id);
+                                }}
+                                className="h-6 px-2 text-xs hover:bg-muted"
+                              >
+                                <Eye className="h-3 w-3 mr-1" />
+                                View
+                              </Button>
+                            )}
+                          </div>
                         </div>
                       </div>
+                    );
+                  })
+                ) : (
+                  <div className="p-3 rounded-lg border bg-card/50 shadow-sm">
+                    <div className="flex items-start justify-between gap-2 mb-2">
+                      <div className="flex items-center gap-2 flex-1 min-w-0">
+                        <Badge variant="outline" className="text-xs px-1.5 py-0.5 h-5 min-w-[24px] flex items-center justify-center flex-shrink-0">
+                          {items[0].itemOrder ?? items.length}
+                        </Badge>
+                        <div className="space-y-1 text-sm flex-1 min-w-0">
+                          <div className="break-words">
+                            <span className="font-medium text-muted-foreground">Item:</span>{" "}
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedItemName(items[0].itemName);
+                              }}
+                              className="font-semibold text-sm text-foreground hover:text-primary hover:bg-muted/50 rounded-full px-3 py-1.5 -mx-2 -my-1 transition-colors cursor-pointer text-left border border-transparent hover:border-primary/20 whitespace-normal"
+                            >
+                              {items[0].itemName}
+                            </button>
+                          </div>
+                          {items[0].description && (
+                            <div className="text-xs text-muted-foreground break-words whitespace-normal">
+                              <span className="font-medium">Dis:</span> {items[0].description}
+                            </div>
+                          )}
+                          <div className="text-xs text-muted-foreground flex flex-wrap items-center gap-2">
+                            <span><span className="font-medium">Quantity:</span> {items[0].quantity} {items[0].unit}</span>
+                            {getInventoryStatusBadge(items[0].itemName, items[0].quantity, items[0].unit)}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1 flex-shrink-0">
+                        <CompactImageGallery
+                          images={getItemPhotos(items[0])}
+                          maxDisplay={1}
+                          size="md"
+                        />
+                      </div>
                     </div>
-                    <div className="flex items-center gap-1 flex-shrink-0">
-                      <CompactImageGallery
-                        images={getItemPhotos(items[0])}
-                        maxDisplay={1}
-                        size="md"
-                      />
+                    {/* Urgent and Status badges on new line */}
+                    <div className="flex items-center justify-between pt-2 border-t mt-2">
+                      <div className="flex items-center gap-2">
+                        {items[0].isUrgent && (
+                          <Badge variant="destructive" className="text-xs flex-shrink-0">
+                            <AlertCircle className="h-3 w-3 mr-1" />
+                            Urgent
+                          </Badge>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {items[0].status === 'draft' && (
+                          <Badge variant="outline" className="bg-gray-50 text-gray-700 border-gray-200 dark:bg-gray-950 dark:text-gray-300 dark:border-gray-800 text-xs flex-shrink-0">
+                            Draft
+                          </Badge>
+                        )}
+                        {items[0].status !== 'draft' && getStatusBadge(items[0].status)}
+                        {/* Per-item action button for collapsed view */}
+                        {(items[0].status === 'cc_pending' || items[0].status === 'ready_for_cc') && (
+                          <>
+                            {items[0].directAction === 'po' && onDirectPO ? (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onDirectPO(items[0]._id);
+                                }}
+                                className="h-6 px-2 text-xs border-blue-200 text-blue-700 hover:bg-blue-50"
+                              >
+                                <ShoppingCart className="h-3 w-3 mr-1" />
+                                Direct PO
+                              </Button>
+                            ) : items[0].directAction === 'delivery' && onDirectDelivery ? (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onDirectDelivery(items[0]._id);
+                                }}
+                                className="h-6 px-2 text-xs border-orange-200 text-orange-700 hover:bg-orange-50"
+                              >
+                                <Truck className="h-3 w-3 mr-1" />
+                                Delivery
+                              </Button>
+                            ) : onOpenCC ? (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  onOpenCC(items[0]._id);
+                                }}
+                                className="h-6 px-2 text-xs"
+                              >
+                                <FileText className="h-3 w-3 mr-1" />
+                                CC
+                              </Button>
+                            ) : null}
+                          </>
+                        )}
+                      </div>
                     </div>
                   </div>
-                  {/* Urgent and Status badges on new line */}
-                  <div className="flex items-center justify-between pt-2 border-t mt-2">
-                    <div className="flex items-center gap-2">
-                      {items[0].isUrgent && (
-                        <Badge variant="destructive" className="text-xs flex-shrink-0">
-                          <AlertCircle className="h-3 w-3 mr-1" />
-                          Urgent
-                        </Badge>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-2">
-                      {items[0].status === 'draft' && (
-                        <Badge variant="outline" className="bg-gray-50 text-gray-700 border-gray-200 dark:bg-gray-950 dark:text-gray-300 dark:border-gray-800 text-xs flex-shrink-0">
-                          Draft
-                        </Badge>
-                      )}
-                      {items[0].status !== 'draft' && getStatusBadge(items[0].status)}
-                      {/* Per-item action button for collapsed view */}
-                      {(items[0].status === 'cc_pending' || items[0].status === 'ready_for_cc') && (
-                        <>
-                          {items[0].directAction === 'po' && onDirectPO ? (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                onDirectPO(items[0]._id);
-                              }}
-                              className="h-6 px-2 text-xs border-blue-200 text-blue-700 hover:bg-blue-50"
-                            >
-                              <ShoppingCart className="h-3 w-3 mr-1" />
-                              Direct PO
-                            </Button>
-                          ) : items[0].directAction === 'delivery' && onDirectDelivery ? (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                onDirectDelivery(items[0]._id);
-                              }}
-                              className="h-6 px-2 text-xs border-orange-200 text-orange-700 hover:bg-orange-50"
-                            >
-                              <Truck className="h-3 w-3 mr-1" />
-                              Delivery
-                            </Button>
-                          ) : onOpenCC ? (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                onOpenCC(items[0]._id);
-                              }}
-                              className="h-6 px-2 text-xs"
-                            >
-                              <FileText className="h-3 w-3 mr-1" />
-                              CC
-                            </Button>
-                          ) : null}
-                        </>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 pt-3 border-t">
-              <div className="flex flex-col gap-1">
-                <div className="text-sm font-medium text-foreground">
-                  <span className="text-muted-foreground">Required:</span> {format(new Date(firstItem.requiredBy), "dd/MM/yyyy")}
-                  <span className={cn(
-                    "ml-2 text-xs",
-                    Math.ceil((firstItem.requiredBy - Date.now()) / (1000 * 60 * 60 * 24)) < 0 ? "text-destructive font-semibold" : "text-muted-foreground"
-                  )}>
-                    ({Math.ceil((firstItem.requiredBy - Date.now()) / (1000 * 60 * 60 * 24))} days)
-                  </span>
-                </div>
-                <div className="text-xs text-muted-foreground">
-                  <span className="font-medium">Created:</span> {format(new Date(firstItem.createdAt), "dd/MM/yyyy hh:mm a")}
-                  {firstItem.creator && (
-                    <span> by <span className="font-medium text-foreground">{firstItem.creator.fullName}</span></span>
-                  )}
-                </div>
+                )}
               </div>
-              <div className="flex gap-0.5 flex-nowrap overflow-x-auto justify-end">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setSelectedRequestNumberForNotes(items[0].requestNumber);
-                  }}
-                  className="relative h-6 sm:h-7 px-1.5 sm:px-2 text-xs text-muted-foreground hover:text-foreground"
-                  title="View Notes"
-                >
-                  <NotebookPen className="h-3 sm:h-3.5 w-3 sm:w-3.5" />
-                  {items[0].notesCount !== undefined && items[0].notesCount > 0 && (
-                    <span className="absolute top-0 right-0 flex h-3 w-3 items-center justify-center rounded-full bg-destructive text-[8px] text-destructive-foreground">
-                      {items[0].notesCount}
+
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 pt-3 border-t">
+                <div className="flex flex-col gap-1">
+                  <div className="text-sm font-medium text-foreground">
+                    <span className="text-muted-foreground">Required:</span> {format(new Date(firstItem.requiredBy), "dd/MM/yyyy")}
+                    <span className={cn(
+                      "ml-2 text-xs",
+                      Math.ceil((firstItem.requiredBy - Date.now()) / (1000 * 60 * 60 * 24)) < 0 ? "text-destructive font-semibold" : "text-muted-foreground"
+                    )}>
+                      ({Math.ceil((firstItem.requiredBy - Date.now()) / (1000 * 60 * 60 * 24))} days)
                     </span>
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    <span className="font-medium">Created:</span> {format(new Date(firstItem.createdAt), "dd/MM/yyyy hh:mm a")}
+                    {firstItem.creator && (
+                      <span> by <span className="font-medium text-foreground">{firstItem.creator.fullName}</span></span>
+                    )}
+                  </div>
+                </div>
+                <div className="flex gap-0.5 flex-nowrap overflow-x-auto justify-end">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedRequestNumberForNotes(items[0].requestNumber);
+                    }}
+                    className="relative h-6 sm:h-7 px-1.5 sm:px-2 text-xs text-muted-foreground hover:text-foreground"
+                    title="View Notes"
+                  >
+                    <NotebookPen className="h-3 sm:h-3.5 w-3 sm:w-3.5" />
+                    {items[0].notesCount !== undefined && items[0].notesCount > 0 && (
+                      <span className="absolute top-0 right-0 flex h-3 w-3 items-center justify-center rounded-full bg-destructive text-[8px] text-destructive-foreground">
+                        {items[0].notesCount}
+                      </span>
+                    )}
+                  </Button>
+                  {firstItem.status === "draft" && (
+                    <div className="flex gap-0.5 flex-nowrap">
+                      {onEditDraft && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => onEditDraft(requestNumber)}
+                          className="h-6 sm:h-7 px-1.5 sm:px-2 text-xs text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-950"
+                          title="Edit draft"
+                        >
+                          <Edit className="h-3 w-3" />
+                        </Button>
+                      )}
+                      {onSendDraft && (
+                        <Button
+                          variant="default"
+                          size="sm"
+                          onClick={() => onSendDraft(requestNumber)}
+                          className="h-6 sm:h-7 px-1.5 sm:px-2 text-xs bg-green-600 hover:bg-green-700 text-white"
+                          title="Send draft"
+                        >
+                          <Send className="h-3 w-3" />
+                        </Button>
+                      )}
+                      {onDeleteDraft && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => onDeleteDraft(requestNumber)}
+                          className="h-6 sm:h-7 px-1.5 sm:px-2 text-xs text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950"
+                          title="Delete draft"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      )}
+                    </div>
                   )}
-                </Button>
-                {firstItem.status === "draft" && (
-                  <div className="flex gap-0.5 flex-nowrap">
-                    {onEditDraft && (
+                  {/* Group CC and View buttons together */}
+                  <div className="flex gap-0.5">
+                    {/* Group-level CC button - shows when there are any cc_pending items */}
+                    {ccPendingCount > 0 && onOpenCC && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          // Pass first CC item ID and all CC item IDs for navigation
+                          onOpenCC(ccPendingIds[0], ccPendingIds);
+                        }}
+                        className="h-6 sm:h-7 px-1.5 sm:px-2 text-xs"
+                      >
+                        <FileText className="h-3 w-3 mr-1" />
+                        CC({ccPendingCount})
+                      </Button>
+                    )}
+                    {/* PDF Button for Direct POs */}
+                    {["sign_pending", "sign_rejected", "ordered", "pending_po"].includes(overallStatus || firstItem.status) && (
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => onEditDraft(requestNumber)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setPdfPreviewPoNumber(requestNumber);
+                        }}
                         className="h-6 sm:h-7 px-1.5 sm:px-2 text-xs text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-950"
-                        title="Edit draft"
+                        title="View PDF"
                       >
-                        <Edit className="h-3 w-3" />
+                        <FileText className="h-3 sm:h-3.5 w-3 sm:w-3.5 mr-1" />
+                        View PDF
                       </Button>
                     )}
-                    {onSendDraft && (
+                    {/* Action Buttons for Sign Pending in Manager View */}
+                    {showCreator && (overallStatus === "sign_pending" || firstItem.status === "sign_pending") ? (
                       <Button
                         variant="default"
                         size="sm"
-                        onClick={() => onSendDraft(requestNumber)}
-                        className="h-6 sm:h-7 px-1.5 sm:px-2 text-xs bg-green-600 hover:bg-green-700 text-white"
-                        title="Send draft"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onViewDetails?.(firstItem._id);
+                        }}
+                        className="h-6 sm:h-7 px-1.5 sm:px-2 text-xs bg-orange-600 text-white hover:bg-orange-700"
                       >
-                        <Send className="h-3 w-3" />
+                        <Eye className="h-3 sm:h-3.5 w-3 sm:w-3.5 mr-1" />
+                        Review
                       </Button>
-                    )}
-                    {onDeleteDraft && (
+                    ) : onViewDetails ? (
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => onDeleteDraft(requestNumber)}
-                        className="h-6 sm:h-7 px-1.5 sm:px-2 text-xs text-red-600 hover:text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950"
-                        title="Delete draft"
+                        onClick={() => onViewDetails?.(firstItem._id)}
+                        className={`h-6 sm:h-7 px-1.5 sm:px-2 text-xs transition-colors duration-200 ${getStatusColor(overallStatus || firstItem.status)}`}
                       >
-                        <Trash2 className="h-3 w-3" />
+                        <Eye className="h-3 sm:h-3.5 w-3 sm:w-3.5 mr-1" />
+                        View
                       </Button>
-                    )}
+                    ) : null}
                   </div>
-                )}
-                {/* Group CC and View buttons together */}
-                <div className="flex gap-0.5">
-                  {/* Group-level CC button - shows when there are any cc_pending items */}
-                  {ccPendingCount > 0 && onOpenCC && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        // Pass first CC item ID and all CC item IDs for navigation
-                        onOpenCC(ccPendingIds[0], ccPendingIds);
-                      }}
-                      className="h-6 sm:h-7 px-1.5 sm:px-2 text-xs"
-                    >
-                      <FileText className="h-3 w-3 mr-1" />
-                      CC({ccPendingCount})
-                    </Button>
-                  )}
-                  {/* PDF Button for Direct POs */}
-                  {["sign_pending", "sign_rejected", "ordered", "pending_po"].includes(overallStatus || firstItem.status) && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setPdfPreviewPoNumber(requestNumber);
-                      }}
-                      className="h-6 sm:h-7 px-1.5 sm:px-2 text-xs text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-950"
-                      title="View PDF"
-                    >
-                      <FileText className="h-3 sm:h-3.5 w-3 sm:w-3.5 mr-1" />
-                      View PDF
-                    </Button>
-                  )}
-                  {onViewDetails && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => onViewDetails(firstItem._id)}
-                      className={`h-6 sm:h-7 px-1.5 sm:px-2 text-xs transition-colors duration-200 ${getStatusColor(overallStatus || firstItem.status)}`}
-                    >
-                      <Eye className="h-3 sm:h-3.5 w-3 sm:w-3.5 mr-1" />
-                      View
-                    </Button>
-                  )}
                 </div>
               </div>
             </div>
-          </div>
-        );
-      })}
-    </div >
+          );
+        })}
+      </div>
+    </>
   );
 
   // Table View
@@ -1519,16 +1535,16 @@ export function RequestsTable({
                                 )}
                                 {/* View button - show for first item */}
                                 <Button
-                                  variant={showCreator && firstItem.status === "pending" ? "default" : "outline"}
+                                  variant={showCreator && (firstItem.status === "pending" || firstItem.status === "sign_pending") ? "default" : "outline"}
                                   size="sm"
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    onViewDetails(firstItem._id);
+                                    onViewDetails?.(firstItem._id);
                                   }}
                                   className={getStatusButtonStyles(firstItem.status)}
                                 >
                                   <Eye className="h-4 w-4 mr-2 text-inherit" />
-                                  {showCreator && firstItem.status === "pending" ? "Review" : "View"}
+                                  {showCreator && (firstItem.status === "pending" || firstItem.status === "sign_pending") ? "Review" : "View"}
                                 </Button>
                               </div>
                             </TableCell>

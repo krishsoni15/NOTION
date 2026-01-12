@@ -186,36 +186,18 @@ export function PurchaseOrderTemplate({ data }: { data: POData }) {
     });
 
     return (
-        <div className="bg-white text-black font-sans text-xs w-full">
+        <div className="bg-white text-black font-sans text-xs" style={{ width: '210mm', minHeight: '297mm', padding: '10mm', margin: '0 auto', boxSizing: 'border-box' }}>
             {/* PO Content */}
-            <div className="max-w-[210mm] mx-auto bg-white">
+            <div className="w-full bg-white">
 
                 {/* Header */}
                 <div className="text-center mb-6">
-                    <div className="flex justify-center items-center mb-2">
-                        {/* Logo Placeholder */}
-                        <div className="text-3xl font-bold text-blue-900 tracking-wide">NOTION <sup className="text-sm">®</sup></div>
-                    </div>
-                    <div className="text-sm text-gray-600 mb-1">"Enlighten the World"</div>
-
-                    {/* Icons placeholder row */}
-                    <div className="flex justify-center gap-4 my-2 text-[10px] text-gray-500">
-                        <div className="flex flex-col items-center"><span>🏭</span><span>Manufacturing</span></div>
-                        <div className="flex flex-col items-center"><span>🛡️</span><span>Quality</span></div>
-                        <div className="flex flex-col items-center"><span>💡</span><span>Product Design</span></div>
-                        <div className="flex flex-col items-center"><span>🤝</span><span>Service</span></div>
-                        <div className="flex flex-col items-center"><span>🚚</span><span>Delivery</span></div>
-                    </div>
-
-                    <h1 className="text-xl font-bold uppercase underline decoration-2 underline-offset-4 mb-1">NOTION ELECTRONICS PVT. LTD.</h1>
-                    <h2 className="text-sm font-semibold underline mb-1">Manufacturer of LED Lights</h2>
-                    <div className="text-[10px] leading-tight text-gray-700">
-                        <p>📍 C-112, Maruti Industrial Estate, Part-C, Opp. Fire Station, Naroda Road, Memco, Ahmedabad 380025, Gujarat, India</p>
-                        <div className="flex justify-center gap-4 mt-1">
-                            <span>🌐 www.notionelectronics.com</span>
-                            <span>✉️ sales@notionelectronics.com</span>
-                            <span>📞 +91 9825879970</span>
-                        </div>
+                    <div className="flex justify-center items-center">
+                        <img
+                            src="/images/logos/PDF_Data.png"
+                            alt="NOTION ELECTRONICS"
+                            style={{ width: '100%', height: '280px', objectFit: 'fill' }}
+                        />
                     </div>
                 </div>
 
@@ -250,7 +232,7 @@ export function PurchaseOrderTemplate({ data }: { data: POData }) {
                 {/* Items Table */}
                 <table className="w-full border-collapse border border-black text-[10px] mb-2">
                     <thead>
-                        <tr className="bg-gray-50">
+                        <tr style={{ backgroundColor: '#f9fafb' }}>
                             <th className="border border-black p-1 text-center w-[30px]">No.</th>
                             <th className="border border-black p-1 text-left">Item & Description</th>
                             <th className="border border-black p-1 text-center w-[60px]">HSN / SAC</th>
@@ -270,7 +252,7 @@ export function PurchaseOrderTemplate({ data }: { data: POData }) {
                                 <td className="border border-black p-1 text-center font-bold">{idx + 1}</td>
                                 <td className="border border-black p-1">
                                     <div className="font-bold uppercase">{item.itemDescription.split('\n')[0]}</div>
-                                    <div className="text-[9px] text-gray-600 whitespace-pre-line">{item.itemDescription}</div>
+                                    <div className="text-[9px] whitespace-pre-line" style={{ color: '#4b5563' }}>{item.itemDescription}</div>
                                 </td>
                                 <td className="border border-black p-1 text-center">{item.hsnSacCode || '-'}</td>
                                 <td className="border border-black p-1 text-center font-bold">{item.quantity}</td>
@@ -295,15 +277,15 @@ export function PurchaseOrderTemplate({ data }: { data: POData }) {
                         </div>
                     </div>
                     <div className="w-[40%]">
-                        <div className="flex justify-between border-b border-gray-300 p-1">
+                        <div className="flex justify-between border-b p-1" style={{ borderColor: '#d1d5db' }}>
                             <span>Total Amount before Tax (₹)</span>
                             <span className="font-bold">{totalTaxable.toFixed(2)}</span>
                         </div>
-                        <div className="flex justify-between border-b border-gray-300 p-1">
+                        <div className="flex justify-between border-b p-1" style={{ borderColor: '#d1d5db' }}>
                             <span>Add CGST (₹)</span>
                             <span>{totalCGST.toFixed(2)}</span>
                         </div>
-                        <div className="flex justify-between border-b border-gray-300 p-1">
+                        <div className="flex justify-between border-b p-1" style={{ borderColor: '#d1d5db' }}>
                             <span>Add SGST (₹)</span>
                             <span>{totalSGST.toFixed(2)}</span>
                         </div>
@@ -311,7 +293,7 @@ export function PurchaseOrderTemplate({ data }: { data: POData }) {
                             <span>Round Off (₹)</span>
                             <span>{roundOff.toFixed(2)}</span>
                         </div>
-                        <div className="flex justify-between p-1 bg-gray-100 font-bold text-sm">
+                        <div className="flex justify-between p-1 font-bold text-sm" style={{ backgroundColor: '#f3f4f6' }}>
                             <span>Grand Total (₹)</span>
                             <span>{finalGrandTotal.toFixed(2)}</span>
                         </div>
@@ -323,7 +305,7 @@ export function PurchaseOrderTemplate({ data }: { data: POData }) {
                     <div className="w-[60%] border-r border-black p-2">
                         <div className="font-bold mb-1">Notes :</div>
                         <div className="uppercase">{data.site?.name}</div>
-                        {data.creator?.role === "purchase_officer" && <div className="mt-2 text-gray-500 text-[8px]">Created by: {data.creator.fullName}</div>}
+                        {data.creator?.role === "purchase_officer" && <div className="mt-2" style={{ color: '#6b7280', fontSize: '8px' }}>Created by: {data.creator.fullName}</div>}
                     </div>
                     <div className="w-[40%] flex flex-col justify-between p-2 text-center">
                         <div className="font-bold text-[9px]">For, NOTION ELECTRONICS PVT LTD</div>
@@ -336,7 +318,7 @@ export function PurchaseOrderTemplate({ data }: { data: POData }) {
                 </div>
 
                 {/* Footer */}
-                <div className="mt-1 text-[8px] text-gray-500 font-bold">
+                <div className="mt-1 text-[8px] font-bold" style={{ color: '#6b7280' }}>
                     This is a computer-generated purchase order. E. & O. E.
                 </div>
 
@@ -344,7 +326,7 @@ export function PurchaseOrderTemplate({ data }: { data: POData }) {
                 <div className="mt-4 w-[60%]">
                     <table className="w-full border-collapse border border-black text-[8px]">
                         <thead>
-                            <tr className="bg-gray-100">
+                            <tr style={{ backgroundColor: '#f3f4f6' }}>
                                 <th className="border border-black p-1">HSN/SAC Code</th>
                                 <th className="border border-black p-1">Taxable (₹)</th>
                                 <th className="border border-black p-1">CGST %</th>

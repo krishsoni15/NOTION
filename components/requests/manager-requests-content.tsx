@@ -82,7 +82,7 @@ export function ManagerRequestsContent() {
         // 2. Site Engineer Context: Strictly "Pending" (Initial Approval) - user request
         const validStatuses = categoryFilter === "site_engineer"
           ? ["pending"]
-          : ["pending", "cc_pending", "sign_pending"];
+          : ["pending", "cc_pending", "sign_pending", "sign_rejected"];
 
         if (!validStatuses.includes(request.status)) {
           return false;
@@ -186,7 +186,7 @@ export function ManagerRequestsContent() {
       work_pending: requestsForWorkCounts.filter(r => {
         // If Site Engineer category is active, Detail Review only implies 'pending'
         if (categoryFilter === "site_engineer") return r.status === "pending";
-        return ["pending", "cc_pending", "sign_pending"].includes(r.status);
+        return ["pending", "cc_pending", "sign_pending", "sign_rejected"].includes(r.status);
       }).length
     };
   }, [requestsForWorkCounts, categoryFilter]);
@@ -198,7 +198,7 @@ export function ManagerRequestsContent() {
       // Apply Work Filter (Base logic, refined in counts)
       if (workFilter === "work_pending") {
         // We allow broader here, and filter strictly in the count step if needed
-        if (!["pending", "cc_pending", "sign_pending"].includes(req.status)) return false;
+        if (!["pending", "cc_pending", "sign_pending", "sign_rejected"].includes(req.status)) return false;
       }
       // Apply Status Filter
       if (statusFilter.length > 0 && !statusFilter.includes(req.status)) return false;
@@ -233,7 +233,7 @@ export function ManagerRequestsContent() {
     if (!allRequests) return [];
     return allRequests.filter(req => {
       // Apply Work Filter
-      if (workFilter === "work_pending" && !["pending", "cc_pending", "sign_pending"].includes(req.status)) return false;
+      if (workFilter === "work_pending" && !["pending", "cc_pending", "sign_pending", "sign_rejected"].includes(req.status)) return false;
       // Apply Category Filter
       if (categoryFilter !== "all") {
         if (categoryFilter === "site_engineer" && req.creator?.role !== "site_engineer") return false;

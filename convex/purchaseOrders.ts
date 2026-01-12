@@ -253,7 +253,9 @@ export const createDirectPO = mutation({
         vendorId: v.id("vendors"),
         validTill: v.number(),
         notes: v.optional(v.string()),
+        existingRequestNumber: v.optional(v.string()), // Optional: Use existing request number
         items: v.array(v.object({
+            requestId: v.optional(v.id("requests")), // Optional: Link to existing request
             itemDescription: v.string(),
             hsnSacCode: v.optional(v.string()),
             quantity: v.number(),
@@ -285,8 +287,8 @@ export const createDirectPO = mutation({
             throw new Error("Site not found or inactive");
         }
 
-        // Generate Request Number / PO Number (Shared Sequence)
-        const idNumber = await generateRequestNumber(ctx);
+        // Generate Request Number / PO Number (Shared Sequence) if not provided
+        const idNumber = args.existingRequestNumber || await generateRequestNumber(ctx);
         const now = Date.now();
         const results = [];
 
@@ -298,23 +300,45 @@ export const createDirectPO = mutation({
             if (item.unitRate <= 0) throw new Error("Unit rate must be greater than 0");
             if (item.gstTaxRate < 0 || item.gstTaxRate > 100) throw new Error("GST tax rate must be between 0 and 100");
 
-            // 1. Create Request Record (to maintain ID continuity and appear in Requests board)
-            const requestId = await ctx.db.insert("requests", {
-                requestNumber: idNumber,
-                createdBy: currentUser._id,
-                siteId: args.deliverySiteId,
-                itemName: item.itemDescription.split('\n')[0], // Use first line as title
-                description: item.itemDescription,
-                quantity: item.quantity,
-                unit: item.unit,
-                requiredBy: args.validTill, // Use ValidTill as required date
-                isUrgent: true, // Direct POs are usually urgent
-                status: "sign_pending", // New status: Pending Manager Signature
-                createdAt: now,
-                updatedAt: now,
-                itemOrder: itemOrder,
-                directAction: "po", // Mark as Direct PO flow
-            });
+            let requestId = item.requestId;
+
+            if (requestId) {
+                // Update existing request
+                const existingRequest = await ctx.db.get(requestId);
+                if (!existingRequest) throw new Error(`Request ${requestId} not found`);
+
+                // Keep the existing request ID, just update status and details if needed
+                await ctx.db.patch(requestId, {
+                    status: "sign_pending",
+                    directAction: "po",
+                    updatedAt: now,
+                    // We typically don't change item description/qty of origin request here? 
+                    // But Direct PO form allows editing. If edited, we should probably update the request too 
+                    // to match the PO.
+                    itemName: item.itemDescription.split('\n')[0],
+                    description: item.itemDescription,
+                    quantity: item.quantity,
+                    unit: item.unit,
+                });
+            } else {
+                // 1. Create Request Record (to maintain ID continuity and appear in Requests board)
+                requestId = await ctx.db.insert("requests", {
+                    requestNumber: idNumber,
+                    createdBy: currentUser._id,
+                    siteId: args.deliverySiteId,
+                    itemName: item.itemDescription.split('\n')[0], // Use first line as title
+                    description: item.itemDescription,
+                    quantity: item.quantity,
+                    unit: item.unit,
+                    requiredBy: args.validTill, // Use ValidTill as required date
+                    isUrgent: true, // Direct POs are usually urgent
+                    status: "sign_pending", // New status: Pending Manager Signature
+                    createdAt: now,
+                    updatedAt: now,
+                    itemOrder: itemOrder,
+                    directAction: "po", // Mark as Direct PO flow
+                });
+            }
 
             // 2. Calculate Amounts
             const basis = item.perUnitBasis || 1;
@@ -328,7 +352,7 @@ export const createDirectPO = mutation({
             // 3. Create Purchase Order Record
             const poId = await ctx.db.insert("purchaseOrders", {
                 poNumber: idNumber,
-                requestId: requestId,
+                requestId: requestId!, // We know we have it now
                 deliverySiteId: args.deliverySiteId,
                 vendorId: args.vendorId,
                 createdBy: currentUser._id,
@@ -352,25 +376,51 @@ export const createDirectPO = mutation({
 
             // 4. Create costComparison entry to store vendor details linked to the request?
             // This ensures "Requests Table" can show vendor info if it looks at costComparisons.
-            await ctx.db.insert("costComparisons", {
-                requestId: requestId,
-                createdBy: currentUser._id,
-                vendorQuotes: [{
-                    vendorId: args.vendorId,
-                    unitPrice: item.unitRate,
-                    amount: totalAmount,
-                    unit: item.unit,
-                    discountPercent: item.discountPercent,
-                    gstPercent: item.gstTaxRate,
-                    perUnitBasis: item.perUnitBasis
-                }],
-                selectedVendorId: args.vendorId,
-                status: "cc_approved", // Auto-approve CC since it's Direct
-                isDirectDelivery: false,
-                createdAt: now,
-                updatedAt: now,
-                managerNotes: "Direct PO Generated - Waiting for Sign Off"
-            });
+            const existingCC = await ctx.db
+                .query("costComparisons")
+                .withIndex("by_request_id", q => q.eq("requestId", requestId!))
+                .unique();
+
+            if (existingCC) {
+                // Update existing CC if exists (e.g. came from "Ready for PO" after CC approval)
+                // Actually, if it's direct PO, we might just want to upsert or ensure it reflects the PO vendor.
+                await ctx.db.patch(existingCC._id, {
+                    status: "cc_approved",
+                    selectedVendorId: args.vendorId,
+                    vendorQuotes: [{ // Overwrite/Ensure this vendor is there? Or just leave it?
+                        // If we overwrite, we lose history. Let's just ensure selectedVendorId is set.
+                        // But wait, if we changed price in Direct PO form, we should probably record that.
+                        vendorId: args.vendorId,
+                        unitPrice: item.unitRate,
+                        amount: totalAmount,
+                        unit: item.unit,
+                        // ... preserve others? 
+                        // Simplest for Direct PO flow is to just set/update the quote for this vendor.
+                        // For now, let's just update status/selectedVendor.
+                    }],
+                    updatedAt: now,
+                });
+            } else {
+                await ctx.db.insert("costComparisons", {
+                    requestId: requestId!,
+                    createdBy: currentUser._id,
+                    vendorQuotes: [{
+                        vendorId: args.vendorId,
+                        unitPrice: item.unitRate,
+                        amount: totalAmount,
+                        unit: item.unit,
+                        discountPercent: item.discountPercent,
+                        gstPercent: item.gstTaxRate,
+                        perUnitBasis: item.perUnitBasis
+                    }],
+                    selectedVendorId: args.vendorId,
+                    status: "cc_approved", // Auto-approve CC since it's Direct
+                    isDirectDelivery: false,
+                    createdAt: now,
+                    updatedAt: now,
+                    managerNotes: "Direct PO Generated - Waiting for Sign Off"
+                });
+            }
 
             results.push(poId);
             itemOrder++;
@@ -572,8 +622,8 @@ export const approveDirectPOByRequest = mutation({
         if (!po) throw new Error("Linked PO not found");
 
         // Status check
-        if (po.status !== "sign_pending" && po.status !== "pending_approval") {
-            throw new Error("PO is not pending approval");
+        if (po.status !== "sign_pending" && po.status !== "pending_approval" && po.status !== "sign_rejected") {
+            throw new Error("PO status is not valid for approval");
         }
 
         const now = Date.now();

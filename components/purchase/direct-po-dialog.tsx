@@ -46,9 +46,26 @@ import { LocationInfoDialog } from "@/components/locations/location-info-dialog"
 import { LocationFormDialog } from "@/components/locations/location-form-dialog";
 import { cn } from "@/lib/utils";
 
+export interface DirectPOInitialData {
+    requestNumber?: string;
+    vendorId?: Id<"vendors">;
+    deliverySiteId?: Id<"sites">;
+    deliverySiteName?: string;
+    items?: {
+        requestId?: Id<"requests">;
+        itemDescription: string;
+        description?: string;
+        quantity: number;
+        unit: string;
+        unitPrice: number;
+        hsnCode?: string;
+    }[];
+}
+
 interface DirectPODialogProps {
     open: boolean;
     onOpenChange: (open: boolean) => void;
+    initialData?: DirectPOInitialData | null;
 }
 
 // Common units for construction materials
@@ -77,7 +94,7 @@ const TAX_RATES = [
     { value: "28", label: "28%" },
 ];
 
-export function DirectPODialog({ open, onOpenChange }: DirectPODialogProps) {
+export function DirectPODialog({ open, onOpenChange, initialData }: DirectPODialogProps) {
     const createDirectPO = useMutation(api.purchaseOrders.createDirectPO);
     const inventoryItems = useQuery(api.inventory.getAllInventoryItems);
     const vendors = useQuery(api.vendors.getAllVendors);
@@ -106,6 +123,7 @@ export function DirectPODialog({ open, onOpenChange }: DirectPODialogProps) {
     const [selectedSiteSuggestionIndex, setSelectedSiteSuggestionIndex] = useState<number>(0);
 
     const [commonData, setCommonData] = useState({
+        requestNumber: "",
         vendorId: "" as Id<"vendors"> | "",
         vendorName: "",
         contactName: "",
@@ -121,6 +139,7 @@ export function DirectPODialog({ open, onOpenChange }: DirectPODialogProps) {
     const [items, setItems] = useState([
         {
             id: Date.now().toString(),
+            requestId: undefined as Id<"requests"> | undefined,
             itemDescription: "",
             description: "",
             itemSearchQuery: "",
@@ -217,8 +236,54 @@ export function DirectPODialog({ open, onOpenChange }: DirectPODialogProps) {
         return items.reduce((sum, item) => sum + calculateItemTotal(item), 0);
     };
 
+    useEffect(() => {
+        if (open && initialData) {
+            // Populate form with initial data
+            setCommonData(prev => ({
+                ...prev,
+                requestNumber: initialData.requestNumber || "",
+                vendorId: initialData.vendorId || "",
+                deliverySite: initialData.deliverySiteId || "",
+            }));
+
+            if (initialData.deliverySiteName) {
+                setSiteSearchQuery(initialData.deliverySiteName);
+            }
+
+            if (initialData.items && initialData.items.length > 0) {
+                setItems(initialData.items.map((item) => {
+                    // Try to find matching inventory item for details like HSN
+                    const matchingInvItem = inventoryItems?.find(inv =>
+                        inv.itemName.toLowerCase() === item.itemDescription.toLowerCase()
+                    );
+
+                    return {
+                        id: Date.now().toString() + Math.random().toString(),
+                        requestId: item.requestId,
+                        itemDescription: item.itemDescription,
+                        description: item.description || matchingInvItem?.description || "",
+                        itemSearchQuery: item.itemDescription,
+                        hsnCode: item.hsnCode || (matchingInvItem as any).hsnSacCode || "",
+                        quantity: item.quantity,
+                        unit: item.unit || matchingInvItem?.unit || "pcs",
+                        unitPrice: item.unitPrice,
+                        perUnitBasis: 1, // Default to 1
+                        perUnitBasisUnit: item.unit || matchingInvItem?.unit || "pcs",
+                        discountPercent: "0",
+                        sgst: "0",
+                        cgst: "0",
+                    };
+                }));
+            }
+        }
+    }, [open, initialData, inventoryItems]);
+
     const handleReset = () => {
+        // Only reset if we're not using initialData or if we want to fully clear
+        // ensuring we don't accidentally clear just populated data
+        // For now, standard reset
         setCommonData({
+            requestNumber: "",
             vendorId: "",
             vendorName: "",
             contactName: "",
@@ -232,6 +297,7 @@ export function DirectPODialog({ open, onOpenChange }: DirectPODialogProps) {
         });
         setItems([{
             id: Date.now().toString(),
+            requestId: undefined,
             itemDescription: "",
             description: "",
             itemSearchQuery: "",
@@ -265,6 +331,7 @@ export function DirectPODialog({ open, onOpenChange }: DirectPODialogProps) {
             ...prev,
             {
                 id: Date.now().toString(),
+                requestId: undefined,
                 itemDescription: "",
                 description: "",
                 itemSearchQuery: "",
@@ -327,6 +394,7 @@ export function DirectPODialog({ open, onOpenChange }: DirectPODialogProps) {
                     : item.itemDescription;
 
                 return {
+                    requestId: item.requestId,
                     itemDescription: fullDescription,
                     hsnSacCode: item.hsnCode || undefined,
                     quantity: item.quantity,
@@ -340,6 +408,7 @@ export function DirectPODialog({ open, onOpenChange }: DirectPODialogProps) {
             });
 
             await createDirectPO({
+                existingRequestNumber: commonData.requestNumber || undefined,
                 deliverySiteId: commonData.deliverySite as Id<"sites">,
                 vendorId: commonData.vendorId as Id<"vendors">,
                 validTill: new Date(commonData.validTill).getTime(),
@@ -364,7 +433,10 @@ export function DirectPODialog({ open, onOpenChange }: DirectPODialogProps) {
     return (
         <>
             <Dialog open={open} onOpenChange={handleOpenChange}>
-                <DialogContent className="sm:max-w-[800px] max-h-[90vh] overflow-y-auto">
+                <DialogContent
+                    className="sm:max-w-[800px] max-h-[90vh] overflow-y-auto"
+                    onOpenAutoFocus={(e) => e.preventDefault()}
+                >
                     <DialogHeader>
                         <DialogTitle className="flex items-center gap-2">
                             <AlertCircle className="h-5 w-5 text-orange-500" />
@@ -414,7 +486,6 @@ export function DirectPODialog({ open, onOpenChange }: DirectPODialogProps) {
                                             onClick={() => setShowVendorSuggestions(true)}
                                             onBlur={() => setTimeout(() => setShowVendorSuggestions(false), 200)}
                                             className="h-9 pl-9 pr-16"
-                                            autoFocus
                                         />
                                         {vendorSearchQuery && (
                                             <button

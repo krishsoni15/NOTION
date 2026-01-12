@@ -15,12 +15,15 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { AlertCircle, Eye, FileText, MapPin, Search, X, Sparkles, Building, Plus, Save, Edit, Check, Truck, Package, PackageX, NotebookPen, ShoppingCart, ChevronDown, ChevronRight, CheckCircle, PieChart } from "lucide-react";
+import { AlertCircle, Eye, FileText, MapPin, Search, X, Sparkles, Building, Plus, Save, Edit, Check, Truck, Package, PackageX, NotebookPen, ShoppingCart, ChevronDown, ChevronRight, CheckCircle, PieChart, RotateCw } from "lucide-react";
 import { CompactImageGallery } from "@/components/ui/image-gallery";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { NotesTimelineDialog } from "@/components/requests/notes-timeline-dialog";
 import type { Id } from "@/convex/_generated/dataModel";
+
+import { useUserRole } from "@/hooks/use-user-role";
+import { ROLES } from "@/lib/auth/roles";
 
 interface RequestItem {
   _id: Id<"requests">;
@@ -101,6 +104,7 @@ interface PurchaseRequestGroupCardProps {
   onMoveToCC?: (requestId: Id<"requests">) => void;
   onCheck?: (requestId: Id<"requests">) => void;
   onCreatePO?: (requestId: Id<"requests">) => void;
+  onViewPDF?: (poNumber: string) => void;
 }
 
 // Helper function to collect photos
@@ -219,6 +223,18 @@ const getStatusBadge = (status: string) => {
       return (
         <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200 dark:bg-red-950 dark:text-red-300 dark:border-red-800 text-xs">
           Rejected
+        </Badge>
+      );
+    case "sign_pending":
+      return (
+        <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-200 dark:bg-yellow-950 dark:text-yellow-300 dark:border-yellow-800 text-xs">
+          Sign Pending
+        </Badge>
+      );
+    case "sign_rejected":
+      return (
+        <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200 dark:bg-red-950 dark:text-red-300 dark:border-red-800 text-xs">
+          Sign Rejected
         </Badge>
       );
     default:
@@ -410,7 +426,10 @@ export function PurchaseRequestGroupCard({
   onMoveToCC,
   onCheck,
   onCreatePO,
+  onViewPDF,
 }: PurchaseRequestGroupCardProps) {
+  const userRole = useUserRole();
+  const isManager = userRole === "manager";
   const StatusIcon = statusInfo.icon;
 
   // Vendor queries
@@ -1071,7 +1090,18 @@ export function PurchaseRequestGroupCard({
                       Recheck CC
                     </Button>
                   )}
-
+                  {/* View PDF Button for Specific Statuses */}
+                  {onViewPDF && ["sign_pending", "sign_rejected", "ordered", "pending_po", "ready_for_delivery", "delivery_stage", "delivered"].includes(item.status) && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => onViewPDF(requestNumber)}
+                      className="text-xs h-7 px-3 bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-600 hover:text-white hover:border-blue-600 transition-all shadow-sm font-medium dark:bg-blue-900/20 dark:text-blue-300 dark:border-blue-800 dark:hover:bg-blue-600"
+                    >
+                      <FileText className="h-3.5 w-3.5 mr-1.5" />
+                      View PDF
+                    </Button>
+                  )}
                   {item.status === "ready_for_po" && onCreatePO && (
                     <Button
                       size="sm"
@@ -1083,14 +1113,25 @@ export function PurchaseRequestGroupCard({
                       Create PO
                     </Button>
                   )}
+                  {item.status === "sign_rejected" && onCreatePO && (
+                    <Button
+                      size="sm"
+                      onClick={() => onCreatePO(item._id)}
+                      className="text-xs h-7 px-3 bg-red-50 text-red-700 border-red-200 hover:bg-red-600 hover:text-white hover:border-red-600 transition-all shadow-sm font-medium dark:bg-red-900/20 dark:text-red-300 dark:border-red-800 dark:hover:bg-red-600"
+                      variant="outline"
+                    >
+                      <RotateCw className="h-3.5 w-3.5 mr-1.5" />
+                      Resubmit PO
+                    </Button>
+                  )}
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={() => onViewDetails(item._id)}
                     className="text-xs h-7 px-3 bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-800 hover:text-white hover:border-slate-800 transition-all shadow-sm font-medium dark:bg-slate-800/50 dark:text-slate-300 dark:border-slate-700 dark:hover:bg-slate-700"
                   >
-                    <Eye className="h-3.5 w-3.5 mr-1.5" />
-                    View
+                    {item.status === "sign_pending" && isManager ? <Edit className="h-3.5 w-3.5 mr-1.5" /> : <Eye className="h-3.5 w-3.5 mr-1.5" />}
+                    {item.status === "sign_pending" && isManager ? "Sign" : "View"}
                   </Button>
                 </div>
               </div>

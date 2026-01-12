@@ -30,7 +30,8 @@ import {
   Edit,
   Package,
   ShoppingCart,
-  DollarSign
+  DollarSign,
+  User
 } from "lucide-react";
 import { useUserRole } from "@/hooks/use-user-role";
 import { ROLES } from "@/lib/auth/roles";
@@ -109,6 +110,16 @@ export function VendorInfoDialog({ open, onOpenChange, vendorId }: VendorInfoDia
                       <p className="text-sm text-muted-foreground">{vendor.companyName}</p>
                     </div>
                   </div>
+
+                  {vendor.contactName && (
+                    <div className="flex items-start gap-3">
+                      <User className="h-4 w-4 text-muted-foreground mt-0.5" />
+                      <div>
+                        <p className="text-sm font-medium">Contact Name</p>
+                        <p className="text-sm text-muted-foreground">{vendor.contactName}</p>
+                      </div>
+                    </div>
+                  )}
 
                   <div className="flex items-start gap-3">
                     <Mail className="h-4 w-4 text-muted-foreground mt-0.5" />
@@ -252,6 +263,7 @@ export function VendorInfoDialog({ open, onOpenChange, vendorId }: VendorInfoDia
           vendorId={vendorId}
           initialData={{
             companyName: vendor.companyName,
+            contactName: vendor.contactName,
             email: vendor.email,
             phone: vendor.phone,
             gstNumber: vendor.gstNumber,

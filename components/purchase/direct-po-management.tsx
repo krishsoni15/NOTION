@@ -6,13 +6,14 @@
  * Displays and manages all Direct Purchase Orders
  */
 
-import { useState, useMemo } from "react";
+import React, { useState, useMemo } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
     Table,
@@ -40,6 +41,20 @@ import {
     DialogHeader,
     DialogTitle,
 } from "@/components/ui/dialog";
+import {
+    Popover,
+    PopoverContent,
+    PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+    Command,
+    CommandEmpty,
+    CommandGroup,
+    CommandInput,
+    CommandItem,
+    CommandList,
+    CommandSeparator,
+} from "@/components/ui/command";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import {
@@ -57,6 +72,7 @@ import {
     AlertTriangle,
     Check,
     X,
+    Filter,
 } from "lucide-react";
 import type { Id } from "@/convex/_generated/dataModel";
 import { cn } from "@/lib/utils";
@@ -64,7 +80,7 @@ import { cn } from "@/lib/utils";
 // Status configuration
 const statusConfig: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline"; icon: any; className?: string }> = {
     pending_approval: {
-        label: "Pending Approval",
+        label: "Pending",
         variant: "secondary",
         icon: AlertTriangle,
         className: "bg-amber-100 text-amber-700 hover:bg-amber-100/80 border-amber-200",
@@ -76,7 +92,7 @@ const statusConfig: Record<string, { label: string; variant: "default" | "second
         className: "bg-emerald-600 text-white hover:bg-emerald-700",
     },
     ordered: {
-        label: "Ordered",
+        label: "Pending PO",
         variant: "default",
         icon: Clock,
         className: "bg-blue-600 text-white hover:bg-blue-700",
@@ -94,7 +110,7 @@ const statusConfig: Record<string, { label: string; variant: "default" | "second
         className: "",
     },
     rejected: {
-        label: "Rejected",
+        label: "PO Rejected",
         variant: "destructive",
         icon: XCircle,
         className: "",
@@ -111,42 +127,61 @@ export function DirectPOManagement() {
     const rejectPO = useMutation(api.purchaseOrders.rejectDirectPO);
 
     const [searchQuery, setSearchQuery] = useState("");
+    const [filterStatus, setFilterStatus] = useState<string[]>([]);
     const [selectedPO, setSelectedPO] = useState<any | null>(null);
+    const [selectedPOForDetails, setSelectedPOForDetails] = useState<any | null>(null);
     const [showCancelDialog, setShowCancelDialog] = useState(false);
     const [showRejectDialog, setShowRejectDialog] = useState(false);
+    const [showDetailsDialog, setShowDetailsDialog] = useState(false);
     const [rejectReason, setRejectReason] = useState("");
     const [isLoading, setIsLoading] = useState(false);
 
     const isManager = currentUser?.role === "manager";
 
-    // Filter POs based on search
+    // Filter POs based on search and status
     const filteredPOs = useMemo(() => {
         if (!directPOs) return [];
-        if (!searchQuery.trim()) return directPOs;
 
-        const query = searchQuery.toLowerCase();
-        return directPOs.filter((po) => {
-            const matchesPONumber = po.poNumber.toLowerCase().includes(query);
-            const matchesItem = po.itemDescription.toLowerCase().includes(query);
-            const matchesVendor = po.vendor?.companyName.toLowerCase().includes(query);
-            const matchesSite = po.site?.name.toLowerCase().includes(query);
+        let filtered = directPOs;
 
-            return matchesPONumber || matchesItem || matchesVendor || matchesSite;
-        });
-    }, [directPOs, searchQuery]);
+        // Filter by status
+        if (filterStatus.length > 0) {
+            filtered = filtered.filter((po) => filterStatus.includes(po.status));
+        }
+
+        // Filter by search query
+        if (searchQuery.trim()) {
+            const query = searchQuery.toLowerCase();
+            filtered = filtered.filter((po) => {
+                const matchesPONumber = po.poNumber.toLowerCase().includes(query);
+                const matchesItem = po.itemDescription.toLowerCase().includes(query);
+                const matchesVendor = po.vendor?.companyName.toLowerCase().includes(query);
+                const matchesSite = po.site?.name.toLowerCase().includes(query);
+
+                return matchesPONumber || matchesItem || matchesVendor || matchesSite;
+            });
+        }
+
+        return filtered;
+    }, [directPOs, searchQuery, filterStatus]);
 
     // Calculate stats
     const stats = useMemo(() => {
-        if (!directPOs) return { total: 0, pending: 0, ordered: 0, delivered: 0, cancelled: 0, totalValue: 0 };
+        if (!directPOs) return { total: 0, pending: 0, ordered: 0, delivered: 0, cancelled: 0, totalValue: 0, latestPendingDate: null };
 
         const total = directPOs.length;
-        const pending = directPOs.filter((po) => po.status === "pending_approval").length;
+        const pendingPOs = directPOs.filter((po) => po.status === "pending_approval");
+        const pending = pendingPOs.length;
         const ordered = directPOs.filter((po) => po.status === "ordered").length;
         const delivered = directPOs.filter((po) => po.status === "delivered").length;
         const cancelled = directPOs.filter((po) => po.status === "cancelled" || po.status === "rejected").length;
         const totalValue = directPOs.reduce((sum, po) => sum + po.totalAmount, 0);
 
-        return { total, pending, ordered, delivered, cancelled, totalValue };
+        const latestPendingDate = pendingPOs.length > 0
+            ? Math.max(...pendingPOs.map(po => po.createdAt))
+            : null;
+
+        return { total, pending, ordered, delivered, cancelled, totalValue, latestPendingDate };
     }, [directPOs]);
 
     const handleMarkDelivered = async (poId: Id<"purchaseOrders">) => {
@@ -241,7 +276,13 @@ export function DirectPOManagement() {
                         <CardContent className="pt-6">
                             <div className="text-center space-y-2">
                                 <div className="text-2xl font-bold text-amber-600 dark:text-amber-500">{stats.pending}</div>
-                                <div className="text-xs text-amber-600/80 dark:text-amber-500/80 font-medium">Pending Approval</div>
+                                <div className="text-xs text-amber-600/80 dark:text-amber-500/80 font-medium">Pending</div>
+                                {stats.latestPendingDate && (
+                                    <div className="text-[10px] text-amber-600/60 dark:text-amber-500/60 flex items-center justify-center gap-1">
+                                        <Calendar className="h-3 w-3" />
+                                        {format(new Date(stats.latestPendingDate), "MMM dd, yyyy")}
+                                    </div>
+                                )}
                             </div>
                         </CardContent>
                     </Card>
@@ -283,17 +324,162 @@ export function DirectPOManagement() {
                     </Card>
                 </div>
 
-                {/* Search */}
+                {/* Search and Filter */}
                 <Card>
                     <CardContent className="pt-6">
-                        <div className="relative">
-                            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
-                            <Input
-                                placeholder="Search by PO number, item, vendor, or site..."
-                                value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
-                                className="pl-10"
-                            />
+                        <div className="flex flex-col sm:flex-row gap-4">
+                            <div className="flex-1 relative">
+                                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+                                <Input
+                                    placeholder="Search by PO number, item, vendor, or site..."
+                                    value={searchQuery}
+                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                    className="pl-10"
+                                />
+                            </div>
+
+                            {/* Status Filter */}
+                            <div className="w-full sm:w-[250px]">
+                                <Popover>
+                                    <PopoverTrigger asChild>
+                                        <Button
+                                            variant="outline"
+                                            role="combobox"
+                                            className="w-full justify-between"
+                                        >
+                                            {filterStatus.length > 0
+                                                ? filterStatus.length === 1
+                                                    ? filterStatus[0] === "pending_approval"
+                                                        ? "Pending"
+                                                        : filterStatus[0] === "ordered"
+                                                            ? "Pending PO"
+                                                            : filterStatus[0] === "rejected"
+                                                                ? "PO Rejected"
+                                                                : `${filterStatus.length} status selected`
+                                                    : `${filterStatus.length} status selected`
+                                                : "Filter by status"}
+                                            <Filter className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                        </Button>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-[200px] p-0" align="start">
+                                        <Command>
+                                            <CommandInput placeholder="Search status..." />
+                                            <CommandList>
+                                                <CommandEmpty>No status found.</CommandEmpty>
+                                                <CommandGroup>
+                                                    <CommandItem
+                                                        onSelect={() => setFilterStatus([])}
+                                                        className="font-medium"
+                                                    >
+                                                        <div
+                                                            className={cn(
+                                                                "mr-2 flex h-4 w-4 items-center justify-center rounded-full border border-primary",
+                                                                filterStatus.length === 0
+                                                                    ? "bg-primary text-primary-foreground"
+                                                                    : "opacity-50 [&_svg]:invisible"
+                                                            )}
+                                                        >
+                                                            <Check className={cn("h-4 w-4")} />
+                                                        </div>
+                                                        All Statuses
+                                                    </CommandItem>
+                                                    {/* Quick Filter: Pending */}
+                                                    <CommandItem
+                                                        onSelect={() => setFilterStatus(["pending_approval"])}
+                                                        className="font-medium text-amber-600"
+                                                    >
+                                                        <div
+                                                            className={cn(
+                                                                "mr-2 flex h-4 w-4 items-center justify-center rounded-full border border-primary",
+                                                                filterStatus.length === 1 && filterStatus[0] === "pending_approval"
+                                                                    ? "bg-primary text-primary-foreground"
+                                                                    : "opacity-50 [&_svg]:invisible"
+                                                            )}
+                                                        >
+                                                            <Check className={cn("h-4 w-4")} />
+                                                        </div>
+                                                        Pending
+                                                    </CommandItem>
+                                                    {/* Quick Filter: Pending PO */}
+                                                    <CommandItem
+                                                        onSelect={() => setFilterStatus(["ordered"])}
+                                                        className="font-medium text-blue-600"
+                                                    >
+                                                        <div
+                                                            className={cn(
+                                                                "mr-2 flex h-4 w-4 items-center justify-center rounded-full border border-primary",
+                                                                filterStatus.length === 1 && filterStatus[0] === "ordered"
+                                                                    ? "bg-primary text-primary-foreground"
+                                                                    : "opacity-50 [&_svg]:invisible"
+                                                            )}
+                                                        >
+                                                            <Check className={cn("h-4 w-4")} />
+                                                        </div>
+                                                        Pending PO
+                                                    </CommandItem>
+                                                    {/* Quick Filter: PO Rejected */}
+                                                    <CommandItem
+                                                        onSelect={() => setFilterStatus(["rejected"])}
+                                                        className="font-medium text-red-600"
+                                                    >
+                                                        <div
+                                                            className={cn(
+                                                                "mr-2 flex h-4 w-4 items-center justify-center rounded-full border border-primary",
+                                                                filterStatus.length === 1 && filterStatus[0] === "rejected"
+                                                                    ? "bg-primary text-primary-foreground"
+                                                                    : "opacity-50 [&_svg]:invisible"
+                                                            )}
+                                                        >
+                                                            <Check className={cn("h-4 w-4")} />
+                                                        </div>
+                                                        PO Rejected
+                                                    </CommandItem>
+                                                </CommandGroup>
+                                                <CommandSeparator />
+                                                <CommandGroup>
+                                                    {Object.entries(statusConfig).map(([key, config]) => (
+                                                        <CommandItem
+                                                            key={key}
+                                                            onSelect={() => {
+                                                                setFilterStatus((prev) =>
+                                                                    prev.includes(key)
+                                                                        ? prev.filter((s) => s !== key)
+                                                                        : [...prev, key]
+                                                                );
+                                                            }}
+                                                        >
+                                                            <div
+                                                                className={cn(
+                                                                    "mr-2 flex h-4 w-4 items-center justify-center rounded-full border border-primary",
+                                                                    filterStatus.includes(key)
+                                                                        ? "bg-primary text-primary-foreground"
+                                                                        : "opacity-50 [&_svg]:invisible"
+                                                                )}
+                                                            >
+                                                                <Check className={cn("h-4 w-4")} />
+                                                            </div>
+                                                            {config.label}
+                                                        </CommandItem>
+                                                    ))}
+                                                </CommandGroup>
+                                                {filterStatus.length > 0 && (
+                                                    <>
+                                                        <CommandSeparator />
+                                                        <CommandGroup>
+                                                            <CommandItem
+                                                                onSelect={() => setFilterStatus([])}
+                                                                className="justify-center text-center"
+                                                            >
+                                                                Clear filters
+                                                            </CommandItem>
+                                                        </CommandGroup>
+                                                    </>
+                                                )}
+                                            </CommandList>
+                                        </Command>
+                                    </PopoverContent>
+                                </Popover>
+                            </div>
                         </div>
                     </CardContent>
                 </Card>
@@ -334,7 +520,6 @@ export function DirectPOManagement() {
                                             <TableHead>Amount</TableHead>
                                             <TableHead>Status</TableHead>
                                             <TableHead>Created</TableHead>
-                                            <TableHead className="text-right">Actions</TableHead>
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
@@ -343,7 +528,14 @@ export function DirectPOManagement() {
                                             const StatusIcon = status.icon;
 
                                             return (
-                                                <TableRow key={po._id}>
+                                                <TableRow
+                                                    key={po._id}
+                                                    className="cursor-pointer hover:bg-accent/50 transition-colors"
+                                                    onClick={() => {
+                                                        setSelectedPOForDetails(po);
+                                                        setShowDetailsDialog(true);
+                                                    }}
+                                                >
                                                     <TableCell className="font-medium">
                                                         <div className="flex items-center gap-2">
                                                             <Zap className="h-4 w-4 text-orange-500" />
@@ -389,62 +581,6 @@ export function DirectPOManagement() {
                                                     </TableCell>
                                                     <TableCell className="text-sm text-muted-foreground">
                                                         {format(new Date(po.createdAt), "MMM dd, yyyy")}
-                                                    </TableCell>
-                                                    <TableCell className="text-right">
-                                                        <div className="flex items-center justify-end gap-2">
-                                                            {po.status === "pending_approval" && isManager && (
-                                                                <>
-                                                                    <Button
-                                                                        size="sm"
-                                                                        onClick={() => handleApprovePO(po._id)}
-                                                                        disabled={isLoading}
-                                                                        className="bg-green-600 hover:bg-green-700 text-white h-8 px-2"
-                                                                    >
-                                                                        <Check className="h-4 w-4 mr-1" />
-                                                                        Approve
-                                                                    </Button>
-                                                                    <Button
-                                                                        size="sm"
-                                                                        variant="destructive"
-                                                                        onClick={() => {
-                                                                            setSelectedPO(po);
-                                                                            setShowRejectDialog(true);
-                                                                        }}
-                                                                        disabled={isLoading}
-                                                                        className="h-8 px-2"
-                                                                    >
-                                                                        <X className="h-4 w-4 mr-1" />
-                                                                        Reject
-                                                                    </Button>
-                                                                </>
-                                                            )}
-
-                                                            {po.status === "ordered" && (
-                                                                <>
-                                                                    <Button
-                                                                        size="sm"
-                                                                        variant="outline"
-                                                                        onClick={() => handleMarkDelivered(po._id)}
-                                                                        disabled={isLoading}
-                                                                    >
-                                                                        <CheckCircle2 className="h-4 w-4 mr-1" />
-                                                                        Delivered
-                                                                    </Button>
-                                                                    <Button
-                                                                        size="sm"
-                                                                        variant="destructive"
-                                                                        onClick={() => {
-                                                                            setSelectedPO(po);
-                                                                            setShowCancelDialog(true);
-                                                                        }}
-                                                                        disabled={isLoading}
-                                                                    >
-                                                                        <XCircle className="h-4 w-4 mr-1" />
-                                                                        Cancel
-                                                                    </Button>
-                                                                </>
-                                                            )}
-                                                        </div>
                                                     </TableCell>
                                                 </TableRow>
                                             );
@@ -504,6 +640,156 @@ export function DirectPOManagement() {
                             {isLoading ? "Rejecting..." : "Reject PO"}
                         </Button>
                     </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* PO Details Dialog */}
+            <Dialog open={showDetailsDialog} onOpenChange={setShowDetailsDialog}>
+                <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                            <Zap className="h-5 w-5 text-orange-500" />
+                            Direct PO #{selectedPOForDetails?.poNumber}
+                        </DialogTitle>
+                        <DialogDescription>
+                            View and manage Direct Purchase Order details
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    {selectedPOForDetails && (
+                        <div className="space-y-6 py-4">
+                            {/* Status Badge */}
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <Badge
+                                        variant={statusConfig[selectedPOForDetails.status]?.variant || "default"}
+                                        className={cn("gap-1", statusConfig[selectedPOForDetails.status]?.className)}
+                                    >
+                                        {React.createElement(statusConfig[selectedPOForDetails.status]?.icon || Clock, { className: "h-3 w-3" })}
+                                        {statusConfig[selectedPOForDetails.status]?.label || selectedPOForDetails.status}
+                                    </Badge>
+                                </div>
+                                <div className="text-sm text-muted-foreground">
+                                    Created: {format(new Date(selectedPOForDetails.createdAt), "MMM dd, yyyy")}
+                                </div>
+                            </div>
+
+                            {/* Item Details */}
+                            <div className="space-y-3">
+                                <h4 className="font-semibold text-sm border-b pb-2">Item Details</h4>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <Label className="text-xs text-muted-foreground">Item Description</Label>
+                                        <p className="text-sm font-medium mt-1">{selectedPOForDetails.itemDescription}</p>
+                                    </div>
+                                    {selectedPOForDetails.hsnSacCode && (
+                                        <div>
+                                            <Label className="text-xs text-muted-foreground">HSN/SAC Code</Label>
+                                            <p className="text-sm font-medium mt-1">{selectedPOForDetails.hsnSacCode}</p>
+                                        </div>
+                                    )}
+                                    <div>
+                                        <Label className="text-xs text-muted-foreground">Quantity</Label>
+                                        <p className="text-sm font-medium mt-1">{selectedPOForDetails.quantity} {selectedPOForDetails.unit}</p>
+                                    </div>
+                                    <div>
+                                        <Label className="text-xs text-muted-foreground">Unit Rate</Label>
+                                        <p className="text-sm font-medium mt-1">₹{selectedPOForDetails.unitRate.toLocaleString()}</p>
+                                    </div>
+                                    <div>
+                                        <Label className="text-xs text-muted-foreground">GST Rate</Label>
+                                        <p className="text-sm font-medium mt-1">{selectedPOForDetails.gstTaxRate}%</p>
+                                    </div>
+                                    <div>
+                                        <Label className="text-xs text-muted-foreground">Total Amount</Label>
+                                        <p className="text-sm font-bold mt-1 text-primary">₹{selectedPOForDetails.totalAmount.toLocaleString()}</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Vendor Details */}
+                            <div className="space-y-3">
+                                <h4 className="font-semibold text-sm border-b pb-2">Vendor Details</h4>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <Label className="text-xs text-muted-foreground">Company Name</Label>
+                                        <p className="text-sm font-medium mt-1">{selectedPOForDetails.vendor?.companyName || "N/A"}</p>
+                                    </div>
+                                    {selectedPOForDetails.vendor?.email && (
+                                        <div>
+                                            <Label className="text-xs text-muted-foreground">Email</Label>
+                                            <p className="text-sm font-medium mt-1">{selectedPOForDetails.vendor.email}</p>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* Delivery Details */}
+                            <div className="space-y-3">
+                                <h4 className="font-semibold text-sm border-b pb-2">Delivery Details</h4>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <Label className="text-xs text-muted-foreground">Delivery Site</Label>
+                                        <p className="text-sm font-medium mt-1">{selectedPOForDetails.site?.name || "N/A"}</p>
+                                    </div>
+                                    <div>
+                                        <Label className="text-xs text-muted-foreground">Valid Till</Label>
+                                        <p className="text-sm font-medium mt-1">
+                                            {format(new Date(selectedPOForDetails.validTill), "MMM dd, yyyy")}
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Notes */}
+                            {selectedPOForDetails.notes && (
+                                <div className="space-y-2">
+                                    <Label className="text-xs text-muted-foreground">Internal Notes</Label>
+                                    <p className="text-sm bg-muted p-3 rounded-md">{selectedPOForDetails.notes}</p>
+                                </div>
+                            )}
+
+                            {/* Rejection Reason */}
+                            {selectedPOForDetails.status === 'rejected' && selectedPOForDetails.rejectionReason && (
+                                <div className="space-y-2">
+                                    <Label className="text-xs text-red-600">Rejection Reason</Label>
+                                    <p className="text-sm bg-red-50 dark:bg-red-900/10 text-red-600 p-3 rounded-md border border-red-200">
+                                        {selectedPOForDetails.rejectionReason}
+                                    </p>
+                                </div>
+                            )}
+
+                            {/* Manager Actions */}
+                            {selectedPOForDetails.status === "pending_approval" && isManager && (
+                                <div className="flex gap-3 pt-4 border-t">
+                                    <Button
+                                        onClick={() => {
+                                            handleApprovePO(selectedPOForDetails._id);
+                                            setShowDetailsDialog(false);
+                                        }}
+                                        disabled={isLoading}
+                                        className="flex-1 bg-green-600 hover:bg-green-700 text-white"
+                                    >
+                                        <Check className="h-4 w-4 mr-2" />
+                                        Approve PO
+                                    </Button>
+                                    <Button
+                                        variant="destructive"
+                                        onClick={() => {
+                                            setSelectedPO(selectedPOForDetails);
+                                            setShowDetailsDialog(false);
+                                            setShowRejectDialog(true);
+                                        }}
+                                        disabled={isLoading}
+                                        className="flex-1"
+                                    >
+                                        <X className="h-4 w-4 mr-2" />
+                                        Reject PO
+                                    </Button>
+                                </div>
+                            )}
+                        </div>
+                    )}
                 </DialogContent>
             </Dialog>
         </>

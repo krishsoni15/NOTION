@@ -12,10 +12,10 @@ import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { Role, ROLES, ROLE_LABELS } from "@/lib/auth/roles";
-import { 
-  LayoutDashboard, 
-  ClipboardList, 
-  Users, 
+import {
+  LayoutDashboard,
+  ClipboardList,
+  Users,
   Store,
   Warehouse,
   CheckCircle,
@@ -60,7 +60,7 @@ const navigationItems: NavigationItem[] = [
     icon: Warehouse,
     roles: [ROLES.SITE_ENGINEER],
   },
-  
+
   // Manager - Logical sequence: Dashboard → Requests → Inventory → Vendors → Users → Sites
   {
     label: "Dashboard",
@@ -93,12 +93,12 @@ const navigationItems: NavigationItem[] = [
     roles: [ROLES.MANAGER],
   },
   {
-    label: "Sites",
-    href: "/dashboard/sites",
+    label: "Locations",
+    href: "/dashboard/locations",
     icon: Building2,
     roles: [ROLES.MANAGER],
   },
-  
+
   // Purchase Officer - Logical sequence: Dashboard → Requests → Inventory → Vendors
   {
     label: "Dashboard",
@@ -141,7 +141,7 @@ export function Sidebar({ userRole }: SidebarProps) {
   );
 
   return (
-    <aside 
+    <aside
       className={cn(
         "hidden md:flex md:flex-col md:border-r md:bg-card/50 md:backdrop-blur-sm transition-all duration-300 ease-in-out fixed left-0 top-0 h-screen z-30 shadow-sm",
         // Only apply width after mount to prevent hydration mismatch
@@ -191,8 +191,8 @@ export function Sidebar({ userRole }: SidebarProps) {
               </Tooltip>
             ) : (
               <div className="flex items-center justify-between gap-3">
-                <Link 
-                  href="/dashboard" 
+                <Link
+                  href="/dashboard"
                   className="flex items-center gap-3 min-w-0 flex-1 cursor-pointer hover:opacity-80 transition-opacity"
                 >
                   <div className="h-12 w-12 rounded-lg bg-gradient-to-br from-primary/20 to-primary/10 flex items-center justify-center shrink-0 overflow-hidden p-2">
@@ -257,13 +257,9 @@ export function Sidebar({ userRole }: SidebarProps) {
               isCollapsed ? "px-3 py-3 space-y-2" : "px-4 py-4 space-y-1.5"
             )}>
               {filteredItems.map((item) => {
-                // More precise active state checking
-                // Dashboard should only be active on exact match
-                // Other pages should be active on exact match or child routes
-                const isDashboard = item.href === "/dashboard/manager" || 
-                                   item.href === "/dashboard/site" || 
-                                   item.href === "/dashboard/purchase";
-                const isActive = isDashboard 
+                // Dashboard items should only be active on exact match
+                const isDashboard = item.label === "Dashboard";
+                const isActive = isDashboard
                   ? pathname === item.href
                   : pathname === item.href || pathname.startsWith(item.href + "/");
                 const Icon = item.icon;

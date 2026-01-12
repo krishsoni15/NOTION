@@ -51,7 +51,7 @@ export function VendorCreationForm({ onVendorCreated, onCancel, itemName, initia
       const vendorId = await createVendor({
         companyName: formData.companyName.trim(),
         email: formData.email.trim(),
-        phone: formData.phone.trim() || undefined,
+        phone: formData.phone.trim(),
         gstNumber: formData.gstNumber.trim(),
         address: formData.address.trim(),
       });

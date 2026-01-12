@@ -38,7 +38,9 @@ type RequestStatus =
   | "ready_for_po"
   | "delivery_stage"
   | "delivered"
-  | "partially_processed";
+  | "partially_processed"
+  | "sign_pending"
+  | "sign_rejected";
 
 export function ManagerRequestsContent() {
   const [selectedRequestId, setSelectedRequestId] = useState<Id<"requests"> | null>(null);
@@ -80,7 +82,7 @@ export function ManagerRequestsContent() {
         // 2. Site Engineer Context: Strictly "Pending" (Initial Approval) - user request
         const validStatuses = categoryFilter === "site_engineer"
           ? ["pending"]
-          : ["pending", "cc_pending"];
+          : ["pending", "cc_pending", "sign_pending"];
 
         if (!validStatuses.includes(request.status)) {
           return false;
@@ -99,7 +101,7 @@ export function ManagerRequestsContent() {
             // Purchase Phase: Approved by Manager (Ready for CC), Incoming from Purchase (CC Pending),
             // or Post-Purchase processing (Ready for PO, Delivered, etc.) OR Created by Purchase Officer
             matchesCategory = request.creator?.role === "purchase_officer" ||
-              ["ready_for_cc", "cc_pending", "cc_approved", "cc_rejected", "ready_for_po", "delivery_stage", "delivered", "partially_processed"].includes(request.status);
+              ["ready_for_cc", "cc_pending", "cc_approved", "cc_rejected", "ready_for_po", "delivery_stage", "delivered", "partially_processed", "sign_pending", "sign_rejected"].includes(request.status);
             break;
         }
         if (!matchesCategory) {
@@ -164,7 +166,7 @@ export function ManagerRequestsContent() {
       // Apply Category Filter
       if (categoryFilter !== "all") {
         if (categoryFilter === "site_engineer" && req.creator?.role !== "site_engineer") return false;
-        if (categoryFilter === "purchases" && !(req.creator?.role === "purchase_officer" || ["ready_for_cc", "cc_pending", "cc_approved", "cc_rejected", "ready_for_po", "delivery_stage", "delivered", "partially_processed"].includes(req.status))) return false;
+        if (categoryFilter === "purchases" && !(req.creator?.role === "purchase_officer" || ["ready_for_cc", "cc_pending", "cc_approved", "cc_rejected", "ready_for_po", "delivery_stage", "delivered", "partially_processed", "sign_pending", "sign_rejected"].includes(req.status))) return false;
       }
       // Apply Status Filter
       if (statusFilter.length > 0 && !statusFilter.includes(req.status)) return false;
@@ -184,7 +186,7 @@ export function ManagerRequestsContent() {
       work_pending: requestsForWorkCounts.filter(r => {
         // If Site Engineer category is active, Detail Review only implies 'pending'
         if (categoryFilter === "site_engineer") return r.status === "pending";
-        return ["pending", "cc_pending"].includes(r.status);
+        return ["pending", "cc_pending", "sign_pending"].includes(r.status);
       }).length
     };
   }, [requestsForWorkCounts, categoryFilter]);
@@ -196,7 +198,7 @@ export function ManagerRequestsContent() {
       // Apply Work Filter (Base logic, refined in counts)
       if (workFilter === "work_pending") {
         // We allow broader here, and filter strictly in the count step if needed
-        if (!["pending", "cc_pending"].includes(req.status)) return false;
+        if (!["pending", "cc_pending", "sign_pending"].includes(req.status)) return false;
       }
       // Apply Status Filter
       if (statusFilter.length > 0 && !statusFilter.includes(req.status)) return false;
@@ -218,7 +220,7 @@ export function ManagerRequestsContent() {
       ? siteEngReqs.filter(r => r.status === "pending").length
       : siteEngReqs.length;
 
-    const purchasesReqs = requestsForCategoryCounts.filter(r => r.creator?.role === "purchase_officer" || ["ready_for_cc", "cc_pending", "cc_approved", "cc_rejected", "ready_for_po", "delivery_stage", "delivered", "partially_processed"].includes(r.status));
+    const purchasesReqs = requestsForCategoryCounts.filter(r => r.creator?.role === "purchase_officer" || ["ready_for_cc", "cc_pending", "cc_approved", "cc_rejected", "ready_for_po", "delivery_stage", "delivered", "partially_processed", "sign_pending", "sign_rejected"].includes(r.status));
 
     return {
       site_engineer: siteEngCount,
@@ -231,11 +233,11 @@ export function ManagerRequestsContent() {
     if (!allRequests) return [];
     return allRequests.filter(req => {
       // Apply Work Filter
-      if (workFilter === "work_pending" && !["pending", "cc_pending"].includes(req.status)) return false;
+      if (workFilter === "work_pending" && !["pending", "cc_pending", "sign_pending"].includes(req.status)) return false;
       // Apply Category Filter
       if (categoryFilter !== "all") {
         if (categoryFilter === "site_engineer" && req.creator?.role !== "site_engineer") return false;
-        if (categoryFilter === "purchases" && !(req.creator?.role === "purchase_officer" || ["ready_for_cc", "cc_pending", "cc_approved", "cc_rejected", "ready_for_po", "delivery_stage", "delivered", "partially_processed"].includes(req.status))) return false;
+        if (categoryFilter === "purchases" && !(req.creator?.role === "purchase_officer" || ["ready_for_cc", "cc_pending", "cc_approved", "cc_rejected", "ready_for_po", "delivery_stage", "delivered", "partially_processed", "sign_pending", "sign_rejected"].includes(req.status))) return false;
       }
       // Apply Search
       if (searchQuery.trim()) {
@@ -267,6 +269,8 @@ export function ManagerRequestsContent() {
     { value: "delivered", label: "Delivered", count: getSmartStatusCount("delivered"), color: "text-sky-600" },
     { value: "rejected", label: "Rejected", count: getSmartStatusCount("rejected"), color: "text-red-600" },
     { value: "cc_rejected", label: "CC Rejected", count: getSmartStatusCount("cc_rejected"), color: "text-red-500" },
+    { value: "sign_pending", label: "Sign Pending", count: getSmartStatusCount("sign_pending"), color: "text-amber-600" },
+    { value: "sign_rejected", label: "Sign Rejected", count: getSmartStatusCount("sign_rejected"), color: "text-red-600" },
   ];
 
   return (

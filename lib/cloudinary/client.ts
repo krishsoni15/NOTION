@@ -33,15 +33,16 @@ export async function uploadImage(
     transformation?: any[];
     quality?: string | number;
     format?: string;
+    resourceType?: 'image' | 'video' | 'raw' | 'auto';
   } = {}
 ): Promise<{ url: string; publicId: string; key: string }> {
   try {
-    const { folder = 'notion-uploads', transformation, quality = 'auto', format } = options;
+    const { folder = 'notion-uploads', transformation, quality = 'auto', format, resourceType = 'image' } = options;
 
     const uploadOptions: any = {
       folder,
       quality,
-      resource_type: 'image',
+      resource_type: resourceType,
     };
 
     if (publicId) {

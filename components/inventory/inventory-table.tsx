@@ -89,7 +89,7 @@ export function InventoryTable({ items, viewMode = "table", onRefresh }: Invento
   const [removingImageKey, setRemovingImageKey] = useState<string | null>(null);
   const [selectedItemName, setSelectedItemName] = useState<string | null>(null);
   const [imageSliderOpen, setImageSliderOpen] = useState(false);
-  const [imageSliderImages, setImageSliderImages] = useState<Array<{imageUrl: string; imageKey: string}>>([]);
+  const [imageSliderImages, setImageSliderImages] = useState<Array<{ imageUrl: string; imageKey: string }>>([]);
   const [imageSliderItemName, setImageSliderItemName] = useState("");
   const [imageSliderInitialIndex, setImageSliderInitialIndex] = useState(0);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
@@ -97,7 +97,7 @@ export function InventoryTable({ items, viewMode = "table", onRefresh }: Invento
   const canPerformCRUD = userRole === ROLES.PURCHASE_OFFICER; // Only Purchase Officers can edit/delete
   const canAddImages = userRole === ROLES.PURCHASE_OFFICER || userRole === ROLES.SITE_ENGINEER; // Purchase Officers and Site Engineers can add images
 
-  const openImageSlider = (images: Array<{imageUrl: string; imageKey: string}>, itemName: string, initialIndex: number = 0) => {
+  const openImageSlider = (images: Array<{ imageUrl: string; imageKey: string }>, itemName: string, initialIndex: number = 0) => {
     setImageSliderImages(images);
     setImageSliderItemName(itemName);
     setImageSliderInitialIndex(initialIndex);
@@ -234,6 +234,17 @@ export function InventoryTable({ items, viewMode = "table", onRefresh }: Invento
               <p className="font-medium">{item.centralStock}</p>
             </div>
           </div>
+
+          <div className="flex items-start gap-2 text-sm">
+            <div className="flex-1 min-w-0">
+              <p className="text-muted-foreground text-xs">HSN/SAC</p>
+              <p className="font-medium">{item.hsnSacCode || "—"}</p>
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-muted-foreground text-xs">Description</p>
+              <p className="font-medium truncate" title={item.description || ""}>{item.description || "—"}</p>
+            </div>
+          </div>
           {((item as any).vendors && (item as any).vendors.length > 0) || (item as any).vendor ? (
             <div className="flex items-start gap-2 text-sm">
               <Building2 className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
@@ -244,179 +255,179 @@ export function InventoryTable({ items, viewMode = "table", onRefresh }: Invento
                 <div className="flex flex-wrap items-center gap-1.5 mt-1">
                   {((item as any).vendors && (item as any).vendors.length > 0)
                     ? (item as any).vendors.map((vendor: any) => (
-                        <div key={vendor._id} className="flex items-center gap-1">
-                          <Popover>
-                            <PopoverTrigger asChild>
-                              <Badge 
-                                variant="outline" 
-                                className="text-xs cursor-pointer hover:bg-primary/10 transition-colors"
-                              >
-                                {vendor.companyName}
-                              </Badge>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-80 p-4" align="start">
-                              <div className="space-y-3">
-                                <div>
-                                  <h4 className="font-semibold text-sm mb-2 flex items-center gap-2">
-                                    <Building2 className="h-4 w-4 text-primary" />
-                                    {vendor.companyName}
-                                  </h4>
-                                </div>
-                                <div className="space-y-2 text-sm">
-                                  <div className="flex items-start gap-2">
-                                    <Mail className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
-                                    <div>
-                                      <p className="text-xs text-muted-foreground">Email</p>
-                                      <p className="font-medium">{vendor.email}</p>
-                                    </div>
-                                  </div>
-                                  {vendor.phone && (
-                                    <div className="flex items-start gap-2">
-                                      <Phone className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
-                                      <div>
-                                        <p className="text-xs text-muted-foreground">Phone</p>
-                                        <p className="font-medium">{vendor.phone}</p>
-                                      </div>
-                                    </div>
-                                  )}
-                                  <div className="flex items-start gap-2">
-                                    <Hash className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
-                                    <div>
-                                      <p className="text-xs text-muted-foreground">GST Number</p>
-                                      <p className="font-medium">{vendor.gstNumber}</p>
-                                    </div>
-                                  </div>
-                                  {vendor.address && (
-                                    <div className="flex items-start gap-2">
-                                      <MapPin className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
-                                      <div>
-                                        <p className="text-xs text-muted-foreground">Address</p>
-                                        <p className="font-medium text-xs">{vendor.address}</p>
-                                      </div>
-                                    </div>
-                                  )}
-                                </div>
+                      <div key={vendor._id} className="flex items-center gap-1">
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <Badge
+                              variant="outline"
+                              className="text-xs cursor-pointer hover:bg-primary/10 transition-colors"
+                            >
+                              {vendor.companyName}
+                            </Badge>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-80 p-4" align="start">
+                            <div className="space-y-3">
+                              <div>
+                                <h4 className="font-semibold text-sm mb-2 flex items-center gap-2">
+                                  <Building2 className="h-4 w-4 text-primary" />
+                                  {vendor.companyName}
+                                </h4>
                               </div>
-                            </PopoverContent>
-                          </Popover>
-                        </div>
-                      ))
+                              <div className="space-y-2 text-sm">
+                                <div className="flex items-start gap-2">
+                                  <Mail className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
+                                  <div>
+                                    <p className="text-xs text-muted-foreground">Email</p>
+                                    <p className="font-medium">{vendor.email}</p>
+                                  </div>
+                                </div>
+                                {vendor.phone && (
+                                  <div className="flex items-start gap-2">
+                                    <Phone className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
+                                    <div>
+                                      <p className="text-xs text-muted-foreground">Phone</p>
+                                      <p className="font-medium">{vendor.phone}</p>
+                                    </div>
+                                  </div>
+                                )}
+                                <div className="flex items-start gap-2">
+                                  <Hash className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
+                                  <div>
+                                    <p className="text-xs text-muted-foreground">GST Number</p>
+                                    <p className="font-medium">{vendor.gstNumber}</p>
+                                  </div>
+                                </div>
+                                {vendor.address && (
+                                  <div className="flex items-start gap-2">
+                                    <MapPin className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
+                                    <div>
+                                      <p className="text-xs text-muted-foreground">Address</p>
+                                      <p className="font-medium text-xs">{vendor.address}</p>
+                                    </div>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </PopoverContent>
+                        </Popover>
+                      </div>
+                    ))
                     : (item as any).vendor && (
-                        <div className="flex items-center gap-1">
-                          <Popover>
-                            <PopoverTrigger asChild>
-                              <Badge 
-                                variant="outline" 
-                                className="text-xs cursor-pointer hover:bg-primary/10 transition-colors"
-                              >
-                                {(item as any).vendor.companyName}
-                              </Badge>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-80 p-4" align="start">
-                              <div className="space-y-3">
-                                <div>
-                                  <h4 className="font-semibold text-sm mb-2 flex items-center gap-2">
-                                    <Building2 className="h-4 w-4 text-primary" />
-                                    {(item as any).vendor.companyName}
-                                  </h4>
+                      <div className="flex items-center gap-1">
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <Badge
+                              variant="outline"
+                              className="text-xs cursor-pointer hover:bg-primary/10 transition-colors"
+                            >
+                              {(item as any).vendor.companyName}
+                            </Badge>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-80 p-4" align="start">
+                            <div className="space-y-3">
+                              <div>
+                                <h4 className="font-semibold text-sm mb-2 flex items-center gap-2">
+                                  <Building2 className="h-4 w-4 text-primary" />
+                                  {(item as any).vendor.companyName}
+                                </h4>
+                              </div>
+                              <div className="space-y-2 text-sm">
+                                <div className="flex items-start gap-2">
+                                  <Mail className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
+                                  <div>
+                                    <p className="text-xs text-muted-foreground">Email</p>
+                                    <p className="font-medium">{(item as any).vendor.email}</p>
+                                  </div>
                                 </div>
-                                <div className="space-y-2 text-sm">
+                                {(item as any).vendor.phone && (
                                   <div className="flex items-start gap-2">
-                                    <Mail className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
+                                    <Phone className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
                                     <div>
-                                      <p className="text-xs text-muted-foreground">Email</p>
-                                      <p className="font-medium">{(item as any).vendor.email}</p>
+                                      <p className="text-xs text-muted-foreground">Phone</p>
+                                      <p className="font-medium">{(item as any).vendor.phone}</p>
                                     </div>
                                   </div>
-                                  {(item as any).vendor.phone && (
-                                    <div className="flex items-start gap-2">
-                                      <Phone className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
-                                      <div>
-                                        <p className="text-xs text-muted-foreground">Phone</p>
-                                        <p className="font-medium">{(item as any).vendor.phone}</p>
-                                      </div>
+                                )}
+                                <div className="flex items-start gap-2">
+                                  <Hash className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
+                                  <div>
+                                    <p className="text-xs text-muted-foreground">GST Number</p>
+                                    <p className="font-medium">{(item as any).vendor.gstNumber}</p>
+                                  </div>
+                                </div>
+                                {(item as any).vendor.address && (
+                                  <div className="flex items-start gap-2">
+                                    <MapPin className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
+                                    <div>
+                                      <p className="text-xs text-muted-foreground">Address</p>
+                                      <p className="font-medium text-xs">{(item as any).vendor.address}</p>
                                     </div>
-                                  )}
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </PopoverContent>
+                        </Popover>
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-5 w-5 p-0 hover:bg-primary/10"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <Info className="h-3 w-3 text-primary" />
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-80 p-4" align="start">
+                            <div className="space-y-3">
+                              <div>
+                                <h4 className="font-semibold text-sm mb-2 flex items-center gap-2">
+                                  <Building2 className="h-4 w-4 text-primary" />
+                                  {(item as any).vendor.companyName}
+                                </h4>
+                              </div>
+                              <div className="space-y-2 text-sm">
+                                <div className="flex items-start gap-2">
+                                  <Mail className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
+                                  <div>
+                                    <p className="text-xs text-muted-foreground">Email</p>
+                                    <p className="font-medium">{(item as any).vendor.email}</p>
+                                  </div>
+                                </div>
+                                {((item as any).vendor as any).phone && (
+                                  <div className="flex items-start gap-2">
+                                    <Phone className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
+                                    <div>
+                                      <p className="text-xs text-muted-foreground">Phone</p>
+                                      <p className="font-medium">{((item as any).vendor as any).phone}</p>
+                                    </div>
+                                  </div>
+                                )}
+                                {((item as any).vendor as any).gstNumber && (
                                   <div className="flex items-start gap-2">
                                     <Hash className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
                                     <div>
                                       <p className="text-xs text-muted-foreground">GST Number</p>
-                                      <p className="font-medium">{(item as any).vendor.gstNumber}</p>
+                                      <p className="font-medium">{((item as any).vendor as any).gstNumber}</p>
                                     </div>
                                   </div>
-                                  {(item as any).vendor.address && (
-                                    <div className="flex items-start gap-2">
-                                      <MapPin className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
-                                      <div>
-                                        <p className="text-xs text-muted-foreground">Address</p>
-                                        <p className="font-medium text-xs">{(item as any).vendor.address}</p>
-                                      </div>
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-                            </PopoverContent>
-                          </Popover>
-                          <Popover>
-                            <PopoverTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-5 w-5 p-0 hover:bg-primary/10"
-                                onClick={(e) => e.stopPropagation()}
-                              >
-                                <Info className="h-3 w-3 text-primary" />
-                              </Button>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-80 p-4" align="start">
-                              <div className="space-y-3">
-                                <div>
-                                  <h4 className="font-semibold text-sm mb-2 flex items-center gap-2">
-                                    <Building2 className="h-4 w-4 text-primary" />
-                                    {(item as any).vendor.companyName}
-                                  </h4>
-                                </div>
-                                <div className="space-y-2 text-sm">
+                                )}
+                                {((item as any).vendor as any).address && (
                                   <div className="flex items-start gap-2">
-                                    <Mail className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
+                                    <MapPin className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
                                     <div>
-                                      <p className="text-xs text-muted-foreground">Email</p>
-                                      <p className="font-medium">{(item as any).vendor.email}</p>
+                                      <p className="text-xs text-muted-foreground">Address</p>
+                                      <p className="font-medium text-xs">{((item as any).vendor as any).address}</p>
                                     </div>
                                   </div>
-                                  {((item as any).vendor as any).phone && (
-                                    <div className="flex items-start gap-2">
-                                      <Phone className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
-                                      <div>
-                                        <p className="text-xs text-muted-foreground">Phone</p>
-                                        <p className="font-medium">{((item as any).vendor as any).phone}</p>
-                                      </div>
-                                    </div>
-                                  )}
-                                  {((item as any).vendor as any).gstNumber && (
-                                    <div className="flex items-start gap-2">
-                                      <Hash className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
-                                      <div>
-                                        <p className="text-xs text-muted-foreground">GST Number</p>
-                                        <p className="font-medium">{((item as any).vendor as any).gstNumber}</p>
-                                      </div>
-                                    </div>
-                                  )}
-                                  {((item as any).vendor as any).address && (
-                                    <div className="flex items-start gap-2">
-                                      <MapPin className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
-                                      <div>
-                                        <p className="text-xs text-muted-foreground">Address</p>
-                                        <p className="font-medium text-xs">{((item as any).vendor as any).address}</p>
-                                      </div>
-                                    </div>
-                                  )}
-                                </div>
+                                )}
                               </div>
-                            </PopoverContent>
-                          </Popover>
-                        </div>
-                      )}
+                            </div>
+                          </PopoverContent>
+                        </Popover>
+                      </div>
+                    )}
                 </div>
               </div>
             </div>
@@ -426,7 +437,7 @@ export function InventoryTable({ items, viewMode = "table", onRefresh }: Invento
             <span>Created {new Date(item.createdAt).toLocaleDateString()}</span>
           </div>
         </CardContent>
-      </Card>
+      </Card >
     );
   };
 
@@ -487,6 +498,8 @@ export function InventoryTable({ items, viewMode = "table", onRefresh }: Invento
                 <TableRow>
                   <TableHead>Item Name</TableHead>
                   <TableHead>Unit</TableHead>
+                  <TableHead>HSN/SAC</TableHead>
+                  <TableHead>Description</TableHead>
                   <TableHead>Central Stock</TableHead>
                   <TableHead>Vendor</TableHead>
                   <TableHead>Images</TableHead>
@@ -510,6 +523,12 @@ export function InventoryTable({ items, viewMode = "table", onRefresh }: Invento
                     <TableCell>
                       <Badge variant="outline">{item.unit}</Badge>
                     </TableCell>
+                    <TableCell>{item.hsnSacCode || "—"}</TableCell>
+                    <TableCell>
+                      <div className="max-w-[200px] truncate" title={item.description || ""}>
+                        {item.description || "—"}
+                      </div>
+                    </TableCell>
                     <TableCell>{item.centralStock}</TableCell>
                     <TableCell>
                       {((item as any).vendors && (item as any).vendors.length > 0) ? (
@@ -518,8 +537,8 @@ export function InventoryTable({ items, viewMode = "table", onRefresh }: Invento
                             <div key={vendor._id} className="flex items-center gap-1">
                               <Popover>
                                 <PopoverTrigger asChild>
-                                  <Badge 
-                                    variant="outline" 
+                                  <Badge
+                                    variant="outline"
                                     className="text-xs cursor-pointer hover:bg-primary/10 transition-colors"
                                   >
                                     {vendor.companyName}
@@ -582,8 +601,8 @@ export function InventoryTable({ items, viewMode = "table", onRefresh }: Invento
                         <div className="flex items-center gap-1">
                           <Popover>
                             <PopoverTrigger asChild>
-                              <Badge 
-                                variant="outline" 
+                              <Badge
+                                variant="outline"
                                 className="text-xs cursor-pointer hover:bg-primary/10 transition-colors"
                               >
                                 {(item as any).vendor.companyName}
@@ -807,12 +826,14 @@ export function InventoryTable({ items, viewMode = "table", onRefresh }: Invento
           itemId={editingItem?._id}
           initialData={editingItem
             ? {
-                itemName: editingItem.itemName,
-                unit: editingItem.unit ?? "",
-                centralStock: editingItem.centralStock ?? 0,
-                vendorIds: (editingItem as any).vendorIds ||
-                          (editingItem.vendorId ? [editingItem.vendorId] : []),
-              }
+              itemName: editingItem.itemName,
+              description: editingItem.description,
+              hsnSacCode: editingItem.hsnSacCode,
+              unit: editingItem.unit ?? "",
+              centralStock: editingItem.centralStock ?? 0,
+              vendorIds: (editingItem as any).vendorIds ||
+                (editingItem.vendorId ? [editingItem.vendorId] : []),
+            }
             : null}
           mode="edit"
         />

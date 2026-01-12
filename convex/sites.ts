@@ -97,6 +97,7 @@ export const createSite = mutation({
     code: v.optional(v.string()),
     address: v.optional(v.string()),
     description: v.optional(v.string()),
+    type: v.optional(v.union(v.literal("site"), v.literal("inventory"))),
   },
   handler: async (ctx, args) => {
     const userId = await getAuthUserId(ctx);
@@ -110,9 +111,9 @@ export const createSite = mutation({
 
     if (!currentUser) throw new Error("User not found");
 
-    // Check if user is a manager
-    if (currentUser.role !== "manager") {
-      throw new Error("Unauthorized: Only managers can create sites");
+    // Check if user is a manager or purchase officer
+    if (currentUser.role !== "manager" && currentUser.role !== "purchase_officer") {
+      throw new Error("Unauthorized: Only managers and purchase officers can create sites");
     }
 
     // Check if site name already exists (case-insensitive)
@@ -123,7 +124,7 @@ export const createSite = mutation({
     );
 
     if (existingSite) {
-      throw new Error(`Site "${args.name}" already exists`);
+      throw new Error(`Location "${args.name}" already exists`);
     }
 
     const now = Date.now();
@@ -134,6 +135,7 @@ export const createSite = mutation({
       code: args.code,
       address: args.address,
       description: args.description,
+      type: args.type || "site", // Default to 'site'
       isActive: true,
       createdBy: currentUser._id,
       createdAt: now,
@@ -154,6 +156,7 @@ export const updateSite = mutation({
     code: v.optional(v.string()),
     address: v.optional(v.string()),
     description: v.optional(v.string()),
+    type: v.optional(v.union(v.literal("site"), v.literal("inventory"))),
     isActive: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
@@ -183,6 +186,7 @@ export const updateSite = mutation({
       ...(args.code !== undefined && { code: args.code }),
       ...(args.address !== undefined && { address: args.address }),
       ...(args.description !== undefined && { description: args.description }),
+      ...(args.type !== undefined && { type: args.type }),
       ...(args.isActive !== undefined && { isActive: args.isActive }),
       updatedAt: Date.now(),
     });

@@ -40,6 +40,8 @@ interface InventoryFormDialogProps {
   itemId?: Id<"inventory"> | null;
   initialData?: {
     itemName: string;
+    description?: string;
+    hsnSacCode?: string;
     unit: string;
     centralStock: number;
     vendorId?: Id<"vendors">;
@@ -60,10 +62,10 @@ export function InventoryFormDialog({
   const createItem = useMutation(api.inventory.createInventoryItem);
   const updateItem = useMutation(api.inventory.updateInventoryItem);
   const addImage = useMutation(api.inventory.addImageToInventory);
-  
+
   // Determine if we're in add-image mode (needed before queries)
   const isAddImageMode = mode === "add-image";
-  
+
   const currentItem = useQuery(
     api.inventory.getInventoryItemById,
     itemId ? { itemId } : "skip"
@@ -74,10 +76,10 @@ export function InventoryFormDialog({
   const [error, setError] = useState("");
   const [selectedImages, setSelectedImages] = useState<File[]>([]);
   const [imagePreviews, setImagePreviews] = useState<string[]>([]);
-  const [existingImages, setExistingImages] = useState<Array<{imageUrl: string; imageKey: string; uploadedAt: number; uploadedBy: Id<"users">}>>([]);
+  const [existingImages, setExistingImages] = useState<Array<{ imageUrl: string; imageKey: string; uploadedAt: number; uploadedBy: Id<"users"> }>>([]);
   const [cameraOpen, setCameraOpen] = useState(false);
   const [formImageSliderOpen, setFormImageSliderOpen] = useState(false);
-  const [formImageSliderImages, setFormImageSliderImages] = useState<Array<{imageUrl: string; imageKey: string}>>([]);
+  const [formImageSliderImages, setFormImageSliderImages] = useState<Array<{ imageUrl: string; imageKey: string }>>([]);
   const [formImageSliderInitialIndex, setFormImageSliderInitialIndex] = useState(0);
   const [isDragOver, setIsDragOver] = useState(false);
   const uploadInputRef = useRef<HTMLInputElement>(null);
@@ -92,7 +94,7 @@ export function InventoryFormDialog({
   // Allow managing images (add/remove) when user can add images or is editing existing item
   const canManageImages = canAddImages || (canEdit && itemId);
 
-  const openFormImageSlider = (images: Array<{imageUrl: string; imageKey: string}>, initialIndex: number) => {
+  const openFormImageSlider = (images: Array<{ imageUrl: string; imageKey: string }>, initialIndex: number) => {
     setFormImageSliderImages(images);
     setFormImageSliderInitialIndex(initialIndex);
     setFormImageSliderOpen(true);
@@ -100,6 +102,8 @@ export function InventoryFormDialog({
 
   const [formData, setFormData] = useState({
     itemName: "",
+    description: "",
+    hsnSacCode: "",
     unit: "",
     centralStock: 0,
     vendorIds: [] as Id<"vendors">[],
@@ -111,6 +115,8 @@ export function InventoryFormDialog({
     if (initialData) {
       setFormData({
         itemName: initialData.itemName,
+        description: initialData.description || "",
+        hsnSacCode: initialData.hsnSacCode || "",
         unit: initialData.unit,
         centralStock: initialData.centralStock,
         vendorIds: initialData.vendorIds || (initialData.vendorId ? [initialData.vendorId] : []),
@@ -118,9 +124,11 @@ export function InventoryFormDialog({
     } else if (currentItem) {
       // Support both old vendorId and new vendorIds format
       const vendorIds = (currentItem as any).vendorIds ||
-                       (currentItem.vendorId ? [currentItem.vendorId] : []);
+        (currentItem.vendorId ? [currentItem.vendorId] : []);
       setFormData({
         itemName: currentItem.itemName,
+        description: currentItem.description || "",
+        hsnSacCode: (currentItem as any).hsnSacCode || "",
         unit: currentItem.unit ?? "",
         centralStock: currentItem.centralStock || 0,
         vendorIds: vendorIds,
@@ -128,6 +136,8 @@ export function InventoryFormDialog({
     } else {
       setFormData({
         itemName: "",
+        description: "",
+        hsnSacCode: "",
         unit: "",
         centralStock: 0,
         vendorIds: [],
@@ -156,6 +166,8 @@ export function InventoryFormDialog({
     if (!newOpen) {
       setFormData({
         itemName: "",
+        description: "",
+        hsnSacCode: "",
         unit: "",
         centralStock: 0,
         vendorIds: [],
@@ -172,7 +184,7 @@ export function InventoryFormDialog({
   const handleCameraCapture = (file: File) => {
     const newImages = [...selectedImages, file];
     setSelectedImages(newImages);
-    
+
     // Create preview
     const reader = new FileReader();
     reader.onload = (e) => {
@@ -351,6 +363,8 @@ export function InventoryFormDialog({
         await updateItem({
           itemId,
           itemName: formData.itemName,
+          description: formData.description,
+          hsnSacCode: formData.hsnSacCode,
           unit: formData.unit || undefined,
           centralStock: formData.centralStock || undefined,
           vendorIds: formData.vendorIds.length > 0 ? formData.vendorIds : undefined,
@@ -381,6 +395,8 @@ export function InventoryFormDialog({
         // Create new item first
         const newItemId = await createItem({
           itemName: formData.itemName,
+          description: formData.description,
+          hsnSacCode: formData.hsnSacCode,
           unit: formData.unit || undefined,
           centralStock: formData.centralStock || undefined,
           vendorIds: formData.vendorIds.length > 0 ? formData.vendorIds : undefined,
@@ -423,54 +439,73 @@ export function InventoryFormDialog({
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
         <DialogHeader className="relative">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="absolute right-4 top-4 h-6 w-6 rounded-full"
-            onClick={() => handleOpenChange(false)}
-            disabled={isLoading || isUploading}
-          >
-            <XIcon className="h-4 w-4" />
-            <span className="sr-only">Close</span>
-          </Button>
+
           <DialogTitle>
             {isAddImageMode
               ? "Manage Images - Inventory Item"
               : itemId
-              ? "Edit Inventory Item"
-              : "Add New Inventory Item"}
+                ? "Edit Inventory Item"
+                : "Add New Inventory Item"}
           </DialogTitle>
           <DialogDescription>
             {isAddImageMode
               ? "Manage images for this inventory item - add new images or remove existing ones"
               : itemId
-              ? "Update inventory item information. Required fields are marked with * (Item Name, Central Stock)."
-              : "Create a new inventory item. Required fields are marked with * (Item Name, Central Stock)."}
+                ? "Update inventory item information. Required fields are marked with * (Item Name, Central Stock)."
+                : "Create a new inventory item. Required fields are marked with * (Item Name, Central Stock)."}
           </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-5 py-2">
           {!isAddImageMode && (
             <>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="itemName">Item Name *</Label>
+                  <Input
+                    id="itemName"
+                    placeholder="Enter item name"
+                    value={formData.itemName}
+                    onChange={(e) =>
+                      setFormData({ ...formData, itemName: e.target.value })
+                    }
+                    required
+                    disabled={isLoading || !canEdit}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="hsnSacCode">HSN / SAC Code</Label>
+                  <Input
+                    id="hsnSacCode"
+                    placeholder="Enter HSN/SAC code"
+                    value={formData.hsnSacCode}
+                    onChange={(e) =>
+                      setFormData({ ...formData, hsnSacCode: e.target.value })
+                    }
+                    disabled={isLoading || !canEdit}
+                  />
+                </div>
+              </div>
+
               <div className="space-y-2">
-                <Label htmlFor="itemName">Item Name *</Label>
-                <Input
-                  id="itemName"
-                  placeholder="Enter item name"
-                  value={formData.itemName}
-                  onChange={(e) =>
-                    setFormData({ ...formData, itemName: e.target.value })
-                  }
-                  required
-                  disabled={isLoading || !canEdit}
-                />
+                <Label htmlFor="description">Description <span className="text-muted-foreground text-xs">(optional)</span></Label>
+                <div className="relative">
+                  <textarea
+                    id="description"
+                    className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                    placeholder="Enter item description..."
+                    value={formData.description}
+                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                    disabled={isLoading || !canEdit}
+                  />
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                <Label htmlFor="centralStock">
-                  Central Stock *
-                </Label>
+                  <Label htmlFor="centralStock">
+                    Central Stock *
+                  </Label>
                   <Input
                     id="centralStock"
                     type="number"
@@ -478,12 +513,12 @@ export function InventoryFormDialog({
                     step="any"
                     placeholder="33"
                     value={formData.centralStock || ""}
-                  onChange={(e) =>
-                    setFormData({
-                      ...formData,
-                      centralStock: e.target.value ? parseFloat(e.target.value) : 0,
-                    })
-                  }
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        centralStock: e.target.value ? parseFloat(e.target.value) : 0,
+                      })
+                    }
                     disabled={isLoading || !canEdit}
                   />
                 </div>
@@ -525,16 +560,15 @@ export function InventoryFormDialog({
                 {isAddImageMode
                   ? "Add new images or remove existing ones for this inventory item"
                   : itemId
-                  ? "Add new images or remove existing ones for this inventory item"
-                  : "Upload images for this inventory item"
+                    ? "Add new images or remove existing ones for this inventory item"
+                    : "Upload images for this inventory item"
                 }
               </p>
               <div
-                className={`border-2 border-dashed rounded-lg p-4 transition-colors ${
-                  isDragOver
-                    ? 'border-primary bg-primary/5'
-                    : 'border-muted-foreground/25 hover:border-muted-foreground/50'
-                }`}
+                className={`border-2 border-dashed rounded-lg p-4 transition-colors ${isDragOver
+                  ? 'border-primary bg-primary/5'
+                  : 'border-muted-foreground/25 hover:border-muted-foreground/50'
+                  }`}
                 onDragOver={handleDragOver}
                 onDragLeave={handleDragLeave}
                 onDrop={handleDrop}
@@ -707,8 +741,8 @@ export function InventoryFormDialog({
                 isAddImageMode
                   ? "Update Images"
                   : itemId
-                  ? "Update Item"
-                  : "Create Item"
+                    ? "Update Item"
+                    : "Create Item"
               )}
             </Button>
           </DialogFooter>

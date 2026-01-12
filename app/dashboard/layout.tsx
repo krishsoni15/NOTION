@@ -23,36 +23,36 @@ export const dynamic = 'force-dynamic';
 export default async function DashboardLayout({ children }: { children: ReactNode }) {
   // Check authentication
   const { userId } = await auth();
-  
+
   if (!userId) {
     redirect("/login");
   }
 
   // Get user role
   const role = await getUserRole();
-  
+
   if (!role) {
     redirect("/login");
   }
 
   return (
-      <ChatWidthProvider>
-        <SidebarProvider>
+    <ChatWidthProvider>
+      <SidebarProvider>
         <PresenceProvider>
           <UserSync />
           <ReminderScheduler />
           <SidebarWrapper userRole={role}>
             <Header userRole={role} />
-            
+
             <main className="flex-1 overflow-y-auto">
-              <div className="container mx-auto px-4 py-6 md:px-6 md:py-8">
+              <div className="container mx-auto px-2 py-3 md:px-4 md:py-4">
                 {children}
               </div>
             </main>
           </SidebarWrapper>
         </PresenceProvider>
-        </SidebarProvider>
-      </ChatWidthProvider>
+      </SidebarProvider>
+    </ChatWidthProvider>
   );
 }
 

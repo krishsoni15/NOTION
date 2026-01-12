@@ -9,7 +9,7 @@
 import { useState, useEffect } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { useUser } from "@clerk/nextjs";
-import { SiteInfoDialog } from "../requests/site-info-dialog";
+import { LocationInfoDialog } from "@/components/locations/location-info-dialog";
 import { api } from "@/convex/_generated/api";
 import {
   Table,
@@ -133,7 +133,7 @@ export function UserTable({ users, viewMode = "table" }: UserTableProps) {
 
   const handleDelete = async () => {
     if (!deletingUser) return;
-    
+
     setLoadingUserId(deletingUser._id);
     try {
       // Delete from Convex first
@@ -162,7 +162,7 @@ export function UserTable({ users, viewMode = "table" }: UserTableProps) {
 
   const UserActions = ({ user }: { user: Doc<"users"> }) => {
     const isCurrentUser = user.clerkUserId === clerkUser?.id;
-    
+
     return (
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
@@ -178,7 +178,7 @@ export function UserTable({ users, viewMode = "table" }: UserTableProps) {
         <DropdownMenuContent align="end">
           <DropdownMenuLabel>Actions</DropdownMenuLabel>
           <DropdownMenuSeparator />
-          <DropdownMenuItem 
+          <DropdownMenuItem
             onClick={() => setEditingUser(user)}
           >
             <Edit className="h-4 w-4 mr-2" />
@@ -217,14 +217,14 @@ export function UserTable({ users, viewMode = "table" }: UserTableProps) {
   const UserCard = ({ user }: { user: Doc<"users"> }) => {
     const isCurrentUser = user.clerkUserId === clerkUser?.id;
     const isOnline = userPresence?.[user._id]?.isOnline ?? false;
-    
+
     return (
       <Card className="hover:shadow-lg transition-all border-border/50">
         <CardHeader className="pb-4 border-b border-border/50">
           <div className="flex items-start justify-between gap-3">
             <div className="flex-1 min-w-0">
               <CardTitle className="text-base font-semibold flex items-center gap-2 mb-1">
-                <OnlineIndicator 
+                <OnlineIndicator
                   isOnline={isOnline}
                   className="shrink-0"
                 />
@@ -328,43 +328,43 @@ export function UserTable({ users, viewMode = "table" }: UserTableProps) {
                         >
                           {site.name}
                         </Badge>
-                            <div className="space-y-3">
-                              <div>
-                                <h4 className="font-semibold text-sm mb-2 flex items-center gap-2">
-                                  <Building2 className="h-4 w-4 text-primary" />
-                                  {site.name}
-                                </h4>
+                        <div className="space-y-3">
+                          <div>
+                            <h4 className="font-semibold text-sm mb-2 flex items-center gap-2">
+                              <Building2 className="h-4 w-4 text-primary" />
+                              {site.name}
+                            </h4>
+                          </div>
+                          <div className="space-y-2 text-sm">
+                            {site.code && (
+                              <div className="flex items-start gap-2">
+                                <Hash className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
+                                <div>
+                                  <p className="text-xs text-muted-foreground">Site Code</p>
+                                  <p className="font-medium">{site.code}</p>
+                                </div>
                               </div>
-                              <div className="space-y-2 text-sm">
-                                {site.code && (
-                                  <div className="flex items-start gap-2">
-                                    <Hash className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
-                                    <div>
-                                      <p className="text-xs text-muted-foreground">Site Code</p>
-                                      <p className="font-medium">{site.code}</p>
-                                    </div>
-                                  </div>
-                                )}
-                                {site.address && (
-                                  <div className="flex items-start gap-2">
-                                    <MapPin className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
-                                    <div>
-                                      <p className="text-xs text-muted-foreground">Address</p>
-                                      <p className="font-medium text-xs">{site.address}</p>
-                                    </div>
-                                  </div>
-                                )}
-                                {site.description && (
-                                  <div className="flex items-start gap-2">
-                                    <Info className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
-                                    <div>
-                                      <p className="text-xs text-muted-foreground">Description</p>
-                                      <p className="font-medium text-xs">{site.description}</p>
-                                    </div>
-                                  </div>
-                                )}
+                            )}
+                            {site.address && (
+                              <div className="flex items-start gap-2">
+                                <MapPin className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
+                                <div>
+                                  <p className="text-xs text-muted-foreground">Address</p>
+                                  <p className="font-medium text-xs">{site.address}</p>
+                                </div>
                               </div>
-                            </div>
+                            )}
+                            {site.description && (
+                              <div className="flex items-start gap-2">
+                                <Info className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
+                                <div>
+                                  <p className="text-xs text-muted-foreground">Description</p>
+                                  <p className="font-medium text-xs">{site.description}</p>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        </div>
                       </div>
                     ) : null;
                   })}
@@ -400,12 +400,12 @@ export function UserTable({ users, viewMode = "table" }: UserTableProps) {
               <TableBody>
                 {paginatedUsers.map((user) => {
                   const isCurrentUser = user.clerkUserId === clerkUser?.id;
-                  
+
                   return (
                     <TableRow key={user._id} className="hover:bg-muted/30">
                       <TableCell className="font-medium">
                         <div className="flex items-center gap-2">
-                          <OnlineIndicator 
+                          <OnlineIndicator
                             isOnline={userPresence?.[user._id]?.isOnline ?? false}
                             className="shrink-0"
                           />
@@ -448,8 +448,8 @@ export function UserTable({ users, viewMode = "table" }: UserTableProps) {
                                 <div key={siteId} className="flex items-center gap-1">
                                   <Popover>
                                     <PopoverTrigger asChild>
-                                      <Badge 
-                                        variant="secondary" 
+                                      <Badge
+                                        variant="secondary"
                                         className="text-xs cursor-pointer hover:bg-primary/10 transition-colors"
                                       >
                                         {site.name}
@@ -616,12 +616,12 @@ export function UserTable({ users, viewMode = "table" }: UserTableProps) {
         </AlertDialogContent>
       </AlertDialog>
 
-      <SiteInfoDialog
+      <LocationInfoDialog
         open={!!selectedSiteId}
         onOpenChange={(open) => {
           if (!open) setSelectedSiteId(null);
         }}
-        siteId={selectedSiteId}
+        locationId={selectedSiteId}
       />
     </div>
   );

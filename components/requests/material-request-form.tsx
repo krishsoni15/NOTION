@@ -56,6 +56,7 @@ import {
   Save,
   Send
 } from "lucide-react";
+import { ImageGallery } from "@/components/ui/image-gallery";
 import { toast } from "sonner";
 import { normalizeSearchQuery, matchesSearchQuery, matchesAnySearchQuery } from "@/lib/utils";
 import { Separator } from "@/components/ui/separator";
@@ -374,6 +375,16 @@ export function MaterialRequestForm({
     }
     return [unit, ...COMMON_UNITS.filter(u => u !== unit).slice(0, 5)];
   };
+
+  const [galleryState, setGalleryState] = useState<{
+    open: boolean;
+    startIndex: number;
+    images: string[];
+  }>({
+    open: false,
+    startIndex: 0,
+    images: [],
+  });
 
   // Generate quantity+unit suggestions
   const generateQuantitySuggestions = (input: string, itemUnit?: string): string[] => {
@@ -777,6 +788,21 @@ export function MaterialRequestForm({
       }
     }
 
+    // Check for duplicates
+    for (let i = 0; i < items.length; i++) {
+      for (let j = i + 1; j < items.length; j++) {
+        const item1 = items[i];
+        const item2 = items[j];
+        if (
+          item1.itemName.trim().toLowerCase() === item2.itemName.trim().toLowerCase() &&
+          item1.quantity === item2.quantity &&
+          item1.unit.trim().toLowerCase() === item2.unit.trim().toLowerCase()
+        ) {
+          return false;
+        }
+      }
+    }
+
     return true;
   };
 
@@ -860,6 +886,21 @@ export function MaterialRequestForm({
       }
       if (parsed.unit.trim().toLowerCase() !== trimmedUnit.toLowerCase()) {
         return `Item ${itemNum}: Unit mismatch. Please re-enter quantity with correct unit`;
+      }
+    }
+
+    // Check for duplicates
+    for (let i = 0; i < items.length; i++) {
+      for (let j = i + 1; j < items.length; j++) {
+        const item1 = items[i];
+        const item2 = items[j];
+        if (
+          item1.itemName.trim().toLowerCase() === item2.itemName.trim().toLowerCase() &&
+          item1.quantity === item2.quantity &&
+          item1.unit.trim().toLowerCase() === item2.unit.trim().toLowerCase()
+        ) {
+          return `Item ${i + 1} and Item ${j + 1} are identical. Please remove the duplicate.`;
+        }
       }
     }
 
@@ -1564,6 +1605,22 @@ export function MaterialRequestForm({
                               Item {displayNumber}
                             </h4>
                           </div>
+                          {(() => {
+                            const isDuplicate = items.some((otherItem) =>
+                              otherItem.id !== item.id &&
+                              otherItem.itemName.trim().toLowerCase() === item.itemName.trim().toLowerCase() &&
+                              otherItem.itemName.trim() !== "" &&
+                              otherItem.quantity === item.quantity &&
+                              otherItem.unit.trim().toLowerCase() === item.unit.trim().toLowerCase()
+                            );
+
+                            return isDuplicate ? (
+                              <div className="flex items-center gap-1.5 px-3 py-1 bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 rounded-full text-xs font-medium animate-in fade-in zoom-in duration-300">
+                                <AlertCircle className="h-3.5 w-3.5" />
+                                <span>Already Added</span>
+                              </div>
+                            ) : null;
+                          })()}
                           <div className="flex items-center gap-2">
                             {/* Urgent Checkbox per Item */}
                             <div className="flex items-center gap-1.5 sm:gap-2">
@@ -1620,14 +1677,25 @@ export function MaterialRequestForm({
                                       }}
                                       value={item.itemSearchQuery}
                                       onChange={(e) => {
+                                        const newValue = e.target.value;
+
+                                        // Check for exactly matching inventory item (case-insensitive)
+                                        // so we don't show "New Item" badge if it already exists
+                                        const exactMatch = inventoryItems?.find(
+                                          (invItem) => invItem.itemName.trim().toLowerCase() === newValue.trim().toLowerCase()
+                                        );
+
                                         updateItem(item.id, {
-                                          itemSearchQuery: e.target.value,
-                                          itemName: e.target.value,
+                                          itemSearchQuery: newValue,
+                                          itemName: newValue,
                                           showItemSuggestions: true,
+                                          selectedItemFromInventory: exactMatch ? {
+                                            itemName: exactMatch.itemName,
+                                            unit: cleanUnit(exactMatch.unit || ""),
+                                            centralStock: exactMatch.centralStock || 0,
+                                          } : null
                                         });
-                                        if (e.target.value !== item.selectedItemFromInventory?.itemName) {
-                                          updateItem(item.id, { selectedItemFromInventory: null });
-                                        }
+
                                         // Reset selection when input changes
                                         setSelectedItemIndex((prev) => ({ ...prev, [item.id]: -1 }));
                                       }}
@@ -1985,24 +2053,35 @@ export function MaterialRequestForm({
                             </Button>
                           </div>
                           {item.imagePreviews.length > 0 && (
-                            <div className="grid grid-cols-2 gap-3 sm:gap-4 mt-3 sm:mt-4">
+                            <div className="flex gap-3 sm:gap-4 mt-3 sm:mt-4 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-muted-foreground/30 hover:scrollbar-thumb-muted-foreground/50">
                               {item.imagePreviews.map((preview, imgIndex) => (
-                                <div key={imgIndex} className="relative group rounded-lg overflow-hidden border-2 border-border hover:border-primary/50 transition-all shadow-sm hover:shadow-md">
+                                <div key={imgIndex} className="relative group shrink-0 w-24 h-24 sm:w-28 sm:h-28 rounded-lg overflow-hidden border border-border hover:border-primary/50 transition-all shadow-sm hover:shadow-md cursor-pointer"
+                                  onClick={() => {
+                                    setGalleryState({
+                                      open: true,
+                                      startIndex: imgIndex,
+                                      images: item.imagePreviews,
+                                    });
+                                  }}
+                                >
                                   <img
                                     src={preview}
                                     alt={`Preview ${imgIndex + 1}`}
-                                    className="w-full h-28 sm:h-36 object-cover"
+                                    className="w-full h-full object-cover"
                                   />
                                   <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors" />
                                   <Button
                                     type="button"
                                     variant="destructive"
                                     size="icon"
-                                    className="absolute top-2 right-2 h-7 w-7 sm:h-8 sm:w-8 rounded-full shadow-lg hover:scale-125 active:scale-95 hover:shadow-xl focus:ring-2 focus:ring-destructive/30 transition-all duration-200"
-                                    onClick={() => removeImage(item.id, imgIndex)}
+                                    className="absolute top-1 right-1 h-6 w-6 rounded-full shadow-lg hover:scale-110 active:scale-95 hover:shadow-xl transition-all duration-200 opacity-0 group-hover:opacity-100"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      removeImage(item.id, imgIndex);
+                                    }}
                                     disabled={isLoading}
                                   >
-                                    <X className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                                    <X className="h-3 w-3" />
                                   </Button>
                                 </div>
                               ))}
@@ -2010,15 +2089,17 @@ export function MaterialRequestForm({
                           )}
                         </div>
 
-                        {index < items.length - 1 && (
-                          <div className="flex items-center gap-2 my-2 sm:my-3">
-                            <Separator className="flex-1" />
-                            <div className="px-2 py-1 rounded-full bg-muted text-xs text-muted-foreground font-medium">
-                              Next Item
+                        {
+                          index < items.length - 1 && (
+                            <div className="flex items-center gap-2 my-2 sm:my-3">
+                              <Separator className="flex-1" />
+                              <div className="px-2 py-1 rounded-full bg-muted text-xs text-muted-foreground font-medium">
+                                Next Item
+                              </div>
+                              <Separator className="flex-1" />
                             </div>
-                            <Separator className="flex-1" />
-                          </div>
-                        )}
+                          )
+                        }
                       </div>
                     );
                   })}
@@ -2095,8 +2176,15 @@ export function MaterialRequestForm({
               </DialogFooter>
             </form>
           </div>
-        </DialogContent>
+        </DialogContent >
       </Dialog>
+
+      <ImageGallery
+        images={galleryState.images.map(url => ({ imageUrl: url, imageKey: url }))}
+        initialIndex={galleryState.startIndex}
+        open={galleryState.open}
+        onOpenChange={(open) => setGalleryState(prev => ({ ...prev, open }))}
+      />
 
       {/* Confirmation Dialog */}
       <AlertDialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
@@ -2175,7 +2263,7 @@ export function MaterialRequestForm({
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
-      </AlertDialog>
+      </AlertDialog >
 
       <CameraDialog
         open={cameraOpen.open}

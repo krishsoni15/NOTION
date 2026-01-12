@@ -12,10 +12,10 @@ import { useState } from "react";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { Role, ROLES, ROLE_LABELS } from "@/lib/auth/roles";
-import { 
-  LayoutDashboard, 
-  ClipboardList, 
-  Users, 
+import {
+  LayoutDashboard,
+  ClipboardList,
+  Users,
   Store,
   Warehouse,
   CheckCircle,
@@ -50,7 +50,7 @@ const navigationItems: NavigationItem[] = [
     icon: Warehouse,
     roles: [ROLES.SITE_ENGINEER],
   },
-  
+
   // Manager - Logical sequence: Dashboard → Requests → Inventory → Vendors → Users → Sites
   {
     label: "Dashboard",
@@ -88,7 +88,7 @@ const navigationItems: NavigationItem[] = [
     icon: Building2,
     roles: [ROLES.MANAGER],
   },
-  
+
   // Purchase Officer - Logical sequence: Dashboard → Requests → Inventory → Vendors
   {
     label: "Dashboard",
@@ -173,7 +173,11 @@ export function MobileSidebar({ userRole }: MobileSidebarProps) {
       {/* Navigation */}
       <nav className="flex-1 p-4 space-y-1">
         {filteredItems.map((item) => {
-          const isActive = pathname === item.href || pathname.startsWith(item.href + "/");
+          // Dashboard items should only be active on exact match
+          const isDashboard = item.label === "Dashboard";
+          const isActive = isDashboard
+            ? pathname === item.href
+            : pathname === item.href || pathname.startsWith(item.href + "/");
           const Icon = item.icon;
 
           return (

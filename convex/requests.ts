@@ -392,7 +392,9 @@ export const getPurchaseRequestsByStatus = query({
         "rejected_po",
         "ready_for_delivery",
         "delivery_stage",
-        "delivered"
+        "delivered",
+        "sign_pending",
+        "sign_rejected"
       ]);
 
       const activeRequestNumbers = new Set<string>();

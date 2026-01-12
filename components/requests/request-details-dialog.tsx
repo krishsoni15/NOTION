@@ -8,7 +8,7 @@
  * Site Engineers can mark delivery.
  */
 
-import { useState, useRef, useEffect, useMemo } from "react";
+import { useState, useRef, useEffect, useMemo, Fragment } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { format } from "date-fns";
@@ -20,13 +20,21 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Separator } from "@/components/ui/separator";
-import { AlertCircle, CheckCircle, XCircle, Package, ShoppingCart, MapPin, PackageX, Sparkles, FileText, PieChart } from "lucide-react";
+import { AlertCircle, CheckCircle, XCircle, Package, ShoppingCart, MapPin, PackageX, Sparkles, FileText, PieChart, LayoutGrid, List } from "lucide-react";
 import { useUserRole } from "@/hooks/use-user-role";
 import { CompactImageGallery } from "@/components/ui/image-gallery";
 import { ROLES } from "@/lib/auth/roles";
@@ -34,8 +42,9 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { UserInfoDialog } from "./user-info-dialog";
 import { ItemInfoDialog } from "./item-info-dialog";
-import { SiteInfoDialog } from "./site-info-dialog";
+import { LocationInfoDialog } from "@/components/locations/location-info-dialog";
 import { NotesTimelineDialog } from "./notes-timeline-dialog";
+import { PDFPreviewDialog } from "@/components/purchase/pdf-preview-dialog";
 import type { Id } from "@/convex/_generated/dataModel";
 
 interface RequestDetailsDialogProps {
@@ -66,6 +75,8 @@ export function RequestDetailsDialog({
   const markDelivery = useMutation(api.requests.markDelivery);
   const upsertCC = useMutation(api.costComparisons.upsertCostComparison);
   const approveSplit = useMutation(api.costComparisons.approveSplitFulfillment);
+  const approveDirectPO = useMutation(api.purchaseOrders.approveDirectPOByRequest);
+  const rejectDirectPO = useMutation(api.purchaseOrders.rejectDirectPOByRequest);
   // Fetch latest note for this request
   const notes = useQuery(api.notes.getNotes, request?.requestNumber ? { requestNumber: request.requestNumber } : "skip");
   const latestNote = notes && notes.length > 0 ? notes[0] : null;
@@ -78,6 +89,7 @@ export function RequestDetailsDialog({
   const [selectedUserId, setSelectedUserId] = useState<Id<"users"> | null>(null);
   const [selectedItemName, setSelectedItemName] = useState<string | null>(null);
   const [selectedSiteId, setSelectedSiteId] = useState<Id<"sites"> | null>(null);
+  const [pdfPreviewPoNumber, setPdfPreviewPoNumber] = useState<string | null>(null);
   const [selectedItemsForAction, setSelectedItemsForAction] = useState<Set<Id<"requests">>>(new Set());
   const [itemActions, setItemActions] = useState<Record<Id<"requests">, "approve" | "reject" | "direct_po" | null>>({});
   const [showBatchProcessDialog, setShowBatchProcessDialog] = useState(false);
@@ -89,6 +101,7 @@ export function RequestDetailsDialog({
   const [showItemDirectDeliveryConfirm, setShowItemDirectDeliveryConfirm] = useState<Id<"requests"> | null>(null);
   const [showBulkSplitConfirm, setShowBulkSplitConfirm] = useState(false);
   const [showNotesTimeline, setShowNotesTimeline] = useState(false);
+  const [viewMode, setViewMode] = useState<"table" | "card">("table");
   const hasRefreshedRef = useRef(false);
 
   // Helper function to collect photos from both photo and photos fields
@@ -239,6 +252,7 @@ export function RequestDetailsDialog({
 
   // Get pending items for manager actions
   const pendingItems = allRequests?.filter((item) => item.status === "pending") || [];
+  const signPendingItems = allRequests?.filter((item) => item.status === "sign_pending") || [];
   const hasMultiplePendingItems = pendingItems.length > 1;
 
   // Manager permissions based on pending items
@@ -302,6 +316,7 @@ export function RequestDetailsDialog({
       setItemRejectionReasons({});
       setShowItemRejectionInput(null);
       setSelectedItemsForAction(new Set());
+      setViewMode("table"); // Reset view mode
       setItemActions({});
       setShowBatchProcessDialog(false);
       setShowApproveConfirm(false);
@@ -669,6 +684,48 @@ export function RequestDetailsDialog({
     window.open(mapUrl, '_blank');
   };
 
+  const handleApproveDirectPO = async () => {
+    const itemsToProcess = signPendingItems.length > 0 ? signPendingItems.map(i => i._id) : (requestId ? [requestId] : []);
+    if (itemsToProcess.length === 0) return;
+
+    setIsLoading(true);
+    try {
+      await Promise.all(itemsToProcess.map(id => approveDirectPO({ requestId: id })));
+      toast.success("Direct PO approved successfully");
+      closeAndRefresh();
+    } catch (error: any) {
+      toast.error(error.message || "Failed to approve PO");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleRejectDirectPO = async () => {
+    const itemsToProcess = signPendingItems.length > 0 ? signPendingItems.map(i => i._id) : (requestId ? [requestId] : []);
+    if (itemsToProcess.length === 0) return;
+
+    if (!rejectionReason.trim()) {
+      toast.error("Please provide a rejection reason");
+      return;
+    }
+
+    setIsLoading(true);
+    try {
+      await Promise.all(itemsToProcess.map(id => rejectDirectPO({
+        requestId: id,
+        reason: rejectionReason.trim(),
+      })));
+      toast.success("Direct PO rejected");
+      onOpenChange(false);
+      setRejectionReason("");
+      setShowRejectionInput(false);
+    } catch (error: any) {
+      toast.error(error.message || "Failed to reject PO");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   if (!request) {
     return null;
   }
@@ -827,6 +884,12 @@ export function RequestDetailsDialog({
   return (
     <div>
       <BatchProcessDialog />
+      <PDFPreviewDialog
+        open={!!pdfPreviewPoNumber}
+        onOpenChange={(open) => !open && setPdfPreviewPoNumber(null)}
+        poNumber={pdfPreviewPoNumber}
+      />
+
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className={cn(
           "w-[95vw] sm:w-full max-w-[95vw] sm:max-w-[640px] md:max-w-[768px] lg:max-w-[1024px] xl:max-w-[1600px] max-h-[95vh] overflow-hidden flex flex-col p-0 gap-0",
@@ -863,6 +926,17 @@ export function RequestDetailsDialog({
                     );
                   })()}
                   {(allItemsHaveSameStatus || overallStatus === "partially_processed") && getStatusBadge(overallStatus || request.status)}
+                  {["sign_pending", "sign_rejected", "ordered", "pending_po"].includes(overallStatus || request.status) && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="gap-2 ml-2 hidden sm:flex"
+                      onClick={() => setPdfPreviewPoNumber(request.requestNumber)}
+                    >
+                      <FileText className="h-4 w-4" />
+                      View PDF
+                    </Button>
+                  )}
                 </div>
               </div>
             </div>
@@ -1057,7 +1131,6 @@ export function RequestDetailsDialog({
                   </div>
                 )}
 
-                {/* All Items Details - Card Grid Layout */}
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
                     <Label className="text-muted-foreground font-bold">
@@ -1067,242 +1140,448 @@ export function RequestDetailsDialog({
                           : "Item Details"
                       )}
                     </Label>
+                    {!isMobileLayout && allRequests && allRequests.length > 0 && (
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-muted-foreground">View:</span>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-8 w-8 p-0"
+                          onClick={() => setViewMode(viewMode === "table" ? "card" : "table")}
+                          title={viewMode === "table" ? "Switch to Grid View" : "Switch to Table View"}
+                        >
+                          {viewMode === "table" ? <LayoutGrid className="h-4 w-4" /> : <List className="h-4 w-4" />}
+                        </Button>
+                      </div>
+                    )}
                   </div>
 
-                  {/* Display all items in proper Card Grid Layout */}
+                  {/* Display all items - Conditional Layout */}
                   {allRequests && allRequests.length > 0 ? (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
-                      {(allRequests || [])
-                        .sort((a, b) => {
-                          const orderA = a.itemOrder ?? a.createdAt;
-                          const orderB = b.itemOrder ?? b.createdAt;
-                          return orderA - orderB;
-                        })
-                        .map((item, idx) => {
-                          const isPending = item.status === "pending";
-                          const displayNumber = item.itemOrder ?? idx + 1;
-                          const isSelected = selectedItemsForAction.has(item._id);
-                          const itemPhotos = getItemPhotos(item);
-
-                          return (
-                            <div
-                              key={item._id}
-                              className={cn(
-                                "p-4 rounded-lg border-2 shadow-sm relative min-h-[200px] flex flex-col",
-                                item.status === "approved" && "bg-green-50 border-green-200 dark:bg-green-950/20 dark:border-green-800",
-                                item.status === "rejected" && "bg-red-50 border-red-200 dark:bg-red-950/20 dark:border-red-800",
-                                !["approved", "rejected"].includes(item.status) && "bg-card/50",
-                                isSelected && "border-green-500 shadow-md ring-2 ring-green-200"
-                              )}
-                            >
-                              {/* Select button - top right corner */}
-                              {isPending && (
-                                <div className="absolute top-2 right-2 z-10">
+                    viewMode === "table" ? (
+                      <div className="border rounded-md overflow-hidden bg-card">
+                        <Table>
+                          <TableHeader>
+                            <TableRow className="bg-muted/50 hover:bg-muted/50">
+                              <TableHead className="w-[40px] text-center p-2">
+                                {isManager && pendingItems.length > 0 && (
                                   <Checkbox
-                                    checked={isSelected}
-                                    onCheckedChange={(checked) => toggleItemSelection(item._id)}
-                                    className="h-4 w-4"
+                                    checked={selectedItemsForAction.size === pendingItems.length && pendingItems.length > 0}
+                                    onCheckedChange={(checked) => {
+                                      if (checked) {
+                                        selectAllPending();
+                                      } else {
+                                        deselectAll();
+                                      }
+                                    }}
+                                    className="translate-y-[2px]"
                                   />
-                                </div>
+                                )}
+                              </TableHead>
+                              <TableHead className="w-[50px] text-center p-2">#</TableHead>
+                              <TableHead className="min-w-[300px]">Item Details</TableHead>
+                              <TableHead>Quantity</TableHead>
+                              <TableHead className="w-[140px]">Status</TableHead>
+                              {isManager && pendingItems.length > 0 ? (
+                                <TableHead className="min-w-[300px] text-right">Actions</TableHead>
+                              ) : (
+                                <TableHead className="hidden"></TableHead>
                               )}
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {(allRequests || [])
+                              .sort((a, b) => {
+                                const orderA = a.itemOrder ?? a.createdAt;
+                                const orderB = b.itemOrder ?? b.createdAt;
+                                return orderA - orderB;
+                              })
+                              .map((item, idx) => {
+                                const isPending = item.status === "pending";
+                                const displayNumber = item.itemOrder ?? idx + 1;
+                                const isSelected = selectedItemsForAction.has(item._id);
+                                const itemPhotos = getItemPhotos(item);
 
-                              <div className="flex flex-col flex-1">
-                                <div className="flex items-start justify-between gap-2 mb-3 pr-8">
-                                  <div className="flex-1 min-w-0">
-                                    <div className="flex items-center gap-2 mb-2">
-                                      <Badge variant="outline" className="text-xs px-2 py-1 h-6 min-w-[28px] flex items-center justify-center flex-shrink-0">
-                                        {displayNumber}
-                                      </Badge>
-                                      <div className="flex-1 min-w-0">
-                                        <button
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            setSelectedItemName(item.itemName);
-                                          }}
-                                          className="text-sm font-medium text-foreground hover:text-primary hover:bg-muted/50 rounded-md px-2 py-1 -mx-2 -my-1 transition-colors cursor-pointer text-left truncate"
-                                        >
-                                          {item.itemName}
-                                        </button>
-                                      </div>
-                                    </div>
-                                    {item.description && (
-                                      <div className="text-xs text-muted-foreground mb-2 line-clamp-2">
-                                        {item.description}
-                                      </div>
+                                return (
+                                  <Fragment key={item._id}>
+                                    <TableRow
+                                      className={cn(
+                                        "cursor-pointer transition-colors",
+                                        isSelected && "bg-muted/50",
+                                        item.status === "approved" && "bg-green-50/50 hover:bg-green-50 dark:bg-green-950/10 dark:hover:bg-green-950/20",
+                                        item.status === "rejected" && "bg-red-50/50 hover:bg-red-50 dark:bg-red-950/10 dark:hover:bg-red-950/20",
+                                        item.status === "direct_po" && "bg-orange-50/50 hover:bg-orange-50 dark:bg-orange-950/10 dark:hover:bg-orange-950/20"
+                                      )}
+                                      onClick={(e) => {
+                                        if (isPending && isManager && (e.target as HTMLElement).tagName !== 'BUTTON' && (e.target as HTMLElement).tagName !== 'TEXTAREA') {
+                                          toggleItemSelection(item._id);
+                                        }
+                                      }}
+                                    >
+                                      <TableCell className="p-2 text-center">
+                                        {isPending && isManager && (
+                                          <Checkbox
+                                            checked={isSelected}
+                                            onCheckedChange={() => toggleItemSelection(item._id)}
+                                            onClick={(e) => e.stopPropagation()}
+                                          />
+                                        )}
+                                      </TableCell>
+                                      <TableCell className="p-2 text-center">
+                                        <Badge variant="outline" className="text-xs min-w-[20px] h-5 flex items-center justify-center p-0">
+                                          {displayNumber}
+                                        </Badge>
+                                      </TableCell>
+                                      <TableCell>
+                                        <div className="flex items-start gap-3">
+                                          <div className="flex-shrink-0 mt-0.5" onClick={(e) => e.stopPropagation()}>
+                                            <CompactImageGallery
+                                              images={itemPhotos}
+                                              maxDisplay={1}
+                                              size="sm"
+                                            />
+                                          </div>
+                                          <div className="space-y-1 min-w-0">
+                                            <button
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                setSelectedItemName(item.itemName);
+                                              }}
+                                              className="font-medium text-base text-left hover:underline focus:outline-none"
+                                            >
+                                              {item.itemName}
+                                            </button>
+                                            {item.description && (
+                                              <div className="text-sm text-muted-foreground line-clamp-1" title={item.description}>
+                                                {item.description}
+                                              </div>
+                                            )}
+                                            {item.specsBrand && (
+                                              <div className="text-xs text-primary truncate">
+                                                {item.specsBrand}
+                                              </div>
+                                            )}
+                                          </div>
+                                        </div>
+                                      </TableCell>
+                                      <TableCell>
+                                        <div className="flex flex-col gap-1 items-start">
+                                          <span className="text-sm font-medium">
+                                            {item.quantity} {item.unit}
+                                          </span>
+                                          <div onClick={(e) => e.stopPropagation()}>
+                                            {getInventoryStatusBadge(item.itemName, item.quantity, item.unit)}
+                                          </div>
+                                        </div>
+                                      </TableCell>
+                                      <TableCell>
+                                        <div className="flex flex-col gap-1 items-start">
+                                          {item.isUrgent && (
+                                            <Badge variant="destructive" className="text-[10px] px-1.5 py-0 h-5">
+                                              Urgent
+                                            </Badge>
+                                          )}
+                                          {getStatusBadge(item.status)}
+                                        </div>
+                                      </TableCell>
+                                      {isManager && isPending ? (
+                                        <TableCell className="text-right p-2">
+                                          <div className="flex items-center justify-end gap-2">
+                                            {(() => {
+                                              const status = inventoryStatus?.[item.itemName];
+                                              const stock = status?.centralStock || 0;
+                                              const isPartial = stock > 0 && stock < item.quantity;
+                                              const isFull = stock >= item.quantity;
+
+                                              if (isFull) {
+                                                return (
+                                                  <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    className="h-8 border-purple-200 text-purple-700 hover:bg-purple-50 hover:text-purple-800"
+                                                    title="Direct Delivery"
+                                                    onClick={(e) => { e.stopPropagation(); setShowItemDirectDeliveryConfirm(item._id); }}
+                                                    disabled={isLoading}
+                                                  >
+                                                    <Package className="h-4 w-4 mr-1.5" />
+                                                    Direct Delivery
+                                                  </Button>
+                                                );
+                                              }
+                                              if (isPartial) {
+                                                return (
+                                                  <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    className="h-8 border-indigo-200 text-indigo-700 hover:bg-indigo-50 hover:text-indigo-800"
+                                                    title="Check/Split"
+                                                    onClick={(e) => { e.stopPropagation(); onCheck?.(item._id); }}
+                                                    disabled={isLoading || !onCheck}
+                                                  >
+                                                    <PieChart className="h-4 w-4 mr-1.5" />
+                                                    Split
+                                                  </Button>
+                                                );
+                                              }
+                                              return (
+                                                <Button
+                                                  variant="outline"
+                                                  size="sm"
+                                                  className="h-8 border-orange-200 text-orange-700 hover:bg-orange-50 hover:text-orange-800"
+                                                  title="Direct PO"
+                                                  onClick={(e) => { e.stopPropagation(); setShowItemDirectPOConfirm(item._id); }}
+                                                  disabled={isLoading}
+                                                >
+                                                  <ShoppingCart className="h-4 w-4 mr-1.5" />
+                                                  Direct PO
+                                                </Button>
+                                              );
+                                            })()}
+                                            <Button
+                                              variant="outline"
+                                              size="sm"
+                                              className="h-8 border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700 hover:border-red-300"
+                                              title="Reject"
+                                              onClick={(e) => { e.stopPropagation(); setShowItemRejectionInput(item._id); }}
+                                              disabled={isLoading}
+                                            >
+                                              <XCircle className="h-4 w-4 mr-1.5" />
+                                              Reject
+                                            </Button>
+                                            <Button
+                                              variant="default"
+                                              size="sm"
+                                              className="h-8 bg-green-600 hover:bg-green-700 text-white border-transparent"
+                                              title="Approve"
+                                              onClick={(e) => { e.stopPropagation(); setShowItemApproveConfirm(item._id); }}
+                                              disabled={isLoading}
+                                            >
+                                              <CheckCircle className="h-4 w-4 mr-1.5" />
+                                              Approve
+                                            </Button>
+                                          </div>
+                                        </TableCell>
+                                      ) : (
+                                        <TableCell className="hidden"></TableCell>
+                                      )}
+                                    </TableRow>
+                                    {showItemRejectionInput === item._id && (
+                                      <TableRow className="bg-muted/10 hover:bg-muted/10">
+                                        <TableCell colSpan={6} className="p-3">
+                                          <div className="flex flex-col gap-2 max-w-md ml-auto bg-card border rounded-md p-3 shadow-sm" onClick={(e) => e.stopPropagation()}>
+                                            <Label className="text-xs font-semibold">Rejection Reason</Label>
+                                            <Textarea
+                                              value={itemRejectionReasons[item._id] || ""}
+                                              onChange={(e) =>
+                                                setItemRejectionReasons((prev) => ({
+                                                  ...prev,
+                                                  [item._id]: e.target.value,
+                                                }))
+                                              }
+                                              placeholder="Enter rejection reason..."
+                                              className="text-xs min-h-[60px]"
+                                            />
+                                            <div className="flex justify-end gap-2">
+                                              <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={() => setShowItemRejectionInput(null)}
+                                                className="h-7 text-xs"
+                                              >
+                                                Cancel
+                                              </Button>
+                                              <Button
+                                                variant="destructive"
+                                                size="sm"
+                                                onClick={() => handleItemReject(item._id)}
+                                                disabled={isLoading || !itemRejectionReasons[item._id]?.trim()}
+                                                className="h-7 text-xs"
+                                              >
+                                                Confirm Reject
+                                              </Button>
+                                            </div>
+                                          </div>
+                                        </TableCell>
+                                      </TableRow>
                                     )}
-                                    <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                                      <span><span className="font-medium">Qty:</span> {item.quantity} {item.unit}</span>
-                                      {item.specsBrand && (
-                                        <span className="text-primary truncate">• {item.specsBrand}</span>
-                                      )}
-                                      {getInventoryStatusBadge(item.itemName, item.quantity, item.unit)}
-                                    </div>
-                                  </div>
-                                  <div className="flex items-center gap-1 flex-shrink-0">
-                                    <CompactImageGallery
-                                      images={itemPhotos}
-                                      maxDisplay={1}
-                                      size="md"
+                                  </Fragment>
+                                );
+                              })}
+                          </TableBody>
+                        </Table>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+                        {(allRequests || [])
+                          .sort((a, b) => {
+                            const orderA = a.itemOrder ?? a.createdAt;
+                            const orderB = b.itemOrder ?? b.createdAt;
+                            return orderA - orderB;
+                          })
+                          .map((item, idx) => {
+                            const isPending = item.status === "pending";
+                            const displayNumber = item.itemOrder ?? idx + 1;
+                            const isSelected = selectedItemsForAction.has(item._id);
+                            const itemPhotos = getItemPhotos(item);
+
+                            return (
+                              <div
+                                key={item._id}
+                                className={cn(
+                                  "p-4 rounded-lg border-2 shadow-sm relative min-h-[220px] flex flex-col",
+                                  item.status === "approved" && "bg-green-50 border-green-200 dark:bg-green-950/20 dark:border-green-800",
+                                  item.status === "rejected" && "bg-red-50 border-red-200 dark:bg-red-950/20 dark:border-red-800",
+                                  !["approved", "rejected"].includes(item.status) && "bg-card/50",
+                                  isSelected && "border-green-500 shadow-md ring-2 ring-green-200"
+                                )}
+                              >
+                                {/* Select button - top right corner */}
+                                {isPending && isManager && (
+                                  <div className="absolute top-2 right-2 z-10">
+                                    <Checkbox
+                                      checked={isSelected}
+                                      onCheckedChange={(checked) => toggleItemSelection(item._id)}
+                                      className="h-5 w-5"
                                     />
-                                  </div>
-                                </div>
-
-                                {/* Status and badges */}
-                                <div className="mt-auto pt-2 border-t">
-                                  <div className="flex items-center justify-between">
-                                    {/* Urgent badge - Left side */}
-                                    <div className="flex items-center">
-                                      {item.isUrgent && (
-                                        <Badge variant="destructive" className="text-xs">
-                                          <AlertCircle className="h-3 w-3 mr-1" />
-                                          Urgent
-                                        </Badge>
-                                      )}
-                                    </div>
-                                    {/* Status badge - Right side */}
-                                    <div className="flex items-center">
-                                      {(item.status === 'approved' || item.status === 'cc_approved') && (
-                                        <Badge variant="default" className="bg-green-600 hover:bg-green-700 text-white text-xs">
-                                          ✓ Approved
-                                        </Badge>
-                                      )}
-                                      {item.status === 'rejected' && (
-                                        <Badge variant="destructive" className="text-xs">
-                                          ✗ Rejected
-                                        </Badge>
-                                      )}
-                                      {item.status !== 'approved' && item.status !== 'rejected' && item.status !== 'cc_approved' && getStatusBadge(item.status)}
-                                    </div>
-                                  </div>
-                                </div>
-
-                                {/* Individual Item Actions */}
-                                {isManager && isPending && (
-                                  <div className="flex gap-1 mt-3 pt-2 border-t">
-                                    {(() => {
-                                      const status = inventoryStatus?.[item.itemName];
-                                      const stock = status?.centralStock || 0;
-                                      const isPartial = stock > 0 && stock < item.quantity;
-                                      const isFull = stock >= item.quantity;
-
-                                      if (isFull) {
-                                        return (
-                                          <Button
-                                            variant="outline"
-                                            size="sm"
-                                            onClick={() => setShowItemDirectDeliveryConfirm(item._id)}
-                                            disabled={isLoading}
-                                            className="flex-1 text-xs h-7 px-1 border-purple-200 text-purple-700 hover:bg-purple-50 dark:border-purple-800 dark:text-purple-300"
-                                          >
-                                            <Package className="h-3 w-3 mr-1" />
-                                            Delivery
-                                          </Button>
-                                        );
-                                      }
-
-                                      if (isPartial) {
-                                        return (
-                                          <Button
-                                            variant="outline"
-                                            size="sm"
-                                            onClick={() => onCheck?.(item._id)}
-                                            disabled={isLoading || !onCheck}
-                                            className="flex-1 text-xs h-7 px-1 border-indigo-200 text-indigo-700 hover:bg-indigo-50 dark:border-indigo-800 dark:text-indigo-300"
-                                            title="Check/Split Fulfillment"
-                                          >
-                                            <PieChart className="h-3 w-3 mr-1" />
-                                            Check/Split
-                                          </Button>
-                                        );
-                                      }
-
-                                      return (
-                                        <Button
-                                          variant="outline"
-                                          size="sm"
-                                          onClick={() => setShowItemDirectPOConfirm(item._id)}
-                                          disabled={isLoading}
-                                          className="flex-1 text-xs h-7 px-1 border-orange-200 text-orange-700 hover:bg-orange-50 dark:border-orange-800 dark:text-orange-300"
-                                        >
-                                          <ShoppingCart className="h-3 w-3 mr-1" />
-                                          Direct PO
-                                        </Button>
-                                      );
-                                    })()}
-                                    <Button
-                                      variant="destructive"
-                                      size="sm"
-                                      onClick={() => setShowItemRejectionInput(item._id)}
-                                      disabled={isLoading}
-                                      className="flex-1 text-xs h-7 px-1"
-                                    >
-                                      <XCircle className="h-3 w-3 mr-1" />
-                                      Reject
-                                    </Button>
-                                    <Button
-                                      variant="default"
-                                      size="sm"
-                                      onClick={() => setShowItemApproveConfirm(item._id)}
-                                      disabled={isLoading}
-                                      className="flex-1 text-xs h-7 px-1 bg-green-600 hover:bg-green-700"
-                                    >
-                                      <CheckCircle className="h-3 w-3 mr-1" />
-                                      Approve
-                                    </Button>
                                   </div>
                                 )}
 
-                                {/* Rejection Reason Input for individual items */}
-                                {showItemRejectionInput === item._id && (
-                                  <div className="mt-2">
-                                    <Textarea
-                                      value={itemRejectionReasons[item._id] || ""}
-                                      onChange={(e) =>
-                                        setItemRejectionReasons((prev) => ({
-                                          ...prev,
-                                          [item._id]: e.target.value,
-                                        }))
-                                      }
-                                      placeholder="Enter rejection reason..."
-                                      rows={2}
-                                      className="text-xs"
-                                    />
-                                    <div className="flex gap-1 mt-1">
-                                      <Button
-                                        variant="destructive"
-                                        size="sm"
-                                        onClick={() => handleItemReject(item._id)}
-                                        disabled={isLoading || !itemRejectionReasons[item._id]?.trim()}
-                                        className="text-xs h-6 px-2"
-                                      >
-                                        <XCircle className="h-3 w-3 mr-1" />
-                                        Confirm
-                                      </Button>
-                                      <Button
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() => {
-                                          setShowItemRejectionInput(null);
-                                          setItemRejectionReasons((prev) => {
-                                            const next: Record<string, string> = { ...prev };
-                                            delete next[item._id];
-                                            return next;
-                                          });
-                                        }}
-                                        disabled={isLoading}
-                                        className="text-xs h-6 px-2"
-                                      >
-                                        Cancel
-                                      </Button>
+                                <div className="flex flex-col flex-1">
+                                  <div className="flex items-start justify-between gap-2 mb-3 pr-8">
+                                    <div className="flex-1 min-w-0">
+                                      <div className="flex items-center gap-2 mb-2">
+                                        <Badge variant="outline" className="text-xs px-2 py-1 h-6 min-w-[28px] flex items-center justify-center flex-shrink-0">
+                                          {displayNumber}
+                                        </Badge>
+                                        <div className="flex-1 min-w-0">
+                                          <button
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              setSelectedItemName(item.itemName);
+                                            }}
+                                            className="text-base font-medium text-foreground hover:text-primary hover:bg-muted/50 rounded-md px-2 py-1 -mx-2 -my-1 transition-colors cursor-pointer text-left truncate"
+                                          >
+                                            {item.itemName}
+                                          </button>
+                                        </div>
+                                      </div>
+                                      {item.description && (
+                                        <div className="text-sm text-muted-foreground mb-2 line-clamp-2">
+                                          {item.description}
+                                        </div>
+                                      )}
+                                      <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                                        <span><span className="font-medium">Qty:</span> {item.quantity} {item.unit}</span>
+                                        {item.specsBrand && (
+                                          <span className="text-primary truncate">• {item.specsBrand}</span>
+                                        )}
+                                        {getInventoryStatusBadge(item.itemName, item.quantity, item.unit)}
+                                      </div>
+                                    </div>
+                                    <div className="flex items-center gap-1 flex-shrink-0">
+                                      <CompactImageGallery
+                                        images={itemPhotos}
+                                        maxDisplay={1}
+                                        size="md"
+                                      />
                                     </div>
                                   </div>
-                                )}
+
+                                  {/* Status and badges */}
+                                  <div className="mt-auto pt-2 border-t">
+                                    <div className="flex items-center justify-between">
+                                      <div className="flex items-center">
+                                        {item.isUrgent && (
+                                          <Badge variant="destructive" className="text-xs">
+                                            <AlertCircle className="h-3 w-3 mr-1" />
+                                            Urgent
+                                          </Badge>
+                                        )}
+                                      </div>
+                                      <div className="flex items-center">
+                                        {(item.status === 'approved' || item.status === 'cc_approved') && (
+                                          <Badge variant="default" className="bg-green-600 hover:bg-green-700 text-white text-xs">
+                                            ✓ Approved
+                                          </Badge>
+                                        )}
+                                        {item.status === 'rejected' && (
+                                          <Badge variant="destructive" className="text-xs">
+                                            ✗ Rejected
+                                          </Badge>
+                                        )}
+                                        {item.status !== 'approved' && item.status !== 'rejected' && item.status !== 'cc_approved' && getStatusBadge(item.status)}
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  {/* Actions in Grid View */}
+                                  {isManager && isPending && (
+                                    <div className="grid grid-cols-2 gap-2 mt-3 pt-3 border-t">
+                                      {/* Reuse logic for full/partial/direct actions but as full buttons */}
+                                      {(() => {
+                                        const status = inventoryStatus?.[item.itemName];
+                                        const stock = status?.centralStock || 0;
+                                        const isPartial = stock > 0 && stock < item.quantity;
+                                        const isFull = stock >= item.quantity;
+
+                                        if (isFull) {
+                                          return (
+                                            <Button variant="outline" size="sm" onClick={() => setShowItemDirectDeliveryConfirm(item._id)} className="h-9 w-full border-purple-200 text-purple-700 hover:bg-purple-50" title="Direct Delivery">
+                                              <Package className="h-4 w-4 mr-1.5" />
+                                              Direct Delivery
+                                            </Button>
+                                          );
+                                        }
+                                        if (isPartial) {
+                                          return (
+                                            <Button variant="outline" size="sm" onClick={() => onCheck?.(item._id)} className="h-9 w-full border-indigo-200 text-indigo-700 hover:bg-indigo-50" title="Check/Split" disabled={!onCheck}>
+                                              <PieChart className="h-4 w-4 mr-1.5" />
+                                              Split
+                                            </Button>
+                                          );
+                                        }
+                                        return (
+                                          <Button variant="outline" size="sm" onClick={() => setShowItemDirectPOConfirm(item._id)} className="h-9 w-full border-orange-200 text-orange-700 hover:bg-orange-50" title="Direct PO">
+                                            <ShoppingCart className="h-4 w-4 mr-1.5" />
+                                            Direct PO
+                                          </Button>
+                                        );
+                                      })()}
+
+                                      <Button variant="outline" size="sm" onClick={() => setShowItemRejectionInput(item._id)} className="h-9 w-full border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700 hover:border-red-300" title="Reject">
+                                        <XCircle className="h-4 w-4 mr-1.5" />
+                                        Reject
+                                      </Button>
+
+                                      <Button variant="default" size="sm" onClick={() => setShowItemApproveConfirm(item._id)} className="h-9 col-span-2 w-full bg-green-600 hover:bg-green-700" title="Approve">
+                                        <CheckCircle className="h-4 w-4 mr-1.5" />
+                                        Approve
+                                      </Button>
+                                    </div>
+                                  )}
+
+                                  {/* Rejection Input for Card */}
+                                  {showItemRejectionInput === item._id && (
+                                    <div className="absolute inset-0 z-20 bg-background/95 p-4 flex flex-col justify-center rounded-lg animate-in fade-in zoom-in-95">
+                                      <Label className="mb-2">Rejection Reason</Label>
+                                      <Textarea
+                                        value={itemRejectionReasons[item._id] || ""}
+                                        onChange={(e) => setItemRejectionReasons((prev) => ({ ...prev, [item._id]: e.target.value }))}
+                                        placeholder="Reason..."
+                                        className="mb-2 flex-1 min-h-[80px]"
+                                      />
+                                      <div className="flex gap-2">
+                                        <Button size="sm" variant="outline" onClick={() => setShowItemRejectionInput(null)} className="flex-1">Cancel</Button>
+                                        <Button size="sm" variant="destructive" onClick={() => handleItemReject(item._id)} className="flex-1">Reject</Button>
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
                               </div>
-                              {/* First Row: Urgent (left) + Status (right) */}
-                            </div>
-                          );
-                        })}
-                    </div>
+                            );
+                          })}
+                      </div>
+                    )
                   ) : (
                     // Fallback to single item display if allRequests not loaded yet
                     <div className="space-y-4">
@@ -1582,6 +1861,28 @@ export function RequestDetailsDialog({
                           }
                         </Button>
                       </div>
+
+                      {/* Direct PO Sign Off Actions */}
+                      {isManager && signPendingItems.length > 0 && (
+                        <div className="border-t pt-4 mt-6">
+                          <div className="flex items-center gap-2 mb-3">
+                            <section className="flex h-8 w-8 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-900/30">
+                              <FileText className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                            </section>
+                            <h3 className="text-sm font-semibold text-foreground">Direct PO Sign Off Required</h3>
+                          </div>
+                          <div className="flex flex-col sm:flex-row gap-3">
+                            <Button variant="destructive" onClick={() => setShowRejectionInput(true)} disabled={isLoading} size="lg" className="flex-1 sm:w-1/3 py-4 font-semibold">
+                              <XCircle className="h-5 w-5 mr-2" />
+                              Reject Direct PO
+                            </Button>
+                            <Button className="flex-1 bg-green-600 hover:bg-green-700 text-white py-4 font-semibold" onClick={handleApproveDirectPO} disabled={isLoading} size="lg">
+                              <CheckCircle className="mr-2 h-5 w-5" />
+                              Sign & Approve PO
+                            </Button>
+                          </div>
+                        </div>
+                      )}
 
                       {/* Direct Delivery Confirmation */}
                       {showDirectDeliveryConfirm && (
@@ -2018,6 +2319,10 @@ export function RequestDetailsDialog({
                                 <Button
                                   variant="destructive"
                                   onClick={async () => {
+                                    if (signPendingItems.length > 0) {
+                                      await handleRejectDirectPO();
+                                      return;
+                                    }
                                     const itemsToProcess = selectedItemsForAction.size > 0
                                       ? Array.from(selectedItemsForAction)
                                       : pendingItems.map(item => item._id);
@@ -2100,12 +2405,12 @@ export function RequestDetailsDialog({
         />
 
         {/* Site Info Dialog */}
-        < SiteInfoDialog
+        <LocationInfoDialog
           open={!!selectedSiteId}
           onOpenChange={(open) => {
             if (!open) setSelectedSiteId(null);
           }}
-          siteId={selectedSiteId}
+          locationId={selectedSiteId}
         />
 
         {/* Notes Timeline Dialog */}

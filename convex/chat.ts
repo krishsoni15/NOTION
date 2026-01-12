@@ -110,7 +110,7 @@ export const getConversations = query({
       .query("conversations")
       .order("desc")
       .collect();
-    
+
     const conversations = allConversations.filter((conv) =>
       conv.participants.includes(currentUser._id)
     );
@@ -130,11 +130,11 @@ export const getConversations = query({
           ...conversation,
           otherUser: otherUser
             ? {
-                _id: otherUser._id,
-                fullName: otherUser.fullName,
-                role: otherUser.role,
-                username: otherUser.username,
-              }
+              _id: otherUser._id,
+              fullName: otherUser.fullName,
+              role: otherUser.role,
+              username: otherUser.username,
+            }
             : null,
           unreadCount,
         };
@@ -188,13 +188,13 @@ export const getConversation = query({
       ...conversation,
       otherUser: otherUser
         ? {
-            _id: otherUser._id,
-            fullName: otherUser.fullName,
-            role: otherUser.role,
-            username: otherUser.username,
-            phoneNumber: otherUser.phoneNumber,
-            address: otherUser.address,
-          }
+          _id: otherUser._id,
+          fullName: otherUser.fullName,
+          role: otherUser.role,
+          username: otherUser.username,
+          phoneNumber: otherUser.phoneNumber,
+          address: otherUser.address,
+        }
         : null,
     };
   },
@@ -251,14 +251,14 @@ export const getMessages = query({
           ...message,
           sender: sender
             ? {
-                _id: sender._id,
-                fullName: sender.fullName,
-                role: sender.role,
-                username: sender.username,
-              }
+              _id: sender._id,
+              fullName: sender.fullName,
+              role: sender.role,
+              username: sender.username,
+            }
             : null,
           isRead: message.readBy.includes(currentUser._id),
-          isDelivered: otherUserId 
+          isDelivered: otherUserId
             ? (message.deliveredBy || []).includes(otherUserId)
             : false,
         };
@@ -279,6 +279,16 @@ export const sendMessage = mutation({
     content: v.string(),
     imageUrl: v.optional(v.string()),
     imageKey: v.optional(v.string()),
+    fileUrl: v.optional(v.string()), // Generic file attachment
+    fileKey: v.optional(v.string()),
+    fileName: v.optional(v.string()),
+    fileType: v.optional(v.string()),
+    fileSize: v.optional(v.number()),
+    location: v.optional(v.object({
+      latitude: v.number(),
+      longitude: v.number(),
+      address: v.optional(v.string()),
+    })),
   },
   handler: async (ctx, args) => {
     const userId = await getAuthUserId(ctx);
@@ -301,9 +311,9 @@ export const sendMessage = mutation({
       throw new Error("Not authorized to send messages in this conversation");
     }
 
-    // Validate content - allow either text content or image
+    // Validate content - allow either text content, image, or location
     const trimmedContent = args.content.trim();
-    const hasContent = trimmedContent || args.imageUrl;
+    const hasContent = trimmedContent || args.imageUrl || args.location || args.fileUrl;
 
     if (!hasContent) {
       throw new Error("Message content cannot be empty");
@@ -318,14 +328,14 @@ export const sendMessage = mutation({
       (id) => id !== currentUser._id
     );
     let deliveredBy: Id<"users">[] = [currentUser._id]; // Sender has delivered their own message
-    
+
     if (otherUserId) {
       // Check if other user is online
       const otherUserPresence = await ctx.db
         .query("userPresence")
         .withIndex("by_user_id", (q) => q.eq("userId", otherUserId))
         .unique();
-      
+
       // If receiver is online, mark as delivered immediately
       if (otherUserPresence?.isOnline) {
         deliveredBy.push(otherUserId);
@@ -340,6 +350,12 @@ export const sendMessage = mutation({
       content: trimmedContent,
       imageUrl: args.imageUrl,
       imageKey: args.imageKey,
+      fileUrl: args.fileUrl,
+      fileKey: args.fileKey,
+      fileName: args.fileName,
+      fileType: args.fileType,
+      fileSize: args.fileSize,
+      location: args.location,
       readBy: [currentUser._id], // Sender has read their own message
       deliveredBy: deliveredBy,
       createdAt: now,
@@ -401,7 +417,7 @@ export const markAsRead = mutation({
         q.eq("conversationId", args.conversationId)
       )
       .collect();
-    
+
     // Mark all messages as delivered (if not already) and read
     await Promise.all(
       allMessages.map((message) => {
@@ -409,17 +425,17 @@ export const markAsRead = mutation({
         const currentReadBy = message.readBy;
         const isDelivered = currentDeliveredBy.includes(currentUser._id);
         const isRead = currentReadBy.includes(currentUser._id);
-        
+
         // Always mark as delivered when user opens conversation
-        const newDeliveredBy = isDelivered 
-          ? currentDeliveredBy 
+        const newDeliveredBy = isDelivered
+          ? currentDeliveredBy
           : [...currentDeliveredBy, currentUser._id];
-        
+
         // Mark as read if not already read
         const newReadBy = isRead
           ? currentReadBy
           : [...currentReadBy, currentUser._id];
-        
+
         return ctx.db.patch(message._id, {
           readBy: newReadBy,
           deliveredBy: newDeliveredBy,

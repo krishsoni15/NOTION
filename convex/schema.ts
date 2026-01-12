@@ -60,8 +60,10 @@ export default defineSchema({
     status: v.union(
       v.literal("draft"),
       v.literal("pending"),
+      v.literal("sign_pending"),
       v.literal("approved"),
       v.literal("rejected"),
+      v.literal("sign_rejected"),
       v.literal("recheck"),
       v.literal("ready_for_cc"),
       v.literal("cc_pending"),
@@ -69,6 +71,7 @@ export default defineSchema({
       v.literal("cc_rejected"),
       v.literal("ready_for_po"),
       v.literal("pending_po"),
+      v.literal("direct_po"),
       v.literal("rejected_po"),
       v.literal("ready_for_delivery"),
       v.literal("delivery_stage"),
@@ -109,8 +112,10 @@ export default defineSchema({
     notes: v.optional(v.string()),
     status: v.union(
       v.literal("pending_approval"),
+      v.literal("sign_pending"),
       v.literal("approved"),
       v.literal("rejected"),
+      v.literal("sign_rejected"),
       v.literal("ordered"),
       v.literal("delivered"),
       v.literal("cancelled")
@@ -141,8 +146,9 @@ export default defineSchema({
   // ============================================================================
   vendors: defineTable({
     companyName: v.string(), // Company Name
+    contactName: v.optional(v.string()), // Contact Person Name
     email: v.string(), // Email
-    phone: v.optional(v.string()), // Phone (optional)
+    phone: v.string(), // Phone
     gstNumber: v.string(), // GST Number
     address: v.string(), // Address
     isActive: v.boolean(),
@@ -159,6 +165,8 @@ export default defineSchema({
   // ============================================================================
   inventory: defineTable({
     itemName: v.string(), // Item Name
+    description: v.optional(v.string()), // Item Description
+    hsnSacCode: v.optional(v.string()), // HSN/SAC Code
     unit: v.optional(v.string()), // Unit (e.g., bags, kg, mm, gm, nos, ton) - optional
     centralStock: v.optional(v.number()), // Central Stock quantity - optional
     vendorId: v.optional(v.id("vendors")), // Linked vendor - optional (deprecated, use vendorIds)
@@ -204,6 +212,16 @@ export default defineSchema({
     content: v.string(),
     imageUrl: v.optional(v.string()), // Cloudinary image URL for image messages
     imageKey: v.optional(v.string()), // Cloudinary image key for deletion
+    fileUrl: v.optional(v.string()), // URL for generic files (pdf, docx, etc)
+    fileKey: v.optional(v.string()), // Storage key
+    fileName: v.optional(v.string()), // Original filename
+    fileType: v.optional(v.string()), // MIME type
+    fileSize: v.optional(v.number()), // Size in bytes
+    location: v.optional(v.object({
+      latitude: v.number(),
+      longitude: v.number(),
+      address: v.optional(v.string()),
+    })), // Location attachment
     readBy: v.array(v.id("users")), // Users who have read this message
     deliveredBy: v.optional(v.array(v.id("users"))), // Users who have received/delivered this message
     createdAt: v.number(),
@@ -272,6 +290,7 @@ export default defineSchema({
     code: v.optional(v.string()), // Site code/identifier
     address: v.optional(v.string()), // Site address
     description: v.optional(v.string()), // Site description
+    type: v.optional(v.union(v.literal("site"), v.literal("inventory"))), // Location type
     isActive: v.boolean(),
     createdBy: v.id("users"), // Manager who created this site
     createdAt: v.number(),

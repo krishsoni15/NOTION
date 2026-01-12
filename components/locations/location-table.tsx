@@ -43,106 +43,107 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+// ... imports
 import { MoreHorizontal, Edit, Trash2, Building2, MapPin, Hash, Calendar, Info, Power, PowerOff } from "lucide-react";
-import { SiteFormDialog } from "./site-form-dialog";
-import { SiteInfoDialog } from "../requests/site-info-dialog";
+import { LocationFormDialog } from "./location-form-dialog";
+import { LocationInfoDialog } from "./location-info-dialog";
 import { toast } from "sonner";
 import type { Doc } from "@/convex/_generated/dataModel";
 
 type ViewMode = "table" | "card";
 
-interface SiteTableProps {
-  sites: typeof import("@/convex/_generated/api").api.sites.getAllSites._returnType | undefined;
+interface LocationTableProps {
+  locations: typeof import("@/convex/_generated/api").api.sites.getAllSites._returnType | undefined;
   viewMode?: ViewMode;
 }
 
-export function SiteTable({ sites, viewMode = "table" }: SiteTableProps) {
-  const [editingSite, setEditingSite] = useState<Doc<"sites"> | null>(null);
-  const [deletingSite, setDeletingSite] = useState<Doc<"sites"> | null>(null);
-  const [deactivatingSite, setDeactivatingSite] = useState<Doc<"sites"> | null>(null);
-  const [loadingSiteId, setLoadingSiteId] = useState<string | null>(null);
-  const [selectedSiteId, setSelectedSiteId] = useState<Doc<"sites">["_id"] | null>(null);
-  const deleteSite = useMutation(api.sites.deleteSite);
-  const toggleSiteStatus = useMutation(api.sites.toggleSiteStatus);
-  
-  // Check site usage when delete dialog opens
-  const siteUsage = useQuery(
+export function LocationTable({ locations, viewMode = "table" }: LocationTableProps) {
+  const [editingLocation, setEditingLocation] = useState<Doc<"sites"> | null>(null);
+  const [deletingLocation, setDeletingLocation] = useState<Doc<"sites"> | null>(null);
+  const [deactivatingLocation, setDeactivatingLocation] = useState<Doc<"sites"> | null>(null);
+  const [loadingLocationId, setLoadingLocationId] = useState<string | null>(null);
+  const [selectedLocationId, setSelectedLocationId] = useState<Doc<"sites">["_id"] | null>(null);
+  const deleteLocation = useMutation(api.sites.deleteSite);
+  const toggleLocationStatus = useMutation(api.sites.toggleSiteStatus);
+
+  // Check location usage when delete dialog opens
+  const locationUsage = useQuery(
     api.sites.checkSiteUsage,
-    deletingSite ? { siteId: deletingSite._id } : "skip"
+    deletingLocation ? { siteId: deletingLocation._id } : "skip"
   );
 
-  // Check site usage when deactivate dialog opens
-  const deactivateSiteUsage = useQuery(
+  // Check location usage when deactivate dialog opens
+  const deactivateLocationUsage = useQuery(
     api.sites.checkSiteUsage,
-    deactivatingSite ? { siteId: deactivatingSite._id } : "skip"
+    deactivatingLocation ? { siteId: deactivatingLocation._id } : "skip"
   );
 
-  const handleToggleStatus = async (site: Doc<"sites">) => {
+  const handleToggleStatus = async (location: Doc<"sites">) => {
     // If trying to deactivate, check usage first
-    if (site.isActive) {
-      setDeactivatingSite(site);
+    if (location.isActive) {
+      setDeactivatingLocation(location);
       return;
     }
-    
+
     // Activating - proceed directly
-    setLoadingSiteId(site._id);
+    setLoadingLocationId(location._id);
     try {
-      await toggleSiteStatus({ siteId: site._id });
-      toast.success("Site activated successfully");
+      await toggleLocationStatus({ siteId: location._id });
+      toast.success("Location activated successfully");
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : "Failed to activate site";
+      const errorMessage = error instanceof Error ? error.message : "Failed to activate location";
       toast.error(errorMessage);
     } finally {
-      setLoadingSiteId(null);
+      setLoadingLocationId(null);
     }
   };
 
   const handleConfirmDeactivate = async () => {
-    if (!deactivatingSite) return;
-    
-    setLoadingSiteId(deactivatingSite._id);
+    if (!deactivatingLocation) return;
+
+    setLoadingLocationId(deactivatingLocation._id);
     try {
-      await toggleSiteStatus({ siteId: deactivatingSite._id });
-      toast.success("Site deactivated successfully");
-      setDeactivatingSite(null);
+      await toggleLocationStatus({ siteId: deactivatingLocation._id });
+      toast.success("Location deactivated successfully");
+      setDeactivatingLocation(null);
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : "Failed to deactivate site";
+      const errorMessage = error instanceof Error ? error.message : "Failed to deactivate location";
       toast.error(errorMessage);
-      setDeactivatingSite(null);
+      setDeactivatingLocation(null);
     } finally {
-      setLoadingSiteId(null);
+      setLoadingLocationId(null);
     }
   };
 
   const handleDelete = async () => {
-    if (!deletingSite) return;
-    
-    setLoadingSiteId(deletingSite._id);
+    if (!deletingLocation) return;
+
+    setLoadingLocationId(deletingLocation._id);
     try {
-      await deleteSite({ siteId: deletingSite._id });
-      toast.success("Site deleted permanently");
-      setDeletingSite(null);
+      await deleteLocation({ siteId: deletingLocation._id });
+      toast.success("Location deleted permanently");
+      setDeletingLocation(null);
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : "Failed to delete site";
+      const errorMessage = error instanceof Error ? error.message : "Failed to delete location";
       toast.error(errorMessage);
     } finally {
-      setLoadingSiteId(null);
+      setLoadingLocationId(null);
     }
   };
 
-  if (!sites) {
+  if (!locations) {
     return <div className="text-center py-8 text-muted-foreground">Loading...</div>;
   }
 
-  if (sites.length === 0) {
+  if (locations.length === 0) {
     return (
       <div className="text-center py-8 text-muted-foreground">
-        No sites found. Add your first site to get started.
+        No locations found. Add your first location to get started.
       </div>
     );
   }
 
-  const SiteCard = ({ site }: { site: Doc<"sites"> }) => {
+  const LocationCard = ({ location }: { location: Doc<"sites"> }) => {
     return (
       <Card className="hover:shadow-lg transition-all border-border/50">
         <CardHeader className="pb-4 border-b border-border/50">
@@ -151,16 +152,21 @@ export function SiteTable({ sites, viewMode = "table" }: SiteTableProps) {
               <CardTitle className="text-base font-semibold flex items-center gap-2 mb-1">
                 <Building2 className="h-4 w-4 text-primary shrink-0" />
                 <button
-                  onClick={() => setSelectedSiteId(site._id)}
+                  onClick={() => setSelectedLocationId(location._id)}
                   className="truncate text-foreground hover:text-primary hover:bg-muted/50 rounded-full px-3 py-1.5 -mx-2 -my-1 transition-colors cursor-pointer text-left border border-transparent hover:border-primary/20"
                 >
-                  {site.name}
+                  {location.name}
                 </button>
               </CardTitle>
             </div>
-            <Badge variant={site.isActive ? "default" : "secondary"} className="text-xs">
-              {site.isActive ? "Active" : "Inactive"}
-            </Badge>
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="text-xs capitalize">
+                {location.type || "site"}
+              </Badge>
+              <Badge variant={location.isActive ? "default" : "secondary"} className="text-xs">
+                {location.isActive ? "Active" : "Inactive"}
+              </Badge>
+            </div>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="icon" className="h-8 w-8">
@@ -171,15 +177,15 @@ export function SiteTable({ sites, viewMode = "table" }: SiteTableProps) {
               <DropdownMenuContent align="end">
                 <DropdownMenuLabel>Actions</DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => setEditingSite(site)}>
+                <DropdownMenuItem onClick={() => setEditingLocation(location)}>
                   <Edit className="h-4 w-4 mr-2" />
-                  Edit Site
+                  Edit Location
                 </DropdownMenuItem>
                 <DropdownMenuItem
-                  onClick={() => handleToggleStatus(site)}
-                  disabled={loadingSiteId === site._id}
+                  onClick={() => handleToggleStatus(location)}
+                  disabled={loadingLocationId === location._id}
                 >
-                  {site.isActive ? (
+                  {location.isActive ? (
                     <>
                       <PowerOff className="h-4 w-4 mr-2" />
                       Deactivate
@@ -192,38 +198,38 @@ export function SiteTable({ sites, viewMode = "table" }: SiteTableProps) {
                   )}
                 </DropdownMenuItem>
                 <DropdownMenuItem
-                  onClick={() => setDeletingSite(site)}
+                  onClick={() => setDeletingLocation(location)}
                   className="text-destructive focus:text-destructive"
                 >
                   <Trash2 className="h-4 w-4 mr-2" />
-                  Delete Site
+                  Delete Location
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
         </CardHeader>
         <CardContent className="pt-4 space-y-3">
-          {site.address && (
+          {location.address && (
             <div className="flex items-start gap-2 text-sm">
               <MapPin className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
               <div className="flex-1 min-w-0">
                 <p className="text-muted-foreground text-xs">Address</p>
-                <p className="line-clamp-2">{site.address}</p>
+                <p className="line-clamp-2">{location.address}</p>
               </div>
             </div>
           )}
-          {site.description && (
+          {location.description && (
             <div className="flex items-start gap-2 text-sm">
               <Info className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
               <div className="flex-1 min-w-0">
                 <p className="text-muted-foreground text-xs">Description</p>
-                <p className="line-clamp-2">{site.description}</p>
+                <p className="line-clamp-2">{location.description}</p>
               </div>
             </div>
           )}
           <div className="flex items-center gap-2 text-xs text-muted-foreground pt-2 border-t">
             <Calendar className="h-3.5 w-3.5" />
-            <span>Created {new Date(site.createdAt).toLocaleDateString()}</span>
+            <span>Created {new Date(location.createdAt).toLocaleDateString()}</span>
           </div>
         </CardContent>
       </Card>
@@ -239,7 +245,8 @@ export function SiteTable({ sites, viewMode = "table" }: SiteTableProps) {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Site Name</TableHead>
+                  <TableHead>Location Name</TableHead>
+                  <TableHead>Type</TableHead>
                   <TableHead>Address</TableHead>
                   <TableHead>Description</TableHead>
                   <TableHead>Status</TableHead>
@@ -248,29 +255,34 @@ export function SiteTable({ sites, viewMode = "table" }: SiteTableProps) {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {sites.map((site) => (
-                  <TableRow key={site._id}>
+                {locations.map((location) => (
+                  <TableRow key={location._id}>
                     <TableCell className="font-medium">
                       <button
-                        onClick={() => setSelectedSiteId(site._id)}
+                        onClick={() => setSelectedLocationId(location._id)}
                         className="text-foreground hover:text-primary hover:bg-muted/50 rounded-full px-3 py-1.5 -mx-2 -my-1 transition-colors cursor-pointer text-left border border-transparent hover:border-primary/20"
                       >
-                        {site.name}
+                        {location.name}
                       </button>
                     </TableCell>
-                    <TableCell className="max-w-xs truncate">
-                      {site.address || "—"}
+                    <TableCell>
+                      <Badge variant="outline" className="capitalize">
+                        {location.type || "site"}
+                      </Badge>
                     </TableCell>
                     <TableCell className="max-w-xs truncate">
-                      {site.description || "—"}
+                      {location.address || "—"}
+                    </TableCell>
+                    <TableCell className="max-w-xs truncate">
+                      {location.description || "—"}
                     </TableCell>
                     <TableCell>
-                      <Badge variant={site.isActive ? "default" : "secondary"}>
-                        {site.isActive ? "Active" : "Inactive"}
+                      <Badge variant={location.isActive ? "default" : "secondary"}>
+                        {location.isActive ? "Active" : "Inactive"}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-muted-foreground text-sm">
-                      {new Date(site.createdAt).toLocaleDateString()}
+                      {new Date(location.createdAt).toLocaleDateString()}
                     </TableCell>
                     <TableCell className="text-right">
                       <DropdownMenu>
@@ -283,15 +295,15 @@ export function SiteTable({ sites, viewMode = "table" }: SiteTableProps) {
                         <DropdownMenuContent align="end">
                           <DropdownMenuLabel>Actions</DropdownMenuLabel>
                           <DropdownMenuSeparator />
-                          <DropdownMenuItem onClick={() => setEditingSite(site)}>
+                          <DropdownMenuItem onClick={() => setEditingLocation(location)}>
                             <Edit className="h-4 w-4 mr-2" />
-                            Edit Site
+                            Edit Location
                           </DropdownMenuItem>
                           <DropdownMenuItem
-                            onClick={() => handleToggleStatus(site)}
-                            disabled={loadingSiteId === site._id}
+                            onClick={() => handleToggleStatus(location)}
+                            disabled={loadingLocationId === location._id}
                           >
-                            {site.isActive ? (
+                            {location.isActive ? (
                               <>
                                 <PowerOff className="h-4 w-4 mr-2" />
                                 Deactivate
@@ -304,11 +316,11 @@ export function SiteTable({ sites, viewMode = "table" }: SiteTableProps) {
                             )}
                           </DropdownMenuItem>
                           <DropdownMenuItem
-                            onClick={() => setDeletingSite(site)}
+                            onClick={() => setDeletingLocation(location)}
                             className="text-destructive focus:text-destructive"
                           >
                             <Trash2 className="h-4 w-4 mr-2" />
-                            Delete Site
+                            Delete Location
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
@@ -324,63 +336,64 @@ export function SiteTable({ sites, viewMode = "table" }: SiteTableProps) {
       {/* Card View */}
       {viewMode === "card" && (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4">
-          {sites.map((site) => (
-            <SiteCard key={site._id} site={site} />
+          {locations.map((location) => (
+            <LocationCard key={location._id} location={location} />
           ))}
         </div>
       )}
 
-      {/* Edit Site Dialog */}
-      <SiteFormDialog
-        open={editingSite !== null}
-        onOpenChange={(open) => !open && setEditingSite(null)}
-        siteId={editingSite?._id}
-        initialData={editingSite ? {
-          name: editingSite.name,
-          code: editingSite.code || "",
-          address: editingSite.address || "",
-          description: editingSite.description || "",
-          isActive: editingSite.isActive,
+      {/* Edit Location Dialog */}
+      <LocationFormDialog
+        open={editingLocation !== null}
+        onOpenChange={(open) => !open && setEditingLocation(null)}
+        locationId={editingLocation?._id}
+        initialData={editingLocation ? {
+          name: editingLocation.name,
+          code: editingLocation.code || "",
+          address: editingLocation.address || "",
+          description: editingLocation.description || "",
+          isActive: editingLocation.isActive,
+          type: editingLocation.type || "site",
         } : null}
       />
 
       {/* Deactivate Error/Confirmation Dialog */}
-      <AlertDialog open={deactivatingSite !== null} onOpenChange={(open) => !open && setDeactivatingSite(null)}>
+      <AlertDialog open={deactivatingLocation !== null} onOpenChange={(open) => !open && setDeactivatingLocation(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>
-              {deactivateSiteUsage?.isInUse ? "Cannot Deactivate Site" : "Deactivate Site"}
+              {deactivateLocationUsage?.isInUse ? "Cannot Deactivate Location" : "Deactivate Location"}
             </AlertDialogTitle>
             <AlertDialogDescription>
-              {deactivateSiteUsage?.isInUse ? (
+              {deactivateLocationUsage?.isInUse ? (
                 <div className="space-y-2">
                   <p>
-                    Cannot deactivate <strong>{deactivatingSite?.name}</strong> because it is currently assigned to users.
+                    Cannot deactivate <strong>{deactivatingLocation?.name}</strong> because it is currently assigned to users.
                   </p>
-                  {deactivateSiteUsage.assignedToUsers > 0 && (
+                  {deactivateLocationUsage.assignedToUsers > 0 && (
                     <p className="text-destructive">
-                      • Assigned to {deactivateSiteUsage.assignedToUsers} user(s)
+                      • Assigned to {deactivateLocationUsage.assignedToUsers} user(s)
                     </p>
                   )}
                   <p className="mt-2">
-                    Please unassign the site from users before deactivating it.
+                    Please unassign the location from users before deactivating it.
                   </p>
                 </div>
               ) : (
                 <p>
-                  Are you sure you want to deactivate <strong>{deactivatingSite?.name}</strong>? The site will be marked as inactive.
+                  Are you sure you want to deactivate <strong>{deactivatingLocation?.name}</strong>? The location will be marked as inactive.
                 </p>
               )}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            {!deactivateSiteUsage?.isInUse && (
+            {!deactivateLocationUsage?.isInUse && (
               <AlertDialogAction
                 onClick={handleConfirmDeactivate}
-                disabled={loadingSiteId === deactivatingSite?._id}
+                disabled={loadingLocationId === deactivatingLocation?._id}
               >
-                {loadingSiteId === deactivatingSite?._id ? "Deactivating..." : "Deactivate"}
+                {loadingLocationId === deactivatingLocation?._id ? "Deactivating..." : "Deactivate"}
               </AlertDialogAction>
             )}
           </AlertDialogFooter>
@@ -388,33 +401,33 @@ export function SiteTable({ sites, viewMode = "table" }: SiteTableProps) {
       </AlertDialog>
 
       {/* Delete Confirmation Dialog */}
-      <AlertDialog open={deletingSite !== null} onOpenChange={(open) => !open && setDeletingSite(null)}>
+      <AlertDialog open={deletingLocation !== null} onOpenChange={(open) => !open && setDeletingLocation(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Are you sure?</AlertDialogTitle>
             <AlertDialogDescription>
-              {siteUsage?.isInUse ? (
+              {locationUsage?.isInUse ? (
                 <div className="space-y-2">
                   <p>
-                    Cannot delete <strong>{deletingSite?.name}</strong> because it is currently in use.
+                    Cannot delete <strong>{deletingLocation?.name}</strong> because it is currently in use.
                   </p>
-                  {siteUsage.assignedToUsers > 0 && (
+                  {locationUsage.assignedToUsers > 0 && (
                     <p className="text-destructive">
-                      • Assigned to {siteUsage.assignedToUsers} user(s)
+                      • Assigned to {locationUsage.assignedToUsers} user(s)
                     </p>
                   )}
-                  {siteUsage.usedInRequests > 0 && (
+                  {locationUsage.usedInRequests > 0 && (
                     <p className="text-destructive">
-                      • Used in {siteUsage.usedInRequests} request(s)
+                      • Used in {locationUsage.usedInRequests} request(s)
                     </p>
                   )}
                   <p className="mt-2">
-                    Please unassign the site from users and ensure no requests are using it before deleting.
+                    Please unassign the location from users and ensure no requests are using it before deleting.
                   </p>
                 </div>
               ) : (
                 <p>
-                  This will <strong>permanently delete</strong> <strong>{deletingSite?.name}</strong>. This action cannot be undone and the site will be removed permanently.
+                  This will <strong>permanently delete</strong> <strong>{deletingLocation?.name}</strong>. This action cannot be undone and the location will be removed permanently.
                 </p>
               )}
             </AlertDialogDescription>
@@ -423,21 +436,21 @@ export function SiteTable({ sites, viewMode = "table" }: SiteTableProps) {
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleDelete}
-              disabled={siteUsage?.isInUse || loadingSiteId === deletingSite?._id}
-              className={siteUsage?.isInUse ? "opacity-50 cursor-not-allowed" : "bg-destructive text-destructive-foreground hover:bg-destructive/90"}
+              disabled={locationUsage?.isInUse || loadingLocationId === deletingLocation?._id}
+              className={locationUsage?.isInUse ? "opacity-50 cursor-not-allowed" : "bg-destructive text-destructive-foreground hover:bg-destructive/90"}
             >
-              {loadingSiteId === deletingSite?._id ? "Deleting..." : "Delete Site"}
+              {loadingLocationId === deletingLocation?._id ? "Deleting..." : "Delete Location"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
 
-      <SiteInfoDialog
-        open={!!selectedSiteId}
+      <LocationInfoDialog
+        open={!!selectedLocationId}
         onOpenChange={(open) => {
-          if (!open) setSelectedSiteId(null);
+          if (!open) setSelectedLocationId(null);
         }}
-        siteId={selectedSiteId}
+        locationId={selectedLocationId}
       />
     </>
   );

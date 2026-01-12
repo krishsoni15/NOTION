@@ -85,6 +85,25 @@ export function ItemInfoDialog({
                 <p className="font-medium text-base">{itemName}</p>
               </div>
 
+              {inventoryItem?.description && (
+                <div className="space-y-2">
+                  <Label className="text-sm font-semibold flex items-center gap-1.5">
+                    <FileText className="h-4 w-4" />
+                    Description
+                  </Label>
+                  <p className="text-sm text-muted-foreground">{inventoryItem.description}</p>
+                </div>
+              )}
+
+              {inventoryItem?.hsnSacCode && (
+                <div className="space-y-2">
+                  <Label className="text-sm font-semibold flex items-center gap-1.5">
+                    <Hash className="h-4 w-4" />
+                    HSN/SAC Code
+                  </Label>
+                  <Badge variant="outline" className="font-mono">{inventoryItem.hsnSacCode}</Badge>
+                </div>
+              )}
             </div>
 
             <div className="space-y-4">
@@ -102,8 +121,8 @@ export function ItemInfoDialog({
                           !hasStock
                             ? "destructive"
                             : isLowStock
-                            ? "outline"
-                            : "default"
+                              ? "outline"
+                              : "default"
                         }
                         className="font-semibold text-sm px-3 py-1"
                       >

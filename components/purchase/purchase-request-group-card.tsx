@@ -592,22 +592,17 @@ export function PurchaseRequestGroupCard({
   return (
     <div className="border rounded-lg p-3 sm:p-4 bg-card shadow-sm grouped-card-hover touch-manipulation transition-all duration-200 hover:shadow-md">
       {/* Card Header */}
-      <div className="flex items-start justify-between mb-3">
+      <div className="flex items-start justify-between mb-3 gap-4">
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-1 flex-nowrap overflow-x-auto">
-            <span className="font-mono text-xs font-semibold text-primary flex-shrink-0">
+          <div className="flex items-center gap-2 mb-1 flex-wrap">
+            <span className="font-mono text-xl font-black text-blue-600 dark:text-white flex-shrink-0 tracking-tighter">
               #{requestNumber}
             </span>
-            <Badge variant={statusInfo.variant} className="text-xs flex-shrink-0">
+            <Badge variant={statusInfo.variant} className="text-[10px] sm:text-xs flex-shrink-0 font-medium">
               <StatusIcon className="h-3 w-3 mr-1" />
               {statusInfo.label}
             </Badge>
-            {urgentCount > 0 && (
-              <Badge variant="destructive" className="flex items-center gap-1 text-xs flex-shrink-0">
-                <AlertCircle className="h-3 w-3" />
-                {urgentCount}/{items.length} urgent{urgentCount > 1 ? 's' : ''}
-              </Badge>
-            )}
+
           </div>
           <div className="space-y-1">
             <div className="flex items-center gap-2">
@@ -624,7 +619,7 @@ export function PurchaseRequestGroupCard({
                 onSiteClick && firstItem.site._id ? (
                   <button
                     onClick={() => onSiteClick(firstItem.site!._id)}
-                    className="font-semibold text-sm text-foreground hover:text-primary hover:bg-muted/50 rounded-full px-3 py-1.5 -mx-2 -my-1 transition-colors cursor-pointer text-left truncate flex-1 border border-transparent hover:border-primary/20"
+                    className="font-semibold text-sm text-foreground hover:text-primary bg-transparent rounded-sm px-1 -mx-1 transition-colors cursor-pointer text-left truncate flex-1 border border-transparent hover:border-border"
                   >
                     {firstItem.site.name}
                     {firstItem.site.code && <span className="text-muted-foreground ml-1">({firstItem.site.code})</span>}
@@ -664,15 +659,11 @@ export function PurchaseRequestGroupCard({
               onClick={() => setIsExpanded(!isExpanded)}
             >
               {isExpanded ? (
-                <>
-                  <ChevronDown className="h-3 w-3 mr-1" />
-                  <span className="hidden sm:inline">Collapse</span>
-                </>
+                <ChevronDown className="h-4 w-4" />
               ) : (
                 <>
-                  <ChevronRight className="h-3 w-3 mr-1" />
-                  <span className="hidden sm:inline">Expand ({items.length})</span>
-                  <span className="sm:hidden">+{items.length - 1}</span>
+                  <ChevronRight className="h-4 w-4 mr-1" />
+                  <span className="font-semibold">({items.length})</span>
                 </>
               )}
             </Button>
@@ -723,7 +714,7 @@ export function PurchaseRequestGroupCard({
                         {onItemClick ? (
                           <button
                             onClick={() => onItemClick(item.itemName)}
-                            className="font-semibold text-sm text-foreground hover:text-primary hover:bg-muted/50 rounded-full px-3 py-1.5 -mx-2 -my-1 transition-colors cursor-pointer text-left border border-transparent hover:border-primary/20 whitespace-normal"
+                            className="font-semibold text-sm text-foreground hover:text-primary bg-transparent rounded-sm px-1 -mx-1 transition-colors cursor-pointer text-left border border-transparent hover:border-border whitespace-normal"
                           >
                             {item.itemName}
                           </button>
@@ -1030,7 +1021,9 @@ export function PurchaseRequestGroupCard({
                         <Button
                           size="sm"
                           onClick={() => setShowReadyForCCConfirm(item._id)}
-                          className="text-xs h-7 px-3 bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-600 hover:text-white hover:border-blue-600 transition-all shadow-sm font-medium dark:bg-blue-900/20 dark:text-blue-300 dark:border-blue-800 dark:hover:bg-blue-600"
+                          disabled={hasFullStock}
+                          title={hasFullStock ? "Full stock available. Use Direct Delivery." : ""}
+                          className="text-xs h-7 px-3 bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-600 hover:text-white hover:border-blue-600 transition-all shadow-sm font-medium dark:bg-blue-900/20 dark:text-blue-300 dark:border-blue-800 dark:hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"
                           variant="outline"
                         >
                           <FileText className="h-3.5 w-3.5 mr-1.5" />

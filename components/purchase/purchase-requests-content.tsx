@@ -19,7 +19,7 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { Check } from "lucide-react";
 import { RequestDetailsDialog } from "@/components/requests/request-details-dialog";
 import { ItemInfoDialog } from "@/components/requests/item-info-dialog";
-import { SiteInfoDialog } from "@/components/requests/site-info-dialog";
+import { LocationInfoDialog } from "@/components/locations/location-info-dialog";
 import { toast } from "sonner";
 import Link from "next/link";
 import type { Id } from "@/convex/_generated/dataModel";
@@ -49,6 +49,8 @@ const statusConfig: Record<string, { label: string; variant: "default" | "second
   ready_for_delivery: { label: "Ready for Delivery", variant: "default", icon: Truck, color: "indigo" },
   delivered: { label: "Delivered", variant: "secondary", icon: CheckCircle, color: "slate" },
   delivery_stage: { label: "Delivery Stage", variant: "outline", icon: Truck, color: "orange" },
+  sign_pending: { label: "Sign Pending", variant: "secondary", icon: Clock, color: "amber" },
+  sign_rejected: { label: "Sign Rejected", variant: "destructive", icon: XCircle, color: "red" },
 };
 
 export function PurchaseRequestsContent() {
@@ -440,12 +442,12 @@ export function PurchaseRequestsContent() {
         itemName={selectedItemName}
       />
 
-      <SiteInfoDialog
+      <LocationInfoDialog
         open={!!selectedSiteId}
         onOpenChange={(open) => {
           if (!open) setSelectedSiteId(null);
         }}
-        siteId={selectedSiteId}
+        locationId={selectedSiteId}
       />
 
       <DirectPODialog

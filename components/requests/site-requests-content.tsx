@@ -12,7 +12,7 @@ import { api } from "@/convex/_generated/api";
 import { MaterialRequestForm } from "@/components/requests/material-request-form";
 import { RequestsTable } from "@/components/requests/requests-table";
 import { RequestDetailsDialog } from "@/components/requests/request-details-dialog";
-import { SiteInfoDialog } from "@/components/requests/site-info-dialog";
+import { LocationInfoDialog } from "@/components/locations/location-info-dialog";
 import { Button } from "@/components/ui/button";
 import {
   AlertDialog,
@@ -200,6 +200,10 @@ const getStatusColor = (status: string) => {
       return "text-red-700 dark:text-red-300";
     case "delivered":
       return "text-blue-700 dark:text-blue-300";
+    case "sign_pending":
+      return "text-amber-700 dark:text-amber-300";
+    case "sign_rejected":
+      return "text-red-700 dark:text-red-300";
     default:
       return "text-foreground";
   }
@@ -227,6 +231,10 @@ const getStatusDot = (status: string) => {
       return "bg-red-400";
     case "delivered":
       return "bg-blue-400";
+    case "sign_pending":
+      return "bg-amber-400";
+    case "sign_rejected":
+      return "bg-red-400";
     default:
       return "bg-muted-foreground";
   }
@@ -412,7 +420,7 @@ export function SiteRequestsContent() {
         // Check if request status matches any selected filter group
         return statusFilter.some(filterGroup => {
           if (filterGroup === "processing") {
-            return ["ready_for_cc", "cc_pending", "cc_approved", "cc_rejected", "ready_for_po"].includes(r.status);
+            return ["ready_for_cc", "cc_pending", "cc_approved", "cc_rejected", "ready_for_po", "sign_pending"].includes(r.status);
           }
           if (filterGroup === "delivery_stage") {
             return ["delivery_stage", "delivered"].includes(r.status);
@@ -460,7 +468,7 @@ export function SiteRequestsContent() {
           <div className="relative flex-1 min-w-0">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder="Search: order ID (001, 002...), item name, or site name"
+              placeholder="Search: order ID (001, 002...), item name, or location name"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className={`pl-9 pr-9 h-9 sm:h-10 text-sm w-full ${debouncedSearchQuery.trim() ? 'ring-2 ring-blue-500/50 border-blue-500' : ''}`}
@@ -488,7 +496,7 @@ export function SiteRequestsContent() {
             variant="outline"
             size="icon"
             onClick={toggleViewMode}
-            className="h-9 sm:h-10 w-9 sm:w-10 flex-shrink-0"
+            className="h-10 w-10 flex-shrink-0"
             title={`Switch to ${viewMode === "card" ? "table" : "card"} view`}
           >
             {viewMode === "card" ? (
@@ -503,7 +511,7 @@ export function SiteRequestsContent() {
         <div className="flex gap-2 items-center">
           <Popover>
             <PopoverTrigger asChild>
-              <Button variant="outline" className="w-full sm:w-[200px] h-9 sm:h-10 justify-between px-3 text-left font-normal text-sm">
+              <Button variant="outline" className="flex-1 sm:w-[200px] sm:flex-none h-9 sm:h-10 justify-between px-3 text-left font-normal text-sm">
                 <span className="truncate">
                   {statusFilter.length === 0
                     ? "All Statuses"
@@ -630,12 +638,12 @@ export function SiteRequestsContent() {
         requestId={selectedRequestId}
       />
 
-      <SiteInfoDialog
+      <LocationInfoDialog
         open={!!selectedSiteId}
         onOpenChange={(open) => {
           if (!open) setSelectedSiteId(null);
         }}
-        siteId={selectedSiteId}
+        locationId={selectedSiteId}
       />
 
       <AlertDialog open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
@@ -677,7 +685,7 @@ export function SiteRequestsContent() {
                     <div className="flex items-start gap-3">
                       <MapPin className="h-5 w-5 text-primary shrink-0 mt-0.5" />
                       <div>
-                        <p className="text-xs font-semibold text-muted-foreground mb-1">Site Location</p>
+                        <p className="text-xs font-semibold text-muted-foreground mb-1">Location</p>
                         {draftDetails[0].site ? (
                           <button
                             onClick={() => setSelectedSiteId(draftDetails[0].site!._id)}

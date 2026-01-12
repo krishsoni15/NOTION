@@ -1422,7 +1422,7 @@ export function CheckDialog({
                                         )}
                                         <Button
                                             onClick={() => setShowSaveConfirm(true)}
-                                            disabled={isSaving || isSubmitting}
+                                            disabled={isSaving || isSubmitting || !!hasSufficientInventory}
                                             size="sm"
                                             className="bg-blue-600 hover:bg-blue-700 text-white"
                                         >

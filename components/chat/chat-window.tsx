@@ -56,12 +56,15 @@ export function ChatWindow({ currentUserId, onClose, className }: ChatWindowProp
   const markAsRead = useMutation(api.chat.markAsRead);
   const getOrCreateConversation = useMutation(api.chat.getOrCreateConversation);
 
-  // Mark messages as read when conversation is opened
+  // Mark messages as read when conversation is opened or new messages arrive
   useEffect(() => {
-    if (selectedConversationId && view === "chat") {
-      markAsRead({ conversationId: selectedConversationId }).catch(() => {});
+    if (selectedConversationId && view === "chat" && messages) {
+      const hasUnread = messages.some((m) => !m.isRead);
+      if (hasUnread) {
+        markAsRead({ conversationId: selectedConversationId }).catch(() => { });
+      }
     }
-  }, [selectedConversationId, view, markAsRead]);
+  }, [selectedConversationId, view, messages, markAsRead]);
 
   const handleSelectUser = async (userId: Id<"users">) => {
     try {
@@ -74,7 +77,13 @@ export function ChatWindow({ currentUserId, onClose, className }: ChatWindowProp
     }
   };
 
-  const handleSendMessage = async (content: string, imageUrl?: string, imageKey?: string) => {
+  const handleSendMessage = async (
+    content: string,
+    imageUrl?: string,
+    imageKey?: string,
+    location?: { lat: number, lng: number, address?: string },
+    file?: { url: string, key: string, name: string, type: string, size: number }
+  ) => {
     if (!selectedConversationId) return;
 
     try {
@@ -83,6 +92,16 @@ export function ChatWindow({ currentUserId, onClose, className }: ChatWindowProp
         content,
         imageUrl,
         imageKey,
+        location: location ? {
+          latitude: location.lat,
+          longitude: location.lng,
+          address: location.address
+        } : undefined,
+        fileUrl: file?.url,
+        fileKey: file?.key,
+        fileName: file?.name,
+        fileType: file?.type,
+        fileSize: file?.size,
       });
     } catch (error) {
       toast.error("Failed to send message. Please try again.");
@@ -122,7 +141,7 @@ export function ChatWindow({ currentUserId, onClose, className }: ChatWindowProp
               <div>
                 <h1 className="text-xl sm:text-2xl font-bold bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent">
                   Messages
-            </h1>
+                </h1>
                 <p className="text-xs text-muted-foreground mt-0.5">Chat with your team</p>
               </div>
             </div>
@@ -145,7 +164,7 @@ export function ChatWindow({ currentUserId, onClose, className }: ChatWindowProp
                   </Badge>
                 </div>
                 <div className="flex items-center gap-2">
-                  <OnlineIndicator 
+                  <OnlineIndicator
                     isOnline={otherUserPresence?.isOnline ?? false}
                     className="scale-90"
                   />

@@ -7,6 +7,7 @@
  * Built with shadcn components for full control.
  */
 
+import { useState, useEffect } from "react";
 import { useUser, useClerk } from "@clerk/nextjs";
 import { useRouter } from "next/navigation";
 import { useQuery, useMutation } from "convex/react";
@@ -21,10 +22,10 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { 
-  User, 
-  LogOut, 
-  Settings, 
+import {
+  User,
+  LogOut,
+  Settings,
   ChevronDown,
   Shield,
   Mail,
@@ -37,14 +38,19 @@ export function UserMenu() {
   const { signOut } = useClerk();
   const router = useRouter();
   const setOffline = useMutation(api.presence.setOffline);
-  
+  const [isMounted, setIsMounted] = useState(false);
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
   // Get user data from Convex (includes role)
   const convexUser = useQuery(
     api.users.getUserByClerkId,
     isLoaded && user ? { clerkUserId: user.id } : "skip"
   );
 
-  if (!isLoaded || !user) {
+  if (!isMounted || !isLoaded || !user) {
     return (
       <div className="h-9 w-9 rounded-full bg-muted animate-pulse" />
     );
@@ -72,7 +78,7 @@ export function UserMenu() {
       // Continue even if setting offline fails
       console.warn("Failed to set offline status:", error);
     }
-    
+
     // Sign out and redirect
     await signOut();
     router.push("/login");
@@ -81,8 +87,8 @@ export function UserMenu() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button 
-          variant="ghost" 
+        <Button
+          variant="ghost"
           className="relative h-10 gap-2 rounded-full pl-2 pr-3 hover:bg-accent/50 transition-all hover:shadow-sm"
         >
           <Avatar className="h-8 w-8 border-2 border-primary/20">
@@ -98,8 +104,8 @@ export function UserMenu() {
         </Button>
       </DropdownMenuTrigger>
 
-      <DropdownMenuContent 
-        className="w-64 bg-popover/95 backdrop-blur-md border-border/50 shadow-lg" 
+      <DropdownMenuContent
+        className="w-64 bg-popover/95 backdrop-blur-md border-border/50 shadow-lg"
         align="end"
         sideOffset={8}
       >
@@ -118,7 +124,7 @@ export function UserMenu() {
                 <p className="text-xs text-muted-foreground mt-1">@{user.username}</p>
               </div>
             </div>
-            
+
             {/* Role Badge */}
             {role && (
               <div className="flex items-center gap-2 px-2 py-1.5 bg-primary/10 rounded-md">
@@ -142,14 +148,14 @@ export function UserMenu() {
                 <span className="text-xs text-muted-foreground">{convexUser.phoneNumber}</span>
               </DropdownMenuItem>
             )}
-            
+
             {user.primaryEmailAddress && (
               <DropdownMenuItem className="cursor-default focus:bg-transparent hover:bg-transparent">
                 <Mail className="mr-2 h-4 w-4 text-muted-foreground" />
                 <span className="text-xs text-muted-foreground">{user.primaryEmailAddress.emailAddress}</span>
               </DropdownMenuItem>
             )}
-            
+
             <DropdownMenuSeparator />
           </>
         )}
@@ -169,7 +175,7 @@ export function UserMenu() {
         <DropdownMenuSeparator />
 
         {/* Sign Out */}
-        <DropdownMenuItem 
+        <DropdownMenuItem
           onClick={handleSignOut}
           className="text-destructive focus:text-destructive focus:bg-destructive/10"
         >

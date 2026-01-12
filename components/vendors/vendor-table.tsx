@@ -43,7 +43,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { MoreHorizontal, Edit, Trash2, Building2, Mail, Phone, MapPin, Hash, Calendar } from "lucide-react";
+import { MoreHorizontal, Edit, Trash2, Building2, Mail, Phone, MapPin, Hash, Calendar, User } from "lucide-react";
 import { useUserRole } from "@/hooks/use-user-role";
 import { ROLES } from "@/lib/auth/roles";
 import { VendorFormDialog } from "./vendor-form-dialog";
@@ -82,7 +82,7 @@ export function VendorTable({ vendors, viewMode = "table" }: VendorTableProps) {
 
   const handleDelete = async () => {
     if (!deletingVendor) return;
-    
+
     setLoadingVendorId(deletingVendor._id);
     try {
       await deleteVendor({ vendorId: deletingVendor._id });
@@ -153,6 +153,15 @@ export function VendorTable({ vendors, viewMode = "table" }: VendorTableProps) {
           </div>
         </CardHeader>
         <CardContent className="pt-4 space-y-3">
+          {vendor.contactName && (
+            <div className="flex items-start gap-2 text-sm">
+              <User className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
+              <div className="flex-1 min-w-0">
+                <p className="text-muted-foreground text-xs">Contact Person</p>
+                <p className="truncate">{vendor.contactName}</p>
+              </div>
+            </div>
+          )}
           <div className="flex items-start gap-2 text-sm">
             <Mail className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
             <div className="flex-1 min-w-0">
@@ -190,7 +199,7 @@ export function VendorTable({ vendors, viewMode = "table" }: VendorTableProps) {
             <span>Created {new Date(vendor.createdAt).toLocaleDateString()}</span>
           </div>
         </CardContent>
-      </Card>
+      </Card >
     );
   };
 
@@ -204,6 +213,7 @@ export function VendorTable({ vendors, viewMode = "table" }: VendorTableProps) {
               <TableHeader>
                 <TableRow>
                   <TableHead>Company Name</TableHead>
+                  <TableHead>Contact Person</TableHead>
                   <TableHead>Email</TableHead>
                   <TableHead>Phone</TableHead>
                   <TableHead>GST Number</TableHead>
@@ -216,6 +226,7 @@ export function VendorTable({ vendors, viewMode = "table" }: VendorTableProps) {
                 {vendors.map((vendor) => (
                   <TableRow key={vendor._id}>
                     <TableCell className="font-medium">{vendor.companyName}</TableCell>
+                    <TableCell>{vendor.contactName || "—"}</TableCell>
                     <TableCell>{vendor.email}</TableCell>
                     <TableCell>{vendor.phone || "—"}</TableCell>
                     <TableCell>
@@ -289,6 +300,7 @@ export function VendorTable({ vendors, viewMode = "table" }: VendorTableProps) {
         vendorId={editingVendor?._id}
         initialData={editingVendor ? {
           companyName: editingVendor.companyName,
+          contactName: editingVendor.contactName,
           email: editingVendor.email,
           phone: editingVendor.phone,
           gstNumber: editingVendor.gstNumber,

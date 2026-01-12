@@ -287,6 +287,8 @@ export const getInventoryStatusForItems = query({
 export const createInventoryItem = mutation({
   args: {
     itemName: v.string(),
+    description: v.optional(v.string()),
+    hsnSacCode: v.optional(v.string()),
     unit: v.optional(v.string()),
     centralStock: v.optional(v.number()),
     vendorId: v.optional(v.id("vendors")), // Deprecated, use vendorIds
@@ -316,6 +318,8 @@ export const createInventoryItem = mutation({
     const now = Date.now();
     const itemId = await ctx.db.insert("inventory", {
       itemName: args.itemName,
+      description: args.description || "",
+      hsnSacCode: args.hsnSacCode || "",
       unit: args.unit || "",
       centralStock: args.centralStock || 0,
       vendorId: vendorIds.length === 1 ? vendorIds[0] : undefined, // Keep for backward compatibility
@@ -338,6 +342,8 @@ export const updateInventoryItem = mutation({
   args: {
     itemId: v.id("inventory"),
     itemName: v.string(),
+    description: v.optional(v.string()),
+    hsnSacCode: v.optional(v.string()),
     unit: v.optional(v.string()),
     centralStock: v.optional(v.number()),
     vendorId: v.optional(v.id("vendors")), // Deprecated, use vendorIds
@@ -373,6 +379,8 @@ export const updateInventoryItem = mutation({
 
     await ctx.db.patch(args.itemId, {
       itemName: args.itemName,
+      description: args.description ?? item.description ?? "",
+      hsnSacCode: args.hsnSacCode ?? item.hsnSacCode ?? "",
       unit: args.unit ?? item.unit ?? "",
       centralStock: args.centralStock ?? item.centralStock ?? 0,
       vendorId: vendorIds.length === 1 ? vendorIds[0] : undefined, // Keep for backward compatibility

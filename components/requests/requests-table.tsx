@@ -34,8 +34,9 @@ import { LazyImage } from "@/components/ui/lazy-image";
 import { cn, normalizeSearchQuery, matchesAnySearchQuery } from "@/lib/utils";
 import { UserInfoDialog } from "./user-info-dialog";
 import { ItemInfoDialog } from "./item-info-dialog";
-import { SiteInfoDialog } from "./site-info-dialog";
+import { LocationInfoDialog } from "@/components/locations/location-info-dialog";
 import { NotesTimelineDialog } from "./notes-timeline-dialog";
+import { PDFPreviewDialog } from "@/components/purchase/pdf-preview-dialog";
 import type { Id } from "@/convex/_generated/dataModel";
 
 type RequestStatus =
@@ -54,7 +55,10 @@ type RequestStatus =
   | "ready_for_delivery"
   | "delivery_stage"
   | "delivered"
-  | "partially_processed";
+  | "partially_processed"
+  | "direct_po"
+  | "sign_pending"
+  | "sign_rejected";
 
 // Enhanced status color mapping for view buttons with better visuals
 const getStatusButtonStyles = (status: RequestStatus) => {
@@ -83,6 +87,10 @@ const getStatusButtonStyles = (status: RequestStatus) => {
       return `${baseClasses} border-blue-300 text-blue-800 bg-gradient-to-r from-blue-50 to-blue-100 hover:from-blue-100 hover:to-blue-200 hover:border-blue-400 dark:border-blue-600 dark:text-blue-300 dark:from-blue-900 dark:to-blue-800 dark:hover:from-blue-800 dark:hover:to-blue-700`;
     case "partially_processed":
       return `${baseClasses} border-purple-300 text-purple-800 bg-gradient-to-r from-purple-50 to-purple-100 hover:from-purple-100 hover:to-purple-200 hover:border-purple-400 dark:border-purple-600 dark:text-purple-300 dark:from-purple-900 dark:to-purple-800 dark:hover:from-purple-800 dark:hover:to-purple-700`;
+    case "sign_pending":
+      return `${baseClasses} border-orange-300 text-orange-800 bg-gradient-to-r from-orange-50 to-orange-100 hover:from-orange-100 hover:to-orange-200 hover:border-orange-400 dark:border-orange-600 dark:text-orange-300 dark:from-orange-900 dark:to-orange-800 dark:hover:from-orange-800 dark:hover:to-orange-700`;
+    case "sign_rejected":
+      return `${baseClasses} border-rose-300 text-rose-800 bg-gradient-to-r from-rose-50 to-rose-100 hover:from-rose-100 hover:to-rose-200 hover:border-rose-400 dark:border-rose-600 dark:text-rose-300 dark:from-rose-900 dark:to-rose-800 dark:hover:from-rose-800 dark:hover:to-rose-700`;
     default:
       return `${baseClasses} border-blue-300 text-blue-800 bg-gradient-to-r from-blue-50 to-blue-100 hover:from-blue-100 hover:to-blue-200 hover:border-blue-400 dark:border-blue-600 dark:text-blue-300 dark:from-blue-900 dark:to-blue-800 dark:hover:from-blue-800 dark:hover:to-blue-700`;
   }
@@ -167,7 +175,9 @@ export function RequestsTable({
   const [selectedUserId, setSelectedUserId] = useState<Id<"users"> | null>(null);
   const [selectedItemName, setSelectedItemName] = useState<string | null>(null);
   const [selectedSiteId, setSelectedSiteId] = useState<Id<"sites"> | null>(null);
+
   const [selectedRequestNumberForNotes, setSelectedRequestNumberForNotes] = useState<string | null>(null);
+  const [pdfPreviewPoNumber, setPdfPreviewPoNumber] = useState<string | null>(null);
 
   // Collect all unique item names from requests
   const uniqueItemNames = useMemo(() => {
@@ -480,6 +490,18 @@ export function RequestsTable({
             Partially Processed
           </Badge>
         );
+      case "sign_pending":
+        return (
+          <Badge variant="outline" className="bg-orange-100 text-orange-800 border-orange-200 dark:bg-orange-900/50 dark:text-orange-300 dark:border-orange-800">
+            Sign Pending
+          </Badge>
+        );
+      case "sign_rejected":
+        return (
+          <Badge variant="outline" className="bg-red-50 text-red-700 border-red-200 dark:bg-red-950 dark:text-red-300 dark:border-red-800">
+            Sign Rejected
+          </Badge>
+        );
       default:
         return <Badge variant="outline">{status}</Badge>;
     }
@@ -525,7 +547,7 @@ export function RequestsTable({
 
   // Card View Component
   const CardView = () => (
-    <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4">
+    <div className="grid grid-cols-[repeat(auto-fit,minmax(350px,1fr))] min-[1500px]:grid-cols-3 gap-3 sm:gap-4">
       {groupedRequestsArray.map((group) => {
         const { requestNumber, items, firstItem } = group;
         const isExpanded = expandedGroups.has(requestNumber);
@@ -618,25 +640,24 @@ export function RequestsTable({
                       "—"
                     )}
                   </div>
+                  {/* Summary Counts */}
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground ml-1">
+                    <span>{items.length} items</span>
+                    {items.filter(i => i.status === 'pending').length > 0 && (
+                      <span className="text-yellow-600 font-medium dark:text-yellow-400">
+                        • {items.filter(i => i.status === 'pending').length} pending
+                      </span>
+                    )}
+                  </div>
+                  {/* Rejection Reason */}
+                  {(firstItem.status === 'rejected' || firstItem.status === 'cc_rejected' || firstItem.status === 'rejected_po') && firstItem.rejectionReason && (
+                    <div className="text-xs text-destructive mt-1 font-medium bg-destructive/10 px-2 py-1 rounded-md border border-destructive/20">
+                      Rejected: {firstItem.rejectionReason}
+                    </div>
+                  )}
                 </div>
               </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setSelectedRequestNumberForNotes(requestNumber);
-                }}
-                className="relative h-7 w-7 p-0 rounded-full hover:bg-muted"
-                title="View Notes"
-              >
-                <NotebookPen className="h-4 w-4 text-muted-foreground mr-0" />
-                {firstItem.notesCount !== undefined && firstItem.notesCount > 0 && (
-                  <span className="absolute top-0 right-0 flex h-3 w-3 items-center justify-center rounded-full bg-destructive text-[8px] text-destructive-foreground">
-                    {firstItem.notesCount}
-                  </span>
-                )}
-              </Button>
+
               {hasMultipleItems && (
                 <Button
                   variant="outline"
@@ -648,15 +669,11 @@ export function RequestsTable({
                   }}
                 >
                   {isExpanded ? (
-                    <>
-                      <ChevronDown className="h-3 w-3 mr-1" />
-                      <span className="hidden sm:inline">Collapse</span>
-                    </>
+                    <ChevronDown className="h-4 w-4" />
                   ) : (
                     <>
-                      <ChevronRight className="h-3 w-3 mr-1" />
-                      <span className="hidden sm:inline">Expand ({items.length - 1})</span>
-                      <span className="sm:hidden">+{items.length - 1}</span>
+                      <ChevronRight className="h-4 w-4 mr-1" />
+                      <span className="font-semibold">({items.length})</span>
                     </>
                   )}
                 </Button>
@@ -939,9 +956,18 @@ export function RequestsTable({
               <div className="flex flex-col gap-1">
                 <div className="text-sm font-medium text-foreground">
                   <span className="text-muted-foreground">Required:</span> {format(new Date(firstItem.requiredBy), "dd/MM/yyyy")}
+                  <span className={cn(
+                    "ml-2 text-xs",
+                    Math.ceil((firstItem.requiredBy - Date.now()) / (1000 * 60 * 60 * 24)) < 0 ? "text-destructive font-semibold" : "text-muted-foreground"
+                  )}>
+                    ({Math.ceil((firstItem.requiredBy - Date.now()) / (1000 * 60 * 60 * 24))} days)
+                  </span>
                 </div>
                 <div className="text-xs text-muted-foreground">
                   <span className="font-medium">Created:</span> {format(new Date(firstItem.createdAt), "dd/MM/yyyy hh:mm a")}
+                  {firstItem.creator && (
+                    <span> by <span className="font-medium text-foreground">{firstItem.creator.fullName}</span></span>
+                  )}
                 </div>
               </div>
               <div className="flex gap-0.5 flex-nowrap overflow-x-auto justify-end">
@@ -1017,6 +1043,22 @@ export function RequestsTable({
                       CC({ccPendingCount})
                     </Button>
                   )}
+                  {/* PDF Button for Direct POs */}
+                  {["sign_pending", "sign_rejected", "ordered", "pending_po"].includes(overallStatus || firstItem.status) && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setPdfPreviewPoNumber(requestNumber);
+                      }}
+                      className="h-6 sm:h-7 px-1.5 sm:px-2 text-xs text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-950"
+                      title="View PDF"
+                    >
+                      <FileText className="h-3 sm:h-3.5 w-3 sm:w-3.5 mr-1" />
+                      View PDF
+                    </Button>
+                  )}
                   {onViewDetails && (
                     <Button
                       variant="ghost"
@@ -1024,7 +1066,8 @@ export function RequestsTable({
                       onClick={() => onViewDetails(firstItem._id)}
                       className={`h-6 sm:h-7 px-1.5 sm:px-2 text-xs transition-colors duration-200 ${getStatusColor(overallStatus || firstItem.status)}`}
                     >
-                      <Eye className="h-3 sm:h-3.5 w-3 sm:w-3.5" />
+                      <Eye className="h-3 sm:h-3.5 w-3 sm:w-3.5 mr-1" />
+                      View
                     </Button>
                   )}
                 </div>
@@ -1431,6 +1474,20 @@ export function RequestsTable({
                                     )}
                                   </>
                                 )}
+                                {["sign_pending", "sign_rejected", "ordered", "pending_po"].includes(overallStatus || firstItem.status) && (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setPdfPreviewPoNumber(requestNumber);
+                                    }}
+                                    className="text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-950"
+                                  >
+                                    <FileText className="h-4 w-4 mr-1" />
+                                    View PDF
+                                  </Button>
+                                )}
                                 {/* CC button for cost comparison statuses - Only show when ready for CC */}
                                 {firstItem.status === "ready_for_cc" && onOpenCC && (
                                   <Button
@@ -1485,7 +1542,8 @@ export function RequestsTable({
             </div>
           </div>
         </div >
-      )}
+      )
+      }
 
       {/* User Info Dialog */}
       <UserInfoDialog
@@ -1505,12 +1563,12 @@ export function RequestsTable({
         itemName={selectedItemName}
       />
 
-      <SiteInfoDialog
+      <LocationInfoDialog
         open={!!selectedSiteId}
         onOpenChange={(open) => {
           if (!open) setSelectedSiteId(null);
         }}
-        siteId={selectedSiteId}
+        locationId={selectedSiteId}
       />
 
       {/* Notes Timeline Dialog */}
@@ -1525,6 +1583,11 @@ export function RequestsTable({
           />
         )
       }
+      <PDFPreviewDialog
+        open={!!pdfPreviewPoNumber}
+        onOpenChange={(open) => !open && setPdfPreviewPoNumber(null)}
+        poNumber={pdfPreviewPoNumber}
+      />
     </>
   );
 }

@@ -75,6 +75,7 @@ export function VendorManagement({ showTableOnly = false }: VendorManagementProp
         matchesAnySearchQuery(
           [
             vendor.companyName,
+            vendor.contactName,
             vendor.email,
             vendor.phone,
             vendor.gstNumber,

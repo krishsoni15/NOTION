@@ -59,7 +59,7 @@ export function ImageGallery({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl w-full h-full max-h-[90vh] p-0 bg-black/95 border-none" showCloseButton={false}>
+      <DialogContent className="max-w-[95vw] w-full h-[95vh] p-0 bg-transparent border-none shadow-none ring-0 outline-none" showCloseButton={false}>
         <VisuallyHidden>
           <DialogTitle>Image Gallery</DialogTitle>
         </VisuallyHidden>
@@ -133,11 +133,10 @@ export function ImageGallery({
                 <button
                   key={image.imageKey}
                   onClick={() => setCurrentIndex(index)}
-                  className={`flex-shrink-0 rounded border-2 overflow-hidden transition-all ${
-                    index === currentIndex
-                      ? "border-white shadow-lg scale-110"
-                      : "border-gray-400 hover:border-gray-300"
-                  }`}
+                  className={`flex-shrink-0 rounded border overflow-hidden transition-all ${index === currentIndex
+                    ? "border-white shadow-lg scale-110"
+                    : "border-gray-400 hover:border-gray-300"
+                    }`}
                 >
                   <LazyImage
                     src={image.imageUrl}

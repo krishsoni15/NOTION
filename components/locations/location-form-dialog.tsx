@@ -23,58 +23,70 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import type { Id } from "@/convex/_generated/dataModel";
 import { toast } from "sonner";
+// ... imports
 import { AddressAutocomplete } from "@/components/vendors/address-autocomplete";
 
-interface SiteFormDialogProps {
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+
+interface LocationFormDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  siteId?: Id<"sites"> | null;
+  locationId?: Id<"sites"> | null;
   initialData?: {
     name: string;
     code?: string;
     address?: string;
     description?: string;
+    type?: "site" | "inventory";
     isActive?: boolean;
   } | null;
 }
 
-export function SiteFormDialog({
+export function LocationFormDialog({
   open,
   onOpenChange,
-  siteId,
+  locationId,
   initialData,
-}: SiteFormDialogProps) {
-  const createSite = useMutation(api.sites.createSite);
-  const updateSite = useMutation(api.sites.updateSite);
-  const allSites = useQuery(api.sites.getAllSites, {});
+}: LocationFormDialogProps) {
+  const createLocation = useMutation(api.sites.createSite);
+  const updateLocation = useMutation(api.sites.updateSite);
+  const allLocations = useQuery(api.sites.getAllSites, {});
 
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<{
+    name: string;
+    code: string;
+    address: string;
+    description: string;
+    type: "site" | "inventory";
+    isActive: boolean;
+  }>({
     name: "",
     code: "",
     address: "",
     description: "",
+    type: "site",
     isActive: true,
   });
 
-  // Check for duplicate site name
+  // Check for duplicate location name
   useEffect(() => {
-    if (formData.name.trim() && !siteId) {
-      const siteNameLower = formData.name.trim().toLowerCase();
-      const existingSite = allSites?.find(
-        (site) => site.name.toLowerCase() === siteNameLower && site.isActive
+    if (formData.name.trim() && !locationId) {
+      const nameLower = formData.name.trim().toLowerCase();
+      const existingLocation = allLocations?.find(
+        (loc) => loc.name.toLowerCase() === nameLower && loc.isActive
       );
-      if (existingSite) {
-        setError(`Site "${formData.name}" already exists`);
+      if (existingLocation) {
+        setError(`Location "${formData.name}" already exists`);
       } else {
         setError("");
       }
     } else {
       setError("");
     }
-  }, [formData.name, allSites, siteId]);
+  }, [formData.name, allLocations, locationId]);
 
   // Load initial data when editing
   useEffect(() => {
@@ -84,6 +96,7 @@ export function SiteFormDialog({
         code: initialData.code || "",
         address: initialData.address || "",
         description: initialData.description || "",
+        type: (initialData.type as "site" | "inventory") || "site",
         isActive: initialData.isActive !== undefined ? initialData.isActive : true,
       });
     } else {
@@ -92,6 +105,7 @@ export function SiteFormDialog({
         code: "",
         address: "",
         description: "",
+        type: "site",
         isActive: true,
       });
     }
@@ -105,6 +119,7 @@ export function SiteFormDialog({
         code: "",
         address: "",
         description: "",
+        type: "site",
         isActive: true,
       });
       setError("");
@@ -115,20 +130,20 @@ export function SiteFormDialog({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
-    
+
     if (!formData.name.trim()) {
-      setError("Site name is required");
+      setError("Location name is required");
       return;
     }
 
-    // Check for duplicate before submitting (only for new sites)
-    if (!siteId) {
-      const siteNameLower = formData.name.trim().toLowerCase();
-      const existingSite = allSites?.find(
-        (site) => site.name.toLowerCase() === siteNameLower && site.isActive
+    // Check for duplicate before submitting (only for new locations)
+    if (!locationId) {
+      const nameLower = formData.name.trim().toLowerCase();
+      const existingLocation = allLocations?.find(
+        (loc) => loc.name.toLowerCase() === nameLower && loc.isActive
       );
-      if (existingSite) {
-        setError(`Site "${formData.name}" already exists`);
+      if (existingLocation) {
+        setError(`Location "${formData.name}" already exists`);
         return;
       }
     }
@@ -136,31 +151,33 @@ export function SiteFormDialog({
     setIsLoading(true);
 
     try {
-      if (siteId) {
-        // Update existing site
-        await updateSite({
-          siteId,
+      if (locationId) {
+        // Update existing location
+        await updateLocation({
+          siteId: locationId,
           name: formData.name.trim(),
-          code: formData.code.trim() || undefined,
+          code: formData.type === "site" ? (formData.code.trim() || undefined) : undefined,
           address: formData.address.trim() || undefined,
           description: formData.description.trim() || undefined,
+          type: formData.type,
           isActive: formData.isActive,
         });
-        toast.success("Site updated successfully");
+        toast.success("Location updated successfully");
       } else {
-        // Create new site
-        await createSite({
+        // Create new location
+        await createLocation({
           name: formData.name.trim(),
-          code: formData.code.trim() || undefined,
+          code: formData.type === "site" ? (formData.code.trim() || undefined) : undefined,
           address: formData.address.trim() || undefined,
           description: formData.description.trim() || undefined,
+          type: formData.type,
         });
-        toast.success("Site created successfully");
+        toast.success("Location created successfully");
       }
 
       handleOpenChange(false);
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : "Failed to save site";
+      const errorMessage = err instanceof Error ? err.message : "Failed to save location";
       setError(errorMessage);
       toast.error(errorMessage);
     } finally {
@@ -172,20 +189,41 @@ export function SiteFormDialog({
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-[550px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>{siteId ? "Edit Site" : "Add New Site"}</DialogTitle>
+          <DialogTitle>{locationId ? "Edit Location" : "Add New Location"}</DialogTitle>
           <DialogDescription>
-            {siteId
-              ? "Update site information. Required fields are marked with *."
-              : "Create a new site. Required fields are marked with *."}
+            {locationId
+              ? "Update location information. Required fields are marked with *."
+              : "Create a new location. Required fields are marked with *."}
           </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4 py-2">
+          {/* Location Type Selection */}
+          <div className="space-y-2">
+            <Label>Location Type *</Label>
+            <RadioGroup
+              defaultValue="site"
+              value={formData.type}
+              onValueChange={(value) => setFormData({ ...formData, type: value as "site" | "inventory" })}
+              className="flex gap-4"
+              disabled={isLoading || !!locationId} // Disable type change on edit to prevent confusion or data loss, or allow it? User didn't specify, but usually changing type is rare. Let's allow it for now if new, maybe disable on edit if critical. For now allow.
+            >
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="site" id="type-site" />
+                <Label htmlFor="type-site" className="cursor-pointer font-normal">Site</Label>
+              </div>
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="inventory" id="type-inventory" />
+                <Label htmlFor="type-inventory" className="cursor-pointer font-normal">Inventory</Label>
+              </div>
+            </RadioGroup>
+          </div>
+
           <div className="space-y-1.5">
-            <Label htmlFor="name" className="text-sm">Site Name *</Label>
+            <Label htmlFor="name" className="text-sm">{formData.type === "inventory" ? "Inventory Name *" : "Site Name *"}</Label>
             <Input
               id="name"
-              placeholder="Enter site name"
+              placeholder={formData.type === "inventory" ? "Enter inventory name" : "Enter site name"}
               value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
               disabled={isLoading}
@@ -197,19 +235,22 @@ export function SiteFormDialog({
             )}
           </div>
 
-          <div className="space-y-1.5">
-            <Label htmlFor="code" className="text-sm">
-              Site Code <span className="text-muted-foreground text-xs">(optional)</span>
-            </Label>
-            <Input
-              id="code"
-              placeholder="Enter site code"
-              value={formData.code}
-              onChange={(e) => setFormData({ ...formData, code: e.target.value })}
-              disabled={isLoading}
-              className="h-9"
-            />
-          </div>
+          {/* Show Code only for Site type */}
+          {formData.type === "site" && (
+            <div className="space-y-1.5">
+              <Label htmlFor="code" className="text-sm">
+                Site Code <span className="text-muted-foreground text-xs">(optional)</span>
+              </Label>
+              <Input
+                id="code"
+                placeholder="Enter site code"
+                value={formData.code}
+                onChange={(e) => setFormData({ ...formData, code: e.target.value })}
+                disabled={isLoading}
+                className="h-9"
+              />
+            </div>
+          )}
 
           <div className="space-y-1.5">
             <AddressAutocomplete
@@ -228,7 +269,7 @@ export function SiteFormDialog({
             </Label>
             <Input
               id="description"
-              placeholder="Enter site description"
+              placeholder="Enter location description"
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
               disabled={isLoading}
@@ -236,7 +277,7 @@ export function SiteFormDialog({
             />
           </div>
 
-          {siteId && (
+          {locationId && (
             <div className="flex items-center space-x-2 py-2">
               <Checkbox
                 id="isActive"
@@ -262,7 +303,7 @@ export function SiteFormDialog({
               Cancel
             </Button>
             <Button type="submit" disabled={isLoading || !!error}>
-              {isLoading ? "Saving..." : siteId ? "Update Site" : "Create Site"}
+              {isLoading ? "Saving..." : locationId ? "Update Location" : "Create Location"}
             </Button>
           </DialogFooter>
         </form>

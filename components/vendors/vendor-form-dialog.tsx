@@ -30,8 +30,9 @@ interface VendorFormDialogProps {
   vendorId?: Id<"vendors"> | null;
   initialData?: {
     companyName: string;
+    contactName?: string;
     email: string;
-    phone?: string;
+    phone: string;
     gstNumber: string;
     address: string;
   } | null;
@@ -51,6 +52,7 @@ export function VendorFormDialog({
 
   const [formData, setFormData] = useState({
     companyName: "",
+    contactName: "",
     email: "",
     phone: "",
     gstNumber: "",
@@ -62,6 +64,7 @@ export function VendorFormDialog({
     if (initialData) {
       setFormData({
         companyName: initialData.companyName,
+        contactName: initialData.contactName || "",
         email: initialData.email,
         phone: initialData.phone || "",
         gstNumber: initialData.gstNumber,
@@ -70,6 +73,7 @@ export function VendorFormDialog({
     } else {
       setFormData({
         companyName: "",
+        contactName: "",
         email: "",
         phone: "",
         gstNumber: "",
@@ -83,6 +87,7 @@ export function VendorFormDialog({
     if (!newOpen) {
       setFormData({
         companyName: "",
+        contactName: "",
         email: "",
         phone: "",
         gstNumber: "",
@@ -104,8 +109,9 @@ export function VendorFormDialog({
         await updateVendor({
           vendorId,
           companyName: formData.companyName,
+          contactName: formData.contactName,
           email: formData.email,
-          phone: formData.phone || undefined,
+          phone: formData.phone,
           gstNumber: formData.gstNumber,
           address: formData.address,
         });
@@ -114,8 +120,9 @@ export function VendorFormDialog({
         // Create new vendor
         await createVendor({
           companyName: formData.companyName,
+          contactName: formData.contactName,
           email: formData.email,
-          phone: formData.phone || undefined,
+          phone: formData.phone,
           gstNumber: formData.gstNumber,
           address: formData.address,
         });
@@ -161,6 +168,23 @@ export function VendorFormDialog({
           </div>
 
           <div className="space-y-1.5">
+            <Label htmlFor="contactName" className="text-sm">
+              Contact Name *
+            </Label>
+            <Input
+              id="contactName"
+              placeholder="e.g. John Doe"
+              value={formData.contactName}
+              onChange={(e) =>
+                setFormData({ ...formData, contactName: e.target.value })
+              }
+              required
+              disabled={isLoading}
+              className="h-9"
+            />
+          </div>
+
+          <div className="space-y-1.5">
             <Label htmlFor="email" className="text-sm">Email *</Label>
             <Input
               id="email"
@@ -177,9 +201,7 @@ export function VendorFormDialog({
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="phone" className="text-sm">
-              Phone <span className="text-muted-foreground text-xs">(optional)</span>
-            </Label>
+            <Label htmlFor="phone" className="text-sm">Phone *</Label>
             <Input
               id="phone"
               type="tel"
@@ -188,6 +210,7 @@ export function VendorFormDialog({
               onChange={(e) =>
                 setFormData({ ...formData, phone: e.target.value })
               }
+              required
               disabled={isLoading}
               className="h-9"
             />

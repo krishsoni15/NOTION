@@ -101,11 +101,15 @@ export const getVendorById = query({
 /**
  * Create a new vendor (Purchase Officer and Manager)
  */
+/**
+ * Create a new vendor (Purchase Officer and Manager)
+ */
 export const createVendor = mutation({
   args: {
     companyName: v.string(),
+    contactName: v.optional(v.string()),
     email: v.string(),
-    phone: v.optional(v.string()),
+    phone: v.string(),
     gstNumber: v.string(),
     address: v.string(),
   },
@@ -132,8 +136,9 @@ export const createVendor = mutation({
     const now = Date.now();
     const vendorId = await ctx.db.insert("vendors", {
       companyName: args.companyName,
+      contactName: args.contactName,
       email: args.email,
-      phone: args.phone || "",
+      phone: args.phone,
       gstNumber: args.gstNumber,
       address: args.address,
       isActive: true,
@@ -153,8 +158,9 @@ export const updateVendor = mutation({
   args: {
     vendorId: v.id("vendors"),
     companyName: v.string(),
+    contactName: v.optional(v.string()),
     email: v.string(),
-    phone: v.optional(v.string()),
+    phone: v.string(),
     gstNumber: v.string(),
     address: v.string(),
   },
@@ -185,8 +191,9 @@ export const updateVendor = mutation({
 
     await ctx.db.patch(args.vendorId, {
       companyName: args.companyName,
+      contactName: args.contactName,
       email: args.email,
-      phone: args.phone || "",
+      phone: args.phone,
       gstNumber: args.gstNumber,
       address: args.address,
       updatedAt: Date.now(),

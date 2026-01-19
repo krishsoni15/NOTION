@@ -33,12 +33,14 @@ import {
 } from "lucide-react";
 import { ROLE_LABELS } from "@/lib/auth/roles";
 
+
 export function UserMenu() {
   const { user, isLoaded } = useUser();
-  const { signOut } = useClerk();
+  const clerk = useClerk();
   const router = useRouter();
   const setOffline = useMutation(api.presence.setOffline);
   const [isMounted, setIsMounted] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
     setIsMounted(true);
@@ -70,17 +72,39 @@ export function UserMenu() {
   const initials = getInitials(displayName);
   const role = convexUser?.role;
 
+  const handleSwitchAccount = async (session: AccountSession) => {
+    if (isLoading) return;
+
+    setIsLoading(true);
+    try {
+      const clerkSession = sessions?.find((s: any) => s.user?.id === session.userId);
+
+      if (!clerkSession) {
+        removeSession(session.sessionId);
+        refreshSessions();
+        return;
+      }
+
+      await clerk.setActive({ session: clerkSession.id });
+      setStoredActiveSession(clerkSession.id);
+      refreshSessions();
+
+      // Force full page reload with cache busting to ensure new account data is loaded
+      window.location.href = `/dashboard?t=${Date.now()}`;
+    } catch (error) {
+      console.error("Failed to switch account:", error);
+      setIsLoading(false);
+    }
+  };
+
   const handleSignOut = async () => {
-    // Set user offline before signing out
     try {
       await setOffline();
     } catch (error) {
-      // Continue even if setting offline fails
       console.warn("Failed to set offline status:", error);
     }
 
-    // Sign out and redirect
-    await signOut();
+    await clerk.signOut();
     router.push("/login");
   };
 
@@ -160,6 +184,8 @@ export function UserMenu() {
           </>
         )}
 
+
+
         {/* Profile Action */}
         <DropdownMenuItem onClick={() => router.push("/dashboard/profile")}>
           <User className="mr-2 h-4 w-4" />
@@ -174,14 +200,19 @@ export function UserMenu() {
 
         <DropdownMenuSeparator />
 
+
+
         {/* Sign Out */}
         <DropdownMenuItem
           onClick={handleSignOut}
           className="text-destructive focus:text-destructive focus:bg-destructive/10"
+          disabled={isLoading}
         >
           <LogOut className="mr-2 h-4 w-4" />
           <span>Sign Out</span>
         </DropdownMenuItem>
+
+
       </DropdownMenuContent>
     </DropdownMenu>
   );

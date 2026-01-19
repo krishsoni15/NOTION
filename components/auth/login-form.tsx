@@ -2,11 +2,12 @@
 
 import { useState, useEffect } from "react";
 import Image from "next/image";
-import { useSignIn } from "@clerk/nextjs";
+import { useSignIn, useUser, useClerk } from "@clerk/nextjs";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { User, Lock, ArrowRight, Loader2, AlertCircle } from "lucide-react";
+import { addOrUpdateSession, setActiveSession } from "@/lib/auth/session-manager";
 
 interface LoginFormProps {
   disabled?: boolean;
@@ -14,14 +15,25 @@ interface LoginFormProps {
 
 export function LoginForm({ disabled = false }: LoginFormProps) {
   const { isLoaded, signIn, setActive } = useSignIn();
+  const clerk = useClerk();
   const router = useRouter();
   const searchParams = useSearchParams();
-  const syncUser = useMutation(api.syncUser.syncCurrentUser);
+  // FIX: Use the auto-create version from users.ts
+  const syncUser = useMutation(api.users.syncCurrentUser);
 
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+
+  // Remember Me state
+  const [rememberMe, setRememberMe] = useState(true); // Default checked
+
+  // Security: Rate limiting state
+  const [failedAttempts, setFailedAttempts] = useState(0);
+  const [lockoutUntil, setLockoutUntil] = useState<number | null>(null);
+
+
 
   useEffect(() => {
     const errorParam = searchParams?.get("error");
@@ -31,15 +43,32 @@ export function LoginForm({ disabled = false }: LoginFormProps) {
       let msg = "An error occurred.";
       if (errorParam === "not_found") msg = "Account not found.";
       if (errorParam === "auth_error") msg = "Authentication failed.";
+      if (errorParam === "no_role") msg = "Account not properly configured. Contact administrator.";
       if (disabledParam === "true") msg = "Account disabled.";
       setError(msg);
       setTimeout(() => router.replace("/login", { scroll: false }), 2000);
     }
   }, [searchParams, router]);
 
+  // Security: Clear lockout timer
+  useEffect(() => {
+    if (lockoutUntil && Date.now() >= lockoutUntil) {
+      setLockoutUntil(null);
+      setFailedAttempts(0);
+    }
+  }, [lockoutUntil]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!isLoaded) return;
+
+    // Security: Check account lockout
+    if (lockoutUntil && Date.now() < lockoutUntil) {
+      const remainingSeconds = Math.ceil((lockoutUntil - Date.now()) / 1000);
+      setError(`Too many failed attempts. Please try again in ${remainingSeconds} seconds.`);
+      return;
+    }
+
     setError("");
     setIsLoading(true);
 
@@ -51,24 +80,144 @@ export function LoginForm({ disabled = false }: LoginFormProps) {
       });
 
       if (result.status === "complete") {
+        // IMPORTANT: Set the new session as active in Clerk
         await setActive({ session: result.createdSessionId });
+
         try {
-          const userExists = await syncUser();
-          if (!userExists) {
-            setError("Account not found.");
+          // FIX: syncUser returns userId (truthy) or null, not a boolean
+          const userId = await syncUser();
+
+          if (!userId) {
+            // User exists in Clerk but not in Convex database
+            setError("Account not found in system. Please contact your administrator.");
+            console.error("User sync failed: User authenticated in Clerk but not found in Convex database");
             return;
           }
-          router.replace("/dashboard");
-          router.refresh();
-        } catch {
-          setError("Verification failed.");
+
+          // Get the user data from Clerk  to store in session
+          // Access the user from the sign-in result
+          const clerkClient = (signIn as any).client;
+          const currentSession = clerkClient?.sessions?.find((s: any) => s.id === result.createdSessionId);
+          const clerkUser = currentSession?.user;
+
+          // Store session with remember me preference
+          if (clerkUser && result.createdSessionId) {
+            const userRole = (clerkUser.publicMetadata as any)?.role || "site_engineer";
+            const userEmail = clerkUser.primaryEmailAddress?.emailAddress || undefined;
+            const userFullName = clerkUser.fullName || clerkUser.username || "User";
+            const userUsername = clerkUser.username || clerkUser.id;
+
+            // Save to session manager and SET AS ACTIVE
+            addOrUpdateSession(
+              result.createdSessionId,
+              clerkUser.id,
+              userUsername,
+              userFullName,
+              userRole,
+              userEmail,
+              rememberMe // Remember me preference
+            );
+
+            // IMPORTANT: Mark this as the active session
+            setActiveSession(result.createdSessionId);
+          }
+
+          // Success! Reset failed attempts
+          setFailedAttempts(0);
+          setLockoutUntil(null);
+
+          // IMPORTANT: Force a full page reload to load the NEW account's data
+          // Add timestamp to bust cache and force fresh redirect to role-specific dashboard
+          window.location.href = `/dashboard?t=${Date.now()}`;
+
+        } catch (syncError: any) {
+          console.error("User sync error:", syncError);
+
+          // Better error handling
+          if (syncError?.message?.includes("Not authenticated")) {
+            setError("Authentication session expired. Please try again.");
+          } else if (syncError?.message?.includes("disabled")) {
+            setError("Your account has been disabled. Please contact support.");
+          } else {
+            setError("Failed to verify account. Please try again.");
+          }
         }
       }
     } catch (err: any) {
+      console.log("Login error:", err);
+
+      // Check if this is a "session already exists" error
+      const errorMessage = err?.errors?.[0]?.message || err?.message || "";
+      const isSessionExists = errorMessage.toLowerCase().includes("session") &&
+        errorMessage.toLowerCase().includes("already");
+
+      if (isSessionExists) {
+        // Session already exists for this user - try to switch to it!
+        try {
+          // Get user from clerk to find their session
+          const { client } = signIn as any;
+
+          if (client?.sessions) {
+            // Find a session for this username
+            const existingSession = client.sessions.find((s: any) => {
+              const sessionUser = s.user;
+              return sessionUser?.username === username.trim() ||
+                sessionUser?.primaryEmailAddress?.emailAddress === username.trim();
+            });
+
+            if (existingSession) {
+              // Found existing session - switch to it SILENTLY!
+              await setActive({ session: existingSession.id });
+
+              // Success! Reset failed attempts (this is NOT a failure!)
+              setFailedAttempts(0);
+              setLockoutUntil(null);
+
+              // Redirect to dashboard silently - no error message
+              window.location.href = `/dashboard?t=${Date.now()}`;
+              return; // Exit early - success!
+            }
+          }
+        } catch (switchError) {
+          console.error("Failed to switch to existing session:", switchError);
+        }
+
+        // If we reach here, session exists error but couldn't switch
+        // This means invalid credentials - treat as failed login
+        // DON'T auto-login! Fall through to error handling below
+      }
+
+      // Security: Track failed login attempts (only for real failures, not session exists)
+      const newFailedAttempts = failedAttempts + 1;
+      setFailedAttempts(newFailedAttempts);
+
+      // Security: Implement exponential backoff after 3 failed attempts
+      if (newFailedAttempts >= 3) {
+        // Lockout duration increases exponentially: 30s, 60s, 120s, 240s, etc.
+        const lockoutSeconds = Math.pow(2, newFailedAttempts - 3) * 30;
+        const lockoutTime = Date.now() + (lockoutSeconds * 1000);
+        setLockoutUntil(lockoutTime);
+        setError(`Too many failed attempts. Account locked for ${lockoutSeconds} seconds.`);
+        return;
+      }
+
+      // Improved error messages
       let msg = "Invalid credentials";
-      if (err?.errors?.[0]?.message) msg = err.errors[0].message;
-      if (msg.toLowerCase().includes("find")) msg = "Account not found";
+      if (err?.errors?.[0]?.message) {
+        msg = err.errors[0].message;
+      }
+      if (msg.toLowerCase().includes("find") || msg.toLowerCase().includes("not found")) {
+        msg = "Account not found";
+      }
+      if (msg.toLowerCase().includes("password") || msg.toLowerCase().includes("incorrect")) {
+        msg = "Incorrect username or password";
+      }
+
       setError(msg);
+
+      // Log failed attempt for security monitoring
+      console.warn(`Failed login attempt for user: ${username.trim()}`);
+
     } finally {
       setIsLoading(false);
     }
@@ -198,6 +347,26 @@ export function LoginForm({ disabled = false }: LoginFormProps) {
                   className="w-full pl-11 pr-4 py-3.5 bg-secondary/60 hover:bg-secondary border-2 border-transparent focus:border-primary focus:bg-background focus:ring-4 focus:ring-primary/10 rounded-2xl transition-all outline-none text-base font-medium placeholder:text-muted-foreground/60 disabled:opacity-60 disabled:cursor-not-allowed"
                 />
               </div>
+            </div>
+
+            {/* Remember Me Checkbox */}
+            <div className="flex items-start gap-3 p-4 bg-secondary/30 rounded-xl border border-border/50">
+              <input
+                type="checkbox"
+                id="rememberMe"
+                checked={rememberMe}
+                onChange={(e) => setRememberMe(e.target.checked)}
+                disabled={isLoading}
+                className="mt-0.5 w-4 h-4 rounded border-2 border-primary/30 text-primary focus:ring-2 focus:ring-primary/20 disabled:opacity-60 cursor-pointer"
+              />
+              <label htmlFor="rememberMe" className="flex-1 cursor-pointer">
+                <div className="text-sm font-semibold text-foreground">
+                  Remember me for 30 days
+                </div>
+                <div className="text-xs text-muted-foreground mt-0.5">
+                  Stay logged in across browser sessions. Uncheck to end session when browser closes.
+                </div>
+              </label>
             </div>
 
             {/* Error Message */}

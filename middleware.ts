@@ -14,9 +14,22 @@ export default clerkMiddleware(async (auth, req) => {
   }
 
   // If authenticated and accessing root or login, redirect to dashboard
+  // EXCEPT when adding another account (mode=add-account)
   if (userId && (req.nextUrl.pathname === "/" || req.nextUrl.pathname === "/login")) {
-    const dashboardUrl = new URL("/dashboard", req.url);
-    return NextResponse.redirect(dashboardUrl);
+    // Allow access to login page if adding another account
+    const mode = req.nextUrl.searchParams.get("mode");
+    if (mode === "add-account") {
+      return NextResponse.next(); // Allow access
+    }
+
+    // Prevent infinite redirect loop if dashboard fails
+    const hasRedirected = req.headers.get("x-redirected-from");
+    if (!hasRedirected) {
+      const dashboardUrl = new URL("/dashboard", req.url);
+      const response = NextResponse.redirect(dashboardUrl);
+      response.headers.set("x-redirected-from", req.nextUrl.pathname);
+      return response;
+    }
   }
 
   return NextResponse.next();

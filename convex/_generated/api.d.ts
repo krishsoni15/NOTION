@@ -21,7 +21,6 @@ import type * as purchaseOrders from "../purchaseOrders.js";
 import type * as requests from "../requests.js";
 import type * as sites from "../sites.js";
 import type * as stickyNotes from "../stickyNotes.js";
-import type * as syncUser from "../syncUser.js";
 import type * as users from "../users.js";
 import type * as vendors from "../vendors.js";
 
@@ -45,7 +44,6 @@ declare const fullApi: ApiFromModules<{
   requests: typeof requests;
   sites: typeof sites;
   stickyNotes: typeof stickyNotes;
-  syncUser: typeof syncUser;
   users: typeof users;
   vendors: typeof vendors;
 }>;

@@ -20,6 +20,7 @@ export async function redirectToDashboard(): Promise<never> {
   const clerkUserId = await getUserClerkId();
 
   if (!clerkUserId) {
+    console.error("Redirect failed: User not authenticated");
     redirect("/login?error=not_authenticated");
   }
 
@@ -30,6 +31,7 @@ export async function redirectToDashboard(): Promise<never> {
   if (!role) {
     // User authenticated but no role - UserSync component will handle
     // checking Convex existence and redirecting if needed
+    console.warn("Redirect failed: User has no role assigned", { clerkUserId });
     redirect("/login?error=no_role");
   }
 

@@ -59,11 +59,11 @@ export function Header({ userRole }: HeaderProps) {
 
         {/* Mobile: No brand shown on small screens */}
 
-        {/* Right side: Sticky Notes + Chat + Theme toggle + Custom User Menu */}
+        {/* Right side: Sticky Notes + Chat + Theme toggle + User Menu */}
         <div className="flex items-center gap-2 md:gap-4">
           {currentUser && (
             <>
-              <StickyNotesIcon 
+              <StickyNotesIcon
                 onClick={() => {
                   if (isStickyNotesOpen) {
                     // If open, close it
@@ -76,21 +76,22 @@ export function Header({ userRole }: HeaderProps) {
                 }}
                 isActive={isStickyNotesOpen}
               />
-            <ChatIcon 
-              onClick={() => {
-                if (isChatOpen) {
-                  // If open, close it
-                  setIsChatOpen(false);
-                } else {
-                  // If closed, open it and close sticky notes
-                  setIsChatOpen(true);
-                  setIsStickyNotesOpen(false);
-                }
-              }}
-              isActive={isChatOpen}
-            />
+              <ChatIcon
+                onClick={() => {
+                  if (isChatOpen) {
+                    // If open, close it
+                    setIsChatOpen(false);
+                  } else {
+                    // If closed, open it and close sticky notes
+                    setIsChatOpen(true);
+                    setIsStickyNotesOpen(false);
+                  }
+                }}
+                isActive={isChatOpen}
+              />
             </>
           )}
+
           <ThemeToggle />
           <UserMenu />
         </div>
@@ -99,8 +100,8 @@ export function Header({ userRole }: HeaderProps) {
       {/* Chat Sheet with Resizable Left Border */}
       {currentUser && (
         <ResizableChatSheet open={isChatOpen} onOpenChange={setIsChatOpen}>
-          <ChatWindow 
-            currentUserId={currentUser._id} 
+          <ChatWindow
+            currentUserId={currentUser._id}
             onClose={() => setIsChatOpen(false)}
           />
         </ResizableChatSheet>
@@ -110,8 +111,8 @@ export function Header({ userRole }: HeaderProps) {
       {currentUser && (
         <>
           <ResizableStickyNotesSheet open={isStickyNotesOpen} onOpenChange={setIsStickyNotesOpen}>
-            <StickyNotesWindow 
-              currentUserId={currentUser._id} 
+            <StickyNotesWindow
+              currentUserId={currentUser._id}
               onClose={() => setIsStickyNotesOpen(false)}
             />
           </ResizableStickyNotesSheet>

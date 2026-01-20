@@ -289,10 +289,16 @@ export function LoginForm({ disabled = false }: LoginFormProps) {
 
       {/* RIGHT PANEL - Form - 60% Width with Rounded Borders & Shadow */}
       <div
-        className={`flex-1 lg:absolute lg:right-0 lg:top-0 lg:bottom-0 lg:w-[60%] flex items-center justify-center p-6 sm:p-8 lg:p-12 bg-white dark:bg-slate-900 relative z-10 -mt-10 lg:mt-0 rounded-t-[2.5rem] lg:rounded-tl-[2.5rem] lg:rounded-tr-none lg:rounded-br-none lg:rounded-bl-[2.5rem] border-2 lg:border-l-[6px] lg:border-r-0 lg:border-t-0 lg:border-b-0 border-primary/30 shadow-[0_-20px_40px_-15px_rgba(0,0,0,0.3)] lg:shadow-[-20px_0_40px_-10px_rgba(0,0,0,0.2)] transition-transform duration-700 ease-[cubic-bezier(0.76,0,0.24,1)] ${isSuccess ? 'translate-x-[105%] opacity-90' : 'translate-x-0'}`}
+        className={`flex-1 lg:absolute lg:right-0 lg:top-0 lg:bottom-0 lg:w-[60%] flex items-center justify-center p-6 sm:p-8 lg:p-12 bg-white dark:bg-slate-900 relative z-10 -mt-10 lg:mt-0 rounded-t-[2.5rem] lg:rounded-tl-[2.5rem] lg:rounded-tr-none lg:rounded-br-none lg:rounded-bl-[2.5rem] border-2 lg:border-l-[6px] lg:border-r-0 lg:border-t-0 lg:border-b-0 border-primary/30 shadow-[0_-20px_40px_-15px_rgba(0,0,0,0.3)] lg:shadow-[-20px_0_40px_-10px_rgba(0,0,0,0.2)] transition-transform duration-700 ease-[cubic-bezier(0.76,0,0.24,1)] ${isSuccess ? 'translate-x-[105%] opacity-90' : 'translate-x-0'} overflow-hidden`}
       >
+        {/* Decorative Elements - Right Panel */}
+        <div className="absolute inset-0 overflow-hidden pointer-events-none">
+          <div className="absolute -bottom-32 -right-32 w-96 h-96 bg-primary/5 rounded-full blur-[100px] animate-pulse duration-[8000ms]" />
+          <div className="absolute top-1/2 right-10 w-24 h-24 bg-blue-400/10 rounded-full blur-[40px]" />
+          <div className="absolute bottom-20 left-10 w-32 h-32 bg-purple-400/5 rounded-full blur-[50px]" />
+        </div>
 
-        <div className="w-full max-w-[480px] animate-in fade-in zoom-in-95 duration-700 delay-100">
+        <div className="w-full max-w-[480px] animate-in fade-in zoom-in-95 duration-700 delay-100 relative z-10">
 
           {/* Header */}
           <div className="space-y-3 text-center lg:text-left mb-10">

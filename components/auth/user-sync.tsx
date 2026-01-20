@@ -9,27 +9,38 @@
  */
 
 import { useEffect, useRef } from "react";
-import { useQuery } from "convex/react";
+import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { useAuth, useClerk } from "@clerk/nextjs";
+import { useUser, useClerk } from "@clerk/nextjs";
 import { useRouter } from "next/navigation";
 
 export function UserSync() {
-  const { isLoaded, isSignedIn } = useAuth();
+  const { isLoaded, isSignedIn, user } = useUser();
   const { signOut } = useClerk();
   const router = useRouter();
   const currentUser = useQuery(api.users.getCurrentUser);
+  const syncUser = useMutation(api.users.syncCurrentUser);
   const hasCheckedRef = useRef(false);
   const checkTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const initialLoadTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const isInitialMountRef = useRef(true);
   const mountTimeRef = useRef(Date.now());
+  const hasSyncedRef = useRef(false);
 
   useEffect(() => {
-    // Track initial mount
-    if (isInitialMountRef.current) {
-      isInitialMountRef.current = false;
-      console.log("UserSync component mounted");
+    // Sync user details when authenticated
+    if (isLoaded && isSignedIn && user && !hasSyncedRef.current) {
+      console.log("Syncing user with Convex...");
+      const metadata = user.publicMetadata as Record<string, unknown> | undefined;
+      syncUser({
+        clerkRole: (metadata?.role as string),
+        clerkUsername: user.username || undefined,
+        clerkName: user.fullName || undefined,
+      })
+        .then(() => {
+          console.log("User sync successful");
+          hasSyncedRef.current = true;
+        })
+        .catch(e => console.error("Auto-sync failed:", e));
     }
 
     // Only sync if user is signed in and loaded
@@ -86,42 +97,42 @@ export function UserSync() {
         return;
       }
 
-    // Check if user exists in Convex
-    if (currentUser === null) {
-      // User exists in Clerk but not in Convex
-      // This means user was not created by a manager
+      // Check if user exists in Convex
+      if (currentUser === null) {
+        // User exists in Clerk but not in Convex
+        // This means user was not created by a manager
 
-      // Don't sign out immediately after page load - give more time for Convex to sync
-      const timeSinceMount = Date.now() - mountTimeRef.current;
-      if (timeSinceMount < 3000) { // Wait at least 3 seconds after mount
-        console.log(`User not found in Convex, but only ${timeSinceMount}ms since mount - waiting longer`);
-        checkTimeoutRef.current = setTimeout(() => {
-          // Re-run the check after additional delay
+        // Don't sign out immediately after page load - give more time for Convex to sync
+        const timeSinceMount = Date.now() - mountTimeRef.current;
+        if (timeSinceMount < 3000) { // Wait at least 3 seconds after mount
+          console.log(`User not found in Convex, but only ${timeSinceMount}ms since mount - waiting longer`);
+          checkTimeoutRef.current = setTimeout(() => {
+            // Re-run the check after additional delay
+            if (currentUser === null && isSignedIn) {
+              console.log("User still not found after additional delay - signing out");
+              hasCheckedRef.current = true;
+              signOut().then(() => {
+                router.push("/login?error=not_found");
+              });
+            }
+          }, 3000 - timeSinceMount);
+          return;
+        }
+
+        console.log("User not found in Convex database, preparing to sign out");
+        // Add extra confirmation before signing out
+        setTimeout(() => {
+          // Final check - if still null after another delay, then sign out
           if (currentUser === null && isSignedIn) {
-            console.log("User still not found after additional delay - signing out");
+            console.log("Confirming user sign out due to missing Convex record");
             hasCheckedRef.current = true;
             signOut().then(() => {
               router.push("/login?error=not_found");
             });
           }
-        }, 3000 - timeSinceMount);
+        }, 1000); // Additional 1 second delay for confirmation
         return;
       }
-
-      console.log("User not found in Convex database, preparing to sign out");
-      // Add extra confirmation before signing out
-      setTimeout(() => {
-        // Final check - if still null after another delay, then sign out
-        if (currentUser === null && isSignedIn) {
-          console.log("Confirming user sign out due to missing Convex record");
-          hasCheckedRef.current = true;
-          signOut().then(() => {
-            router.push("/login?error=not_found");
-          });
-        }
-      }, 1000); // Additional 1 second delay for confirmation
-      return;
-    }
 
       // Check if user is disabled
       if (currentUser && !currentUser.isActive) {
@@ -148,7 +159,7 @@ export function UserSync() {
         initialLoadTimeoutRef.current = null;
       }
     };
-  }, [isLoaded, isSignedIn, currentUser, signOut, router]);
+  }, [isLoaded, isSignedIn, currentUser, signOut, router, user, syncUser]);
 
   // Reset check flag when user signs out
   useEffect(() => {

@@ -220,10 +220,10 @@ export function LocationFormDialog({
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="name" className="text-sm">{formData.type === "inventory" ? "Inventory Name *" : "Site Name *"}</Label>
+            <Label htmlFor="name" className="text-sm">{formData.type === "inventory" ? "Store Name *" : "Site Name *"}</Label>
             <Input
               id="name"
-              placeholder={formData.type === "inventory" ? "Enter inventory name" : "Enter site name"}
+              placeholder={formData.type === "inventory" ? "Enter store name" : "Enter site name"}
               value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
               disabled={isLoading}

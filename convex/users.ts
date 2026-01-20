@@ -140,12 +140,18 @@ export const getUsersByRole = query({
  * Can be called by any authenticated user to sync themselves
  */
 export const syncCurrentUser = mutation({
-  args: {},
-  handler: async (ctx) => {
+  args: {
+    clerkRole: v.optional(v.string()),
+    clerkUsername: v.optional(v.string()),
+    clerkName: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) {
       throw new Error("Not authenticated");
     }
+
+    console.log("Syncing user identity:", JSON.stringify(identity, null, 2));
 
     // Check if user already exists
     const existingUser = await ctx.db
@@ -153,21 +159,45 @@ export const syncCurrentUser = mutation({
       .withIndex("by_clerk_user_id", (q) => q.eq("clerkUserId", identity.subject))
       .unique();
 
-    if (existingUser) {
-      return existingUser._id; // User already exists
+    // Get role from Clerk metadata or args
+    const metadata = identity.publicMetadata as Record<string, unknown> | undefined;
+    let roleStr = args.clerkRole || (metadata?.role as string | undefined);
+
+    // Fallback: If username is 'manager', force role to manager (useful for dev/initial setup)
+    // Note: identity.username might be under different fields depending on provider
+    const rawUsername = args.clerkUsername || (identity.username || identity.nickname || identity.preferredUsername || identity.name || "") as string;
+    const usernameLower = rawUsername.toLowerCase();
+
+    if (!roleStr && (usernameLower === "manager" || usernameLower.includes("manager"))) {
+      console.log("Auto-assigning manager role based on username:", rawUsername);
+      roleStr = "manager";
     }
 
-    // Get role from Clerk metadata
-    const metadata = identity.publicMetadata as Record<string, unknown> | undefined;
-    const role = (metadata?.role as string | undefined) || "site_engineer";
-    const validRole = 
+    const role = roleStr || "site_engineer";
+    const validRole =
       role === "manager" ? "manager" :
-      role === "purchase_officer" ? "purchase_officer" :
-      "site_engineer";
+        role === "purchase_officer" ? "purchase_officer" :
+          "site_engineer";
 
-    // Create user from Clerk data
-    const username = (identity.username as string | undefined) || `user_${identity.subject.slice(0, 8)}`;
-    const name = (identity.name as string | undefined) || username || "User";
+    const username = rawUsername || `user_${identity.subject.slice(0, 8)}`;
+    const name = args.clerkName || (identity.name as string | undefined) || username || "User";
+
+    if (existingUser) {
+      // Sync data if changed (Role, Name, Username)
+      if (
+        existingUser.role !== validRole ||
+        existingUser.fullName !== name ||
+        existingUser.username !== username
+      ) {
+        await ctx.db.patch(existingUser._id, {
+          role: validRole,
+          fullName: name,
+          username: username,
+          updatedAt: Date.now(),
+        });
+      }
+      return existingUser._id;
+    }
     const phoneNumber = (identity.phoneNumber as string | undefined) || "";
 
     const userId = await ctx.db.insert("users", {

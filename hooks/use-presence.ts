@@ -4,7 +4,7 @@
  * Custom hook for tracking and updating user online/offline status.
  */
 
-import { useQuery, useMutation } from "convex/react";
+import { useQuery, useMutation, useConvexAuth } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { useEffect, useRef } from "react";
@@ -46,12 +46,14 @@ export function useOnlineUsers() {
  * Call this in your main app layout to keep presence updated
  */
 export function usePresenceHeartbeat(enabled: boolean = true) {
+  const { isAuthenticated } = useConvexAuth();
   const updatePresence = useMutation(api.presence.updatePresence);
   const setOffline = useMutation(api.presence.setOffline);
   const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
-    if (!enabled) return;
+    // Only run if enabled AND Convex is authenticated
+    if (!enabled || !isAuthenticated) return;
 
     // Update presence immediately
     updatePresence({ isOnline: true }).catch((error) => {
@@ -80,7 +82,7 @@ export function usePresenceHeartbeat(enabled: boolean = true) {
     };
 
     if (typeof window !== "undefined") {
-    window.addEventListener("beforeunload", handleBeforeUnload);
+      window.addEventListener("beforeunload", handleBeforeUnload);
     }
 
     return () => {
@@ -88,7 +90,7 @@ export function usePresenceHeartbeat(enabled: boolean = true) {
         clearInterval(intervalRef.current);
       }
       if (typeof window !== "undefined") {
-      window.removeEventListener("beforeunload", handleBeforeUnload);
+        window.removeEventListener("beforeunload", handleBeforeUnload);
       }
       setOffline().catch((error) => {
         if (process.env.NODE_ENV === "development") {
@@ -96,7 +98,7 @@ export function usePresenceHeartbeat(enabled: boolean = true) {
         }
       });
     };
-  }, [enabled]); // Remove updatePresence and setOffline from dependencies to prevent re-running
+  }, [enabled, isAuthenticated, updatePresence, setOffline]);
 }
 
 /**

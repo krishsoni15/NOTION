@@ -8,6 +8,7 @@ import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { User, Lock, ArrowRight, Loader2, AlertCircle } from "lucide-react";
 import { addOrUpdateSession, setActiveSession } from "@/lib/auth/session-manager";
+import { AnimatedThemeToggler } from "@/components/ui/animated-theme-toggler";
 
 interface LoginFormProps {
   disabled?: boolean;
@@ -18,22 +19,16 @@ export function LoginForm({ disabled = false }: LoginFormProps) {
   const clerk = useClerk();
   const router = useRouter();
   const searchParams = useSearchParams();
-  // FIX: Use the auto-create version from users.ts
   const syncUser = useMutation(api.users.syncCurrentUser);
 
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-
-  // Remember Me state
-  const [rememberMe, setRememberMe] = useState(true); // Default checked
-
-  // Security: Rate limiting state
+  const [rememberMe, setRememberMe] = useState(true);
   const [failedAttempts, setFailedAttempts] = useState(0);
   const [lockoutUntil, setLockoutUntil] = useState<number | null>(null);
-
-
+  const [isSuccess, setIsSuccess] = useState(false);
 
   useEffect(() => {
     const errorParam = searchParams?.get("error");
@@ -46,11 +41,22 @@ export function LoginForm({ disabled = false }: LoginFormProps) {
       if (errorParam === "no_role") msg = "Account not properly configured. Contact administrator.";
       if (disabledParam === "true") msg = "Account disabled.";
       setError(msg);
-      setTimeout(() => router.replace("/login", { scroll: false }), 2000);
+
+      const timeout = setTimeout(() => {
+        setError("");
+        router.replace("/login", { scroll: false });
+      }, 3000);
+
+      return () => clearTimeout(timeout);
     }
   }, [searchParams, router]);
 
-  // Security: Clear lockout timer
+  useEffect(() => {
+    if (username || password) {
+      setError("");
+    }
+  }, [username, password]);
+
   useEffect(() => {
     if (lockoutUntil && Date.now() >= lockoutUntil) {
       setLockoutUntil(null);
@@ -62,7 +68,6 @@ export function LoginForm({ disabled = false }: LoginFormProps) {
     e.preventDefault();
     if (!isLoaded) return;
 
-    // Security: Check account lockout
     if (lockoutUntil && Date.now() < lockoutUntil) {
       const remainingSeconds = Math.ceil((lockoutUntil - Date.now()) / 1000);
       setError(`Too many failed attempts. Please try again in ${remainingSeconds} seconds.`);
@@ -80,34 +85,34 @@ export function LoginForm({ disabled = false }: LoginFormProps) {
       });
 
       if (result.status === "complete") {
-        // IMPORTANT: Set the new session as active in Clerk
+        // Trigger Success Animation
+        setIsSuccess(true);
+        // Delay actual redirection slightly to let animation play
+        await new Promise(resolve => setTimeout(resolve, 800));
+
         await setActive({ session: result.createdSessionId });
 
         try {
-          // FIX: syncUser returns userId (truthy) or null, not a boolean
-          const userId = await syncUser();
+          const userId = await syncUser({});
 
           if (!userId) {
-            // User exists in Clerk but not in Convex database
             setError("Account not found in system. Please contact your administrator.");
             console.error("User sync failed: User authenticated in Clerk but not found in Convex database");
+            setIsSuccess(false); // Reset on error
+            setIsLoading(false);
             return;
           }
 
-          // Get the user data from Clerk  to store in session
-          // Access the user from the sign-in result
           const clerkClient = (signIn as any).client;
           const currentSession = clerkClient?.sessions?.find((s: any) => s.id === result.createdSessionId);
           const clerkUser = currentSession?.user;
 
-          // Store session with remember me preference
           if (clerkUser && result.createdSessionId) {
             const userRole = (clerkUser.publicMetadata as any)?.role || "site_engineer";
             const userEmail = clerkUser.primaryEmailAddress?.emailAddress || undefined;
             const userFullName = clerkUser.fullName || clerkUser.username || "User";
             const userUsername = clerkUser.username || clerkUser.id;
 
-            // Save to session manager and SET AS ACTIVE
             addOrUpdateSession(
               result.createdSessionId,
               clerkUser.id,
@@ -115,25 +120,25 @@ export function LoginForm({ disabled = false }: LoginFormProps) {
               userFullName,
               userRole,
               userEmail,
-              rememberMe // Remember me preference
+              rememberMe
             );
 
-            // IMPORTANT: Mark this as the active session
             setActiveSession(result.createdSessionId);
           }
 
-          // Success! Reset failed attempts
           setFailedAttempts(0);
           setLockoutUntil(null);
+          setIsLoading(false);
 
-          // IMPORTANT: Force a full page reload to load the NEW account's data
-          // Add timestamp to bust cache and force fresh redirect to role-specific dashboard
-          window.location.href = `/dashboard?t=${Date.now()}`;
+          setTimeout(() => {
+            window.location.href = `/dashboard?t=${Date.now()}`;
+          }, 200);
 
         } catch (syncError: any) {
           console.error("User sync error:", syncError);
+          setIsSuccess(false); // Reset on error
+          setIsLoading(false);
 
-          // Better error handling
           if (syncError?.message?.includes("Not authenticated")) {
             setError("Authentication session expired. Please try again.");
           } else if (syncError?.message?.includes("disabled")) {
@@ -146,19 +151,15 @@ export function LoginForm({ disabled = false }: LoginFormProps) {
     } catch (err: any) {
       console.log("Login error:", err);
 
-      // Check if this is a "session already exists" error
       const errorMessage = err?.errors?.[0]?.message || err?.message || "";
       const isSessionExists = errorMessage.toLowerCase().includes("session") &&
         errorMessage.toLowerCase().includes("already");
 
       if (isSessionExists) {
-        // Session already exists for this user - try to switch to it!
         try {
-          // Get user from clerk to find their session
           const { client } = signIn as any;
 
           if (client?.sessions) {
-            // Find a session for this username
             const existingSession = client.sessions.find((s: any) => {
               const sessionUser = s.user;
               return sessionUser?.username === username.trim() ||
@@ -166,34 +167,26 @@ export function LoginForm({ disabled = false }: LoginFormProps) {
             });
 
             if (existingSession) {
-              // Found existing session - switch to it SILENTLY!
-              await setActive({ session: existingSession.id });
+              // Trigger Animation for existing session too
+              setIsSuccess(true);
+              await new Promise(resolve => setTimeout(resolve, 800));
 
-              // Success! Reset failed attempts (this is NOT a failure!)
+              await setActive({ session: existingSession.id });
               setFailedAttempts(0);
               setLockoutUntil(null);
-
-              // Redirect to dashboard silently - no error message
               window.location.href = `/dashboard?t=${Date.now()}`;
-              return; // Exit early - success!
+              return;
             }
           }
         } catch (switchError) {
           console.error("Failed to switch to existing session:", switchError);
         }
-
-        // If we reach here, session exists error but couldn't switch
-        // This means invalid credentials - treat as failed login
-        // DON'T auto-login! Fall through to error handling below
       }
 
-      // Security: Track failed login attempts (only for real failures, not session exists)
       const newFailedAttempts = failedAttempts + 1;
       setFailedAttempts(newFailedAttempts);
 
-      // Security: Implement exponential backoff after 3 failed attempts
       if (newFailedAttempts >= 3) {
-        // Lockout duration increases exponentially: 30s, 60s, 120s, 240s, etc.
         const lockoutSeconds = Math.pow(2, newFailedAttempts - 3) * 30;
         const lockoutTime = Date.now() + (lockoutSeconds * 1000);
         setLockoutUntil(lockoutTime);
@@ -201,7 +194,6 @@ export function LoginForm({ disabled = false }: LoginFormProps) {
         return;
       }
 
-      // Improved error messages
       let msg = "Invalid credentials";
       if (err?.errors?.[0]?.message) {
         msg = err.errors[0].message;
@@ -214,8 +206,6 @@ export function LoginForm({ disabled = false }: LoginFormProps) {
       }
 
       setError(msg);
-
-      // Log failed attempt for security monitoring
       console.warn(`Failed login attempt for user: ${username.trim()}`);
 
     } finally {
@@ -224,94 +214,106 @@ export function LoginForm({ disabled = false }: LoginFormProps) {
   };
 
   return (
-    <div className="flex flex-col lg:flex-row h-screen w-full overflow-hidden bg-background">
+    <div className={`min-h-screen w-full bg-slate-50 dark:bg-slate-950 flex flex-col lg:flex-row relative font-sans transition-colors duration-700 selection:bg-primary/30 overflow-hidden ${isSuccess ? 'pointer-events-none' : ''}`}>
 
-      {/* LEFT PANEL - Brand (Theme-Aware) */}
-      <div className="lg:w-1/2 w-full bg-primary relative flex flex-col justify-center items-center text-primary-foreground p-8 lg:p-16 min-h-[250px] lg:h-full overflow-hidden">
+      {/* Slide Transition Overlay (Success) - Fixed Full Screen */}
+      <div className={`fixed inset-0 bg-primary z-[9999] transform transition-transform duration-1000 ease-[cubic-bezier(0.76,0,0.24,1)] ${isSuccess ? 'translate-y-0' : 'translate-y-full'} pointer-events-none`}>
+        <div className="absolute inset-0 bg-gradient-to-b from-white/10 to-transparent opacity-30" />
+        <div className="flex flex-col items-center justify-center h-full text-white space-y-8 relative z-10">
+          <div className="relative">
+            <div className="absolute inset-0 bg-white/20 rounded-full blur-xl animate-pulse" />
+            <Loader2 className="w-16 h-16 animate-spin text-white relative z-10" />
+          </div>
+          <div className="text-center space-y-3 p-4">
+            <h2 className="text-4xl md:text-5xl font-bold animate-in fade-in slide-in-from-bottom-4 duration-1000 delay-200 text-white tracking-tight">
+              Welcome Back
+            </h2>
+            <p className="text-white/80 font-medium text-lg md:text-xl animate-in fade-in slide-in-from-bottom-4 duration-1000 delay-300">
+              Entering secure dashboard...
+            </p>
+          </div>
+        </div>
+      </div>
 
-        <div className="relative z-10 flex flex-col items-center lg:items-start max-w-xl w-full space-y-8">
+      {/* Animated Theme Toggle - Top Right */}
+      <div className="absolute top-4 right-4 lg:top-6 lg:right-6 z-50 animate-in fade-in slide-in-from-top-4 duration-1000 delay-300">
+        <AnimatedThemeToggler />
+      </div>
 
-          {/* Logo */}
-          <div className="transition-transform hover:scale-105 duration-300">
+      {/* LEFT PANEL - Brand - Compact on Mobile */}
+      <div className="relative min-h-[30vh] lg:absolute lg:inset-0 lg:w-full bg-primary flex flex-col justify-center items-center lg:items-start text-primary-foreground px-6 py-8 lg:p-16 lg:pl-[8%] overflow-hidden">
+
+        {/* Background Decorations */}
+        <div className="absolute inset-0 overflow-hidden pointer-events-none">
+          <div className="absolute top-[-20%] left-[-10%] w-[500px] h-[500px] bg-white/10 rounded-full blur-[80px] animate-pulse duration-[4000ms]" />
+          <div className="absolute bottom-[-10%] right-[30%] w-[300px] h-[300px] bg-black/5 rounded-full blur-[60px]" />
+        </div>
+
+        <div className="relative z-10 flex flex-col items-center lg:items-start max-w-xl w-full space-y-4 lg:space-y-10 animate-in fade-in slide-in-from-left-8 duration-1000 ease-out">
+
+          {/* Logo - Smaller on mobile */}
+          <div className="transition-all duration-500 hover:scale-105 hover:drop-shadow-2xl">
             <Image
               src="/images/logos/fulllogo.png"
               alt="Notion CRM"
               width={800}
               height={200}
-              className="w-56 lg:w-72 h-auto brightness-0 invert drop-shadow-2xl"
+              className="w-40 sm:w-56 lg:w-80 h-auto brightness-0 invert drop-shadow-xl"
               priority
               quality={100}
             />
           </div>
 
-          {/* Headline */}
-          <div className="space-y-4">
-            <h1 className="text-4xl lg:text-6xl font-extrabold leading-tight tracking-tight">
-              Welcome Back
+          {/* Headline - Compact on mobile */}
+          <div className="space-y-2 lg:space-y-4 text-center lg:text-left">
+            <h1 className="text-3xl sm:text-4xl lg:text-7xl font-extrabold leading-[1.1] tracking-tight drop-shadow-sm">
+              Welcome <br className="hidden lg:block" />
+              <span className="text-primary-foreground/90">Back</span>
             </h1>
-            <p className="text-primary-foreground/90 text-lg lg:text-xl font-medium max-w-md">
+            <p className="hidden sm:block text-primary-foreground/80 text-sm sm:text-base lg:text-2xl font-medium max-w-[280px] sm:max-w-md leading-relaxed tracking-wide">
               Sign in to access your enterprise logistics dashboard.
             </p>
           </div>
-
-          {/* Trust Badge */}
-          <div className="hidden lg:flex items-center gap-3 opacity-90">
-            <div className="flex -space-x-2">
-              {[1, 2, 3].map(i => (
-                <div key={i} className="w-10 h-10 rounded-full bg-primary-foreground/20 border-2 border-primary-foreground/40 backdrop-blur-sm" />
-              ))}
-            </div>
-            <span className="text-sm font-semibold text-primary-foreground/80">
-              Trusted by 500+ Companies
-            </span>
-          </div>
         </div>
 
-        {/* Wave SVG - Desktop */}
-        <div className="hidden lg:block absolute right-[-2px] top-0 bottom-0 w-[140px] overflow-hidden pointer-events-none z-20">
-          <svg viewBox="0 0 100 800" preserveAspectRatio="none" className="h-full w-full fill-background" style={{ filter: 'drop-shadow(-6px 0 10px rgba(0,0,0,0.08))' }}>
-            <path d="M100,0 L100,800 L35,800 C35,800 70,700 35,600 C0,500 70,400 30,300 C-5,220 65,100 35,0 Z" />
-          </svg>
+        {/* Straight Edge - Desktop - Plain/Simple */}
+        <div className="hidden lg:block absolute right-0 top-0 bottom-0 w-px overflow-visible pointer-events-none z-0">
+          <div className="h-full w-px bg-white/10"></div>
         </div>
 
-        {/* Wave SVG - Mobile */}
-        <div className="lg:hidden absolute bottom-[-2px] left-0 right-0 h-[60px] overflow-hidden pointer-events-none z-20">
-          <svg viewBox="0 0 500 100" preserveAspectRatio="none" className="w-full h-full fill-background" style={{ filter: 'drop-shadow(0 -4px 8px rgba(0,0,0,0.08))' }}>
-            <path d="M0,100 L500,100 L500,35 C450,70 350,50 250,60 C150,70 50,40 0,35 Z" />
-          </svg>
+        {/* Straight Edge - Mobile - Bottom */}
+        <div className="lg:hidden absolute bottom-0 left-0 right-0 h-px overflow-visible pointer-events-none z-0">
+          <div className="w-full h-px bg-white/10"></div>
         </div>
-
-        {/* Decorative elements */}
-        <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-5" />
-        <div className="absolute -bottom-32 -left-32 w-96 h-96 bg-primary-foreground/10 rounded-full blur-3xl" />
-        <div className="absolute -top-32 -right-32 w-96 h-96 bg-primary-foreground/5 rounded-full blur-3xl" />
       </div>
 
-      {/* RIGHT PANEL - Form */}
-      <div className="lg:w-1/2 w-full flex items-center justify-center p-6 lg:p-12 bg-background">
+      {/* RIGHT PANEL - Form - 60% Width with Rounded Borders & Shadow */}
+      <div
+        className={`flex-1 lg:absolute lg:right-0 lg:top-0 lg:bottom-0 lg:w-[60%] flex items-center justify-center p-6 sm:p-8 lg:p-12 bg-white dark:bg-slate-900 relative z-10 -mt-10 lg:mt-0 rounded-t-[2.5rem] lg:rounded-tl-[2.5rem] lg:rounded-tr-none lg:rounded-br-none lg:rounded-bl-[2.5rem] border-2 lg:border-l-[6px] lg:border-r-0 lg:border-t-0 lg:border-b-0 border-primary/30 shadow-[0_-20px_40px_-15px_rgba(0,0,0,0.3)] lg:shadow-[-20px_0_40px_-10px_rgba(0,0,0,0.2)] transition-transform duration-700 ease-[cubic-bezier(0.76,0,0.24,1)] ${isSuccess ? 'translate-x-[105%] opacity-90' : 'translate-x-0'}`}
+      >
 
-        <div className="w-full max-w-md space-y-8">
+        <div className="w-full max-w-[480px] animate-in fade-in zoom-in-95 duration-700 delay-100">
 
           {/* Header */}
-          <div className="space-y-2 text-center lg:text-left">
-            <h2 className="text-3xl font-bold text-foreground tracking-tight">
+          <div className="space-y-3 text-center lg:text-left mb-10">
+            <h2 className="text-3xl sm:text-4xl lg:text-5xl font-bold text-slate-900 dark:text-white tracking-tighter">
               Sign In
             </h2>
-            <p className="text-muted-foreground">
+            <p className="text-slate-500 dark:text-slate-400 text-base sm:text-lg">
               Enter your credentials to continue
             </p>
           </div>
 
           {/* Form */}
-          <form onSubmit={handleSubmit} className="space-y-5">
+          <form onSubmit={handleSubmit} className="space-y-6">
 
             {/* Username Input */}
-            <div className="space-y-2">
-              <label htmlFor="username" className="text-sm font-semibold text-foreground">
+            <div className="space-y-2 group">
+              <label htmlFor="username" className="text-sm font-semibold text-slate-700 dark:text-slate-300 ml-1 transition-colors group-focus-within:text-primary">
                 Username
               </label>
-              <div className="relative">
-                <div className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none">
+              <div className="relative transform transition-all duration-300 group-focus-within:scale-[1.01]">
+                <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 transition-colors group-focus-within:text-primary pointer-events-none">
                   <User size={20} strokeWidth={2} />
                 </div>
                 <input
@@ -321,19 +323,20 @@ export function LoginForm({ disabled = false }: LoginFormProps) {
                   onChange={(e) => setUsername(e.target.value)}
                   required
                   disabled={isLoading}
-                  placeholder="Enter your username"
-                  className="w-full pl-11 pr-4 py-3.5 bg-secondary/60 hover:bg-secondary border-2 border-transparent focus:border-primary focus:bg-background focus:ring-4 focus:ring-primary/10 rounded-2xl transition-all outline-none text-base font-medium placeholder:text-muted-foreground/60 disabled:opacity-60 disabled:cursor-not-allowed"
+                  placeholder="purchase1"
+                  autoComplete="username"
+                  className="w-full pl-12 pr-4 py-4 bg-slate-50 dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 focus:border-primary focus:bg-white dark:focus:bg-slate-800 focus:ring-4 focus:ring-primary/10 rounded-2xl transition-all duration-300 outline-none text-base font-medium text-slate-900 dark:text-white placeholder:text-slate-400 disabled:opacity-60 disabled:cursor-not-allowed"
                 />
               </div>
             </div>
 
             {/* Password Input */}
-            <div className="space-y-2">
-              <label htmlFor="password" className="text-sm font-semibold text-foreground">
+            <div className="space-y-2 group">
+              <label htmlFor="password" className="text-sm font-semibold text-slate-700 dark:text-slate-300 ml-1 transition-colors group-focus-within:text-primary">
                 Password
               </label>
-              <div className="relative">
-                <div className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none">
+              <div className="relative transform transition-all duration-300 group-focus-within:scale-[1.01]">
+                <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 transition-colors group-focus-within:text-primary pointer-events-none">
                   <Lock size={20} strokeWidth={2} />
                 </div>
                 <input
@@ -343,65 +346,80 @@ export function LoginForm({ disabled = false }: LoginFormProps) {
                   onChange={(e) => setPassword(e.target.value)}
                   required
                   disabled={isLoading}
-                  placeholder="Enter your password"
-                  className="w-full pl-11 pr-4 py-3.5 bg-secondary/60 hover:bg-secondary border-2 border-transparent focus:border-primary focus:bg-background focus:ring-4 focus:ring-primary/10 rounded-2xl transition-all outline-none text-base font-medium placeholder:text-muted-foreground/60 disabled:opacity-60 disabled:cursor-not-allowed"
+                  placeholder="••••••••"
+                  autoComplete="current-password"
+                  className="w-full pl-12 pr-4 py-4 bg-slate-50 dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 focus:border-primary focus:bg-white dark:focus:bg-slate-800 focus:ring-4 focus:ring-primary/10 rounded-2xl transition-all duration-300 outline-none text-base font-medium text-slate-900 dark:text-white placeholder:text-slate-400 disabled:opacity-60 disabled:cursor-not-allowed"
                 />
               </div>
             </div>
 
             {/* Remember Me Checkbox */}
-            <div className="flex items-start gap-3 p-4 bg-secondary/30 rounded-xl border border-border/50">
-              <input
-                type="checkbox"
-                id="rememberMe"
-                checked={rememberMe}
-                onChange={(e) => setRememberMe(e.target.checked)}
-                disabled={isLoading}
-                className="mt-0.5 w-4 h-4 rounded border-2 border-primary/30 text-primary focus:ring-2 focus:ring-primary/20 disabled:opacity-60 cursor-pointer"
-              />
-              <label htmlFor="rememberMe" className="flex-1 cursor-pointer">
-                <div className="text-sm font-semibold text-foreground">
-                  Remember me for 30 days
-                </div>
-                <div className="text-xs text-muted-foreground mt-0.5">
-                  Stay logged in across browser sessions. Uncheck to end session when browser closes.
-                </div>
+            <div className="flex items-center gap-3 pt-2">
+              <div className="relative flex items-center">
+                <input
+                  type="checkbox"
+                  id="rememberMe"
+                  checked={rememberMe}
+                  onChange={(e) => setRememberMe(e.target.checked)}
+                  disabled={isLoading}
+                  className="peer h-5 w-5 cursor-pointer appearance-none rounded-md border-2 border-slate-300 dark:border-slate-600 shadow-sm transition-all checked:border-primary checked:bg-primary hover:border-primary focus:ring-2 focus:ring-primary/20 disabled:cursor-not-allowed disabled:opacity-60"
+                />
+                <svg
+                  className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 text-white opacity-0 transition-opacity peer-checked:opacity-100"
+                  width="12"
+                  height="12"
+                  viewBox="0 0 12 12"
+                  fill="none"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <path
+                    d="M10 3L4.5 8.5L2 6"
+                    stroke="currentColor"
+                    strokeWidth="2.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              </div>
+              <label htmlFor="rememberMe" className="text-sm font-medium text-slate-600 dark:text-slate-400 cursor-pointer select-none hover:text-slate-900 dark:hover:text-slate-200 transition-colors">
+                Remember me for 30 days
               </label>
             </div>
 
             {/* Error Message */}
             {(error || disabled) && (
-              <div className="flex items-center gap-3 p-4 bg-destructive/10 border border-destructive/20 rounded-2xl">
-                <AlertCircle className="text-destructive flex-shrink-0" size={20} />
-                <p className="text-sm font-semibold text-destructive">
+              <div className="flex items-center gap-3 p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/50 rounded-xl animate-in fade-in slide-in-from-top-2 duration-300">
+                <AlertCircle className="text-red-500 flex-shrink-0" size={20} />
+                <p className="text-sm font-medium text-red-600 dark:text-red-400">
                   {disabled ? "Account disabled" : error}
                 </p>
               </div>
             )}
 
-            {/* Submit Button (Theme-Aware) */}
+            {/* Submit Button */}
             <button
               type="submit"
               disabled={isLoading}
-              className="w-full py-4 px-6 bg-primary hover:bg-primary/90 active:bg-primary/80 text-primary-foreground font-bold text-base rounded-2xl shadow-lg shadow-primary/25 hover:shadow-xl hover:shadow-primary/30 transition-all duration-200 flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:shadow-lg group"
+              className="w-full py-4 px-6 bg-primary hover:bg-primary/90 active:scale-[0.98] text-white font-bold text-lg rounded-2xl shadow-xl shadow-primary/30 hover:shadow-2xl hover:shadow-primary/40 transition-all duration-300 flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed disabled:active:scale-100 group mt-4 relative overflow-hidden"
             >
+              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover:animate-shimmer" />
               {isLoading ? (
                 <>
-                  <Loader2 className="animate-spin" size={20} />
+                  <Loader2 className="animate-spin" size={22} />
                   <span>Signing in...</span>
                 </>
               ) : (
                 <>
                   <span>Sign In</span>
-                  <ArrowRight size={20} className="group-hover:translate-x-1 transition-transform" />
+                  <ArrowRight size={22} strokeWidth={2.5} className="group-hover:translate-x-1 transition-transform" />
                 </>
               )}
             </button>
 
             {/* Footer */}
-            <div className="pt-4 text-center">
-              <p className="text-xs text-muted-foreground">
-                &copy; {new Date().getFullYear()} Notion CRM - Enterprise Logistics Platform
+            <div className="pt-6 text-center">
+              <p className="text-sm text-slate-400 dark:text-slate-500 font-medium">
+                &copy; {new Date().getFullYear()} Notion CRM <span className="mx-1">•</span> Enterprise Platform
               </p>
             </div>
           </form>

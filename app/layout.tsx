@@ -7,6 +7,7 @@ import { ThemeInitializer } from "./theme-initializer";
 import { Providers } from "./providers";
 import { Toaster } from "@/components/ui/sonner";
 import { ErrorBoundary } from "@/components/error-boundary";
+import { PresenceProvider } from "@/components/chat/presence-provider";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -55,7 +56,11 @@ export default function RootLayout({
           <ErrorBoundary>
             <Providers>
               <ThemeInitializer />
-              <ConvexClientProvider>{children}</ConvexClientProvider>
+              <ConvexClientProvider>
+                <PresenceProvider>
+                  {children}
+                </PresenceProvider>
+              </ConvexClientProvider>
               <Toaster />
             </Providers>
           </ErrorBoundary>

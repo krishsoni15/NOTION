@@ -1,0 +1,494 @@
+"use client";
+
+import { useState, useEffect } from "react";
+import Image from "next/image";
+import { useSignIn, useUser, useClerk } from "@clerk/nextjs";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useMutation } from "convex/react";
+import { api } from "@/convex/_generated/api";
+import { User, Lock, ArrowRight, Loader2, AlertCircle } from "lucide-react";
+import { addOrUpdateSession, setActiveSession } from "@/lib/auth/session-manager";
+
+interface LoginFormProps {
+  disabled?: boolean;
+}
+
+export function LoginForm({ disabled = false }: LoginFormProps) {
+  const { isLoaded, signIn, setActive } = useSignIn();
+  const clerk = useClerk();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  // FIX: Use the auto-create version from users.ts
+  const syncUser = useMutation(api.users.syncCurrentUser);
+
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+
+  // Remember Me state  
+  const [rememberMe, setRememberMe] = useState(true); // Default checked
+
+  // Security: Rate limiting state
+  const [failedAttempts, setFailedAttempts] = useState(0);
+  const [lockoutUntil, setLockoutUntil] = useState<number | null>(null);
+
+
+
+  useEffect(() => {
+    const errorParam = searchParams?.get("error");
+    const disabledParam = searchParams?.get("disabled");
+
+    if (errorParam || disabledParam) {
+      let msg = "An error occurred.";
+      if (errorParam === "not_found") msg = "Account not found.";
+      if (errorParam === "auth_error") msg = "Authentication failed.";
+      if (errorParam === "no_role") msg = "Account not properly configured. Contact administrator.";
+      if (disabledParam === "true") msg = "Account disabled.";
+      setError(msg);
+
+      // Clear URL params and error after 3 seconds
+      const timeout = setTimeout(() => {
+        setError("");
+        router.replace("/login", { scroll: false });
+      }, 3000);
+
+      return () => clearTimeout(timeout);
+    }
+  }, [searchParams, router]);
+
+  // Clear errors when user starts typing
+  useEffect(() => {
+    if (username || password) {
+      setError("");
+    }
+  }, [username, password]);
+
+  // Security: Clear lockout timer
+  useEffect(() => {
+    if (lockoutUntil && Date.now() >= lockoutUntil) {
+      setLockoutUntil(null);
+      setFailedAttempts(0);
+    }
+  }, [lockoutUntil]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!isLoaded) return;
+
+    // Security: Check account lockout
+    if (lockoutUntil && Date.now() < lockoutUntil) {
+      const remainingSeconds = Math.ceil((lockoutUntil - Date.now()) / 1000);
+      setError(`Too many failed attempts. Please try again in ${remainingSeconds} seconds.`);
+      return;
+    }
+
+    setError("");
+    setIsLoading(true);
+
+    try {
+      const result = await signIn.create({
+        identifier: username.trim(),
+        password,
+        strategy: "password",
+      });
+
+      if (result.status === "complete") {
+        // IMPORTANT: Set the new session as active in Clerk
+        await setActive({ session: result.createdSessionId });
+
+        try {
+          // FIX: syncUser returns userId (truthy) or null, not a boolean
+          const userId = await syncUser();
+
+          if (!userId) {
+            // User exists in Clerk but not in Convex database
+            setError("Account not found in system. Please contact your administrator.");
+            console.error("User sync failed: User authenticated in Clerk but not found in Convex database");
+            return;
+          }
+
+          // Get the user data from Clerk  to store in session
+          // Access the user from the sign-in result
+          const clerkClient = (signIn as any).client;
+          const currentSession = clerkClient?.sessions?.find((s: any) => s.id === result.createdSessionId);
+          const clerkUser = currentSession?.user;
+
+          // Store session with remember me preference
+          if (clerkUser && result.createdSessionId) {
+            const userRole = (clerkUser.publicMetadata as any)?.role || "site_engineer";
+            const userEmail = clerkUser.primaryEmailAddress?.emailAddress || undefined;
+            const userFullName = clerkUser.fullName || clerkUser.username || "User";
+            const userUsername = clerkUser.username || clerkUser.id;
+
+            // Save to session manager and SET AS ACTIVE
+            addOrUpdateSession(
+              result.createdSessionId,
+              clerkUser.id,
+              userUsername,
+              userFullName,
+              userRole,
+              userEmail,
+              rememberMe // Remember me preference
+            );
+
+            // IMPORTANT: Mark this as the active session
+            setActiveSession(result.createdSessionId);
+          }
+
+          // Success! Reset failed attempts
+          setFailedAttempts(0);
+          setLockoutUntil(null);
+
+          // Show success state briefly before redirect
+          setIsLoading(false);
+
+          // IMPORTANT: Force a full page reload to load the NEW account's data
+          // Add timestamp to bust cache and force fresh redirect to role-specific dashboard
+          setTimeout(() => {
+            window.location.href = `/dashboard?t=${Date.now()}`;
+          }, 100);
+
+        } catch (syncError: any) {
+          console.error("User sync error:", syncError);
+          setIsLoading(false);
+
+          // Better error handling
+          if (syncError?.message?.includes("Not authenticated")) {
+            setError("Authentication session expired. Please try again.");
+          } else if (syncError?.message?.includes("disabled")) {
+            setError("Your account has been disabled. Please contact support.");
+          } else {
+            setError("Failed to verify account. Please try again.");
+          }
+        }
+      }
+    } catch (err: any) {
+      console.log("Login error:", err);
+
+      // Check if this is a "session already exists" error
+      const errorMessage = err?.errors?.[0]?.message || err?.message || "";
+      const isSessionExists = errorMessage.toLowerCase().includes("session") &&
+        errorMessage.toLowerCase().includes("already");
+
+      if (isSessionExists) {
+        // Session already exists for this user - try to switch to it!
+        try {
+          // Get user from clerk to find their session
+          const { client } = signIn as any;
+
+          if (client?.sessions) {
+            // Find a session for this username
+            const existingSession = client.sessions.find((s: any) => {
+              const sessionUser = s.user;
+              return sessionUser?.username === username.trim() ||
+                sessionUser?.primaryEmailAddress?.emailAddress === username.trim();
+            });
+
+            if (existingSession) {
+              // Found existing session - switch to it SILENTLY!
+              await setActive({ session: existingSession.id });
+
+              // Success! Reset failed attempts (this is NOT a failure!)
+              setFailedAttempts(0);
+              setLockoutUntil(null);
+
+              // Redirect to dashboard silently - no error message
+              window.location.href = `/dashboard?t=${Date.now()}`;
+              return; // Exit early - success!
+            }
+          }
+        } catch (switchError) {
+          console.error("Failed to switch to existing session:", switchError);
+        }
+
+        // If we reach here, session exists error but couldn't switch
+        // This means invalid credentials - treat as failed login
+        // DON'T auto-login! Fall through to error handling below
+      }
+
+      // Security: Track failed login attempts (only for real failures, not session exists)
+      const newFailedAttempts = failedAttempts + 1;
+      setFailedAttempts(newFailedAttempts);
+
+      // Security: Implement exponential backoff after 3 failed attempts
+      if (newFailedAttempts >= 3) {
+        // Lockout duration increases exponentially: 30s, 60s, 120s, 240s, etc.
+        const lockoutSeconds = Math.pow(2, newFailedAttempts - 3) * 30;
+        const lockoutTime = Date.now() + (lockoutSeconds * 1000);
+        setLockoutUntil(lockoutTime);
+        setError(`Too many failed attempts. Account locked for ${lockoutSeconds} seconds.`);
+        return;
+      }
+
+      // Improved error messages
+      let msg = "Invalid credentials";
+      if (err?.errors?.[0]?.message) {
+        msg = err.errors[0].message;
+      }
+      if (msg.toLowerCase().includes("find") || msg.toLowerCase().includes("not found")) {
+        msg = "Account not found";
+      }
+      if (msg.toLowerCase().includes("password") || msg.toLowerCase().includes("incorrect")) {
+        msg = "Incorrect username or password";
+      }
+
+      setError(msg);
+
+      // Log failed attempt for security monitoring
+      console.warn(`Failed login attempt for user: ${username.trim()}`);
+
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen w-full bg-background flex items-center justify-center p-4 sm:p-6 lg:p-8">
+
+      {/* Main Container with Rounded Border - Premium Modern UI */}
+      <div className="w-full max-w-7xl flex flex-col lg:flex-row relative overflow-hidden rounded-2xl lg:rounded-3xl shadow-2xl border border-border/20">
+
+        {/* LEFT PANEL - Brand with Enhanced Wavy Edge */}
+        <div className="relative lg:w-1/2 bg-primary flex flex-col justify-center items-center text-primary-foreground px-8 py-12 lg:p-16 overflow-hidden">
+
+          {/* Background Decorations */}
+          <div className="absolute inset-0 overflow-hidden">
+            <div className="absolute top-[-20%] left-[-10%] w-96 h-96 bg-primary-foreground/10 rounded-full blur-3xl" />
+            <div className="absolute bottom-[-20%] right-[-10%] w-96 h-96 bg-primary-foreground/10 rounded-full blur-3xl" />
+          </div>
+
+          <div className="relative z-10 flex flex-col items-center lg:items-start max-w-xl w-full space-y-6 lg:space-y-8">
+
+            {/* Logo */}
+            <div className="transition-transform hover:scale-105 duration-300">
+              <Image
+                src="/images/logos/fulllogo.png"
+                alt="Notion CRM"
+                width={800}
+                height={200}
+                className="w-60 lg:w-72 h-auto brightness-0 invert drop-shadow-2xl"
+                priority
+                quality={100}
+              />
+            </div>
+
+            {/* Headline */}
+            <div className="space-y-3 lg:space-y-4 text-center lg:text-left">
+              <h1 className="text-4xl lg:text-6xl font-extrabold leading-tight tracking-tight">
+                Welcome Back
+              </h1>
+              <p className="text-primary-foreground/90 text-base lg:text-xl font-medium max-w-md">
+                Sign in to access your enterprise logistics dashboard.
+              </p>
+            </div>
+          </div>
+
+          {/* Enhanced Wavy Edge - Desktop - SMOOTH CIRCULAR BULGE */}
+          <div className="hidden lg:block absolute right-0 top-0 bottom-0 w-40 overflow-visible pointer-events-none z-20">
+            <svg viewBox="0 0 100 1000" preserveAspectRatio="none" className="h-full w-full" style={{ filter: 'drop-shadow(3px 0 8px rgba(0,0,0,0.15))' }}>
+              {/* Base wave - SMOOTH curve with more points */}
+              <path
+                d="M0,0 L100,0 L100,1000 L0,1000 
+                   C8,950 12,900 14,850 
+                   C16,800 17,750 18,700 
+                   C18,650 18,600 18,550 
+                   Q18,520 25,505 
+                   Q32,490 42,490 
+                   Q45,490 45,500 
+                   Q45,510 42,510 
+                   Q32,510 25,495 
+                   Q18,480 18,450 
+                   C18,400 18,350 18,300 
+                   C17,250 16,200 14,150 
+                   C12,100 8,50 0,0 Z"
+                className="fill-background"
+              />
+              {/* Inner shadow/gradient for depth */}
+              <path
+                d="M8,0 
+                   C10,850 13,750 16,650 
+                   C17,600 17,550 17,520 
+                   Q17,505 28,500 
+                   Q38,495 46,495 
+                   Q50,495 50,500 
+                   Q50,505 46,505 
+                   Q38,505 28,500 
+                   Q17,495 17,480 
+                   C17,450 17,400 16,350 
+                   C13,250 10,150 8,1000 L8,0 Z"
+                className="fill-primary/5 opacity-50"
+              />
+              {/* Overlay for additional depth */}
+              <path
+                d="M12,100 
+                   C13,800 15,700 16,600 
+                   Q16,510 35,500 
+                   Q16,490 16,400 
+                   C15,300 13,200 12,900 L12,100 Z"
+                className="fill-background opacity-20 blur-[1px]"
+              />
+              {/* Subtle border line */}
+              <path
+                d="M0,0 
+                   C8,900 14,800 17,700 
+                   C18,650 18,600 18,550 
+                   Q18,515 30,500 
+                   Q42,485 45,500 
+                   Q18,515 18,450 
+                   C18,400 18,350 17,300 
+                   C14,200 8,100 0,1000"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="0.5"
+                className="text-border/25"
+              />
+            </svg>
+          </div>
+
+          {/* Enhanced Wavy Edge - Mobile (Bottom) - FIXED NO GAP */}
+          <div className="lg:hidden absolute bottom-0 left-0 right-0 h-28 overflow-visible pointer-events-none z-20">
+            <svg viewBox="0 0 1000 100" preserveAspectRatio="none" className="w-full h-full" style={{ filter: 'drop-shadow(0 2px 6px rgba(0,0,0,0.2))' }}>
+              {/* Base wave - smooth continuous */}
+              <path
+                d="M0,30 C120,75 200,15 320,50 C440,15 560,70 680,40 C800,20 900,30 1000,30 L1000,100 L0,100 Z"
+                className="fill-background"
+              />
+              {/* Overlay for depth */}
+              <path
+                d="M0,40 C140,85 220,25 340,60 C460,25 580,80 700,50 C820,30 920,40 1000,40 L1000,100 L0,100 Z"
+                className="fill-background opacity-40 blur-[1px]"
+              />
+              {/* Border line */}
+              <path
+                d="M0,30 C120,75 200,15 320,50 C440,15 560,70 680,40 C800,20 900,30 1000,30"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                className="text-border/40"
+              />
+            </svg>
+          </div>
+        </div>
+
+        {/* RIGHT PANEL - Form */}
+        <div className="flex-1 lg:w-1/2 flex items-center justify-center p-6 sm:p-8 lg:p-12 bg-background relative">
+
+          <div className="w-full max-w-md">
+
+            {/* Header */}
+            <div className="space-y-2 text-center lg:text-left mb-8">
+              <h2 className="text-3xl sm:text-4xl font-bold text-foreground tracking-tight">
+                Sign In
+              </h2>
+              <p className="text-sm sm:text-base text-muted-foreground">
+                Enter your credentials to continue
+              </p>
+            </div>
+
+            {/* Form */}
+            <form onSubmit={handleSubmit} className="space-y-5">
+
+              {/* Username Input */}
+              <div className="space-y-2">
+                <label htmlFor="username" className="text-sm font-medium text-foreground/80">
+                  Username
+                </label>
+                <div className="relative">
+                  <div className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none">
+                    <User size={18} strokeWidth={2} />
+                  </div>
+                  <input
+                    id="username"
+                    type="text"
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                    required
+                    disabled={isLoading}
+                    placeholder="purchase1"
+                    autoComplete="username"
+                    className="w-full pl-11 pr-4 py-3.5 bg-secondary/50 hover:bg-secondary/70 border border-border/50 focus:border-primary focus:bg-background focus:ring-2 focus:ring-primary/20 rounded-xl transition-all outline-none text-sm sm:text-base font-medium text-foreground placeholder:text-muted-foreground/50 disabled:opacity-60 disabled:cursor-not-allowed"
+                  />
+                </div>
+              </div>
+
+              {/* Password Input */}
+              <div className="space-y-2">
+                <label htmlFor="password" className="text-sm font-medium text-foreground/80">
+                  Password
+                </label>
+                <div className="relative">
+                  <div className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground pointer-events-none">
+                    <Lock size={18} strokeWidth={2} />
+                  </div>
+                  <input
+                    id="password"
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    required
+                    disabled={isLoading}
+                    placeholder="••••••••"
+                    autoComplete="current-password"
+                    className="w-full pl-11 pr-4 py-3.5 bg-secondary/50 hover:bg-secondary/70 border border-border/50 focus:border-primary focus:bg-background focus:ring-2 focus:ring-primary/20 rounded-xl transition-all outline-none text-sm sm:text-base font-medium text-foreground placeholder:text-muted-foreground/50 disabled:opacity-60 disabled:cursor-not-allowed"
+                  />
+                </div>
+              </div>
+
+              {/* Remember Me Checkbox */}
+              <div className="flex items-center gap-2.5 pt-1">
+                <input
+                  type="checkbox"
+                  id="rememberMe"
+                  checked={rememberMe}
+                  onChange={(e) => setRememberMe(e.target.checked)}
+                  disabled={isLoading}
+                  className="w-4 h-4 rounded border-2 border-primary/40 bg-background text-primary focus:ring-2 focus:ring-primary/30 disabled:opacity-60 cursor-pointer"
+                />
+                <label htmlFor="rememberMe" className="text-sm font-medium text-muted-foreground cursor-pointer select-none">
+                  Remember me for 30 days
+                </label>
+              </div>
+
+              {/* Error Message */}
+              {(error || disabled) && (
+                <div className="flex items-center gap-3 p-4 bg-destructive/10 border border-destructive/30 rounded-xl animate-in fade-in slide-in-from-top-2 duration-300">
+                  <AlertCircle className="text-destructive flex-shrink-0" size={18} />
+                  <p className="text-sm font-medium text-destructive">
+                    {disabled ? "Account disabled" : error}
+                  </p>
+                </div>
+              )}
+
+              {/* Submit Button */}
+              <button
+                type="submit"
+                disabled={isLoading}
+                className="w-full py-4 px-6 bg-primary hover:bg-primary/90 active:bg-primary/80 text-primary-foreground font-semibold text-sm sm:text-base rounded-xl shadow-lg shadow-primary/30 hover:shadow-xl hover:shadow-primary/40 transition-all duration-200 flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed group"
+              >
+                {isLoading ? (
+                  <>
+                    <Loader2 className="animate-spin" size={18} />
+                    <span>Signing in...</span>
+                  </>
+                ) : (
+                  <>
+                    <span>Sign In</span>
+                    <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" />
+                  </>
+                )}
+              </button>
+
+              {/* Footer */}
+              <div className="pt-4 text-center">
+                <p className="text-xs text-muted-foreground">
+                  &copy; {new Date().getFullYear()} Notion CRM - Enterprise Logistics Platform
+                </p>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}

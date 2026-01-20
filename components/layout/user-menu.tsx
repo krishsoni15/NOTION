@@ -72,30 +72,7 @@ export function UserMenu() {
   const initials = getInitials(displayName);
   const role = convexUser?.role;
 
-  const handleSwitchAccount = async (session: AccountSession) => {
-    if (isLoading) return;
 
-    setIsLoading(true);
-    try {
-      const clerkSession = sessions?.find((s: any) => s.user?.id === session.userId);
-
-      if (!clerkSession) {
-        removeSession(session.sessionId);
-        refreshSessions();
-        return;
-      }
-
-      await clerk.setActive({ session: clerkSession.id });
-      setStoredActiveSession(clerkSession.id);
-      refreshSessions();
-
-      // Force full page reload with cache busting to ensure new account data is loaded
-      window.location.href = `/dashboard?t=${Date.now()}`;
-    } catch (error) {
-      console.error("Failed to switch account:", error);
-      setIsLoading(false);
-    }
-  };
 
   const handleSignOut = async () => {
     try {

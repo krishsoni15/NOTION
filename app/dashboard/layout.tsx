@@ -11,7 +11,7 @@ import { auth } from "@clerk/nextjs/server";
 import { SidebarProvider } from "@/components/layout/sidebar-provider";
 import { SidebarWrapper } from "@/components/layout/sidebar-wrapper";
 import { Header } from "@/components/layout/header";
-import { PresenceProvider } from "@/components/chat/presence-provider";
+
 import { ChatWidthProvider } from "@/components/chat/chat-width-provider";
 import { ReminderScheduler } from "@/components/sticky-notes/reminder-scheduler";
 import { getUserRole } from "@/lib/auth/get-user-role";
@@ -38,19 +38,17 @@ export default async function DashboardLayout({ children }: { children: ReactNod
   return (
     <ChatWidthProvider>
       <SidebarProvider>
-        <PresenceProvider>
-          <UserSync />
-          <ReminderScheduler />
-          <SidebarWrapper userRole={role}>
-            <Header userRole={role} />
+        <UserSync />
+        <ReminderScheduler />
+        <SidebarWrapper userRole={role}>
+          <Header userRole={role} />
 
-            <main className="flex-1 overflow-y-auto">
-              <div className="container mx-auto px-2 py-3 md:px-4 md:py-4">
-                {children}
-              </div>
-            </main>
-          </SidebarWrapper>
-        </PresenceProvider>
+          <main className="flex-1 overflow-y-auto">
+            <div className="container mx-auto px-2 py-3 md:px-4 md:py-4">
+              {children}
+            </div>
+          </main>
+        </SidebarWrapper>
       </SidebarProvider>
     </ChatWidthProvider>
   );

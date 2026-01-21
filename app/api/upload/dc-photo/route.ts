@@ -1,11 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { v2 as cloudinary } from "cloudinary";
-
-cloudinary.config({
-    cloud_name: process.env.NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME,
-    api_key: process.env.CLOUDINARY_API_KEY,
-    api_secret: process.env.CLOUDINARY_API_SECRET,
-});
+import { uploadImage } from "@/lib/cloudinary/client";
 
 export async function POST(request: NextRequest) {
     try {
@@ -20,30 +14,21 @@ export async function POST(request: NextRequest) {
         const bytes = await file.arrayBuffer();
         const buffer = Buffer.from(bytes);
 
-        // Upload to Cloudinary
-        const result = await new Promise<any>((resolve, reject) => {
-            const uploadStream = cloudinary.uploader.upload_stream(
-                {
-                    folder: "delivery-challans",
-                    resource_type: "auto",
-                },
-                (error, result) => {
-                    if (error) reject(error);
-                    else resolve(result);
-                }
-            );
-
-            uploadStream.end(buffer);
+        // Upload to Cloudinary using shared client
+        // Using "delivery-challans" folder as originally requested
+        const { url, key } = await uploadImage(buffer, undefined, {
+            folder: "delivery-challans",
+            resourceType: "auto",
         });
 
         return NextResponse.json({
-            imageUrl: result.secure_url,
-            imageKey: result.public_id,
+            imageUrl: url,
+            imageKey: key,
         });
     } catch (error) {
         console.error("Upload error:", error);
         return NextResponse.json(
-            { error: "Failed to upload file" },
+            { error: error instanceof Error ? error.message : "Failed to upload file" },
             { status: 500 }
         );
     }

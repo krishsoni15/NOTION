@@ -181,29 +181,25 @@ const fuzzyMatch = (text: string, pattern: string): boolean => {
 const getStatusColor = (status: string) => {
   switch (status) {
     case "draft":
-      return "text-gray-700 dark:text-gray-300";
+      return "text-slate-600 dark:text-slate-400";
     case "pending":
-      return "text-yellow-700 dark:text-yellow-300";
+      return "text-amber-600 dark:text-amber-400";
     case "approved":
-      return "text-green-700 dark:text-green-300";
     case "ready_for_cc":
-      return "text-blue-700 dark:text-blue-300";
     case "cc_pending":
-      return "text-purple-700 dark:text-purple-300";
     case "cc_approved":
-      return "text-indigo-700 dark:text-indigo-300";
     case "ready_for_po":
-      return "text-cyan-700 dark:text-cyan-300";
-    case "delivery_stage":
-      return "text-orange-700 dark:text-orange-300";
-    case "rejected":
-      return "text-red-700 dark:text-red-300";
-    case "delivered":
-      return "text-blue-700 dark:text-blue-300";
+    case "pending_po":
     case "sign_pending":
-      return "text-amber-700 dark:text-amber-300";
+      return "text-blue-600 dark:text-blue-400";
+    case "delivery_processing":
+      return "text-orange-600 dark:text-orange-400";
+    case "rejected":
     case "sign_rejected":
-      return "text-red-700 dark:text-red-300";
+    case "clicked_rejected": // Covers various rejected states
+      return "text-rose-600 dark:text-rose-400";
+    case "delivered":
+      return "text-emerald-600 dark:text-emerald-400";
     default:
       return "text-foreground";
   }
@@ -212,29 +208,24 @@ const getStatusColor = (status: string) => {
 const getStatusDot = (status: string) => {
   switch (status) {
     case "draft":
-      return "bg-gray-400";
+      return "bg-slate-400";
     case "pending":
-      return "bg-yellow-400";
+      return "bg-amber-400";
     case "approved":
-      return "bg-green-400";
     case "ready_for_cc":
-      return "bg-blue-400";
     case "cc_pending":
-      return "bg-purple-400";
     case "cc_approved":
-      return "bg-indigo-400";
     case "ready_for_po":
-      return "bg-cyan-400";
-    case "delivery_stage":
+    case "pending_po":
+    case "sign_pending":
+      return "bg-blue-400";
+    case "delivery_processing":
       return "bg-orange-400";
     case "rejected":
-      return "bg-red-400";
-    case "delivered":
-      return "bg-blue-400";
-    case "sign_pending":
-      return "bg-amber-400";
     case "sign_rejected":
-      return "bg-red-400";
+      return "bg-rose-400";
+    case "delivered":
+      return "bg-emerald-400";
     default:
       return "bg-muted-foreground";
   }
@@ -337,7 +328,11 @@ export function SiteRequestsContent() {
   // Separate new requests from history (include drafts in new)
   // Sort by updatedAt descending (newest first) - newly sent requests will be at top
   const newRequests = (allRequests?.filter((r) =>
-    ["draft", "pending", "ready_for_cc", "cc_pending", "ready_for_po", "delivery_stage"].includes(r.status)
+    ![
+      "rejected",
+      "sign_rejected",
+      "delivered"
+    ].includes(r.status)
   ) || []).sort((a, b) => {
     // Non-drafts first (pending, etc.), sorted by updatedAt (newest first)
     if (a.status !== "draft" && b.status !== "draft") {
@@ -350,7 +345,7 @@ export function SiteRequestsContent() {
   });
 
   const historyRequests = allRequests?.filter((r) =>
-    ["approved", "rejected", "delivered"].includes(r.status)
+    ["rejected", "sign_rejected", "delivered"].includes(r.status)
   ) || [];
 
   const handleEditDraft = (requestNumber: string) => {
@@ -419,13 +414,36 @@ export function SiteRequestsContent() {
       filtered = filtered.filter((r) => {
         // Check if request status matches any selected filter group
         return statusFilter.some(filterGroup => {
+          if (filterGroup === "draft") return r.status === "draft";
+
+          if (filterGroup === "pending") return ["pending", "sign_pending"].includes(r.status);
+
+          if (filterGroup === "approved") return r.status === "approved";
+
+          if (filterGroup === "rejected") return ["rejected", "sign_rejected"].includes(r.status);
+
           if (filterGroup === "processing") {
-            return ["ready_for_cc", "cc_pending", "cc_approved", "cc_rejected", "ready_for_po", "sign_pending"].includes(r.status);
+            return [
+              "ready_for_cc",
+              "cc_pending",
+              "cc_approved",
+              "cc_rejected",
+              "ready_for_po",
+              "pending_po",
+              "rejected_po",
+              "ready_for_delivery", // "ready for delivery all thing sho on processign"
+              "recheck"
+            ].includes(r.status);
           }
-          if (filterGroup === "delivery_stage") {
-            return ["delivery_stage", "delivered"].includes(r.status);
+
+          if (filterGroup === "out_for_delivery") {
+            return ["delivery_processing"].includes(r.status);
           }
-          // Direct match for draft, pending, approved, rejected
+
+          if (filterGroup === "delivered") {
+            return r.status === "delivered";
+          }
+
           return r.status === filterGroup;
         });
       });
@@ -542,22 +560,24 @@ export function SiteRequestsContent() {
                     </CommandItem>
                     <CommandSeparator className="my-1" />
                     {[
-                      { value: "draft", label: "Draft", color: "text-gray-500" },
-                      { value: "pending", label: "Pending Approval", color: "text-amber-600" },
-                      { value: "approved", label: "Approved", color: "text-emerald-600" },
-                      { value: "rejected", label: "Rejected", color: "text-red-600" },
-                      { value: "processing", label: "Processing", color: "text-indigo-600" },
-                      { value: "delivery_stage", label: "Delivery Stage", color: "text-orange-600" },
+                      { value: "draft", label: "Draft", color: "text-slate-500" },
+                      { value: "pending", label: "Pending", color: "text-amber-600" },
+                      { value: "approved", label: "Approved", color: "text-blue-600" },
+                      { value: "rejected", label: "Rejected", color: "text-rose-600" },
+                      { value: "processing", label: "Processing", color: "text-blue-600" },
+                      { value: "out_for_delivery", label: "Out for Delivery", color: "text-orange-600" },
+                      { value: "delivered", label: "Delivered", color: "text-emerald-600" },
                     ].map((option) => {
                       const isSelected = statusFilter.includes(option.value);
                       const getStatusDotForGroup = (groupValue: string) => {
                         switch (groupValue) {
-                          case "draft": return "bg-gray-400";
-                          case "pending": return "bg-yellow-400";
-                          case "approved": return "bg-green-400";
-                          case "rejected": return "bg-red-400";
-                          case "processing": return "bg-indigo-400";
-                          case "delivery_stage": return "bg-orange-400";
+                          case "draft": return "bg-slate-400";
+                          case "pending": return "bg-amber-400";
+                          case "approved": return "bg-blue-400";
+                          case "rejected": return "bg-rose-400";
+                          case "processing": return "bg-blue-400";
+                          case "out_for_delivery": return "bg-orange-400";
+                          case "delivered": return "bg-emerald-400";
                           default: return "bg-muted-foreground";
                         }
                       }

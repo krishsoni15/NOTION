@@ -83,7 +83,8 @@ export function CreateDeliveryDialog({
             });
 
             if (!response.ok) {
-                throw new Error("Upload failed");
+                const errorData = await response.json().catch(() => ({}));
+                throw new Error(errorData.error || "Upload failed");
             }
 
             return await response.json();

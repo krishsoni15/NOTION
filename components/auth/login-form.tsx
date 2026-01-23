@@ -6,7 +6,7 @@ import { useSignIn, useUser, useClerk } from "@clerk/nextjs";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
-import { User, Lock, ArrowRight, Loader2, AlertCircle } from "lucide-react";
+import { User, Lock, ArrowRight, Loader2, AlertCircle, Eye, EyeOff } from "lucide-react";
 import { addOrUpdateSession, setActiveSession } from "@/lib/auth/session-manager";
 import { AnimatedThemeToggler } from "@/components/ui/animated-theme-toggler";
 
@@ -29,6 +29,7 @@ export function LoginForm({ disabled = false }: LoginFormProps) {
   const [failedAttempts, setFailedAttempts] = useState(0);
   const [lockoutUntil, setLockoutUntil] = useState<number | null>(null);
   const [isSuccess, setIsSuccess] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   useEffect(() => {
     const errorParam = searchParams?.get("error");
@@ -131,7 +132,7 @@ export function LoginForm({ disabled = false }: LoginFormProps) {
           setIsLoading(false);
 
           setTimeout(() => {
-            window.location.href = `/dashboard?t=${Date.now()}`;
+            router.push(`/dashboard?t=${Date.now()}`);
           }, 200);
 
         } catch (syncError: any) {
@@ -174,7 +175,7 @@ export function LoginForm({ disabled = false }: LoginFormProps) {
               await setActive({ session: existingSession.id });
               setFailedAttempts(0);
               setLockoutUntil(null);
-              window.location.href = `/dashboard?t=${Date.now()}`;
+              router.push(`/dashboard?t=${Date.now()}`);
               return;
             }
           }
@@ -347,15 +348,26 @@ export function LoginForm({ disabled = false }: LoginFormProps) {
                 </div>
                 <input
                   id="password"
-                  type="password"
+                  type={showPassword ? "text" : "password"}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   required
                   disabled={isLoading}
                   placeholder="••••••••"
                   autoComplete="current-password"
-                  className="w-full pl-12 pr-4 py-4 bg-slate-50 dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 focus:border-primary focus:bg-white dark:focus:bg-slate-800 focus:ring-4 focus:ring-primary/10 rounded-2xl transition-all duration-300 outline-none text-base font-medium text-slate-900 dark:text-white placeholder:text-slate-400 disabled:opacity-60 disabled:cursor-not-allowed"
+                  className="w-full pl-12 pr-12 py-4 bg-slate-50 dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 focus:border-primary focus:bg-white dark:focus:bg-slate-800 focus:ring-4 focus:ring-primary/10 rounded-2xl transition-all duration-300 outline-none text-base font-medium text-slate-900 dark:text-white placeholder:text-slate-400 disabled:opacity-60 disabled:cursor-not-allowed"
                 />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors focus:outline-none"
+                >
+                  {showPassword ? (
+                    <EyeOff size={20} />
+                  ) : (
+                    <Eye size={20} />
+                  )}
+                </button>
               </div>
             </div>
 

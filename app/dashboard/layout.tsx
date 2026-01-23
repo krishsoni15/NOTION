@@ -44,7 +44,7 @@ export default async function DashboardLayout({ children }: { children: ReactNod
           <Header userRole={role} />
 
           <main className="flex-1 overflow-y-auto">
-            <div className="container mx-auto px-2 py-3 md:px-4 md:py-4">
+            <div className="w-full max-w-[1920px] mx-auto px-2 py-3 md:px-4 md:py-4">
               {children}
             </div>
           </main>

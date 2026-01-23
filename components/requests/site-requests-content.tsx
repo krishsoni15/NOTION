@@ -33,6 +33,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandSeparator } from "@/components/ui/command";
 import { cn, normalizeSearchQuery, matchesSearchQuery } from "@/lib/utils";
 import { useViewMode } from "@/hooks/use-view-mode";
+import { PaginationControls } from "@/components/ui/pagination-controls";
 import type { Id } from "@/convex/_generated/dataModel";
 
 // Enhanced precise search function with priority for exact matches
@@ -185,18 +186,22 @@ const getStatusColor = (status: string) => {
     case "pending":
       return "text-amber-600 dark:text-amber-400";
     case "approved":
+    case "recheck":
     case "ready_for_cc":
     case "cc_pending":
     case "cc_approved":
     case "ready_for_po":
     case "pending_po":
     case "sign_pending":
+    case "ready_for_delivery":
       return "text-blue-600 dark:text-blue-400";
     case "delivery_processing":
+    case "delivery_stage":
       return "text-orange-600 dark:text-orange-400";
     case "rejected":
+    case "cc_rejected":
+    case "rejected_po":
     case "sign_rejected":
-    case "clicked_rejected": // Covers various rejected states
       return "text-rose-600 dark:text-rose-400";
     case "delivered":
       return "text-emerald-600 dark:text-emerald-400";
@@ -212,16 +217,21 @@ const getStatusDot = (status: string) => {
     case "pending":
       return "bg-amber-400";
     case "approved":
+    case "recheck":
     case "ready_for_cc":
     case "cc_pending":
     case "cc_approved":
     case "ready_for_po":
     case "pending_po":
     case "sign_pending":
+    case "ready_for_delivery":
       return "bg-blue-400";
     case "delivery_processing":
+    case "delivery_stage":
       return "bg-orange-400";
     case "rejected":
+    case "cc_rejected":
+    case "rejected_po":
     case "sign_rejected":
       return "bg-rose-400";
     case "delivered":
@@ -418,12 +428,9 @@ export function SiteRequestsContent() {
 
           if (filterGroup === "pending") return ["pending", "sign_pending"].includes(r.status);
 
-          if (filterGroup === "approved") return r.status === "approved";
-
-          if (filterGroup === "rejected") return ["rejected", "sign_rejected"].includes(r.status);
-
           if (filterGroup === "processing") {
             return [
+              "approved",
               "ready_for_cc",
               "cc_pending",
               "cc_approved",
@@ -434,6 +441,10 @@ export function SiteRequestsContent() {
               "ready_for_delivery", // "ready for delivery all thing sho on processign"
               "recheck"
             ].includes(r.status);
+          }
+
+          if (filterGroup === "rejected") {
+            return ["rejected", "sign_rejected"].includes(r.status);
           }
 
           if (filterGroup === "out_for_delivery") {
@@ -477,6 +488,54 @@ export function SiteRequestsContent() {
     };
   }, [debouncedSearchQuery, allFilteredRequests.length, newRequests, historyRequests]);
 
+  // Pagination State with localStorage persistence
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(() => {
+    // Load from localStorage on mount
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('requestsPageSize');
+      return saved ? Number(saved) : 50; // Default to 50
+    }
+    return 50;
+  });
+
+  // Save page size to localStorage when it changes
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('requestsPageSize', pageSize.toString());
+    }
+  }, [pageSize]);
+
+  // Reset page when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, statusFilter.length, viewMode]);
+
+
+  // Pagination Logic: Group by Request Number first to keep requests intact across pages
+  const groupBy = (array: any[], key: string) => {
+    return array.reduce((result, currentValue) => {
+      (result[currentValue[key]] = result[currentValue[key]] || []).push(currentValue);
+      return result;
+    }, {});
+  };
+
+  const groupedRequestsMap = groupBy(allFilteredRequests, 'requestNumber');
+  // Sort groups based on their sorting in the original list (which is by date)
+  // We can use the order of appearance in allFilteredRequests to maintain sort
+  const uniqueRequestNumbers = Array.from(new Set(allFilteredRequests.map(r => r.requestNumber)));
+
+  const totalRequestGroups = uniqueRequestNumbers.length;
+  const totalPages = Math.ceil(totalRequestGroups / pageSize);
+
+  const paginatedRequestNumbers = uniqueRequestNumbers.slice(
+    (currentPage - 1) * pageSize,
+    currentPage * pageSize
+  );
+
+  // Flatten back to items list for the table, but only containing items for the current page's requests
+  const paginatedRequests = paginatedRequestNumbers.flatMap(num => groupedRequestsMap[num]);
+
   return (
     <>
       {/* Search, Filters, and Actions Bar */}
@@ -489,7 +548,7 @@ export function SiteRequestsContent() {
               placeholder="Search: order ID (001, 002...), item name, or location name"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className={`pl-9 pr-9 h-9 sm:h-10 text-sm w-full ${debouncedSearchQuery.trim() ? 'ring-2 ring-blue-500/50 border-blue-500' : ''}`}
+              className={`pl-9 pr-9 h-9 sm:h-10 text-base w-full ${debouncedSearchQuery.trim() ? 'ring-2 ring-blue-500/50 border-blue-500' : ''}`}
               title="Press Ctrl+K to focus search, Escape to clear"
             />
             {searchQuery && (
@@ -529,10 +588,10 @@ export function SiteRequestsContent() {
         <div className="flex gap-2 items-center">
           <Popover>
             <PopoverTrigger asChild>
-              <Button variant="outline" className="flex-1 sm:w-[200px] sm:flex-none h-9 sm:h-10 justify-between px-3 text-left font-normal text-sm">
+              <Button variant="outline" className="flex-1 sm:w-[200px] sm:flex-none h-9 sm:h-10 justify-between px-3 text-left font-normal text-base">
                 <span className="truncate">
                   {statusFilter.length === 0
-                    ? "All Statuses"
+                    ? `All Items (${totalRequestGroups})`
                     : `${statusFilter.length} Selected`}
                 </span>
                 <Filter className="ml-2 h-4 w-4 shrink-0 opacity-50" />
@@ -560,27 +619,74 @@ export function SiteRequestsContent() {
                     </CommandItem>
                     <CommandSeparator className="my-1" />
                     {[
-                      { value: "draft", label: "Draft", color: "text-slate-500" },
-                      { value: "pending", label: "Pending", color: "text-amber-600" },
-                      { value: "approved", label: "Approved", color: "text-blue-600" },
-                      { value: "rejected", label: "Rejected", color: "text-rose-600" },
-                      { value: "processing", label: "Processing", color: "text-blue-600" },
-                      { value: "out_for_delivery", label: "Out for Delivery", color: "text-orange-600" },
-                      { value: "delivered", label: "Delivered", color: "text-emerald-600" },
+                      {
+                        value: "draft",
+                        label: "Draft",
+                        color: "text-slate-600",
+                        dotColor: "bg-slate-400"
+                      },
+                      {
+                        value: "pending",
+                        label: "Pending",
+                        color: "text-amber-600",
+                        dotColor: "bg-amber-500"
+                      },
+                      {
+                        value: "rejected",
+                        label: "Rejected",
+                        color: "text-rose-600",
+                        dotColor: "bg-rose-500"
+                      },
+                      {
+                        value: "processing",
+                        label: "Approved & Processing",
+                        color: "text-blue-600",
+                        dotColor: "bg-blue-500"
+                      },
+                      {
+                        value: "out_for_delivery",
+                        label: "Out for Delivery",
+                        color: "text-orange-600",
+                        dotColor: "bg-orange-500"
+                      },
+                      {
+                        value: "delivered",
+                        label: "Delivered",
+                        color: "text-emerald-600",
+                        dotColor: "bg-emerald-500"
+                      },
                     ].map((option) => {
                       const isSelected = statusFilter.includes(option.value);
-                      const getStatusDotForGroup = (groupValue: string) => {
-                        switch (groupValue) {
-                          case "draft": return "bg-slate-400";
-                          case "pending": return "bg-amber-400";
-                          case "approved": return "bg-blue-400";
-                          case "rejected": return "bg-rose-400";
-                          case "processing": return "bg-blue-400";
-                          case "out_for_delivery": return "bg-orange-400";
-                          case "delivered": return "bg-emerald-400";
-                          default: return "bg-muted-foreground";
-                        }
-                      }
+
+                      // Calculate count for this status
+                      const getStatusCount = () => {
+                        if (!allRequests) return 0;
+                        return allRequests.filter(r => {
+                          if (option.value === "draft") return r.status === "draft";
+                          if (option.value === "pending") return ["pending", "sign_pending"].includes(r.status);
+                          if (option.value === "rejected") return ["rejected", "sign_rejected"].includes(r.status);
+                          if (option.value === "processing") {
+                            return [
+                              "approved",
+                              "ready_for_cc",
+                              "cc_pending",
+                              "cc_approved",
+                              "cc_rejected",
+                              "ready_for_po",
+                              "pending_po",
+                              "rejected_po",
+                              "ready_for_delivery",
+                              "recheck"
+                            ].includes(r.status);
+                          }
+                          if (option.value === "out_for_delivery") return r.status === "delivery_processing";
+                          if (option.value === "delivered") return r.status === "delivered";
+                          return false;
+                        }).length;
+                      };
+
+                      const count = getStatusCount();
+
                       return (
                         <CommandItem
                           key={option.value}
@@ -591,7 +697,7 @@ export function SiteRequestsContent() {
                               setStatusFilter([...statusFilter, option.value]);
                             }
                           }}
-                          className="cursor-pointer"
+                          className="cursor-pointer py-2"
                         >
                           <div className={cn(
                             "mr-2 flex h-4 w-4 items-center justify-center rounded-sm border",
@@ -601,10 +707,11 @@ export function SiteRequestsContent() {
                           )}>
                             <Check className={cn("h-4 w-4")} />
                           </div>
-                          <div className="flex items-center gap-2">
-                            <div className={`w-2 h-2 rounded-full ${getStatusDotForGroup(option.value)}`}></div>
-                            <span className={cn("flex-1", option.color)}>{option.label}</span>
-                          </div>
+                          <div className={`w-2 h-2 rounded-full ${option.dotColor} mr-2 flex-shrink-0`}></div>
+                          <span className={cn("flex-1 text-sm font-medium", option.color)}>{option.label}</span>
+                          <span className="text-xs font-semibold text-muted-foreground bg-muted/50 px-1.5 py-0.5 rounded min-w-[24px] text-center">
+                            {count}
+                          </span>
                         </CommandItem>
                       );
                     })}
@@ -615,8 +722,7 @@ export function SiteRequestsContent() {
           </Popover>
           <Button
             onClick={() => setFormOpen(true)}
-            size="sm"
-            className="h-9 sm:h-10 ml-auto"
+            className="h-9 sm:h-10 ml-auto text-base"
           >
             <Plus className="h-4 w-4 mr-2" />
             New Request
@@ -627,8 +733,21 @@ export function SiteRequestsContent() {
 
       </div>
 
+      {/* Pagination Controls - Top */}
+      <div className="mb-3">
+        <PaginationControls
+          currentPage={currentPage}
+          totalPages={totalPages}
+          onPageChange={setCurrentPage}
+          pageSize={pageSize}
+          onPageSizeChange={setPageSize}
+          totalItems={totalRequestGroups}
+          pageSizeOptions={[10, 25, 50, 100]}
+        />
+      </div>
+
       <RequestsTable
-        requests={allFilteredRequests as any}
+        requests={paginatedRequests}
         onViewDetails={(requestId) => setSelectedRequestId(requestId)}
         onEditDraft={handleEditDraft}
         onDeleteDraft={handleDeleteDraft}
@@ -636,6 +755,18 @@ export function SiteRequestsContent() {
         newlySentRequestNumbers={newlySentRequestNumbers}
         viewMode={viewMode}
       />
+
+      <div className="mt-4 border-t pt-4">
+        <PaginationControls
+          currentPage={currentPage}
+          totalPages={totalPages}
+          onPageChange={setCurrentPage}
+          pageSize={pageSize}
+          onPageSizeChange={setPageSize}
+          totalItems={totalRequestGroups}
+          pageSizeOptions={[10, 35, 50, 100]}
+        />
+      </div>
 
       <MaterialRequestForm
         open={formOpen}

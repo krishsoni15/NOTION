@@ -174,6 +174,7 @@ interface Request {
   approver?: {
     _id: Id<"users">;
     fullName: string;
+    role: string;
   } | null;
   notesCount?: number;
 }
@@ -341,12 +342,6 @@ export function RequestsTable({
     return photos;
   };
 
-  const handleOpenInMap = (address: string) => {
-    const encodedAddress = encodeURIComponent(address);
-    const mapUrl = `https://www.google.com/maps/search/?api=1&query=${encodedAddress}`;
-    window.open(mapUrl, '_blank');
-  };
-
   // Get all photos from all items in a request group
   const getRequestPhotos = (items: Request[]) => {
     const photos: Array<{ imageUrl: string; imageKey: string }> = [];
@@ -481,37 +476,6 @@ export function RequestsTable({
     }
   };
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "draft":
-        return "text-slate-600 dark:text-slate-400";
-      case "pending":
-        return "text-amber-600 dark:text-amber-400";
-      case "approved":
-      case "recheck":
-      case "ready_for_cc":
-      case "cc_pending":
-      case "cc_approved":
-      case "ready_for_po":
-      case "pending_po":
-      case "ready_for_delivery":
-      case "sign_pending":
-      case "partially_processed":
-        return "text-blue-600 dark:text-blue-400";
-      case "delivery_processing":
-        return "text-orange-600 dark:text-orange-400";
-      case "delivered":
-        return "text-emerald-600 dark:text-emerald-400";
-      case "rejected":
-      case "cc_rejected":
-      case "rejected_po":
-      case "sign_rejected":
-        return "text-rose-600 dark:text-rose-400";
-      default:
-        return "text-muted-foreground";
-    }
-  };
-
   if (groupedRequestsArray.length === 0 && requests.length === 0) {
     return (
       <div className="text-center py-8 text-muted-foreground">
@@ -531,22 +495,14 @@ export function RequestsTable({
   // Card View Component
   const CardView = () => (
     <>
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 min-[1000px]:grid-cols-2 min-[1900px]:grid-cols-3 gap-4">
         {groupedRequestsArray.map((group) => {
           const { requestNumber, items, firstItem } = group;
           const isExpanded = expandedGroups.has(requestNumber);
           const isNewlySent = newlySentRequestNumbers.has(requestNumber);
           const hasMultipleItems = items.length > 1;
           const urgentCount = items.filter((item) => item.isUrgent).length;
-
-          // Count items with cc_pending status for group CC button
-          const ccPendingItems = items.filter((item) => item.status === 'cc_pending');
-          const ccPendingCount = ccPendingItems.length;
-
-          // Count items requiring review for the Review button
-          const reviewableItemsCount = items.filter((item) =>
-            ["pending", "sign_pending", "ready_for_cc"].includes(item.status)
-          ).length;
+          const reviewableItemsCount = items.filter((item) => ["pending", "sign_pending"].includes(item.status)).length;
 
           const allItemsHaveSameStatus = items.length > 0
             ? items.every((item) => item.status === items[0].status)
@@ -562,7 +518,7 @@ export function RequestsTable({
           const overallStatus = getOverallStatus();
 
           // Helper to render a single item row
-          const renderItemRow = (item: Request, isFirst: boolean = false) => (
+          const renderItemRow = (item: Request, isFirst: boolean = false, showBadges: boolean = true) => (
             <div className="flex gap-3 relative">
               <div className="shrink-0 pt-1">
                 <CompactImageGallery images={getItemPhotos(item)} maxDisplay={1} size="sm" />
@@ -572,45 +528,46 @@ export function RequestsTable({
                 <div className="flex justify-between items-start gap-3">
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 mb-0.5">
-                      <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Item Name</span>
+                      <span className="text-sm uppercase font-bold text-muted-foreground tracking-wider">Item Name</span>
                     </div>
                     <button
                       onClick={(e) => { e.stopPropagation(); setSelectedItemName(item.itemName); }}
-                      className="font-bold text-base text-foreground hover:text-primary hover:underline leading-tight text-left block w-full truncate"
+                      className="font-bold text-xl text-foreground hover:text-primary hover:underline leading-tight text-left block w-full truncate"
                     >
                       {item.itemName}
                     </button>
                   </div>
 
                   <div className="flex flex-col items-end shrink-0">
-                    <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider mb-0.5">Quantity</span>
-                    <Badge variant="secondary" className="text-sm font-bold px-2 py-0.5 bg-slate-100 text-slate-900 border-slate-200">
-                      {item.quantity} <span className="text-xs font-normal ml-1 text-slate-500">{item.unit}</span>
+                    <span className="text-sm uppercase font-bold text-muted-foreground tracking-wider mb-1">Quantity</span>
+                    <Badge variant="secondary" className="text-lg font-bold px-3 py-1 bg-slate-100 text-slate-900 border-slate-200">
+                      {item.quantity} <span className="text-base font-normal ml-1 text-slate-500">{item.unit}</span>
                     </Badge>
                   </div>
                 </div>
 
                 {item.description && (
                   <div className="relative group/desc">
-                    <div className="flex items-center gap-2 mb-0.5">
-                      <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Specs/Desc</span>
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-sm uppercase font-bold text-muted-foreground tracking-wider">Description</span>
                     </div>
-                    <p className="text-sm text-muted-foreground line-clamp-2 leading-relaxed group-hover/desc:line-clamp-none transition-all duration-200 bg-muted/20 p-1.5 rounded-md border border-transparent group-hover/desc:border-border group-hover/desc:bg-card group-hover/desc:shadow-sm">
+                    <p className="text-lg text-muted-foreground line-clamp-2 leading-relaxed group-hover/desc:line-clamp-none transition-all duration-200 bg-muted/20 p-2 rounded-md border border-transparent group-hover/desc:border-border group-hover/desc:bg-card group-hover/desc:shadow-sm">
                       {item.description}
                     </p>
                   </div>
                 )}
 
-                <div className="flex flex-wrap items-center gap-2 pt-2">
-                  {getInventoryStatusBadge(item.itemName, item.quantity, item.unit)}
-                  {!allItemsHaveSameStatus && getStatusBadge(item.status)}
-                  {isFirst && urgentCount > 0 && (
-                    <Badge variant="destructive" className="h-5 px-1.5 text-[10px] gap-1 animate-pulse">
-                      <AlertCircle className="h-3 w-3" />
-                      Urgent
-                    </Badge>
-                  )}
-                </div>
+                {showBadges && (
+                  <div className="flex flex-wrap items-center gap-2 pt-2">
+                    {getInventoryStatusBadge(item.itemName, item.quantity, item.unit)}
+                    {item.isUrgent && (
+                      <Badge variant="destructive" className="h-5 px-1.5 text-[10px] gap-1 animate-pulse">
+                        <AlertCircle className="h-3 w-3" />
+                        Urgent
+                      </Badge>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           );
@@ -627,15 +584,21 @@ export function RequestsTable({
               <div className="flex items-start justify-between mb-4 pb-3 border-b border-border/50">
                 <div className="space-y-1">
                   <div className="flex items-center gap-2">
-                    <span className="text-xs font-bold text-muted-foreground uppercase tracking-wider">Request ID</span>
+                    <span className="text-sm font-bold text-muted-foreground uppercase tracking-wider">Request ID</span>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-xl font-black font-mono text-primary tracking-tight">#{requestNumber}</span>
-                    <div className="scale-90 origin-left">
-                      {(allItemsHaveSameStatus || overallStatus === "partially_processed") && (
-                        getStatusBadge(overallStatus || firstItem.status)
-                      )}
-                    </div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-2xl font-black font-mono text-primary tracking-tight">#{requestNumber}</span>
+                    {hasMultipleItems && (
+                      <Badge variant="outline" className="text-xs px-2.5 py-1 bg-slate-50 text-slate-700 border-slate-200 dark:bg-slate-900/50 dark:text-slate-400 dark:border-slate-700">
+                        {items.length} items
+                      </Badge>
+                    )}
+                    {urgentCount > 0 && (
+                      <Badge variant="destructive" className="h-6 px-2.5 text-xs gap-1.5 animate-pulse items-center">
+                        <AlertCircle className="h-3.5 w-3.5" />
+                        Urgent: {urgentCount}/{items.length}
+                      </Badge>
+                    )}
                   </div>
                 </div>
 
@@ -665,10 +628,10 @@ export function RequestsTable({
 
               {/* Items List - Always show first item */}
               <div className="space-y-4 mb-4">
-                {/* First Item */}
+                {/* First Item - No badges in collapsed view */}
                 <div className="p-3.5 rounded-xl border bg-card/60 shadow-sm relative overflow-hidden">
                   <div className="absolute top-0 left-0 w-1 h-full bg-primary/20"></div>
-                  {renderItemRow(items[0], true)}
+                  {renderItemRow(items[0], true, false)}
                 </div>
 
                 {/* Additional Items Area */}
@@ -690,7 +653,7 @@ export function RequestsTable({
                         {items.slice(1).map((item, idx) => (
                           <div key={item._id} className="p-3 rounded-lg border bg-muted/20 relative">
                             <div className="absolute top-2 right-2 text-[10px] text-muted-foreground font-mono">#{idx + 2}</div>
-                            {renderItemRow(item)}
+                            {renderItemRow(item, false, true)}
                           </div>
                         ))}
                         <button
@@ -708,8 +671,8 @@ export function RequestsTable({
               {/* Actions Footer */}
               <div className="flex items-center justify-between p-3 -mx-4 -mb-4 mt-4 bg-slate-50/80 dark:bg-slate-900/40 border-t border-border/50 rounded-b-xl backdrop-blur-sm">
                 <div className="flex items-center gap-2 pl-1">
-                  <Clock className="h-3 w-3 text-muted-foreground/70" />
-                  <span className="text-[10px] font-medium text-muted-foreground">Created: {format(new Date(firstItem.createdAt), "dd MMM, yyyy")}</span>
+                  <Clock className="h-4 w-4 text-muted-foreground/70" />
+                  <span className="text-sm font-medium text-muted-foreground">Created: {format(new Date(firstItem.createdAt), "dd MMM, yyyy, hh:mm a")}</span>
                 </div>
 
                 <div className="flex items-center gap-1.5 pr-1">
@@ -784,14 +747,13 @@ export function RequestsTable({
           <div className="overflow-x-auto">
             <Table>
               <TableHeader>
-                <TableRow className="bg-muted/40 hover:bg-muted/40 border-b border-border">
-                  <TableHead className="w-[40px]"></TableHead>
-                  <TableHead className="w-[100px] font-bold text-xs uppercase tracking-wider text-muted-foreground">Request #</TableHead>
-                  <TableHead className="min-w-[140px] font-bold text-xs uppercase tracking-wider text-muted-foreground">Location</TableHead>
-                  <TableHead className="w-[120px] font-bold text-xs uppercase tracking-wider text-muted-foreground">Dates</TableHead>
-                  <TableHead className="min-w-[250px] font-bold text-xs uppercase tracking-wider text-muted-foreground">Item Details</TableHead>
-                  <TableHead className="w-[140px] font-bold text-xs uppercase tracking-wider text-muted-foreground">Status</TableHead>
-                  <TableHead className="text-right w-[100px] font-bold text-xs uppercase tracking-wider text-muted-foreground">Actions</TableHead>
+                <TableRow className="bg-muted/50 hover:bg-muted/50 border-b-2 border-border text-foreground">
+                  <TableHead className="w-[50px]"></TableHead>
+                  <TableHead className="w-[120px] font-bold text-xs uppercase tracking-wider text-muted-foreground">Request ID</TableHead>
+                  <TableHead className="min-w-[150px] font-bold text-xs uppercase tracking-wider text-muted-foreground">Location</TableHead>
+                  <TableHead className="w-[130px] font-bold text-xs uppercase tracking-wider text-muted-foreground">Dates</TableHead>
+                  <TableHead className="min-w-[350px] font-bold text-xs uppercase tracking-wider text-muted-foreground">Item Details</TableHead>
+                  <TableHead className="text-right w-[70px] font-bold text-xs uppercase tracking-wider text-muted-foreground">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -807,98 +769,141 @@ export function RequestsTable({
                     items.some(i => !["pending", "draft"].includes(i.status)) ? "partially_processed" : null
                   );
 
+                  // Count urgent items
+                  const urgentCount = items.filter((item) => item.isUrgent).length;
+
+                  // Get status color for left border - VIBRANT & THICKER
+                  const getStatusBorderColor = (status: string) => {
+                    if (status === "draft") return "border-l-slate-400";
+                    if (["pending", "sign_pending"].includes(status)) return "border-l-amber-500";
+                    if (["approved", "recheck", "ready_for_cc", "cc_pending", "cc_approved", "ready_for_po", "pending_po", "ready_for_delivery", "partially_processed"].includes(status)) return "border-l-blue-500";
+                    if (status === "delivery_processing") return "border-l-orange-500";
+                    if (status === "delivered") return "border-l-emerald-500";
+                    if (["rejected", "sign_rejected", "cc_rejected", "rejected_po"].includes(status)) return "border-l-rose-500";
+                    return "border-l-muted";
+                  };
+
+                  // Get status background color for table row - VISIBLE & PREMIUM
+                  const getStatusBgColor = (status: string) => {
+                    if (status === "draft") return "bg-slate-50/80 dark:bg-slate-900/40 hover:bg-slate-100 dark:hover:bg-slate-900/60";
+                    if (["pending", "sign_pending"].includes(status)) return "bg-amber-50/80 dark:bg-amber-950/20 hover:bg-amber-100 dark:hover:bg-amber-950/30";
+                    if (["approved", "recheck", "ready_for_cc", "cc_pending", "cc_approved", "ready_for_po", "pending_po", "ready_for_delivery", "partially_processed"].includes(status)) return "bg-blue-50/80 dark:bg-blue-950/20 hover:bg-blue-100 dark:hover:bg-blue-950/30";
+                    if (status === "delivery_processing") return "bg-orange-50/80 dark:bg-orange-950/20 hover:bg-orange-100 dark:hover:bg-orange-950/30";
+                    if (status === "delivered") return "bg-emerald-50/80 dark:bg-emerald-950/20 hover:bg-emerald-100 dark:hover:bg-emerald-950/30";
+                    if (["rejected", "sign_rejected", "cc_rejected", "rejected_po"].includes(status)) return "bg-rose-50/80 dark:bg-rose-950/20 hover:bg-rose-100 dark:hover:bg-rose-950/30";
+                    return "bg-card hover:bg-accent/50";
+                  };
+
                   return (
                     <Fragment key={requestNumber}>
                       <TableRow
                         className={cn(
-                          "hover:bg-muted/30 transition-colors cursor-pointer",
-                          isNewlySent && "bg-primary/5",
-                          hasMultipleItems && isExpanded && "border-b-0 bg-muted/10"
+                          "transition-all duration-200 cursor-pointer !border-l-[6px] border-b-8 border-b-transparent rounded-lg my-2 relative",
+                          getStatusBorderColor(overallStatus || firstItem.status),
+                          getStatusBgColor(overallStatus || firstItem.status),
+                          isNewlySent && "ring-2 ring-primary/20",
+                          hasMultipleItems && isExpanded ? "border-b-0 shadow-none" : "shadow-sm hover:shadow-md hover:translate-x-1"
                         )}
                         onClick={() => hasMultipleItems ? toggleGroup(requestNumber) : null}
                       >
                         {/* Expand/Collapse Header */}
-                        <TableCell className="text-center p-2">
+                        <TableCell className="text-center py-4">
                           {hasMultipleItems && (
-                            <div className="flex justify-center items-center h-6 w-6 rounded-full hover:bg-muted transition-colors">
-                              {isExpanded ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
+                            <div className="flex justify-center items-center h-7 w-7 rounded-md hover:bg-black/10 dark:hover:bg-white/10 transition-colors">
+                              {isExpanded ? <ChevronDown className="h-4 w-4 text-foreground/60" /> : <ChevronRight className="h-4 w-4 text-foreground/60" />}
                             </div>
                           )}
                         </TableCell>
 
                         {/* Request # */}
-                        <TableCell className="font-mono text-sm font-medium">
-                          #{requestNumber}
-                          {hasMultipleItems && <div className="text-[10px] text-muted-foreground mt-0.5">{items.length} Items</div>}
+                        <TableCell className="py-4">
+                          <div className="font-mono text-lg font-black text-foreground tracking-tight">#{requestNumber}</div>
+                          <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                            {hasMultipleItems && (
+                              <span className="text-[10px] uppercase font-bold text-muted-foreground/80 tracking-wide">{items.length} items</span>
+                            )}
+                            {urgentCount > 0 && (
+                              <Badge variant="destructive" className="h-4 px-1.5 text-[10px] gap-0.5 animate-pulse">
+                                <AlertCircle className="h-2.5 w-2.5" />
+                                {urgentCount}/{items.length}
+                              </Badge>
+                            )}
+                          </div>
                         </TableCell>
 
                         {/* Location */}
-                        <TableCell>
-                          <div className="flex items-center gap-1.5 max-w-[180px]">
-                            <MapPin className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                            <span className="truncate text-sm" title={firstItem.site?.name}>{firstItem.site?.name || "—"}</span>
+                        <TableCell className="py-4">
+                          <div className="flex items-center gap-2 max-w-[200px]">
+                            <MapPin className="h-4 w-4 text-primary shrink-0" />
+                            <span className="truncate text-sm font-semibold" title={firstItem.site?.name}>{firstItem.site?.name || "—"}</span>
                           </div>
                         </TableCell>
 
                         {/* Date */}
-                        <TableCell className="text-sm">
-                          <div className="space-y-1">
+                        <TableCell className="py-4">
+                          <div className="space-y-2">
                             <div className="flex flex-col">
-                              <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-tight">Required</span>
-                              <span className={cn("font-medium", new Date(firstItem.requiredBy) < new Date() ? "text-red-600" : "text-foreground")}>
+                              <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-wide mb-0.5">Required</span>
+                              <span className={cn("text-sm font-bold", new Date(firstItem.requiredBy) < new Date() ? "text-red-600" : "text-foreground")}>
                                 {format(new Date(firstItem.requiredBy), "dd MMM")}
                               </span>
                             </div>
                             <div className="flex flex-col">
-                              <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-tight">Created</span>
-                              <span className="text-muted-foreground text-xs">{format(new Date(firstItem.createdAt), "dd/MM")}</span>
+                              <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-wide mb-0.5">Created</span>
+                              <span className="text-xs text-muted-foreground/90 font-medium">{format(new Date(firstItem.createdAt), "dd/MM")}</span>
                             </div>
                           </div>
                         </TableCell>
 
                         {/* Items Preview */}
-                        <TableCell>
+                        <TableCell className="py-4">
                           {isExpanded ? (
-                            <span className="text-xs font-medium text-muted-foreground italic flex items-center gap-1">
-                              <ChevronDown className="h-3 w-3" /> Viewing details below...
+                            <span className="text-xs font-bold text-primary italic flex items-center gap-1.5 animate-pulse">
+                              <ChevronDown className="h-3.5 w-3.5" /> Viewing details below...
                             </span>
                           ) : (
-                            <div className="flex items-start gap-3 py-1">
-                              <div className="shrink-0 pt-0.5">
-                                <CompactImageGallery images={getItemPhotos(firstItem)} maxDisplay={1} size="sm" />
-                              </div>
-                              <div className="min-w-0 flex-1 space-y-1">
-                                <div className="font-semibold text-sm truncate text-foreground leading-tight" title={firstItem.itemName}>{firstItem.itemName}</div>
-                                {firstItem.description && (
-                                  <p className="text-xs text-muted-foreground line-clamp-1">{firstItem.description}</p>
+                            <div className="flex items-center gap-3">
+                              <div className={cn(
+                                "shrink-0 flex items-center justify-center",
+                                getItemPhotos(firstItem).length > 0 ? "w-10 h-10 ring-1 ring-border rounded-md overflow-hidden bg-background" : "w-10 h-10"
+                              )}>
+                                {getItemPhotos(firstItem).length > 0 ? (
+                                  <CompactImageGallery images={getItemPhotos(firstItem)} maxDisplay={1} size="sm" />
+                                ) : (
+                                  <span className="text-[10px] text-muted-foreground/30 font-medium italic">No Image</span>
                                 )}
-                                <div className="flex items-center gap-2">
-                                  <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-5 font-medium bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700">
-                                    {firstItem.quantity} {firstItem.unit}
-                                  </Badge>
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <div className="font-bold text-sm text-foreground mb-0.5 truncate" title={firstItem.itemName}>
+                                  {firstItem.itemName}
+                                </div>
+                                {firstItem.description && (
+                                  <p className="text-xs text-muted-foreground line-clamp-1">
+                                    {firstItem.description}
+                                  </p>
+                                )}
+                              </div>
+                              <div className="shrink-0 ml-2">
+                                <div className="text-sm font-bold text-foreground">
+                                  {firstItem.quantity} <span className="text-xs text-muted-foreground font-normal">{firstItem.unit}</span>
                                 </div>
                               </div>
                             </div>
                           )}
                         </TableCell>
 
-                        {/* Status */}
-                        <TableCell>
-                          {getStatusBadge(overallStatus || firstItem.status)}
-                        </TableCell>
-
                         {/* Actions */}
-                        <TableCell className="text-right">
-                          <div className="flex justify-end items-center gap-1">
+                        <TableCell className="text-right py-4">
+                          <div className="flex justify-end">
                             {onViewDetails && (
-                              <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground" onClick={(e) => { e.stopPropagation(); onViewDetails(firstItem._id); }}>
-                                <Eye className="h-4 w-4" />
-                              </Button>
-                            )}
-
-                            {(firstItem.status === "draft" || firstItem.status === "rejected") && onEditDraft && (
-                              <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-600" onClick={(e) => { e.stopPropagation(); onEditDraft(requestNumber); }}>
-                                <Edit className="h-4 w-4" />
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-8 px-3 text-xs font-semibold hover:bg-primary hover:text-primary-foreground transition-all rounded-full"
+                                onClick={(e) => { e.stopPropagation(); onViewDetails(firstItem._id); }}
+                                title="View Details"
+                              >
+                                View
                               </Button>
                             )}
                           </div>
@@ -907,27 +912,77 @@ export function RequestsTable({
 
                       {/* Expanded Details Row */}
                       {hasMultipleItems && isExpanded && (
-                        <TableRow className="bg-muted/5 hover:bg-muted/5 border-t-0">
-                          <TableCell colSpan={7} className="p-0">
-                            <div className="p-3 pl-12 grid gap-2">
+                        <TableRow className={cn(
+                          "border-t-0 border-b-8 border-b-transparent",
+                          getStatusBgColor(overallStatus || firstItem.status)
+                        )}>
+                          <TableCell colSpan={7} className="p-0 border-t-0 bg-transparent">
+                            <div className="py-3 px-6 sm:px-14 space-y-2">
                               {items.map((item, idx) => (
-                                <div key={item._id} className="flex items-center gap-4 p-2 rounded-lg border bg-card text-sm">
-                                  <div className="w-6 text-center text-xs text-muted-foreground">#{idx + 1}</div>
-                                  <div className="shrink-0"><CompactImageGallery images={getItemPhotos(item)} maxDisplay={1} size="sm" /></div>
-                                  <div className="flex-1 min-w-0 grid grid-cols-[1fr_auto_auto] gap-4 items-center">
-                                    <div>
-                                      <div className="font-medium truncate" title={item.itemName}>{item.itemName}</div>
-                                      {item.description && <div className="text-xs text-muted-foreground truncate max-w-[300px]">{item.description}</div>}
-                                    </div>
-                                    <div className="text-sm text-nowrap">{item.quantity} {item.unit}</div>
+                                <div
+                                  key={item._id}
+                                  className={cn(
+                                    "grid grid-cols-[50px_60px_2fr_120px_140px_80px] gap-4 items-center p-3 rounded-lg border-l-4 transition-all w-full mb-2",
+                                    getStatusBgColor(item.status),
+                                    getStatusBorderColor(item.status),
+                                    "border-y border-r border-border/50 hover:shadow-md"
+                                  )}
+                                >
+                                  {/* Item Number */}
+                                  <div className="text-center">
+                                    <span className="text-[10px] font-bold opacity-50 uppercase tracking-widest">Item {String(idx + 1).padStart(2, '0')}</span>
+                                  </div>
 
-                                    <div className="flex items-center gap-2">
-                                      {getInventoryStatusBadge(item.itemName, item.quantity, item.unit)}
-                                      {!allItemsHaveSameStatus && getStatusBadge(item.status)}
-                                      {onViewDetails && (
-                                        <Button variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={(e) => { e.stopPropagation(); onViewDetails(item._id); }}>View</Button>
-                                      )}
+                                  {/* Image */}
+                                  <div className="shrink-0 flex justify-center">
+                                    {getItemPhotos(item).length > 0 ? (
+                                      <CompactImageGallery images={getItemPhotos(item)} maxDisplay={1} size="sm" />
+                                    ) : (
+                                      <span className="text-[10px] text-muted-foreground/40 font-medium italic">No Image</span>
+                                    )}
+                                  </div>
+
+                                  {/* Item Name & Description */}
+                                  <div className="min-w-0">
+                                    <div className="flex flex-col">
+                                      <span className="font-bold text-sm text-foreground mb-1 truncate" title={item.itemName}>
+                                        {item.itemName}
+                                      </span>
+                                      <div className="text-xs text-muted-foreground line-clamp-1">
+                                        {item.description || <span className="italic opacity-50">No description</span>}
+                                      </div>
                                     </div>
+                                  </div>
+
+                                  {/* Quantity */}
+                                  <div className="flex flex-col items-center justify-center">
+                                    <span className="text-base font-black text-foreground tracking-tight">{item.quantity}</span>
+                                    <span className="text-[10px] uppercase text-muted-foreground font-bold tracking-wider">{item.unit}</span>
+                                  </div>
+
+                                  {/* Tags (Urgent & Inventory) */}
+                                  <div className="flex flex-col gap-1.5 items-start">
+                                    {item.isUrgent && (
+                                      <Badge variant="destructive" className="h-5 px-2 text-[10px] gap-1 animate-pulse shadow-sm shadow-red-500/20">
+                                        <AlertCircle className="h-3 w-3" />
+                                        Urgent
+                                      </Badge>
+                                    )}
+                                    {getInventoryStatusBadge(item.itemName, item.quantity, item.unit)}
+                                  </div>
+
+                                  {/* Actions */}
+                                  <div className="text-right flex justify-end">
+                                    {onViewDetails && (
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-8 w-full text-xs font-semibold hover:bg-black/5 dark:hover:bg-white/10 transition-colors"
+                                        onClick={(e) => { e.stopPropagation(); onViewDetails(item._id); }}
+                                      >
+                                        View
+                                      </Button>
+                                    )}
                                   </div>
                                 </div>
                               ))}
@@ -991,5 +1046,3 @@ export function RequestsTable({
     </>
   );
 }
-
-

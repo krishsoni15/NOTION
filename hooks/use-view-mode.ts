@@ -16,20 +16,22 @@ export function useViewMode(storageKey: string = "requests-view-mode") {
         // 2. Check viewport if no saved preference
         const isMobile = window.innerWidth < 768;
 
+        let initialMode: ViewMode;
         if (savedMode && (savedMode === "card" || savedMode === "table")) {
             // Use saved preference if valid
             // However, if it's mobile, we might want to prioritize card view for usability
             // User said "on phone it will be automaticly card"
             if (isMobile) {
-                setViewMode("card");
+                initialMode = "card";
             } else {
-                setViewMode(savedMode);
+                initialMode = savedMode;
             }
         } else {
             // Default behavior
-            setViewMode(isMobile ? "card" : "table");
+            initialMode = isMobile ? "card" : "table";
         }
 
+        setViewMode(initialMode);
         setIsInitialized(true);
     }, [storageKey]);
 

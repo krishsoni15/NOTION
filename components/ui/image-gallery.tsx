@@ -131,11 +131,11 @@ export function ImageGallery({
             <div className="flex gap-2 justify-center max-w-full overflow-x-auto pb-2">
               {images.map((image, index) => (
                 <button
-                  key={image.imageKey}
+                  key={`${image.imageKey}-${index}`}
                   onClick={() => setCurrentIndex(index)}
-                  className={`flex-shrink-0 rounded border overflow-hidden transition-all ${index === currentIndex
-                    ? "border-white shadow-lg scale-110"
-                    : "border-gray-400 hover:border-gray-300"
+                  className={`flex-shrink-0 rounded-md border-2 overflow-hidden transition-all duration-200 ${index === currentIndex
+                    ? "border-primary shadow-lg scale-105 ring-2 ring-primary/20"
+                    : "border-transparent opacity-70 hover:opacity-100 hover:border-white/50"
                     }`}
                 >
                   <LazyImage
@@ -163,7 +163,7 @@ interface CompactImageGalleryProps {
     alt?: string;
   }>;
   maxDisplay?: number;
-  size?: "sm" | "md" | "lg";
+  size?: "sm" | "md" | "lg" | "xl";
   className?: string;
 }
 
@@ -179,7 +179,8 @@ export function CompactImageGallery({
   const sizeClasses = {
     sm: "w-8 h-8",
     md: "w-10 h-10",
-    lg: "w-12 h-12"
+    lg: "w-12 h-12",
+    xl: "w-full h-full"
   };
 
   const openGallery = (index: number, e?: React.MouseEvent) => {
@@ -195,16 +196,16 @@ export function CompactImageGallery({
       <div className={`flex items-center gap-1 ${className}`}>
         {images.slice(0, maxDisplay).map((image, index) => (
           <button
-            key={image.imageKey}
+            key={`${image.imageKey}-${index}`}
             onClick={(e) => openGallery(index, e)}
-            className="relative group"
+            className={`relative group transition-transform hover:scale-105 ${size === 'xl' ? 'w-full h-full' : ''}`}
           >
             <LazyImage
               src={image.imageUrl}
               alt={image.alt || `Image ${index + 1}`}
-              width={size === "sm" ? 32 : size === "md" ? 40 : 48}
-              height={size === "sm" ? 32 : size === "md" ? 40 : 48}
-              className={`rounded border hover:border-primary transition-colors ${sizeClasses[size]}`}
+              width={size === "xl" ? undefined : (size === "sm" ? 32 : size === "md" ? 40 : 48)}
+              height={size === "xl" ? undefined : (size === "sm" ? 32 : size === "md" ? 40 : 48)}
+              className={`rounded-md border border-border shadow-sm group-hover:border-primary/50 group-hover:shadow-md transition-all object-cover bg-muted ${sizeClasses[size]}`}
             />
             {/* Notification-style badge for additional images */}
             {images.length > maxDisplay && index === maxDisplay - 1 && (

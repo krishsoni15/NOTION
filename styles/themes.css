@@ -16,45 +16,51 @@
    ============================================ */
 
 /* Light Mode - Theme Notion */
+/* Default Logo Filter - White Logo for ALL themes (as Primary is usually dark/colored) */
+[class*="theme-"] {
+  --logo-filter: brightness(0) invert(1);
+}
+
+/* Light Mode - Theme Notion */
 .theme-notion {
   /* Base Colors */
   --background: #F7F9FC;
   --surface: #FFFFFF;
   --card: #FFFFFF;
-  
+
   /* Primary (Blue) - Navigation & Primary Actions */
   --primary: #1F4E79;
   --primary-foreground: #FFFFFF;
-  
+
   /* Accent (Orange) - Actions Only */
   --accent: #F28C28;
   --accent-foreground: #FFFFFF;
-  
+
   /* Text Colors */
   --text-primary: #0F172A;
   --text-secondary: #475569;
   --foreground: #0F172A;
-  
+
   /* UI Elements */
   --border: #E2E8F0;
   --input: #E2E8F0;
   --ring: #1F4E79;
-  
+
   /* Secondary & Muted */
   --secondary: #F1F5F9;
   --secondary-foreground: #0F172A;
   --muted: #F1F5F9;
   --muted-foreground: #475569;
-  
+
   /* Popover & Card */
   --popover: #FFFFFF;
   --popover-foreground: #0F172A;
   --card-foreground: #0F172A;
-  
+
   /* Destructive */
   --destructive: #DC2626;
   --destructive-foreground: #FFFFFF;
-  
+
   /* Radius */
   --radius: 0.75rem;
 }
@@ -65,40 +71,40 @@
   --background: #0B1220;
   --surface: #111827;
   --card: #111827;
-  
+
   /* Primary (Blue) - Navigation & Primary Actions */
   --primary: #3B82F6;
   --primary-foreground: #FFFFFF;
-  
+
   /* Accent (Orange) - Actions Only */
   --accent: #FB923C;
   --accent-foreground: #FFFFFF;
-  
+
   /* Text Colors */
   --text-primary: #E5E7EB;
   --text-secondary: #9CA3AF;
   --foreground: #E5E7EB;
-  
+
   /* UI Elements */
   --border: #1F2933;
   --input: #1F2933;
   --ring: #3B82F6;
-  
+
   /* Secondary & Muted */
   --secondary: #1F2937;
   --secondary-foreground: #E5E7EB;
   --muted: #1F2937;
   --muted-foreground: #9CA3AF;
-  
+
   /* Popover & Card */
   --popover: #111827;
   --popover-foreground: #E5E7EB;
   --card-foreground: #E5E7EB;
-  
+
   /* Destructive */
   --destructive: #EF4444;
   --destructive-foreground: #FFFFFF;
-  
+
   /* Radius (same in dark mode) */
   --radius: 0.75rem;
 }
@@ -313,8 +319,8 @@
   --background: #000000;
   --surface: #0A0A0A;
   --card: #111111;
-  --primary: #FFFFFF;
-  --primary-foreground: #000000;
+  --primary: #171717;
+  --primary-foreground: #FFFFFF;
   --accent: #6B7280;
   --accent-foreground: #FFFFFF;
   --text-primary: #F9FAFB;
@@ -393,3 +399,229 @@
   --radius: 0.75rem;
 }
 
+/* ============================================
+   THEME: BLOSSOM (Rose - Chic & Professional)
+   ============================================ */
+
+/* Light Mode - Theme Blossom */
+.theme-blossom {
+  --background: #FDF2F8;
+  /* Pink 50 */
+  --surface: #FFFFFF;
+  --card: #FFFFFF;
+  --primary: #BE185D;
+  /* Pink 700 */
+  --primary-foreground: #FFFFFF;
+  --accent: #DB2777;
+  /* Pink 600 */
+  --accent-foreground: #FFFFFF;
+  --text-primary: #831843;
+  /* Pink 900 */
+  --text-secondary: #9D174D;
+  /* Pink 800 */
+  --foreground: #831843;
+  --border: #FBCFE8;
+  /* Pink 200 */
+  --input: #FBCFE8;
+  --ring: #BE185D;
+  --secondary: #FCE7F3;
+  /* Pink 100 */
+  --secondary-foreground: #831843;
+  --muted: #FCE7F3;
+  --muted-foreground: #9D174D;
+  --popover: #FFFFFF;
+  --popover-foreground: #831843;
+  --card-foreground: #831843;
+  --destructive: #BE123C;
+  --destructive-foreground: #FFFFFF;
+  --radius: 0.75rem;
+  /* Standard radius for professional look */
+}
+
+/* Dark Mode - Theme Blossom */
+.dark.theme-blossom {
+  /* Pastel Primary -> Dark Text -> Black Logo */
+  --logo-filter: brightness(0);
+
+  --background: #171013;
+  /* Very Dark Rose */
+  --surface: #2D1B24;
+  /* Dark Rose Surface */
+  --card: #2D1B24;
+  --primary: #F472B6;
+  /* Pink 400 */
+  --primary-foreground: #2D1B24;
+  --accent: #FB7185;
+  /* Pink 300 */
+  --accent-foreground: #2D1B24;
+  --text-primary: #FDF2F8;
+  /* Pink 50 */
+  --text-secondary: #FBCFE8;
+  /* Pink 200 */
+  --foreground: #FDF2F8;
+  --border: #500724;
+  /* Pink 900/Stroke */
+  --input: #500724;
+  --ring: #F472B6;
+  --secondary: #500724;
+  --secondary-foreground: #FDF2F8;
+  --muted: #500724;
+  --muted-foreground: #FBCFE8;
+  --popover: #2D1B24;
+  --popover-foreground: #FDF2F8;
+  --card-foreground: #FDF2F8;
+  --destructive: #F43F5E;
+  --destructive-foreground: #FFFFFF;
+  --radius: 0.75rem;
+}
+
+/* ============================================
+   THEME: SLATE (Classy & Masculine)
+   ============================================ */
+
+/* Light Mode - Theme Slate */
+.theme-slate {
+  --background: #F8FAFC;
+  /* Slate 50 */
+  --surface: #FFFFFF;
+  --card: #FFFFFF;
+  --primary: #334155;
+  /* Slate 700 */
+  --primary-foreground: #FFFFFF;
+  --accent: #64748B;
+  /* Slate 500 */
+  --accent-foreground: #FFFFFF;
+  --text-primary: #0F172A;
+  /* Slate 900 */
+  --text-secondary: #475569;
+  /* Slate 600 */
+  --foreground: #0F172A;
+  --border: #CBD5E1;
+  /* Slate 300 */
+  --input: #CBD5E1;
+  --ring: #334155;
+  --secondary: #E2E8F0;
+  /* Slate 200 */
+  --secondary-foreground: #0F172A;
+  --muted: #E2E8F0;
+  --muted-foreground: #475569;
+  --popover: #FFFFFF;
+  --popover-foreground: #0F172A;
+  --card-foreground: #0F172A;
+  --destructive: #B91C1C;
+  --destructive-foreground: #FFFFFF;
+  --radius: 0.5rem;
+  /* Sharper, more rigid feel */
+}
+
+/* Dark Mode - Theme Slate */
+.dark.theme-slate {
+  /* Light Slate Primary -> Dark Text -> Black Logo */
+  --logo-filter: brightness(0);
+
+  --background: #020617;
+  /* Slate 950 */
+  --surface: #0F172A;
+  /* Slate 900 */
+  --card: #0F172A;
+  --primary: #94A3B8;
+  /* Slate 400 */
+  --primary-foreground: #020617;
+  --accent: #64748B;
+  /* Slate 500 */
+  --accent-foreground: #FFFFFF;
+  --text-primary: #F8FAFC;
+  /* Slate 50 */
+  --text-secondary: #CBD5E1;
+  /* Slate 300 */
+  --foreground: #F8FAFC;
+  --border: #1E293B;
+  /* Slate 800 */
+  --input: #1E293B;
+  --ring: #94A3B8;
+  --secondary: #1E293B;
+  --secondary-foreground: #F8FAFC;
+  --muted: #1E293B;
+  --muted-foreground: #CBD5E1;
+  --popover: #0F172A;
+  --popover-foreground: #F8FAFC;
+  --card-foreground: #F8FAFC;
+  --destructive: #EF4444;
+  --destructive-foreground: #FFFFFF;
+  --radius: 0.5rem;
+}
+
+/* ============================================
+   THEME: AMBER (Gold - Warm & Luxurious)
+   ============================================ */
+
+/* Light Mode - Theme Amber */
+.theme-amber {
+  --background: #FFFBEB;
+  /* Amber 50 */
+  --surface: #FFFFFF;
+  --card: #FFFFFF;
+  --primary: #D97706;
+  /* Amber 600 */
+  --primary-foreground: #FFFFFF;
+  --accent: #F59E0B;
+  /* Amber 500 */
+  --accent-foreground: #FFFFFF;
+  --text-primary: #451A03;
+  /* Amber 950 */
+  --text-secondary: #78350F;
+  /* Amber 900 */
+  --foreground: #451A03;
+  --border: #FDE68A;
+  /* Amber 200 */
+  --input: #FDE68A;
+  --ring: #D97706;
+  --secondary: #FEF3C7;
+  /* Amber 100 */
+  --secondary-foreground: #451A03;
+  --muted: #FEF3C7;
+  --muted-foreground: #78350F;
+  --popover: #FFFFFF;
+  --popover-foreground: #451A03;
+  --card-foreground: #451A03;
+  --destructive: #DC2626;
+  --destructive-foreground: #FFFFFF;
+  --radius: 0.75rem;
+}
+
+/* Dark Mode - Theme Amber */
+.dark.theme-amber {
+  /* Bright Amber Primary -> Dark Text -> Black Logo */
+  --logo-filter: brightness(0);
+
+  --background: #451A03;
+  /* Amber 950 */
+  --surface: #78350F;
+  /* Amber 900 */
+  --card: #78350F;
+  --primary: #FBBF24;
+  /* Amber 400 */
+  --primary-foreground: #451A03;
+  --accent: #D97706;
+  /* Amber 600 */
+  --accent-foreground: #FFFFFF;
+  --text-primary: #FFFBEB;
+  /* Amber 50 */
+  --text-secondary: #FDE68A;
+  /* Amber 200 */
+  --foreground: #FFFBEB;
+  --border: #92400E;
+  /* Amber 800 */
+  --input: #92400E;
+  --ring: #FBBF24;
+  --secondary: #78350F;
+  --secondary-foreground: #FFFBEB;
+  --muted: #78350F;
+  --muted-foreground: #FDE68A;
+  --popover: #78350F;
+  --popover-foreground: #FFFBEB;
+  --card-foreground: #FFFBEB;
+  --destructive: #EF4444;
+  --destructive-foreground: #FFFFFF;
+  --radius: 0.75rem;
+}

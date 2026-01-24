@@ -1,61 +1,83 @@
 "use client";
-
-import { useEffect, useState } from "react";
-import { Moon, Sun } from "lucide-react";
+import { useTheme } from "next-themes";
+import { Sun, Moon } from "lucide-react";
+import { useEffect, useState, useRef } from "react";
 
 export function AnimatedThemeToggler() {
-    const [isDark, setIsDark] = useState(false);
+    const { theme, setTheme } = useTheme();
+    const [mounted, setMounted] = useState(false);
+    const [isTransitioning, setIsTransitioning] = useState(false);
+    const buttonRef = useRef<HTMLButtonElement>(null);
 
+    // Hydration fix
     useEffect(() => {
-        // Check initial heme
-        if (document.documentElement.classList.contains("dark")) {
-            setIsDark(true);
-        }
-
-        // Observer for external changes
-        const observer = new MutationObserver((mutations) => {
-            mutations.forEach((mutation) => {
-                if (mutation.attributeName === "class") {
-                    setIsDark(document.documentElement.classList.contains("dark"));
-                }
-            });
-        });
-
-        observer.observe(document.documentElement, { attributes: true });
-        return () => observer.disconnect();
+        const timer = setTimeout(() => setMounted(true), 0);
+        return () => clearTimeout(timer);
     }, []);
 
-    const toggleTheme = () => {
-        document.documentElement.classList.toggle("dark");
-        setIsDark(!isDark);
+    if (!mounted) return null;
+
+    const toggleTheme = async () => {
+        setIsTransitioning(true);
+
+        const button = buttonRef.current;
+        if (!button) return;
+
+        const rect = button.getBoundingClientRect();
+        const x = rect.left + rect.width / 2;
+        const y = rect.top + rect.height / 2;
+
+        document.documentElement.style.setProperty('--theme-toggle-x', `${x}px`);
+        document.documentElement.style.setProperty('--theme-toggle-y', `${y}px`);
+
+        if (typeof document !== "undefined" && "startViewTransition" in document) {
+            const transition = (document as unknown as { startViewTransition: (callback: () => void) => { finished: Promise<void> } }).startViewTransition(() => {
+                setTheme(theme === "dark" ? "light" : "dark");
+            });
+
+            transition.finished.finally(() => {
+                setIsTransitioning(false);
+                document.documentElement.style.removeProperty('--theme-toggle-x');
+                document.documentElement.style.removeProperty('--theme-toggle-y');
+            });
+        } else {
+            setTheme(theme === "dark" ? "light" : "dark");
+            setTimeout(() => {
+                setIsTransitioning(false);
+                document.documentElement.style.removeProperty('--theme-toggle-x');
+                document.documentElement.style.removeProperty('--theme-toggle-y');
+            }, 400);
+        }
     };
 
     return (
         <button
+            ref={buttonRef}
             onClick={toggleTheme}
-            className={`relative p-3 rounded-full transition-all duration-500 ease-in-out hover:scale-110 active:scale-95
-        ${isDark
-                    ? "bg-slate-800/80 text-yellow-400 hover:bg-slate-800"
-                    : "bg-white/80 text-slate-700 hover:bg-white"
-                } 
-        backdrop-blur-md shadow-sm hover:shadow-md ring-1 ring-inset ${isDark ? "ring-white/10" : "ring-black/5"}`}
+            className="relative p-3 rounded-full overflow-hidden group transition-all duration-300 hover:bg-primary/10"
             aria-label="Toggle theme"
+            disabled={isTransitioning}
         >
-            <div className="relative w-6 h-6">
-                <div
-                    className={`absolute inset-0 flex items-center justify-center transition-all duration-500 transform ${isDark ? "rotate-0 opacity-100 scale-100" : "-rotate-90 opacity-0 scale-50"
-                        }`}
-                >
-                    <Moon size={20} strokeWidth={2.5} fill="currentColor" className="text-yellow-400 drop-shadow-sm" />
-                </div>
-                <div
-                    className={`absolute inset-0 flex items-center justify-center transition-all duration-500 transform ${isDark ? "rotate-90 opacity-0 scale-50" : "rotate-0 opacity-100 scale-100"
-                        }`}
-                >
-                    <Sun size={22} strokeWidth={2.5} className="text-orange-500 drop-shadow-sm" />
-                </div>
+            {/* Button animation during theme switch */}
+            <span
+                className={`absolute inset-0 rounded-full bg-primary/10 transition-all duration-400 ${isTransitioning ? "scale-150 opacity-100" : "scale-0 opacity-0"
+                    }`}
+            />
+
+            {/* Icon with rotation animation */}
+            <div className="relative z-10 text-foreground">
+                {theme === "dark" ? (
+                    <Sun
+                        className={`w-6 h-6 transition-all duration-400 ${isTransitioning ? "rotate-180 scale-110" : "rotate-0 scale-100"
+                            }`}
+                    />
+                ) : (
+                    <Moon
+                        className={`w-6 h-6 transition-all duration-400 ${isTransitioning ? "rotate-180 scale-110" : "rotate-0 scale-100"
+                            }`}
+                    />
+                )}
             </div>
-            <span className="sr-only">Toggle theme</span>
         </button>
     );
 }

@@ -259,7 +259,8 @@ export function LoginForm({ disabled = false }: LoginFormProps) {
               alt="Notion CRM"
               width={800}
               height={200}
-              className="w-40 sm:w-56 lg:w-80 h-auto brightness-0 invert drop-shadow-xl"
+              className="w-40 sm:w-56 lg:w-80 h-auto drop-shadow-xl"
+              style={{ filter: "var(--logo-filter)" }} // Dynamic filter from theme
               priority
               quality={100}
             />
@@ -330,7 +331,7 @@ export function LoginForm({ disabled = false }: LoginFormProps) {
                   onChange={(e) => setUsername(e.target.value)}
                   required
                   disabled={isLoading}
-                  placeholder="purchase1"
+                  placeholder="Enter your username"
                   autoComplete="username"
                   className="w-full pl-12 pr-4 py-4 bg-slate-50 dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 focus:border-primary focus:bg-white dark:focus:bg-slate-800 focus:ring-4 focus:ring-primary/10 rounded-2xl transition-all duration-300 outline-none text-base font-medium text-slate-900 dark:text-white placeholder:text-slate-400 disabled:opacity-60 disabled:cursor-not-allowed"
                 />
@@ -353,7 +354,7 @@ export function LoginForm({ disabled = false }: LoginFormProps) {
                   onChange={(e) => setPassword(e.target.value)}
                   required
                   disabled={isLoading}
-                  placeholder="••••••••"
+                  placeholder="Enter your password"
                   autoComplete="current-password"
                   className="w-full pl-12 pr-12 py-4 bg-slate-50 dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 focus:border-primary focus:bg-white dark:focus:bg-slate-800 focus:ring-4 focus:ring-primary/10 rounded-2xl transition-all duration-300 outline-none text-base font-medium text-slate-900 dark:text-white placeholder:text-slate-400 disabled:opacity-60 disabled:cursor-not-allowed"
                 />

@@ -74,8 +74,9 @@ export default defineSchema({
       v.literal("direct_po"),
       v.literal("rejected_po"),
       v.literal("ready_for_delivery"),
-      v.literal("delivery_stage"), // Deprecated - migrating to delivery_processing
-      v.literal("delivery_processing"),
+      v.literal("delivery_stage"), // Deprecated - migrating to out_for_delivery
+      v.literal("delivery_processing"), // Deprecated - migrating to out_for_delivery
+      v.literal("out_for_delivery"),
       v.literal("delivered")
     ),
     approvedBy: v.optional(v.id("users")), // Manager
@@ -85,6 +86,14 @@ export default defineSchema({
     deliveryId: v.optional(v.id("deliveries")), // Linked delivery record
     notes: v.optional(v.string()),
     directAction: v.optional(v.union(v.literal("delivery"), v.literal("po"))), // Flag for direct delivery/PO without CC
+
+    // Delivery Confirmation Details
+    deliveryNotes: v.optional(v.string()), // Notes added by site engineer upon receipt
+    deliveryPhotos: v.optional(v.array(v.object({
+      imageUrl: v.string(),
+      imageKey: v.string(),
+    }))), // Photos of received items
+
     createdAt: v.number(),
     updatedAt: v.number(),
   })

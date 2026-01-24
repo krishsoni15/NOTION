@@ -18,6 +18,7 @@ interface PaginationControlsProps {
     onPageSizeChange: (size: number) => void;
     totalItems: number;
     pageSizeOptions?: number[];
+    itemCount?: number;
 }
 
 export function PaginationControls({
@@ -28,6 +29,7 @@ export function PaginationControls({
     onPageSizeChange,
     totalItems,
     pageSizeOptions = [10, 25, 50, 100],
+    itemCount,
 }: PaginationControlsProps) {
     if (totalItems === 0) return null;
 
@@ -157,75 +159,112 @@ export function PaginationControls({
 
             {/* Desktop View (>= 640px) - Traditional Layout */}
             <div className="hidden sm:flex items-center justify-between gap-4 w-full">
-                <div className="flex items-center gap-2 text-sm text-muted-foreground whitespace-nowrap">
-                    <span>Show</span>
-                    <Select
-                        value={pageSize.toString()}
-                        onValueChange={(value) => onPageSizeChange(Number(value))}
-                    >
-                        <SelectTrigger className="h-8 w-[70px]">
-                            <SelectValue placeholder={pageSize.toString()} />
-                        </SelectTrigger>
-                        <SelectContent side="top">
-                            {pageSizeOptions.map((option) => (
-                                <SelectItem key={option} value={option.toString()}>
-                                    {option}
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-                    <span>per page</span>
-                    <span className="ml-2 inline-block px-2 py-0.5 bg-muted/50 rounded-md text-xs font-medium">
-                        {totalItems} total
+                <div className="flex items-center gap-3 text-sm text-muted-foreground whitespace-nowrap">
+                    <div className="flex items-center gap-2">
+                        <span className="font-medium text-xs uppercase tracking-wide opacity-80">Show</span>
+                        <Select
+                            value={pageSize.toString()}
+                            onValueChange={(value) => onPageSizeChange(Number(value))}
+                        >
+                            <SelectTrigger className="h-8 w-[75px] bg-background border-input/60 shadow-sm">
+                                <SelectValue placeholder={pageSize.toString()} />
+                            </SelectTrigger>
+                            <SelectContent side="top">
+                                {pageSizeOptions.map((option) => (
+                                    <SelectItem key={option} value={option.toString()}>
+                                        {option}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
+                    <div className="w-px h-4 bg-border/60 mx-1"></div>
+                    <span className="inline-block px-2 py-0.5 bg-muted/50 rounded-md text-xs font-medium border border-border/50">
+                        {totalItems} Requests {itemCount !== undefined && <span className="opacity-70 font-normal">({itemCount} items)</span>}
                     </span>
                 </div>
 
                 <div className="flex items-center gap-1">
-                    <div className="flex items-center justify-center text-sm font-medium mr-4 bg-muted/30 px-3 py-1 rounded-md border text-muted-foreground">
-                        Page <span className="text-foreground font-bold mx-1">{currentPage}</span> of {totalPages || 1}
+                    <Button
+                        variant="outline"
+                        size="icon"
+                        className="h-8 w-8 rounded-md"
+                        onClick={() => onPageChange(currentPage - 1)}
+                        disabled={currentPage <= 1}
+                        title="Previous Page"
+                    >
+                        <ChevronLeft className="h-4 w-4" />
+                    </Button>
+
+                    <div className="flex items-center gap-1 mx-2">
+                        {(() => {
+                            const desktopItems = [];
+
+                            // Helper to render a page button
+                            const renderPageBtn = (page: number) => (
+                                <Button
+                                    key={page}
+                                    variant={currentPage === page ? "default" : "ghost"}
+                                    size="sm"
+                                    className={`h-8 w-8 p-0 rounded-md text-sm font-medium ${currentPage === page ? "shadow-sm" : "text-muted-foreground hover:text-foreground"}`}
+                                    onClick={() => onPageChange(page)}
+                                >
+                                    {page}
+                                </Button>
+                            );
+
+                            const renderEllipsis = (key: string) => (
+                                <span key={key} className="flex h-8 w-4 items-center justify-center text-muted-foreground text-xs">
+                                    ...
+                                </span>
+                            );
+
+                            if (totalPages <= 7) {
+                                // Show all pages
+                                for (let i = 1; i <= totalPages; i++) {
+                                    desktopItems.push(renderPageBtn(i));
+                                }
+                            } else {
+                                // Dynamic ranges
+                                if (currentPage <= 4) {
+                                    // Start: 1 2 3 4 5 ... 10
+                                    for (let i = 1; i <= 5; i++) {
+                                        desktopItems.push(renderPageBtn(i));
+                                    }
+                                    desktopItems.push(renderEllipsis("end-dots"));
+                                    desktopItems.push(renderPageBtn(totalPages));
+                                } else if (currentPage >= totalPages - 3) {
+                                    // End: 1 ... 6 7 8 9 10
+                                    desktopItems.push(renderPageBtn(1));
+                                    desktopItems.push(renderEllipsis("start-dots"));
+                                    for (let i = totalPages - 4; i <= totalPages; i++) {
+                                        desktopItems.push(renderPageBtn(i));
+                                    }
+                                } else {
+                                    // Middle: 1 ... 4 5 6 ... 10
+                                    desktopItems.push(renderPageBtn(1));
+                                    desktopItems.push(renderEllipsis("start-dots"));
+                                    for (let i = currentPage - 1; i <= currentPage + 1; i++) {
+                                        desktopItems.push(renderPageBtn(i));
+                                    }
+                                    desktopItems.push(renderEllipsis("end-dots"));
+                                    desktopItems.push(renderPageBtn(totalPages));
+                                }
+                            }
+                            return desktopItems;
+                        })()}
                     </div>
-                    <div className="flex items-center gap-1">
-                        <Button
-                            variant="outline"
-                            size="icon"
-                            className="h-8 w-8"
-                            onClick={() => onPageChange(1)}
-                            disabled={currentPage <= 1}
-                            title="First Page"
-                        >
-                            <ChevronsLeft className="h-4 w-4" />
-                        </Button>
-                        <Button
-                            variant="outline"
-                            size="icon"
-                            className="h-8 w-8"
-                            onClick={() => onPageChange(currentPage - 1)}
-                            disabled={currentPage <= 1}
-                            title="Previous Page"
-                        >
-                            <ChevronLeft className="h-4 w-4" />
-                        </Button>
-                        <Button
-                            variant="outline"
-                            size="icon"
-                            className="h-8 w-8"
-                            onClick={() => onPageChange(currentPage + 1)}
-                            disabled={currentPage >= totalPages}
-                            title="Next Page"
-                        >
-                            <ChevronRight className="h-4 w-4" />
-                        </Button>
-                        <Button
-                            variant="outline"
-                            size="icon"
-                            className="h-8 w-8"
-                            onClick={() => onPageChange(totalPages)}
-                            disabled={currentPage >= totalPages}
-                            title="Last Page"
-                        >
-                            <ChevronsRight className="h-4 w-4" />
-                        </Button>
-                    </div>
+
+                    <Button
+                        variant="outline"
+                        size="icon"
+                        className="h-8 w-8 rounded-md"
+                        onClick={() => onPageChange(currentPage + 1)}
+                        disabled={currentPage >= totalPages}
+                        title="Next Page"
+                    >
+                        <ChevronRight className="h-4 w-4" />
+                    </Button>
                 </div>
             </div>
         </div>

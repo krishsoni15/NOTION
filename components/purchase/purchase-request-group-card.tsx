@@ -220,10 +220,11 @@ const getStatusBadge = (status: string) => {
           Delivered
         </Badge>
       );
+    case "delivery_processing":
     case "delivery_stage":
       return (
         <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-950 dark:text-orange-300 dark:border-orange-800 text-xs">
-          Delivery Stage
+          Out for Delivery
         </Badge>
       );
     case "rejected":

@@ -28,7 +28,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
-import { Eye, AlertCircle, FileText, Edit, Trash2, Send, ChevronDown, ChevronRight, MapPin, Package, PackageX, Sparkles, NotebookPen, LayoutGrid, Table as TableIcon, ShoppingCart, Truck, Clock, CheckCircle2, XCircle, Loader2 } from "lucide-react";
+import { ExpandableText } from "@/components/ui/expandable-text";
+import { Eye, AlertCircle, FileText, Edit, Trash2, Send, ChevronDown, ChevronUp, ChevronRight, MapPin, Package, PackageX, Sparkles, NotebookPen, LayoutGrid, Table as TableIcon, ShoppingCart, Truck, Clock, CheckCircle2, XCircle, Loader2, Pencil } from "lucide-react";
 import { CompactImageGallery } from "@/components/ui/image-gallery";
 import { LazyImage } from "@/components/ui/lazy-image";
 import { cn, normalizeSearchQuery, matchesAnySearchQuery } from "@/lib/utils";
@@ -54,11 +55,13 @@ type RequestStatus =
   | "rejected_po"
   | "ready_for_delivery"
   | "delivery_processing"
+  | "out_for_delivery"
   | "delivered"
   | "partially_processed"
   | "direct_po"
   | "sign_pending"
-  | "sign_rejected";
+  | "sign_rejected"
+  | "delivery_stage";
 
 // Helper to get card border/bg styles based on status
 const getCardStyles = (status: RequestStatus) => {
@@ -68,22 +71,26 @@ const getCardStyles = (status: RequestStatus) => {
     case "draft":
       return `${baseClasses} bg-slate-50/50 border-slate-200 dark:bg-slate-900/20 dark:border-slate-800`;
     case "pending":
+    case "sign_pending":
       return `${baseClasses} bg-amber-50/50 border-amber-200 dark:bg-amber-900/10 dark:border-amber-800`;
     case "approved":
+      return `${baseClasses} bg-emerald-50/50 border-emerald-200 dark:bg-emerald-900/10 dark:border-emerald-800`;
     case "recheck":
     case "ready_for_cc":
     case "cc_pending":
     case "cc_approved":
     case "ready_for_po":
     case "pending_po":
-    case "ready_for_delivery":
-    case "sign_pending":
+    case "direct_po":
     case "partially_processed":
-      return `${baseClasses} bg-blue-50/50 border-blue-200 dark:bg-blue-900/10 dark:border-blue-800`;
+      return `${baseClasses} bg-indigo-50/50 border-indigo-200 dark:bg-indigo-900/10 dark:border-indigo-800`;
+    case "ready_for_delivery":
     case "delivery_processing":
+    case "delivery_stage":
+    case "out_for_delivery":
       return `${baseClasses} bg-orange-50/50 border-orange-200 dark:bg-orange-900/10 dark:border-orange-800`;
     case "delivered":
-      return `${baseClasses} bg-emerald-50/50 border-emerald-200 dark:bg-emerald-900/10 dark:border-emerald-800`;
+      return `${baseClasses} bg-teal-50/50 border-teal-200 dark:bg-teal-900/10 dark:border-teal-800`;
     case "rejected":
     case "cc_rejected":
     case "rejected_po":
@@ -102,27 +109,29 @@ const getStatusButtonStyles = (status: RequestStatus) => {
     case "draft":
       return `${baseClasses} border-slate-300 text-slate-700 bg-gradient-to-r from-slate-50 to-slate-100 hover:from-slate-100 hover:to-slate-200 hover:border-slate-400 dark:border-slate-600 dark:text-slate-300 dark:from-slate-800 dark:to-slate-700 dark:hover:from-slate-700 dark:hover:to-slate-600`;
     case "pending":
+    case "sign_pending":
       return `${baseClasses} border-amber-300 text-amber-800 bg-gradient-to-r from-amber-50 to-amber-100 hover:from-amber-100 hover:to-amber-200 hover:border-amber-400 dark:border-amber-600 dark:text-amber-300 dark:from-amber-900 dark:to-amber-800 dark:hover:from-amber-800 dark:hover:to-amber-700`;
     case "approved":
       return `${baseClasses} border-emerald-300 text-emerald-800 bg-gradient-to-r from-emerald-50 to-emerald-100 hover:from-emerald-100 hover:to-emerald-200 hover:border-emerald-400 dark:border-emerald-600 dark:text-emerald-300 dark:from-emerald-900 dark:to-emerald-800 dark:hover:from-emerald-800 dark:hover:to-emerald-700`;
+    case "recheck":
     case "ready_for_cc":
-      return `${baseClasses} border-sky-300 text-sky-800 bg-gradient-to-r from-sky-50 to-sky-100 hover:from-sky-100 hover:to-sky-200 hover:border-sky-400 dark:border-sky-600 dark:text-sky-300 dark:from-sky-900 dark:to-sky-800 dark:hover:from-sky-800 dark:hover:to-sky-700`;
     case "cc_pending":
-      return `${baseClasses} border-violet-300 text-violet-800 bg-gradient-to-r from-violet-50 to-violet-100 hover:from-violet-100 hover:to-violet-200 hover:border-violet-400 dark:border-violet-600 dark:text-violet-300 dark:from-violet-900 dark:to-violet-800 dark:hover:from-violet-800 dark:hover:to-violet-700`;
     case "cc_approved":
-      return `${baseClasses} border-indigo-300 text-indigo-800 bg-gradient-to-r from-indigo-50 to-indigo-100 hover:from-indigo-100 hover:to-indigo-200 hover:border-indigo-400 dark:border-indigo-600 dark:text-indigo-300 dark:from-indigo-900 dark:to-indigo-800 dark:hover:from-indigo-800 dark:hover:to-indigo-700`;
     case "ready_for_po":
-      return `${baseClasses} border-teal-300 text-teal-800 bg-gradient-to-r from-teal-50 to-teal-100 hover:from-teal-100 hover:to-teal-200 hover:border-teal-400 dark:border-teal-600 dark:text-teal-300 dark:from-teal-900 dark:to-teal-800 dark:hover:from-teal-800 dark:hover:to-teal-700`;
-    case "delivery_processing":
-      return `${baseClasses} border-orange-300 text-orange-800 bg-gradient-to-r from-orange-50 to-orange-100 hover:from-orange-100 hover:to-orange-200 hover:border-orange-400 dark:border-orange-600 dark:text-orange-300 dark:from-orange-900 dark:to-orange-800 dark:hover:from-orange-800 dark:hover:to-orange-700`;
-    case "rejected":
-      return `${baseClasses} border-rose-300 text-rose-800 bg-gradient-to-r from-rose-50 to-rose-100 hover:from-rose-100 hover:to-rose-200 hover:border-rose-400 dark:border-rose-600 dark:text-rose-300 dark:from-rose-900 dark:to-rose-800 dark:hover:from-rose-800 dark:hover:to-rose-700`;
-    case "delivered":
-      return `${baseClasses} border-blue-300 text-blue-800 bg-gradient-to-r from-blue-50 to-blue-100 hover:from-blue-100 hover:to-blue-200 hover:border-blue-400 dark:border-blue-600 dark:text-blue-300 dark:from-blue-900 dark:to-blue-800 dark:hover:from-blue-800 dark:hover:to-blue-700`;
+    case "pending_po":
+    case "direct_po":
     case "partially_processed":
-      return `${baseClasses} border-purple-300 text-purple-800 bg-gradient-to-r from-purple-50 to-purple-100 hover:from-purple-100 hover:to-purple-200 hover:border-purple-400 dark:border-purple-600 dark:text-purple-300 dark:from-purple-900 dark:to-purple-800 dark:hover:from-purple-800 dark:hover:to-purple-700`;
-    case "sign_pending":
+      return `${baseClasses} border-indigo-300 text-indigo-800 bg-gradient-to-r from-indigo-50 to-indigo-100 hover:from-indigo-100 hover:to-indigo-200 hover:border-indigo-400 dark:border-indigo-600 dark:text-indigo-300 dark:from-indigo-900 dark:to-indigo-800 dark:hover:from-indigo-800 dark:hover:to-indigo-700`;
+    case "ready_for_delivery":
+    case "delivery_processing":
+    case "delivery_stage":
+    case "out_for_delivery":
       return `${baseClasses} border-orange-300 text-orange-800 bg-gradient-to-r from-orange-50 to-orange-100 hover:from-orange-100 hover:to-orange-200 hover:border-orange-400 dark:border-orange-600 dark:text-orange-300 dark:from-orange-900 dark:to-orange-800 dark:hover:from-orange-800 dark:hover:to-orange-700`;
+    case "delivered":
+      return `${baseClasses} border-teal-300 text-teal-800 bg-gradient-to-r from-teal-50 to-teal-100 hover:from-teal-100 hover:to-teal-200 hover:border-teal-400 dark:border-teal-600 dark:text-teal-300 dark:from-teal-900 dark:to-teal-800 dark:hover:from-teal-800 dark:hover:to-teal-700`;
+    case "rejected":
+    case "cc_rejected":
+    case "rejected_po":
     case "sign_rejected":
       return `${baseClasses} border-rose-300 text-rose-800 bg-gradient-to-r from-rose-50 to-rose-100 hover:from-rose-100 hover:to-rose-200 hover:border-rose-400 dark:border-rose-600 dark:text-rose-300 dark:from-rose-900 dark:to-rose-800 dark:hover:from-rose-800 dark:hover:to-rose-700`;
     default:
@@ -191,6 +200,10 @@ interface RequestsTableProps {
   onSendDraft?: (requestNumber: string) => void; // Send draft request
   newlySentRequestNumbers?: Set<string>; // Request numbers that were just sent (for animation)
   viewMode?: "card" | "table"; // View mode: card or table
+  onConfirmDelivery?: (requestId: Id<"requests">) => void; // Confirm delivery of request
+  singleColumn?: boolean; // Force single column layout
+  alwaysExpanded?: boolean; // Always show expanded details (e.g. for dashboard)
+  simplifiedStatuses?: boolean; // Show simplified status badges for site engineers
 }
 
 export function RequestsTable({
@@ -205,6 +218,10 @@ export function RequestsTable({
   onSendDraft,
   newlySentRequestNumbers = new Set(),
   viewMode = "table",
+  onConfirmDelivery,
+  singleColumn = false,
+  alwaysExpanded = false,
+  simplifiedStatuses = false,
 }: RequestsTableProps) {
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const [selectedUserId, setSelectedUserId] = useState<Id<"users"> | null>(null);
@@ -416,15 +433,66 @@ export function RequestsTable({
 
   // Get status badge variant with simplified categories and icons
   const getStatusBadge = (status: RequestStatus) => {
+    if (simplifiedStatuses) {
+      if (status === "draft") {
+        return (
+          <Badge variant="outline" className="bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-900/50 dark:text-slate-400 dark:border-slate-800 gap-1.5 pl-1.5 pr-2.5">
+            <Pencil className="h-3.5 w-3.5" />
+            Draft
+          </Badge>
+        );
+      }
+      if (status === "pending") {
+        return (
+          <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/50 dark:text-amber-400 dark:border-amber-800 gap-1.5 pl-1.5 pr-2.5">
+            <Clock className="h-3.5 w-3.5" />
+            Pending
+          </Badge>
+        );
+      }
+      if (status === "rejected") {
+        return (
+          <Badge variant="outline" className="bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/50 dark:text-rose-400 dark:border-rose-800 gap-1.5 pl-1.5 pr-2.5">
+            <XCircle className="h-3.5 w-3.5" />
+            Rejected
+          </Badge>
+        );
+      }
+      if (["delivery_processing", "delivery_stage", "out_for_delivery"].includes(status)) {
+        return (
+          <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-950/50 dark:text-orange-400 dark:border-orange-800 gap-1.5 pl-1.5 pr-2.5">
+            <Truck className="h-3.5 w-3.5" />
+            Out for Delivery
+          </Badge>
+        );
+      }
+      if (status === "delivered") {
+        return (
+          <Badge variant="outline" className="bg-teal-50 text-teal-700 border-teal-200 dark:bg-teal-950/50 dark:text-teal-400 dark:border-teal-800 gap-1.5 pl-1.5 pr-2.5">
+            <Package className="h-3.5 w-3.5" />
+            Delivered
+          </Badge>
+        );
+      }
+      // Everything else falls into Approved & Processing
+      return (
+        <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-950/50 dark:text-indigo-400 dark:border-indigo-800 gap-1.5 pl-1.5 pr-2.5">
+          <Loader2 className="h-3.5 w-3.5 animate-spin-slow" />
+          Approved & Processing
+        </Badge>
+      );
+    }
+
     switch (status) {
       case "draft":
         return (
           <Badge variant="outline" className="bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-900/50 dark:text-slate-400 dark:border-slate-800 gap-1.5 pl-1.5 pr-2.5">
-            <FileText className="h-3.5 w-3.5" />
+            <Pencil className="h-3.5 w-3.5" />
             Draft
           </Badge>
         );
       case "pending":
+      case "sign_pending":
         return (
           <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/50 dark:text-amber-400 dark:border-amber-800 gap-1.5 pl-1.5 pr-2.5">
             <Clock className="h-3.5 w-3.5" />
@@ -432,22 +500,37 @@ export function RequestsTable({
           </Badge>
         );
       case "approved":
+        return (
+          <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-400 dark:border-emerald-800 gap-1.5 pl-1.5 pr-2.5">
+            <CheckCircle2 className="h-3.5 w-3.5" />
+            Approved
+          </Badge>
+        );
+      case "recheck":
       case "recheck":
       case "ready_for_cc":
       case "cc_pending":
       case "cc_approved":
       case "ready_for_po":
       case "pending_po":
-      case "ready_for_delivery":
-      case "sign_pending":
+      case "direct_po":
       case "partially_processed":
         return (
-          <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/50 dark:text-blue-400 dark:border-blue-800 gap-1.5 pl-1.5 pr-2.5">
+          <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-950/50 dark:text-indigo-400 dark:border-indigo-800 gap-1.5 pl-1.5 pr-2.5">
             <Loader2 className="h-3.5 w-3.5 animate-spin-slow" />
             Processing
           </Badge>
         );
+      case "ready_for_delivery":
+        return (
+          <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-950/50 dark:text-indigo-400 dark:border-indigo-800 gap-1.5 pl-1.5 pr-2.5">
+            <Truck className="h-3.5 w-3.5" />
+            Ready for Delivery
+          </Badge>
+        );
       case "delivery_processing":
+      case "delivery_stage":
+      case "out_for_delivery":
         return (
           <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-950/50 dark:text-orange-400 dark:border-orange-800 gap-1.5 pl-1.5 pr-2.5">
             <Truck className="h-3.5 w-3.5" />
@@ -456,8 +539,8 @@ export function RequestsTable({
         );
       case "delivered":
         return (
-          <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-400 dark:border-emerald-800 gap-1.5 pl-1.5 pr-2.5">
-            <CheckCircle2 className="h-3.5 w-3.5" />
+          <Badge variant="outline" className="bg-teal-50 text-teal-700 border-teal-200 dark:bg-teal-950/50 dark:text-teal-400 dark:border-teal-800 gap-1.5 pl-1.5 pr-2.5">
+            <Package className="h-3.5 w-3.5" />
             Delivered
           </Badge>
         );
@@ -495,10 +578,15 @@ export function RequestsTable({
   // Card View Component
   const CardView = () => (
     <>
-      <div className="grid grid-cols-1 min-[1000px]:grid-cols-2 min-[1900px]:grid-cols-3 gap-4">
+      <div className={cn(
+        "grid gap-4",
+        singleColumn
+          ? "grid-cols-1"
+          : "grid-cols-1 min-[1000px]:grid-cols-2 min-[1900px]:grid-cols-3"
+      )}>
         {groupedRequestsArray.map((group) => {
           const { requestNumber, items, firstItem } = group;
-          const isExpanded = expandedGroups.has(requestNumber);
+          const isExpanded = alwaysExpanded || expandedGroups.has(requestNumber);
           const isNewlySent = newlySentRequestNumbers.has(requestNumber);
           const hasMultipleItems = items.length > 1;
           const urgentCount = items.filter((item) => item.isUrgent).length;
@@ -518,7 +606,7 @@ export function RequestsTable({
           const overallStatus = getOverallStatus();
 
           // Helper to render a single item row
-          const renderItemRow = (item: Request, isFirst: boolean = false, showBadges: boolean = true) => (
+          const renderItemRow = (item: Request, isFirst: boolean = false, showBadges: boolean = true, itemIndex?: number) => (
             <div className="flex gap-3 relative">
               <div className="shrink-0 pt-1">
                 <CompactImageGallery images={getItemPhotos(item)} maxDisplay={1} size="sm" />
@@ -528,6 +616,11 @@ export function RequestsTable({
                 <div className="flex justify-between items-start gap-3">
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 mb-0.5">
+                      {itemIndex && (
+                        <span className="bg-primary/10 text-primary text-xs font-black font-mono px-2 py-0.5 rounded border border-primary/20 shadow-sm">
+                          #{itemIndex}
+                        </span>
+                      )}
                       <span className="text-sm uppercase font-bold text-muted-foreground tracking-wider">Item Name</span>
                     </div>
                     <button
@@ -540,9 +633,10 @@ export function RequestsTable({
 
                   <div className="flex flex-col items-end shrink-0">
                     <span className="text-sm uppercase font-bold text-muted-foreground tracking-wider mb-1">Quantity</span>
-                    <Badge variant="secondary" className="text-lg font-bold px-3 py-1 bg-slate-100 text-slate-900 border-slate-200">
-                      {item.quantity} <span className="text-base font-normal ml-1 text-slate-500">{item.unit}</span>
-                    </Badge>
+                    <div className="flex items-baseline gap-1 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-3 py-1.5 rounded-lg shadow-sm">
+                      <span className="text-2xl font-black text-slate-900 dark:text-slate-100 tracking-tight">{item.quantity}</span>
+                      <span className="text-sm font-bold text-slate-500 dark:text-slate-400 uppercase">{item.unit}</span>
+                    </div>
                   </div>
                 </div>
 
@@ -551,9 +645,9 @@ export function RequestsTable({
                     <div className="flex items-center gap-2 mb-1">
                       <span className="text-sm uppercase font-bold text-muted-foreground tracking-wider">Description</span>
                     </div>
-                    <p className="text-lg text-muted-foreground line-clamp-2 leading-relaxed group-hover/desc:line-clamp-none transition-all duration-200 bg-muted/20 p-2 rounded-md border border-transparent group-hover/desc:border-border group-hover/desc:bg-card group-hover/desc:shadow-sm">
-                      {item.description}
-                    </p>
+                    <div className="bg-muted/20 p-2 rounded-md border border-transparent">
+                      <ExpandableText text={item.description} className="text-lg text-muted-foreground leading-relaxed" limit={50} />
+                    </div>
                   </div>
                 )}
 
@@ -588,6 +682,9 @@ export function RequestsTable({
                   </div>
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-2xl font-black font-mono text-primary tracking-tight">#{requestNumber}</span>
+                    <div className="scale-110 origin-left ml-1">
+                      {getStatusBadge(overallStatus || firstItem.status)}
+                    </div>
                     {hasMultipleItems && (
                       <Badge variant="outline" className="text-xs px-2.5 py-1 bg-slate-50 text-slate-700 border-slate-200 dark:bg-slate-900/50 dark:text-slate-400 dark:border-slate-700">
                         {items.length} items
@@ -617,9 +714,13 @@ export function RequestsTable({
                   {firstItem.site && (
                     <div>
                       <div className="text-[10px] text-muted-foreground uppercase tracking-wider font-bold mb-0.5">Site Location</div>
-                      <div className="flex items-center justify-end gap-1.5 text-xs font-medium" title={firstItem.site.name}>
-                        <MapPin className="h-3.5 w-3.5 text-primary/70" />
-                        <span className="max-w-[120px] truncate">{firstItem.site.name}</span>
+                      <div
+                        className="flex items-center justify-end gap-1.5 text-xs font-medium cursor-pointer hover:text-primary transition-colors group"
+                        title={firstItem.site.name}
+                        onClick={(e) => { e.stopPropagation(); setSelectedSiteId(firstItem.siteId); }}
+                      >
+                        <MapPin className="h-3.5 w-3.5 text-primary/70 group-hover:scale-110 transition-transform" />
+                        <span className="max-w-[120px] truncate group-hover:underline">{firstItem.site.name}</span>
                       </div>
                     </div>
                   )}
@@ -631,13 +732,34 @@ export function RequestsTable({
                 {/* First Item - No badges in collapsed view */}
                 <div className="p-3.5 rounded-xl border bg-card/60 shadow-sm relative overflow-hidden">
                   <div className="absolute top-0 left-0 w-1 h-full bg-primary/20"></div>
-                  {renderItemRow(items[0], true, false)}
+                  {renderItemRow(items[0], true, false, items[0].itemOrder ?? items.length)}
                 </div>
 
                 {/* Additional Items Area */}
-                {hasMultipleItems && (
+                {hasMultipleItems ? (
                   <div className="space-y-3">
-                    {!isExpanded ? (
+                    {/* If alwaysExpanded OR isExpanded is true, show the list. */}
+                    {isExpanded ? (
+                      <div className={cn(
+                        "space-y-3 animate-in fade-in slide-in-from-top-2 duration-200",
+                        !alwaysExpanded && "pl-3 border-l-2 border-dashed border-border/50"
+                      )}>
+                        {items.slice(1).map((item, idx) => (
+                          <div key={item._id} className="p-3 rounded-lg border bg-muted/20 relative">
+                            {renderItemRow(item, false, true, item.itemOrder ?? (items.length - 1 - idx))}
+                          </div>
+                        ))}
+                        {/* Only show 'Show Less' button if it's NOT alwaysExpanded */}
+                        {!alwaysExpanded && (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); toggleGroup(requestNumber); }}
+                            className="w-full py-1 text-xs text-muted-foreground hover:text-foreground flex items-center justify-center gap-1"
+                          >
+                            Show Less <ChevronDown className="h-3 w-3 rotate-180" />
+                          </button>
+                        )}
+                      </div>
+                    ) : (
                       <button
                         onClick={(e) => { e.stopPropagation(); toggleGroup(requestNumber); }}
                         className="w-full py-2 px-3 rounded-lg border border-dashed border-primary/30 bg-primary/5 hover:bg-primary/10 flex items-center justify-center gap-2 text-primary font-medium text-sm transition-colors group"
@@ -648,31 +770,55 @@ export function RequestsTable({
                         <span>More Items in this Request...</span>
                         <ChevronDown className="h-4 w-4 transition-transform group-hover:translate-y-0.5" />
                       </button>
-                    ) : (
-                      <div className="pl-3 space-y-3 border-l-2 border-dashed border-border/50 animate-in fade-in slide-in-from-top-2 duration-200">
-                        {items.slice(1).map((item, idx) => (
-                          <div key={item._id} className="p-3 rounded-lg border bg-muted/20 relative">
-                            <div className="absolute top-2 right-2 text-[10px] text-muted-foreground font-mono">#{idx + 2}</div>
-                            {renderItemRow(item, false, true)}
-                          </div>
-                        ))}
-                        <button
-                          onClick={(e) => { e.stopPropagation(); toggleGroup(requestNumber); }}
-                          className="w-full py-1 text-xs text-muted-foreground hover:text-foreground flex items-center justify-center gap-1"
-                        >
-                          Show Less <ChevronDown className="h-3 w-3 rotate-180" />
-                        </button>
-                      </div>
                     )}
                   </div>
+                ) : (
+                  // Single item indicator to maintain consistent layout - Hide if alwaysExpanded (Dashboard)
+                  !alwaysExpanded && (
+                    <div className="mt-3 space-y-3">
+                      <button
+                        disabled
+                        className="w-full py-2 px-3 rounded-lg border border-dashed border-muted bg-muted/30 flex items-center justify-center gap-2 text-muted-foreground/70 font-medium text-sm cursor-default opacity-80"
+                      >
+                        <span className="flex items-center justify-center h-5 w-5 rounded-full bg-muted text-xs font-bold text-muted-foreground">1</span>
+                        <span>Only 1 Item in this Request</span>
+                      </button>
+                    </div>
+                  )
                 )}
               </div>
 
               {/* Actions Footer */}
               <div className="flex items-center justify-between p-3 -mx-4 -mb-4 mt-4 bg-slate-50/80 dark:bg-slate-900/40 border-t border-border/50 rounded-b-xl backdrop-blur-sm">
                 <div className="flex items-center gap-2 pl-1">
-                  <Clock className="h-4 w-4 text-muted-foreground/70" />
-                  <span className="text-sm font-medium text-muted-foreground">Created: {format(new Date(firstItem.createdAt), "dd MMM, yyyy, hh:mm a")}</span>
+                  <div className="flex items-center gap-3">
+                    {/* Avatar */}
+                    <div
+                      className="h-9 w-9 rounded-full bg-gradient-to-br from-white to-slate-100 dark:from-slate-800 dark:to-slate-900 border border-slate-200 dark:border-slate-700 flex items-center justify-center shadow-sm cursor-pointer hover:ring-2 hover:ring-primary/20 transition-all"
+                      onClick={(e) => { e.stopPropagation(); setSelectedUserId(firstItem.createdBy); }}
+                      title="View User Profile"
+                    >
+                      <span className="text-xs font-black text-slate-700 dark:text-slate-300">
+                        {firstItem.creator?.fullName?.charAt(0).toUpperCase() || "?"}
+                      </span>
+                    </div>
+
+                    <div className="flex flex-col">
+                      <span className="text-[10px] uppercase font-bold text-muted-foreground/70 tracking-wider">Created By</span>
+                      <div className="flex items-center gap-1.5">
+                        {firstItem.creator && (
+                          <span
+                            className="text-xs font-bold text-foreground hover:text-primary cursor-pointer transition-colors"
+                            onClick={(e) => { e.stopPropagation(); setSelectedUserId(firstItem.createdBy); }}
+                          >
+                            {firstItem.creator.fullName}
+                          </span>
+                        )}
+                        <span className="text-[10px] text-muted-foreground/40">•</span>
+                        <span className="text-xs font-medium text-muted-foreground">{format(new Date(firstItem.createdAt), "dd MMM, hh:mm a")}</span>
+                      </div>
+                    </div>
+                  </div>
                 </div>
 
                 <div className="flex items-center gap-1.5 pr-1">
@@ -686,7 +832,9 @@ export function RequestsTable({
                   >
                     <NotebookPen className="h-4 w-4" />
                     {items[0].notesCount && items[0].notesCount > 0 && (
-                      <span className="absolute -top-0.5 -right-0.5 h-2.5 w-2.5 bg-red-500 rounded-full ring-2 ring-white dark:ring-slate-950" />
+                      <span className="absolute -top-2 -right-2 min-w-[16px] h-4 px-0.5 bg-red-500 rounded-full ring-2 ring-white dark:ring-slate-950 text-[9px] font-bold text-white flex items-center justify-center">
+                        {items[0].notesCount}
+                      </span>
                     )}
                   </Button>
 
@@ -704,15 +852,28 @@ export function RequestsTable({
                         </Button>
                       )}
                       {onSendDraft && (
-                        <Button variant="default" size="sm" onClick={() => onSendDraft(requestNumber)} className="h-8 px-4 text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 shadow-sm shadow-emerald-200 dark:shadow-none ml-1">
-                          <Send className="h-3 w-3 mr-1.5" /> Send Request
+                        <Button variant="default" size="sm" onClick={() => onSendDraft(requestNumber)} className="h-8 w-8 p-0 rounded-full bg-emerald-600 hover:bg-emerald-700 shadow-sm shadow-emerald-200 dark:shadow-none ml-1" title="Send Request">
+                          <Send className="h-4 w-4" />
                         </Button>
                       )}
                     </>
                   )}
 
+                  {/* Confirm Delivery Action */}
+                  {onConfirmDelivery && ["out_for_delivery", "delivery_processing", "delivery_stage"].includes(firstItem.status) && (
+                    <Button
+                      variant="default"
+                      size="sm"
+                      onClick={(e) => { e.stopPropagation(); onConfirmDelivery(firstItem._id); }}
+                      className="h-8 px-4 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm shadow-emerald-200 dark:shadow-none ml-1 animate-pulse transition-all hover:scale-105"
+                    >
+                      <CheckCircle2 className="h-3.5 w-3.5 mr-1.5" />
+                      Confirm Delivery
+                    </Button>
+                  )}
+
                   {/* Main Action Button */}
-                  {onViewDetails && !["draft", "rejected", "sign_rejected"].includes(firstItem.status) && (
+                  {onViewDetails && (
                     <Button
                       variant={showCreator && reviewableItemsCount > 0 ? "default" : "outline"}
                       size="sm"
@@ -721,11 +882,11 @@ export function RequestsTable({
                         "h-8 px-4 text-xs font-semibold ml-1 shadow-sm transition-all",
                         showCreator && reviewableItemsCount > 0
                           ? "bg-orange-600 text-white hover:bg-orange-700 shadow-orange-200 dark:shadow-none"
-                          : "bg-white dark:bg-card hover:bg-slate-50 dark:hover:bg-slate-800 border-slate-200 hover:border-slate-300 dark:border-slate-700"
+                          : "bg-white dark:bg-card hover:bg-slate-50 hover:text-black dark:hover:bg-slate-800 dark:hover:text-white border-slate-200 hover:border-slate-300 dark:border-slate-700"
                       )}
                     >
                       <Eye className="h-3.5 w-3.5 mr-1.5" />
-                      {showCreator && reviewableItemsCount > 0 ? "Review Request" : "View Details"}
+                      {showCreator && reviewableItemsCount > 0 ? "Review Request" : "View"}
                     </Button>
                   )}
                 </div>
@@ -747,13 +908,13 @@ export function RequestsTable({
           <div className="overflow-x-auto">
             <Table>
               <TableHeader>
-                <TableRow className="bg-muted/50 hover:bg-muted/50 border-b-2 border-border text-foreground">
+                <TableRow className="bg-muted/80 hover:bg-muted/80 border-b-2 border-primary/20">
                   <TableHead className="w-[50px]"></TableHead>
-                  <TableHead className="w-[120px] font-bold text-xs uppercase tracking-wider text-muted-foreground">Request ID</TableHead>
-                  <TableHead className="min-w-[150px] font-bold text-xs uppercase tracking-wider text-muted-foreground">Location</TableHead>
-                  <TableHead className="w-[130px] font-bold text-xs uppercase tracking-wider text-muted-foreground">Dates</TableHead>
-                  <TableHead className="min-w-[350px] font-bold text-xs uppercase tracking-wider text-muted-foreground">Item Details</TableHead>
-                  <TableHead className="text-right w-[70px] font-bold text-xs uppercase tracking-wider text-muted-foreground">Actions</TableHead>
+                  <TableHead className="w-[120px] font-extrabold text-sm uppercase tracking-wider text-foreground/80">Request ID</TableHead>
+                  <TableHead className="min-w-[180px] font-extrabold text-sm uppercase tracking-wider text-foreground/80">Location</TableHead>
+                  <TableHead className="w-[150px] font-extrabold text-sm uppercase tracking-wider text-foreground/80">Dates</TableHead>
+                  <TableHead className="min-w-[350px] font-extrabold text-sm uppercase tracking-wider text-foreground/80">Item Details</TableHead>
+                  <TableHead className="text-right min-w-[100px] font-extrabold text-sm uppercase tracking-wider text-foreground/80">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -776,10 +937,11 @@ export function RequestsTable({
                   const getStatusBorderColor = (status: string) => {
                     if (status === "draft") return "border-l-slate-400";
                     if (["pending", "sign_pending"].includes(status)) return "border-l-amber-500";
-                    if (["approved", "recheck", "ready_for_cc", "cc_pending", "cc_approved", "ready_for_po", "pending_po", "ready_for_delivery", "partially_processed"].includes(status)) return "border-l-blue-500";
-                    if (status === "delivery_processing") return "border-l-orange-500";
-                    if (status === "delivered") return "border-l-emerald-500";
-                    if (["rejected", "sign_rejected", "cc_rejected", "rejected_po"].includes(status)) return "border-l-rose-500";
+                    if (status === "approved") return "border-l-emerald-500";
+                    if (["recheck", "ready_for_cc", "cc_pending", "cc_approved", "ready_for_po", "pending_po", "direct_po", "partially_processed"].includes(status)) return "border-l-indigo-500";
+                    if (["ready_for_delivery", "delivery_processing", "delivery_stage", "out_for_delivery"].includes(status)) return "border-l-orange-500";
+                    if (status === "delivered") return "border-l-teal-500";
+                    if (["rejected", "sign_rejected", "cc_rejected", "rejected_po", "cc_rejected"].includes(status)) return "border-l-rose-500";
                     return "border-l-muted";
                   };
 
@@ -787,11 +949,24 @@ export function RequestsTable({
                   const getStatusBgColor = (status: string) => {
                     if (status === "draft") return "bg-slate-50/80 dark:bg-slate-900/40 hover:bg-slate-100 dark:hover:bg-slate-900/60";
                     if (["pending", "sign_pending"].includes(status)) return "bg-amber-50/80 dark:bg-amber-950/20 hover:bg-amber-100 dark:hover:bg-amber-950/30";
-                    if (["approved", "recheck", "ready_for_cc", "cc_pending", "cc_approved", "ready_for_po", "pending_po", "ready_for_delivery", "partially_processed"].includes(status)) return "bg-blue-50/80 dark:bg-blue-950/20 hover:bg-blue-100 dark:hover:bg-blue-950/30";
-                    if (status === "delivery_processing") return "bg-orange-50/80 dark:bg-orange-950/20 hover:bg-orange-100 dark:hover:bg-orange-950/30";
-                    if (status === "delivered") return "bg-emerald-50/80 dark:bg-emerald-950/20 hover:bg-emerald-100 dark:hover:bg-emerald-950/30";
-                    if (["rejected", "sign_rejected", "cc_rejected", "rejected_po"].includes(status)) return "bg-rose-50/80 dark:bg-rose-950/20 hover:bg-rose-100 dark:hover:bg-rose-950/30";
+                    if (status === "approved") return "bg-emerald-50/80 dark:bg-emerald-950/20 hover:bg-emerald-100 dark:hover:bg-emerald-950/30";
+                    if (["recheck", "ready_for_cc", "cc_pending", "cc_approved", "ready_for_po", "pending_po", "direct_po", "partially_processed"].includes(status)) return "bg-indigo-50/80 dark:bg-indigo-950/20 hover:bg-indigo-100 dark:hover:bg-indigo-950/30";
+                    if (["ready_for_delivery", "delivery_processing", "delivery_stage", "out_for_delivery"].includes(status)) return "bg-orange-50/80 dark:bg-orange-950/20 hover:bg-orange-100 dark:hover:bg-orange-950/30";
+                    if (status === "delivered") return "bg-teal-50/80 dark:bg-teal-950/20 hover:bg-teal-100 dark:hover:bg-teal-950/30";
+                    if (["rejected", "sign_rejected", "cc_rejected", "rejected_po", "cc_rejected"].includes(status)) return "bg-rose-50/80 dark:bg-rose-950/20 hover:bg-rose-100 dark:hover:bg-rose-950/30";
                     return "bg-card hover:bg-accent/50";
+                  };
+
+                  // Get status bar color - EXPLICIT classes for Tailwind JIT
+                  const getStatusBarColor = (status: string) => {
+                    if (status === "draft") return "bg-slate-400";
+                    if (["pending", "sign_pending"].includes(status)) return "bg-amber-500";
+                    if (status === "approved") return "bg-emerald-500";
+                    if (["recheck", "ready_for_cc", "cc_pending", "cc_approved", "ready_for_po", "pending_po", "direct_po", "partially_processed"].includes(status)) return "bg-indigo-500";
+                    if (["ready_for_delivery", "delivery_processing", "delivery_stage", "out_for_delivery"].includes(status)) return "bg-orange-500";
+                    if (status === "delivered") return "bg-teal-500";
+                    if (["rejected", "sign_rejected", "cc_rejected", "rejected_po", "cc_rejected"].includes(status)) return "bg-rose-500";
+                    return "bg-muted";
                   };
 
                   return (
@@ -802,7 +977,7 @@ export function RequestsTable({
                           getStatusBorderColor(overallStatus || firstItem.status),
                           getStatusBgColor(overallStatus || firstItem.status),
                           isNewlySent && "ring-2 ring-primary/20",
-                          hasMultipleItems && isExpanded ? "border-b-0 shadow-none" : "shadow-sm hover:shadow-md hover:translate-x-1"
+                          hasMultipleItems && isExpanded ? "border-b-0 shadow-none" : "shadow-sm hover:shadow-md"
                         )}
                         onClick={() => hasMultipleItems ? toggleGroup(requestNumber) : null}
                       >
@@ -833,9 +1008,12 @@ export function RequestsTable({
 
                         {/* Location */}
                         <TableCell className="py-4">
-                          <div className="flex items-center gap-2 max-w-[200px]">
-                            <MapPin className="h-4 w-4 text-primary shrink-0" />
-                            <span className="truncate text-sm font-semibold" title={firstItem.site?.name}>{firstItem.site?.name || "—"}</span>
+                          <div
+                            className="flex items-center gap-2 max-w-[200px] cursor-pointer hover:text-primary transition-colors group"
+                            onClick={(e) => { e.stopPropagation(); setSelectedSiteId(firstItem.siteId); }}
+                          >
+                            <MapPin className="h-4 w-4 text-primary shrink-0 transition-transform" />
+                            <span className="truncate text-sm font-semibold group-hover:underline" title={firstItem.site?.name}>{firstItem.site?.name || "—"}</span>
                           </div>
                         </TableCell>
 
@@ -862,9 +1040,9 @@ export function RequestsTable({
                               <ChevronDown className="h-3.5 w-3.5" /> Viewing details below...
                             </span>
                           ) : (
-                            <div className="flex items-center gap-3">
+                            <div className="flex items-start gap-3">
                               <div className={cn(
-                                "shrink-0 flex items-center justify-center",
+                                "shrink-0 flex items-center justify-center mt-1",
                                 getItemPhotos(firstItem).length > 0 ? "w-10 h-10 ring-1 ring-border rounded-md overflow-hidden bg-background" : "w-10 h-10"
                               )}>
                                 {getItemPhotos(firstItem).length > 0 ? (
@@ -874,16 +1052,25 @@ export function RequestsTable({
                                 )}
                               </div>
                               <div className="min-w-0 flex-1">
-                                <div className="font-bold text-sm text-foreground mb-0.5 truncate" title={firstItem.itemName}>
-                                  {firstItem.itemName}
+                                <div className="flex items-start gap-2">
+                                  <span className="bg-primary/10 text-primary text-[10px] font-black font-mono px-1.5 py-0.5 rounded border border-primary/20 shadow-sm shrink-0 mt-0.5">
+                                    #{firstItem.itemOrder ?? items.length}
+                                  </span>
+                                  <button
+                                    onClick={(e) => { e.stopPropagation(); setSelectedItemName(firstItem.itemName); }}
+                                    className="font-bold text-sm text-foreground mb-0.5 truncate hover:text-primary hover:underline text-left block w-full leading-tight"
+                                    title={firstItem.itemName}
+                                  >
+                                    {firstItem.itemName}
+                                  </button>
                                 </div>
                                 {firstItem.description && (
-                                  <p className="text-xs text-muted-foreground line-clamp-1">
-                                    {firstItem.description}
-                                  </p>
+                                  <div className="w-full text-xs text-muted-foreground mt-1">
+                                    <ExpandableText text={firstItem.description} className="text-xs text-muted-foreground" limit={60} />
+                                  </div>
                                 )}
                               </div>
-                              <div className="shrink-0 ml-2">
+                              <div className="shrink-0 ml-2 mt-1">
                                 <div className="text-sm font-bold text-foreground">
                                   {firstItem.quantity} <span className="text-xs text-muted-foreground font-normal">{firstItem.unit}</span>
                                 </div>
@@ -894,17 +1081,55 @@ export function RequestsTable({
 
                         {/* Actions */}
                         <TableCell className="text-right py-4">
-                          <div className="flex justify-end">
-                            {onViewDetails && (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-8 px-3 text-xs font-semibold hover:bg-primary hover:text-primary-foreground transition-all rounded-full"
-                                onClick={(e) => { e.stopPropagation(); onViewDetails(firstItem._id); }}
-                                title="View Details"
-                              >
-                                View
-                              </Button>
+                          <div className="flex justify-end gap-1">
+                            {(firstItem.status === "draft" || firstItem.status === "rejected" || firstItem.status === "sign_rejected") ? (
+                              <>
+                                {onViewDetails && (
+                                  <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); onViewDetails(firstItem._id); }} className="h-8 w-8 p-0 rounded-full text-muted-foreground hover:text-foreground hover:bg-slate-100 dark:hover:bg-slate-800" title="View Details">
+                                    <Eye className="h-4 w-4" />
+                                  </Button>
+                                )}
+                                {onEditDraft && (
+                                  <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); onEditDraft(requestNumber); }} className="h-8 w-8 p-0 rounded-full text-blue-600 hover:bg-blue-50 hover:text-blue-700" title="Edit">
+                                    <Edit className="h-4 w-4" />
+                                  </Button>
+                                )}
+                                {onDeleteDraft && (
+                                  <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); onDeleteDraft(requestNumber); }} className="h-8 w-8 p-0 rounded-full text-red-600 hover:bg-red-50 hover:text-red-700" title="Delete">
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                )}
+                                {onSendDraft && (
+                                  <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); onSendDraft(requestNumber); }} className="h-8 w-8 p-0 rounded-full text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700" title="Send Request">
+                                    <Send className="h-4 w-4" />
+                                  </Button>
+                                )}
+                              </>
+                            ) : (
+                              <>
+                                {onConfirmDelivery && ["out_for_delivery", "delivery_processing", "delivery_stage"].includes(firstItem.status) && (
+                                  <Button
+                                    variant="default"
+                                    size="sm"
+                                    className="h-7 px-3 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm animate-pulse mr-1"
+                                    onClick={(e) => { e.stopPropagation(); onConfirmDelivery(firstItem._id); }}
+                                  >
+                                    <CheckCircle2 className="h-3 w-3 mr-1" />
+                                    Confirm
+                                  </Button>
+                                )}
+                                {onViewDetails && (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-7 px-3 text-xs font-bold border-slate-200 bg-white hover:bg-slate-50 text-slate-700 hover:text-slate-900 shadow-sm transition-all rounded-md dark:bg-slate-900 dark:border-slate-800 dark:text-slate-200"
+                                    onClick={(e) => { e.stopPropagation(); onViewDetails(firstItem._id); }}
+                                    title="View Details"
+                                  >
+                                    View
+                                  </Button>
+                                )}
+                              </>
                             )}
                           </div>
                         </TableCell>
@@ -922,15 +1147,20 @@ export function RequestsTable({
                                 <div
                                   key={item._id}
                                   className={cn(
-                                    "grid grid-cols-[50px_60px_2fr_120px_140px_80px] gap-4 items-center p-3 rounded-lg border-l-4 transition-all w-full mb-2",
+                                    "relative grid grid-cols-[50px_60px_2fr_120px_140px_80px] gap-4 items-center p-3 rounded-lg transition-all w-full mb-2 shadow-sm overflow-hidden",
+                                    "bg-white dark:bg-slate-950",
                                     getStatusBgColor(item.status),
-                                    getStatusBorderColor(item.status),
-                                    "border-y border-r border-border/50 hover:shadow-md"
+                                    "border border-border/50 hover:shadow-md"
                                   )}
                                 >
+                                  {/* Status Bar */}
+                                  <div className={cn("absolute left-0 top-0 bottom-0 w-[6px] z-10", getStatusBarColor(item.status))} />
+
                                   {/* Item Number */}
-                                  <div className="text-center">
-                                    <span className="text-[10px] font-bold opacity-50 uppercase tracking-widest">Item {String(idx + 1).padStart(2, '0')}</span>
+                                  <div className="text-center pb-1">
+                                    <span className="bg-primary/10 text-primary text-xs font-black font-mono px-2 py-0.5 rounded border border-primary/20 shadow-sm block w-fit mx-auto">
+                                      #{item.itemOrder ?? (items.length - idx)}
+                                    </span>
                                   </div>
 
                                   {/* Image */}
@@ -945,11 +1175,19 @@ export function RequestsTable({
                                   {/* Item Name & Description */}
                                   <div className="min-w-0">
                                     <div className="flex flex-col">
-                                      <span className="font-bold text-sm text-foreground mb-1 truncate" title={item.itemName}>
+                                      <button
+                                        onClick={(e) => { e.stopPropagation(); setSelectedItemName(item.itemName); }}
+                                        className="font-bold text-sm text-foreground mb-1 truncate hover:text-primary hover:underline text-left block w-full"
+                                        title={item.itemName}
+                                      >
                                         {item.itemName}
-                                      </span>
-                                      <div className="text-xs text-muted-foreground line-clamp-1">
-                                        {item.description || <span className="italic opacity-50">No description</span>}
+                                      </button>
+                                      <div className="text-xs text-muted-foreground w-full">
+                                        {item.description ? (
+                                          <ExpandableText text={item.description} className="text-xs text-muted-foreground" limit={40} />
+                                        ) : (
+                                          <span className="italic opacity-50">No description</span>
+                                        )}
                                       </div>
                                     </div>
                                   </div>
@@ -972,12 +1210,23 @@ export function RequestsTable({
                                   </div>
 
                                   {/* Actions */}
-                                  <div className="text-right flex justify-end">
+                                  <div className="text-right flex justify-end items-center">
+                                    {onConfirmDelivery && ["ready_for_delivery", "delivery_processing", "delivery_stage"].includes(item.status) && (
+                                      <Button
+                                        variant="default"
+                                        size="sm"
+                                        className="h-7 px-3 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm animate-pulse mr-2"
+                                        onClick={(e) => { e.stopPropagation(); onConfirmDelivery(item._id); }}
+                                      >
+                                        <CheckCircle2 className="h-3 w-3 mr-1" />
+                                        Confirm
+                                      </Button>
+                                    )}
                                     {onViewDetails && (
                                       <Button
-                                        variant="ghost"
+                                        variant="outline"
                                         size="sm"
-                                        className="h-8 w-full text-xs font-semibold hover:bg-black/5 dark:hover:bg-white/10 transition-colors"
+                                        className="h-8 px-4 text-xs font-bold border-primary/30 text-primary hover:bg-primary hover:text-primary-foreground transition-all shadow-sm"
                                         onClick={(e) => { e.stopPropagation(); onViewDetails(item._id); }}
                                       >
                                         View

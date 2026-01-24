@@ -35,7 +35,10 @@ import {
   MapPin,
   Sparkles,
   PackageX,
-  ZoomIn
+  ZoomIn,
+  X,
+  ChevronDown,
+  ChevronUp
 } from "lucide-react";
 import { ImageGallery } from "@/components/ui/image-gallery";
 import { LazyImage } from "@/components/ui/lazy-image";
@@ -53,6 +56,7 @@ export function ItemInfoDialog({
   itemName,
 }: ItemInfoDialogProps) {
   const [galleryOpen, setGalleryOpen] = useState(false);
+  const [descriptionExpanded, setDescriptionExpanded] = useState(false);
 
   const queryArgs = itemName ? { itemName } : "skip";
   const inventoryItem = useQuery(
@@ -75,201 +79,204 @@ export function ItemInfoDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden p-0 gap-0 rounded-2xl border-none shadow-2xl bg-card flex flex-col w-full">
-        {/* Helper Header Background */}
-        <div className="h-32 bg-gradient-to-br from-primary/10 via-primary/5 to-transparent absolute w-full top-0 left-0 -z-10" />
-
-        {/* Minimal Header */}
-        <DialogHeader className="p-6 pb-4 border-b-0 shrink-0 z-10">
-          <div className="flex items-start justify-between gap-4 pr-12">
-            <div className="flex items-center gap-3.5 min-w-0">
-              <div className="p-2.5 bg-background rounded-xl shadow-sm border border-border/50 shrink-0">
-                <Package className="h-5 w-5 text-primary" />
-              </div>
-              <div className="space-y-0.5 min-w-0">
-                <DialogTitle className="text-xl font-bold tracking-tight text-foreground truncate block">
-                  {itemName || "Item Details"}
-                </DialogTitle>
-                <div className="text-xs font-medium text-muted-foreground flex items-center gap-1.5 truncate">
-                  Inventory & Vendor Overview
-                </div>
+      <DialogContent
+        showCloseButton={false}
+        className="max-w-4xl max-h-[85vh] overflow-hidden p-0 gap-0 rounded-3xl border border-border/40 shadow-2xl bg-slate-50/50 dark:bg-slate-950/50 backdrop-blur-xl flex flex-col w-full outline-none"
+      >
+        {/* Header Section */}
+        <div className="relative shrink-0 border-b border-border/10 bg-white/50 dark:bg-slate-900/50 p-6 flex items-start justify-between gap-4">
+          <div className="flex-1 min-w-0 flex items-center gap-4">
+            <div className="h-12 w-12 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center shadow-lg shadow-blue-500/20 shrink-0 text-white">
+              <Package className="h-6 w-6" />
+            </div>
+            <div className="space-y-1 min-w-0">
+              <DialogTitle className="text-2xl font-black tracking-tight text-foreground truncate drop-shadow-sm">
+                {itemName || "Item Details"}
+              </DialogTitle>
+              <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+                <span className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs">
+                  <Hash className="h-3 w-3 opacity-50" />
+                  Inventory Item
+                </span>
+                {inventoryItem?.hsnSacCode && (
+                  <span className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs">
+                    HSN: {inventoryItem.hsnSacCode}
+                  </span>
+                )}
               </div>
             </div>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0">
             {inventoryItem && (
               <Button
+                variant="outline"
                 size="sm"
-                className="shrink-0 gap-1.5 h-8 px-3.5 text-xs font-semibold bg-white dark:bg-slate-950 hover:bg-slate-50 dark:hover:bg-slate-900 text-foreground border border-border/60 shadow-sm transition-all rounded-full hover:scale-105"
+                className="hidden sm:flex h-9 gap-2 rounded-full border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 hover:bg-slate-50 hover:text-black dark:hover:bg-slate-800 dark:hover:text-white text-xs font-bold text-slate-900 dark:text-slate-100 shadow-sm"
                 onClick={handleViewInInventory}
               >
-                <ExternalLink className="h-3 w-3" />
-                Inventory
+                <ExternalLink className="h-3.5 w-3.5" />
+                View Full Details
               </Button>
             )}
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-9 w-9 rounded-full bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 transition-colors"
+              onClick={() => onOpenChange(false)}
+            >
+              <X className="h-5 w-5 text-muted-foreground" />
+            </Button>
           </div>
-        </DialogHeader>
+        </div>
 
         {/* Scrollable Content */}
-        <div className="flex-1 overflow-y-auto custom-scrollbar p-6 pt-0">
+        <div className="flex-1 overflow-y-auto custom-scrollbar">
+          <div className="p-6 space-y-8">
 
-          <div className="flex flex-col gap-8">
+            {/* Main Content Grid - Changed to Single Column */}
+            <div className="flex flex-col gap-6">
 
-            {/* Top Section: Image & Stats */}
-            <div className="grid grid-cols-1 md:grid-cols-[240px_1fr] gap-6 lg:gap-8">
-              {/* Left: Image Card */}
-              <div className="flex flex-col gap-4">
-                <div
-                  className={cn(
-                    "relative aspect-square w-full rounded-2xl border border-border/50 bg-card overflow-hidden group cursor-pointer shadow-sm transition-all hover:shadow-md hover:border-primary/20",
-                    !itemPhotos.length && "cursor-default hover:shadow-none hover:border-border/50"
-                  )}
-                  onClick={() => itemPhotos.length > 0 && setGalleryOpen(true)}
-                >
-                  {itemPhotos.length > 0 ? (
-                    <>
-                      <div className="w-full h-full p-3 flex items-center justify-center bg-white dark:bg-slate-950/20">
-                        <LazyImage
-                          src={itemPhotos[0].imageUrl}
-                          alt={itemName || "Item image"}
-                          width={400}
-                          height={400}
-                          className="max-w-full max-h-full object-contain drop-shadow-sm group-hover:scale-105 transition-transform duration-500"
-                        />
-                      </div>
-                      <div className="absolute inset-0 bg-black/0 group-hover:bg-black/5 transition-colors duration-300 flex items-center justify-center">
-                        <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-white/90 dark:bg-black/80 text-foreground px-2.5 py-1 rounded-full text-[10px] font-bold shadow-lg backdrop-blur-sm flex items-center gap-1.5 transform translate-y-2 group-hover:translate-y-0 transition-transform">
-                          <ZoomIn className="h-3 w-3" /> Gallery
-                        </div>
-                      </div>
-                      {itemPhotos.length > 1 && (
-                        <div className="absolute bottom-2 right-2 bg-black/60 text-white text-[9px] font-bold px-1.5 py-0.5 rounded backdrop-blur-md">
-                          +{itemPhotos.length - 1}
-                        </div>
-                      )}
-                    </>
-                  ) : (
-                    <div className="flex flex-col items-center justify-center h-full text-muted-foreground/40 bg-muted/10">
-                      <ImageIcon className="h-10 w-10 mb-2 opacity-20" />
-                      <span className="text-[10px] font-bold uppercase tracking-wider">No Image</span>
-                    </div>
-                  )}
-                </div>
-
-                {/* HSN Code Badge */}
-                {inventoryItem?.hsnSacCode && (
-                  <div className="flex items-center justify-center gap-2 px-3 py-2 bg-muted/20 rounded-xl border border-border/50">
-                    <span className="text-[10px] font-bold text-muted-foreground uppercase opacity-70">HSN/SAC</span>
-                    <Badge variant="secondary" className="h-5 px-1.5 font-mono text-[10px] bg-background border">{inventoryItem.hsnSacCode}</Badge>
-                  </div>
+              {/* Row 1: Image */}
+              <div
+                className={cn(
+                  "relative aspect-square w-full sm:w-2/3 mx-auto rounded-3xl border border-border/50 bg-white dark:bg-slate-900 shadow-sm overflow-hidden group cursor-pointer",
+                  !itemPhotos.length && "cursor-default"
                 )}
-              </div>
-
-              {/* Right: Stats & Desc */}
-              <div className="flex flex-col gap-4 min-w-0">
-                <div className="grid grid-cols-2 gap-4">
-                  {/* Stock Card */}
-                  <div className="p-4 rounded-2xl bg-card border border-border/60 shadow-sm relative overflow-hidden group hover:border-primary/20 transition-all">
-                    <Label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5 mb-1 opacity-80">
-                      Stock
-                    </Label>
-                    <div className="flex items-baseline gap-1 mt-1 flex-wrap">
-                      <span className={cn(
-                        "text-3xl font-black tracking-tight",
-                        !hasStock ? "text-muted-foreground" : "text-foreground"
-                      )}>
-                        {stock}
-                      </span>
-                      <span className="text-sm font-semibold text-muted-foreground truncate max-w-[80px]">{inventoryItem?.unit || "u"}</span>
-                    </div>
-                    <div className="h-1.5 w-full bg-muted mt-3 rounded-full overflow-hidden">
-                      <div
-                        className={cn("h-full rounded-full transition-all duration-1000",
-                          !hasStock ? "bg-muted w-0" : isLowStock ? "bg-amber-500 w-1/4" : "bg-emerald-500 w-full"
-                        )}
+                onClick={() => itemPhotos.length > 0 && setGalleryOpen(true)}
+              >
+                {itemPhotos.length > 0 ? (
+                  <>
+                    <div className="w-full h-full p-8 flex items-center justify-center">
+                      <LazyImage
+                        src={itemPhotos[0].imageUrl}
+                        alt={itemName || "Item image"}
+                        width={600}
+                        height={600}
+                        className="max-w-full max-h-full object-contain drop-shadow-xl group-hover:scale-105 transition-transform duration-500"
                       />
                     </div>
-                  </div>
-
-                  {/* Status Card */}
-                  <div className="p-4 rounded-2xl bg-card border border-border/60 shadow-sm relative overflow-hidden group hover:border-primary/20 transition-all">
-                    <Label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5 mb-2 opacity-80">
-                      Status
-                    </Label>
-                    <div className="min-h-[2.5rem] flex items-center">
-                      {inventoryItem ? (
-                        !hasStock ? (
-                          <Badge variant="destructive" className="px-2.5 py-1 text-[11px] font-bold rounded-lg shadow-sm whitespace-nowrap">
-                            Out of Stock
-                          </Badge>
-                        ) : isLowStock ? (
-                          <Badge variant="outline" className="px-2.5 py-1 border-amber-200/50 text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 text-[11px] font-bold rounded-lg shadow-sm whitespace-nowrap">
-                            Low Stock
-                          </Badge>
-                        ) : (
-                          <Badge variant="outline" className="px-2.5 py-1 border-emerald-200/50 text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 text-[11px] font-bold rounded-lg shadow-sm whitespace-nowrap">
-                            In Stock
-                          </Badge>
-                        )
-                      ) : (
-                        <Badge variant="secondary" className="text-[10px]">Unracked</Badge>
-                      )}
+                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/10 transition-colors duration-300 flex items-center justify-center">
+                      <div className="opacity-0 group-hover:opacity-100 transition-all duration-300 transform translate-y-4 group-hover:translate-y-0 bg-white dark:bg-slate-900 text-foreground px-5 py-2.5 rounded-full text-sm font-bold shadow-xl flex items-center gap-2">
+                        <ZoomIn className="h-4 w-4" /> View Gallery
+                      </div>
                     </div>
-                  </div>
-                </div>
-
-                {/* Description */}
-                {inventoryItem?.description ? (
-                  <div className="flex-1 bg-muted/10 p-4 rounded-2xl border border-border/50 relative overflow-hidden">
-                    <Label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5 mb-2 opacity-80">
-                      Description
-                    </Label>
-                    <div className="text-xs text-foreground/80 leading-relaxed max-h-[120px] overflow-y-auto custom-scrollbar">
-                      {inventoryItem.description}
-                    </div>
-                  </div>
+                  </>
                 ) : (
-                  <div className="flex-1 bg-muted/5 p-4 rounded-2xl border border-dashed border-border/50 flex items-center justify-center">
-                    <span className="text-xs text-muted-foreground italic">No description available</span>
+                  <div className="flex flex-col items-center justify-center h-full text-muted-foreground/30 bg-slate-50 dark:bg-slate-900/50">
+                    <ImageIcon className="h-20 w-20 mb-4 opacity-20" />
+                    <span className="text-sm font-bold uppercase tracking-widest opacity-60">No Image Available</span>
                   </div>
                 )}
               </div>
+
+              {/* Row 2: Stats Cards */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm">
+                  <div className="text-[11px] font-bold text-muted-foreground uppercase opacity-80 mb-2">Available Stock</div>
+                  <div className="flex items-baseline gap-1">
+                    <span className={cn(
+                      "text-4xl font-black tracking-tighter",
+                      hasStock ? "text-foreground" : "text-muted-foreground"
+                    )}>
+                      {stock}
+                    </span>
+                    <span className="text-sm font-semibold text-muted-foreground">{inventoryItem?.unit || "u"}</span>
+                  </div>
+                  {hasStock && (
+                    <div className="mt-3 h-1.5 w-full bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                      <div className="h-full bg-emerald-500 rounded-full w-full" />
+                    </div>
+                  )}
+                </div>
+
+                <div className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm flex flex-col justify-center items-start">
+                  <div className="text-[11px] font-bold text-muted-foreground uppercase opacity-80 mb-3">Inventory Status</div>
+                  {inventoryItem ? (
+                    !hasStock ? (
+                      <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-red-50 text-red-700 border border-red-100 dark:bg-red-950/30 dark:text-red-400 dark:border-red-900/50 w-full justify-center sm:w-auto">
+                        <AlertCircle className="h-4 w-4 shrink-0" />
+                        <span className="font-bold text-sm whitespace-nowrap">Out of Stock</span>
+                      </div>
+                    ) : isLowStock ? (
+                      <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-amber-50 text-amber-700 border border-amber-100 dark:bg-amber-950/30 dark:text-amber-400 dark:border-amber-900/50 w-full justify-center sm:w-auto">
+                        <AlertCircle className="h-4 w-4 shrink-0" />
+                        <span className="font-bold text-sm whitespace-nowrap">Low Stock</span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-100 dark:bg-emerald-950/30 dark:text-emerald-400 dark:border-emerald-900/50 w-full justify-center sm:w-auto">
+                        <CheckCircle className="h-4 w-4 shrink-0" />
+                        <span className="font-bold text-sm whitespace-nowrap">In Stock</span>
+                      </div>
+                    )
+                  ) : (
+                    <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 w-full justify-center sm:w-auto">
+                      <Hash className="h-4 w-4 shrink-0" />
+                      <span className="font-bold text-sm whitespace-nowrap">Unracked</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Row 3: Description */}
+              <div className="p-6 rounded-2xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200/60 dark:border-slate-800/60">
+                <div className="flex items-center gap-2 mb-3">
+                  <FileText className="h-4 w-4 text-primary" />
+                  <span className="text-[11px] font-bold text-foreground uppercase opacity-80">Description & Specs</span>
+                </div>
+                <div className="relative">
+                  <p className={cn(
+                    "text-sm text-muted-foreground leading-relaxed",
+                    !descriptionExpanded && "line-clamp-3"
+                  )}>
+                    {inventoryItem?.description || <span className="italic opacity-50">No description available for this item.</span>}
+                  </p>
+                  {inventoryItem?.description && inventoryItem.description.length > 200 && (
+                    <button
+                      onClick={() => setDescriptionExpanded(!descriptionExpanded)}
+                      className="mt-2 text-primary font-bold text-xs flex items-center gap-1 hover:underline"
+                    >
+                      {descriptionExpanded ? (
+                        <>Show Less <ChevronUp className="h-3 w-3" /></>
+                      ) : (
+                        <>Read More <ChevronDown className="h-3 w-3" /></>
+                      )}
+                    </button>
+                  )}
+                </div>
+              </div>
+
             </div>
 
-            <Separator className="bg-border/60" />
+            <Separator className="bg-border/50" />
 
-            {/* Bottom Section: Vendors - Full Width Vertical Stack */}
+            {/* Vendor Information */}
             <div className="space-y-4">
-              <h3 className="font-bold text-sm flex items-center gap-2 text-foreground/90 px-1">
-                <div className="p-1 rounded bg-blue-500/10">
-                  <Building2 className="h-3.5 w-3.5 text-blue-500" />
-                </div>
-                Vendor Information
-              </h3>
+              <div className="flex items-center gap-2">
+                <Building2 className="h-5 w-5 text-indigo-500" />
+                <h3 className="font-bold text-lg tracking-tight">Vendor Information</h3>
+              </div>
 
               {inventoryItem && (inventoryItem.vendor || (inventoryItem.vendors && inventoryItem.vendors.length > 0)) ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   {(inventoryItem.vendors?.length ? inventoryItem.vendors : [inventoryItem.vendor]).filter(Boolean).map((vendor: any) => (
-                    <div key={vendor._id || 'default'} className="p-4 rounded-2xl border border-border/60 bg-card hover:bg-muted/10 transition-all hover:shadow-sm hover:border-primary/20 group flex items-start gap-4 overflow-hidden">
-                      <div className="h-10 w-10 rounded-xl bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center shrink-0 text-blue-600 dark:text-blue-400">
-                        <Building2 className="h-5 w-5" />
-                      </div>
-                      <div className="min-w-0 flex-1 space-y-1.5">
-                        <p className="font-bold text-sm text-foreground truncate" title={vendor.companyName}>{vendor.companyName}</p>
-                        <div className="space-y-1">
+                    <div key={vendor._id || 'default'} className="group p-5 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:border-indigo-500/30 hover:shadow-lg hover:shadow-indigo-500/5 transition-all duration-300">
+                      <div className="flex items-start gap-4">
+                        <div className="h-10 w-10 rounded-xl bg-indigo-50 dark:bg-indigo-950/30 flex items-center justify-center text-indigo-600 dark:text-indigo-400 shrink-0 group-hover:scale-110 transition-transform">
+                          <Building2 className="h-5 w-5" />
+                        </div>
+                        <div className="min-w-0 space-y-1">
+                          <div className="font-bold text-base text-foreground truncate">{vendor.companyName}</div>
                           {vendor.phone && (
-                            <div className="flex items-center gap-2 text-xs text-muted-foreground truncate">
-                              <Phone className="h-3 w-3 shrink-0 opacity-70" /> {vendor.phone}
+                            <div className="flex items-center gap-2 text-sm text-muted-foreground group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
+                              <Phone className="h-3.5 w-3.5" />
+                              {vendor.phone}
                             </div>
                           )}
                           {vendor.email && (
-                            <div className="flex items-center gap-2 text-xs text-muted-foreground truncate">
-                              <Mail className="h-3 w-3 shrink-0 opacity-70" />
-                              <span className="truncate">{vendor.email}</span>
-                            </div>
-                          )}
-                          {vendor.address && (
-                            <div className="flex items-start gap-2 text-xs text-muted-foreground">
-                              <MapPin className="h-3 w-3 shrink-0 mt-0.5 opacity-70" />
-                              <span className="line-clamp-1">{vendor.address}</span>
+                            <div className="flex items-center gap-2 text-sm text-muted-foreground truncate">
+                              <Mail className="h-3.5 w-3.5" />
+                              {vendor.email}
                             </div>
                           )}
                         </div>
@@ -278,14 +285,18 @@ export function ItemInfoDialog({
                   ))}
                 </div>
               ) : (
-                <div className="p-8 text-center bg-muted/5 rounded-2xl border border-dashed border-border/60">
-                  <p className="text-xs text-muted-foreground">No vendor information available.</p>
+                <div className="p-8 rounded-2xl border border-dashed border-slate-300 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-900/20 text-center">
+                  <div className="inline-flex h-12 w-12 rounded-full bg-slate-100 dark:bg-slate-800 items-center justify-center mb-3 text-slate-400">
+                    <Building2 className="h-6 w-6" />
+                  </div>
+                  <p className="text-sm font-medium text-muted-foreground">No vendor information associated with this item.</p>
                 </div>
               )}
             </div>
 
           </div>
         </div>
+
       </DialogContent>
 
       <ImageGallery

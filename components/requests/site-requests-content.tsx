@@ -14,6 +14,7 @@ import { RequestsTable } from "@/components/requests/requests-table";
 import { RequestDetailsDialog } from "@/components/requests/request-details-dialog";
 import { LocationInfoDialog } from "@/components/locations/location-info-dialog";
 import { Button } from "@/components/ui/button";
+import { ConfirmDeliveryDialog } from "@/components/requests/confirm-delivery-dialog";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -258,6 +259,7 @@ export function SiteRequestsContent() {
   const [sendConfirmOpen, setSendConfirmOpen] = useState(false);
   const [draftToSend, setDraftToSend] = useState<string | null>(null);
   const [newlySentRequestNumbers, setNewlySentRequestNumbers] = useState<Set<string>>(new Set());
+  const [confirmDeliveryId, setConfirmDeliveryId] = useState<Id<"requests"> | null>(null);
   const { viewMode, toggleViewMode } = useViewMode();
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
@@ -344,14 +346,12 @@ export function SiteRequestsContent() {
       "delivered"
     ].includes(r.status)
   ) || []).sort((a, b) => {
-    // Non-drafts first (pending, etc.), sorted by updatedAt (newest first)
-    if (a.status !== "draft" && b.status !== "draft") {
-      return b.updatedAt - a.updatedAt;
-    }
-    if (a.status !== "draft") return -1; // Non-draft comes before draft
-    if (b.status !== "draft") return 1; // Non-draft comes before draft
-    // Both are drafts, sort by createdAt (newest first)
-    return b.createdAt - a.createdAt;
+    // Priority: Drafts first, then by updatedAt
+    if (a.status === "draft" && b.status !== "draft") return -1;
+    if (a.status !== "draft" && b.status === "draft") return 1;
+
+    // If both are drafts or both are not drafts, sort by updatedAt (newest first)
+    return b.updatedAt - a.updatedAt;
   });
 
   const historyRequests = allRequests?.filter((r) =>
@@ -378,7 +378,12 @@ export function SiteRequestsContent() {
       setDraftToDelete(null);
     } catch (error: any) {
       toast.error(error.message || "Failed to delete draft");
+      console.error(error);
     }
+  };
+
+  const handleConfirmDelivery = (requestId: Id<"requests">) => {
+    setConfirmDeliveryId(requestId);
   };
 
   const handleSendDraft = (requestNumber: string) => {
@@ -597,63 +602,94 @@ export function SiteRequestsContent() {
                 <Filter className="ml-2 h-4 w-4 shrink-0 opacity-50" />
               </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-[220px] p-0" align="start">
+            <PopoverContent className="w-[360px] p-0" align="start">
               <Command>
                 <CommandInput placeholder="Search status..." />
-                <CommandList>
+                <CommandList className="max-h-[600px] overflow-y-auto">
                   <CommandEmpty>No status found.</CommandEmpty>
-                  <CommandGroup>
+                  <CommandGroup className="p-2">
                     <CommandItem
                       onSelect={() => setStatusFilter([])}
-                      className="cursor-pointer"
+                      className={cn(
+                        "cursor-pointer py-3.5 px-3 mb-2 rounded-xl border transition-all flex items-start gap-3 h-auto group",
+                        statusFilter.length === 0
+                          ? "bg-foreground text-background border-transparent shadow-md"
+                          : "bg-card hover:bg-muted/60 border-border text-muted-foreground hover:text-foreground shadow-sm"
+                      )}
                     >
                       <div className={cn(
-                        "mr-2 flex h-4 w-4 items-center justify-center rounded-sm border",
+                        "h-5 w-5 shrink-0 rounded flex items-center justify-center transition-all mt-0.5",
                         statusFilter.length === 0
-                          ? "bg-primary border-primary text-primary-foreground"
-                          : "opacity-50 [&_svg]:invisible border-input"
+                          ? "bg-background text-foreground border-2 border-background"
+                          : "border-2 border-muted-foreground/30 bg-transparent group-hover:border-foreground/50"
                       )}>
-                        <Check className={cn("h-4 w-4")} />
+                        {statusFilter.length === 0 && <Check className="h-3.5 w-3.5" strokeWidth={3} />}
                       </div>
-                      <span>All Statuses</span>
+                      <span className="font-bold text-sm flex-1 pt-0.5">All Statuses</span>
                     </CommandItem>
-                    <CommandSeparator className="my-1" />
+
+                    <div className="h-px bg-border/50 my-2 mx-1" />
+
                     {[
                       {
                         value: "draft",
                         label: "Draft",
                         color: "text-slate-600",
-                        dotColor: "bg-slate-400"
+                        dotColor: "bg-slate-400",
+                        activeColor: "bg-slate-100 text-slate-900 dark:bg-slate-900/40 dark:text-slate-100",
+                        hoverColor: "hover:bg-slate-50 dark:hover:bg-slate-900/20",
+                        borderColor: "border-slate-500 bg-slate-500",
+                        selectedBorder: "border-slate-200 dark:border-slate-800"
                       },
                       {
                         value: "pending",
                         label: "Pending",
                         color: "text-amber-600",
-                        dotColor: "bg-amber-500"
+                        dotColor: "bg-amber-500",
+                        activeColor: "bg-amber-100 text-amber-900 dark:bg-amber-900/40 dark:text-amber-100",
+                        hoverColor: "hover:bg-amber-50 dark:hover:bg-amber-900/20",
+                        borderColor: "border-amber-500 bg-amber-500",
+                        selectedBorder: "border-amber-200 dark:border-amber-800"
                       },
                       {
                         value: "rejected",
                         label: "Rejected",
                         color: "text-rose-600",
-                        dotColor: "bg-rose-500"
+                        dotColor: "bg-rose-500",
+                        activeColor: "bg-rose-100 text-rose-900 dark:bg-rose-900/40 dark:text-rose-100",
+                        hoverColor: "hover:bg-rose-50 dark:hover:bg-rose-900/20",
+                        borderColor: "border-rose-500 bg-rose-500",
+                        selectedBorder: "border-rose-200 dark:border-rose-800"
                       },
                       {
                         value: "processing",
-                        label: "Approved & Processing",
-                        color: "text-blue-600",
-                        dotColor: "bg-blue-500"
+                        label: "Processing",
+                        color: "text-indigo-600",
+                        dotColor: "bg-indigo-500",
+                        activeColor: "bg-indigo-100 text-indigo-900 dark:bg-indigo-900/40 dark:text-indigo-100",
+                        hoverColor: "hover:bg-indigo-50 dark:hover:bg-indigo-900/20",
+                        borderColor: "border-indigo-500 bg-indigo-500",
+                        selectedBorder: "border-indigo-200 dark:border-indigo-800"
                       },
                       {
                         value: "out_for_delivery",
                         label: "Out for Delivery",
                         color: "text-orange-600",
-                        dotColor: "bg-orange-500"
+                        dotColor: "bg-orange-500",
+                        activeColor: "bg-orange-100 text-orange-900 dark:bg-orange-900/40 dark:text-orange-100",
+                        hoverColor: "hover:bg-orange-50 dark:hover:bg-orange-900/20",
+                        borderColor: "border-orange-500 bg-orange-500",
+                        selectedBorder: "border-orange-200 dark:border-orange-800"
                       },
                       {
                         value: "delivered",
                         label: "Delivered",
-                        color: "text-emerald-600",
-                        dotColor: "bg-emerald-500"
+                        color: "text-teal-600",
+                        dotColor: "bg-teal-500",
+                        activeColor: "bg-teal-100 text-teal-900 dark:bg-teal-900/40 dark:text-teal-100",
+                        hoverColor: "hover:bg-teal-50 dark:hover:bg-teal-900/20",
+                        borderColor: "border-teal-500 bg-teal-500",
+                        selectedBorder: "border-teal-200 dark:border-teal-800"
                       },
                     ].map((option) => {
                       const isSelected = statusFilter.includes(option.value);
@@ -679,7 +715,7 @@ export function SiteRequestsContent() {
                               "recheck"
                             ].includes(r.status);
                           }
-                          if (option.value === "out_for_delivery") return r.status === "delivery_processing";
+                          if (option.value === "out_for_delivery") return ["delivery_processing", "delivery_stage"].includes(r.status);
                           if (option.value === "delivered") return r.status === "delivered";
                           return false;
                         }).length;
@@ -697,21 +733,33 @@ export function SiteRequestsContent() {
                               setStatusFilter([...statusFilter, option.value]);
                             }
                           }}
-                          className="cursor-pointer py-2"
+                          className={cn(
+                            "cursor-pointer py-3.5 px-3 mb-2 rounded-xl border transition-all flex items-start gap-3 h-auto group",
+                            isSelected
+                              ? cn(option.activeColor, option.selectedBorder, "shadow-sm ring-1 ring-inset ring-black/5 dark:ring-white/5")
+                              : cn("bg-card border-border text-muted-foreground hover:text-foreground hover:border-border/80 shadow-sm", option.hoverColor)
+                          )}
                         >
                           <div className={cn(
-                            "mr-2 flex h-4 w-4 items-center justify-center rounded-sm border",
+                            "h-5 w-5 shrink-0 rounded flex items-center justify-center transition-all mt-0.5",
                             isSelected
-                              ? "bg-primary border-primary text-primary-foreground"
-                              : "opacity-50 [&_svg]:invisible border-input"
+                              ? cn(option.borderColor, "text-white shadow-sm")
+                              : "border-2 border-muted-foreground/30 bg-transparent group-hover:border-foreground/40"
                           )}>
-                            <Check className={cn("h-4 w-4")} />
+                            {isSelected && <Check className="h-3.5 w-3.5" strokeWidth={3} />}
                           </div>
-                          <div className={`w-2 h-2 rounded-full ${option.dotColor} mr-2 flex-shrink-0`}></div>
-                          <span className={cn("flex-1 text-sm font-medium", option.color)}>{option.label}</span>
-                          <span className="text-xs font-semibold text-muted-foreground bg-muted/50 px-1.5 py-0.5 rounded min-w-[24px] text-center">
+
+                          <div className="flex items-start gap-3 flex-1 min-w-0">
+                            <div className={`w-2.5 h-2.5 rounded-full ${option.dotColor} shadow-sm shrink-0 mt-1.5`} />
+                            <span className="font-bold text-sm whitespace-normal break-words leading-tight pt-0.5">{option.label}</span>
+                          </div>
+
+                          <div className={cn(
+                            "text-[10px] font-bold px-2 py-0.5 rounded-full min-w-[28px] text-center shadow-sm mt-0.5",
+                            isSelected ? "bg-white/90 text-black backdrop-blur-sm" : "bg-muted text-muted-foreground"
+                          )}>
                             {count}
-                          </span>
+                          </div>
                         </CommandItem>
                       );
                     })}
@@ -743,6 +791,7 @@ export function SiteRequestsContent() {
           onPageSizeChange={setPageSize}
           totalItems={totalRequestGroups}
           pageSizeOptions={[10, 25, 50, 100]}
+          itemCount={allFilteredRequests.length}
         />
       </div>
 
@@ -752,8 +801,10 @@ export function SiteRequestsContent() {
         onEditDraft={handleEditDraft}
         onDeleteDraft={handleDeleteDraft}
         onSendDraft={handleSendDraft}
+        onConfirmDelivery={handleConfirmDelivery}
         newlySentRequestNumbers={newlySentRequestNumbers}
         viewMode={viewMode}
+        simplifiedStatuses={true}
       />
 
       <div className="mt-4 border-t pt-4">
@@ -765,6 +816,7 @@ export function SiteRequestsContent() {
           onPageSizeChange={setPageSize}
           totalItems={totalRequestGroups}
           pageSizeOptions={[10, 35, 50, 100]}
+          itemCount={allFilteredRequests.length}
         />
       </div>
 
@@ -918,6 +970,12 @@ export function SiteRequestsContent() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      {/* Confirm Delivery Dialog */}
+      <ConfirmDeliveryDialog
+        open={!!confirmDeliveryId}
+        onOpenChange={(open) => !open && setConfirmDeliveryId(null)}
+        requestId={confirmDeliveryId}
+      />
     </>
   );
 }

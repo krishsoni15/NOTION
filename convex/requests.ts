@@ -198,6 +198,7 @@ export const getUserRequests = query({
             ? {
               _id: approver._id,
               fullName: approver.fullName,
+              role: approver.role,
             }
             : null,
           selectedVendorId,
@@ -302,6 +303,7 @@ export const getRequestsReadyForCC = query({
             ? {
               _id: approver._id,
               fullName: approver.fullName,
+              role: approver.role,
             }
             : null,
           selectedVendorId,
@@ -498,6 +500,7 @@ export const getPurchaseRequestsByStatus = query({
             ? {
               _id: approver._id,
               fullName: approver.fullName,
+              role: approver.role,
             }
             : null,
           selectedVendorId,
@@ -2044,5 +2047,61 @@ export const splitPendingPOQuantity = mutation({
       newRequestId,
       remainingQuantity,
     };
+  },
+});
+
+/**
+ * Confirm delivery of a request - Site Engineer
+ * Marks items as delivered and records proof of delivery
+ */
+export const confirmDelivery = mutation({
+  args: {
+    requestId: v.id("requests"),
+    notes: v.optional(v.string()),
+    photos: v.optional(v.array(v.object({
+      imageUrl: v.string(),
+      imageKey: v.string(),
+    }))),
+  },
+  handler: async (ctx, args) => {
+    const currentUser = await getCurrentUser(ctx);
+
+    // Only site engineers (or authorized roles) can confirm
+    if (currentUser.role !== "site_engineer" && currentUser.role !== "manager" && currentUser.role !== "purchase_officer") {
+      throw new Error("Unauthorized to confirm delivery");
+    }
+
+    const request = await ctx.db.get(args.requestId);
+    if (!request) {
+      throw new Error("Request not found");
+    }
+
+    // Allow confirming if status is correct
+    // Allow confirming if status is correct
+    const validStatuses = ["out_for_delivery", "delivery_processing", "delivery_stage"];
+    if (!validStatuses.includes(request.status)) {
+      throw new Error("Request is not in a delivery stage");
+    }
+
+    const now = Date.now();
+
+    // Update Request
+    await ctx.db.patch(request._id, {
+      status: "delivered",
+      deliveryMarkedAt: now,
+      deliveryNotes: args.notes,
+      deliveryPhotos: args.photos,
+      updatedAt: now,
+    });
+
+    // Add Note for timeline
+    await ctx.db.insert("request_notes", {
+      requestNumber: request.requestNumber,
+      userId: currentUser._id,
+      role: currentUser.role,
+      status: "delivered",
+      content: "Request marked as Delivered",
+      createdAt: now,
+    });
   },
 });

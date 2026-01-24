@@ -50,7 +50,8 @@ const statusConfig: Record<string, { label: string; variant: "default" | "second
   pending_po: { label: "Pending PO", variant: "secondary", icon: Clock, color: "amber" },
   // Delivery statuses grouped at the end
   ready_for_delivery: { label: "Ready for Delivery", variant: "default", icon: Truck, color: "indigo" },
-  delivery_processing: { label: "Delivery Processing", variant: "secondary", icon: Truck, color: "blue" },
+  delivery_processing: { label: "Out for Delivery", variant: "secondary", icon: Truck, color: "blue" },
+  delivery_stage: { label: "Out for Delivery", variant: "secondary", icon: Truck, color: "blue" }, // Legacy support
   delivered: { label: "Delivered", variant: "secondary", icon: CheckCircle, color: "green" },
 };
 
@@ -78,9 +79,12 @@ export function PurchaseRequestsContent() {
     let filtered = allRequests;
 
     // Filter by status dropdown
-    // Filter by status dropdown
+    // Special handling for legacy 'delivery_stage' mapping to 'delivery_processing'
     if (filterStatus.length > 0) {
-      filtered = filtered.filter((r) => filterStatus.includes(r.status));
+      filtered = filtered.filter((r) => {
+        if (filterStatus.includes("delivery_processing") && r.status === "delivery_stage") return true;
+        return filterStatus.includes(r.status);
+      });
     }
 
     // Apply search filter
@@ -402,19 +406,19 @@ export function PurchaseRequestsContent() {
                         <Filter className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                       </Button>
                     </PopoverTrigger>
-                    <PopoverContent className="w-[200px] p-0" align="start">
+                    <PopoverContent className="w-[400px] p-0" align="start">
                       <Command>
                         <CommandInput placeholder="Search status..." />
-                        <CommandList>
+                        <CommandList className="max-h-[600px] overflow-y-auto">
                           <CommandEmpty>No status found.</CommandEmpty>
                           <CommandGroup>
                             <CommandItem
                               onSelect={() => setFilterStatus([])}
-                              className="font-medium"
+                              className="font-medium h-auto py-3 items-start"
                             >
                               <div
                                 className={cn(
-                                  "mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-primary",
+                                  "mr-2 flex h-4 w-4 shrink-0 items-center justify-center rounded-sm border border-primary mt-0.5",
                                   filterStatus.length === 0
                                     ? "bg-primary text-primary-foreground"
                                     : "opacity-50 [&_svg]:invisible"
@@ -422,7 +426,7 @@ export function PurchaseRequestsContent() {
                               >
                                 <Check className={cn("h-4 w-4")} />
                               </div>
-                              All Statuses
+                              <span className="flex-1 whitespace-normal break-words leading-tight">All Statuses</span>
                             </CommandItem>
                             {/* Draft (My Drafts) Special Case */}
                             <CommandItem
@@ -433,10 +437,11 @@ export function PurchaseRequestsContent() {
                                     : [...prev, "draft"]
                                 );
                               }}
+                              className="h-auto py-3 items-start"
                             >
                               <div
                                 className={cn(
-                                  "mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-primary",
+                                  "mr-2 flex h-4 w-4 shrink-0 items-center justify-center rounded-sm border border-primary mt-0.5",
                                   filterStatus.includes("draft")
                                     ? "bg-primary text-primary-foreground"
                                     : "opacity-50 [&_svg]:invisible"
@@ -444,10 +449,10 @@ export function PurchaseRequestsContent() {
                               >
                                 <Check className={cn("h-4 w-4")} />
                               </div>
-                              Draft (My Drafts)
+                              <span className="flex-1 whitespace-normal break-words leading-tight">Draft (My Drafts)</span>
                             </CommandItem>
                             {Object.entries(statusConfig)
-                              .filter(([key]) => key !== "draft") // Already handled above
+                              .filter(([key]) => key !== "draft" && key !== "delivery_stage") // Already handled above
                               .map(([key, config]) => (
                                 <CommandItem
                                   key={key}
@@ -458,10 +463,11 @@ export function PurchaseRequestsContent() {
                                         : [...prev, key]
                                     );
                                   }}
+                                  className="h-auto py-3 items-start"
                                 >
                                   <div
                                     className={cn(
-                                      "mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-primary",
+                                      "mr-2 flex h-4 w-4 shrink-0 items-center justify-center rounded-sm border border-primary mt-0.5",
                                       filterStatus.includes(key)
                                         ? "bg-primary text-primary-foreground"
                                         : "opacity-50 [&_svg]:invisible"
@@ -469,7 +475,7 @@ export function PurchaseRequestsContent() {
                                   >
                                     <Check className={cn("h-4 w-4")} />
                                   </div>
-                                  {config.label}
+                                  <span className="flex-1 whitespace-normal break-words leading-tight">{config.label}</span>
                                 </CommandItem>
                               ))}
                           </CommandGroup>

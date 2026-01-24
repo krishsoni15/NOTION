@@ -135,7 +135,7 @@ export const createDelivery = mutation({
                 await ctx.db.insert("requests", {
                     ...request, // Copy fields
                     quantity: item.quantity,
-                    status: "delivery_processing", // Set to processing stage
+                    status: "out_for_delivery", // Set to processing stage
                     deliveryMarkedAt: now,
                     deliveryId: deliveryId, // Link to delivery
                     createdAt: now,
@@ -152,7 +152,7 @@ export const createDelivery = mutation({
             } else {
                 // Full delivery of this request item
                 await ctx.db.patch(request._id, {
-                    status: "delivery_processing", // Set to processing stage
+                    status: "out_for_delivery", // Set to processing stage
                     updatedAt: now,
                     deliveryMarkedAt: now,
                     deliveryId: deliveryId, // Link to delivery
@@ -193,7 +193,7 @@ export const confirmDelivery = mutation({
         }
 
         // Allow confirming from pending_po or delivery_processing status
-        if (!["pending_po", "delivery_processing"].includes(request.status)) {
+        if (!["pending_po", "delivery_processing", "out_for_delivery"].includes(request.status)) {
             throw new Error("Request is not in a deliverable state");
         }
 

@@ -45,7 +45,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Separator } from "@/components/ui/separator";
-import { AlertCircle, CheckCircle, XCircle, Package, ShoppingCart, MapPin, PackageX, Sparkles, FileText, PieChart, LayoutGrid, List, Edit, Image as ImageIcon } from "lucide-react";
+import { AlertCircle, CheckCircle, XCircle, Package, ShoppingCart, MapPin, PackageX, Sparkles, FileText, PieChart, LayoutGrid, List, Edit, Image as ImageIcon, Calendar, Clock } from "lucide-react";
 import { useUserRole } from "@/hooks/use-user-role";
 import { CompactImageGallery } from "@/components/ui/image-gallery";
 import { ROLES } from "@/lib/auth/roles";
@@ -57,6 +57,7 @@ import { LocationInfoDialog } from "@/components/locations/location-info-dialog"
 import { NotesTimelineDialog } from "./notes-timeline-dialog";
 import { PDFPreviewDialog } from "@/components/purchase/pdf-preview-dialog";
 import { EditPOQuantityDialog } from "@/components/purchase/edit-po-quantity-dialog";
+import { ExpandableText } from "@/components/ui/expandable-text";
 import type { Id } from "@/convex/_generated/dataModel";
 
 interface RequestDetailsDialogProps {
@@ -954,103 +955,71 @@ export function RequestDetailsDialog({
                     );
                   })()}
                 </div>
-                <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-muted-foreground">
-                  <div className="flex items-center gap-1.5">
-                    <div className="p-1 rounded-full bg-background/50 border shadow-sm">
-                      <MapPin className="h-3.5 w-3.5 text-primary" />
-                    </div>
-                    <span className="font-medium text-foreground/80">{request?.site?.name || "Unknown Location"}</span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <div className="p-1 rounded-full bg-background/50 border shadow-sm">
-                      <FileText className="h-3.5 w-3.5 text-blue-500" />
-                    </div>
-                    <span className="font-medium text-foreground/80">
-                      {allRequests?.length || 0} Item{(allRequests?.length || 0) !== 1 && 's'}
-                    </span>
-                  </div>
-                  {request?.creator && (
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-muted-foreground/70">Created by</span>
-                      <span className="font-medium text-foreground/80">{request.creator.fullName}</span>
-                    </div>
-                  )}
-                </div>
               </div>
 
               <div className="flex items-center gap-2">
-                <div className="hidden sm:block text-right mr-2">
-                  <p className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Required By</p>
-                  <p className={cn(
-                    "text-sm font-semibold",
-                    request?.requiredBy && new Date(request.requiredBy) < new Date() ? "text-red-600" : "text-foreground"
-                  )}>
-                    {request?.requiredBy ? format(new Date(request.requiredBy), "PPP") : "Not set"}
-                  </p>
-                </div>
-                <div className="h-8 w-[1px] bg-border mx-2 hidden sm:block" />
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="h-8 w-8 rounded-full hover:bg-muted/60"
+                  className="h-10 w-10 rounded-full bg-background/50 hover:bg-destructive/10 hover:text-destructive border shadow-sm transition-all duration-200"
                   onClick={() => onOpenChange(false)}
                 >
-                  <XCircle className="h-5 w-5 text-muted-foreground/70" />
+                  <XCircle className="h-6 w-6" />
                 </Button>
               </div>
             </div>
+          </div>
 
-            {/* Toolbar / Actions Bar */}
-            <div className="px-6 py-2 flex items-center justify-between border-t bg-muted/20">
-              <div className="flex items-center gap-2">
-                {/* View toggle moved to Materials List header */}
+          {/* Toolbar / Actions Bar */}
+          <div className="px-6 py-2 flex items-center justify-between border-t bg-muted/20">
+            <div className="flex items-center gap-2">
+              {/* View toggle moved to Materials List header */}
 
-                {/* Batch Selection Counter */}
-                {selectedItemsForAction.size > 0 && (
-                  <div className="flex items-center gap-2 ml-4 animate-in fade-in slide-in-from-left-2">
-                    <span className="text-xs font-medium bg-primary/10 text-primary px-2.5 py-1 rounded-full border border-primary/20">
-                      {selectedItemsForAction.size} Selected
-                    </span>
-                    <Button variant="ghost" size="sm" onClick={deselectAll} className="h-7 text-xs hover:bg-destructive/10 hover:text-destructive">
-                      Clear
-                    </Button>
-                  </div>
-                )}
-              </div>
-
-              {/* Right Side Actions */}
-              <div className="flex items-center gap-2">
-                {/* Select All Checkbox for Manager */}
-                {isManager && (hasMultiplePendingItems || signPendingItems.length > 0) && (
-                  <div className="flex items-center gap-2 mr-4 border-r pr-4 h-5">
-                    <Checkbox
-                      id="select-all"
-                      checked={
-                        (pendingItems.length > 0 || signPendingItems.length > 0) &&
-                        selectedItemsForAction.size === (pendingItems.length + signPendingItems.length)
-                      }
-                      onCheckedChange={(checked) => {
-                        if (checked) selectAllPending();
-                        else deselectAll();
-                      }}
-                    />
-                    <Label htmlFor="select-all" className="text-xs cursor-pointer font-medium">
-                      Select All Pending
-                    </Label>
-                  </div>
-                )}
-                {["sign_pending", "sign_rejected", "ordered", "pending_po"].includes(overallStatus || request.status) && (
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="gap-2 h-7 text-xs"
-                    onClick={() => setPdfPreviewPoNumber(request.requestNumber)}
-                  >
-                    <FileText className="h-3.5 w-3.5" />
-                    View PDF
+              {/* Batch Selection Counter */}
+              {selectedItemsForAction.size > 0 && (
+                <div className="flex items-center gap-2 ml-4 animate-in fade-in slide-in-from-left-2">
+                  <span className="text-xs font-medium bg-primary/10 text-primary px-2.5 py-1 rounded-full border border-primary/20">
+                    {selectedItemsForAction.size} Selected
+                  </span>
+                  <Button variant="ghost" size="sm" onClick={deselectAll} className="h-7 text-xs hover:bg-destructive/10 hover:text-destructive">
+                    Clear
                   </Button>
-                )}
-              </div>
+                </div>
+              )}
+            </div>
+
+            {/* Right Side Actions */}
+            <div className="flex items-center gap-2">
+              {/* Select All Checkbox for Manager */}
+              {isManager && (hasMultiplePendingItems || signPendingItems.length > 0) && (
+                <div className="flex items-center gap-2 mr-4 border-r pr-4 h-5">
+                  <Checkbox
+                    id="select-all"
+                    checked={
+                      (pendingItems.length > 0 || signPendingItems.length > 0) &&
+                      selectedItemsForAction.size === (pendingItems.length + signPendingItems.length)
+                    }
+                    onCheckedChange={(checked) => {
+                      if (checked) selectAllPending();
+                      else deselectAll();
+                    }}
+                  />
+                  <Label htmlFor="select-all" className="text-xs cursor-pointer font-medium">
+                    Select All Pending
+                  </Label>
+                </div>
+              )}
+              {["sign_pending", "sign_rejected", "ordered", "pending_po"].includes(overallStatus || request.status) && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="gap-2 h-7 text-xs"
+                  onClick={() => setPdfPreviewPoNumber(request.requestNumber)}
+                >
+                  <FileText className="h-3.5 w-3.5" />
+                  View PDF
+                </Button>
+              )}
             </div>
           </div>
 
@@ -1061,9 +1030,9 @@ export function RequestDetailsDialog({
                 {/* Basic Information - Simple Mobile Layout */}
                 {isMobileLayout ? (
                   // Mobile-first simple layout for site engineers
-                  <div className="space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
                     <div className="space-y-2">
-                      <Label className="text-sm font-semibold text-muted-foreground">Work Site</Label>
+                      <Label className="text-sm font-semibold text-muted-foreground">Site Location</Label>
                       {request.site ? (
                         <div className="flex items-center gap-2">
                           <button
@@ -1092,11 +1061,11 @@ export function RequestDetailsDialog({
                     </div>
 
                     <div className="space-y-2">
-                      <Label className="text-sm font-semibold text-muted-foreground">Requested By</Label>
+                      <Label className="text-sm font-semibold text-muted-foreground">Created By</Label>
                       {request.creator ? (
                         <button
                           onClick={() => setSelectedUserId(request.creator!._id)}
-                          className="font-semibold text-lg text-foreground hover:text-primary hover:bg-muted/50 rounded-md px-3 py-2 -mx-3 -my-2 transition-colors cursor-pointer text-left w-full"
+                          className="font-semibold text-lg text-foreground hover:text-primary hover:bg-muted/50 rounded-md px-3 py-2 -mx-3 -my-2 transition-colors cursor-pointer text-left w-full truncate"
                         >
                           {request.creator.fullName}
                         </button>
@@ -1109,7 +1078,7 @@ export function RequestDetailsDialog({
                     </div>
 
                     <div className="space-y-2">
-                      <Label className="text-sm font-semibold text-muted-foreground">Needed By</Label>
+                      <Label className="text-sm font-semibold text-muted-foreground">Requested By</Label>
                       <p className="font-semibold text-lg">
                         {format(new Date(request.requiredBy), "dd MMM yyyy")}
                       </p>
@@ -1120,69 +1089,110 @@ export function RequestDetailsDialog({
                   </div>
                 ) : (
                   // Original desktop layout for managers
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 gap-4 lg:gap-6">
-                    <div className="space-y-1">
-                      <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Site Location</Label>
-                      {request.site ? (
-                        <button
-                          onClick={() => setSelectedSiteId(request.site!._id)}
-                          className="font-semibold text-base text-foreground hover:text-primary hover:bg-muted/50 rounded-md px-2 py-1 -mx-2 -my-1 transition-colors cursor-pointer text-left"
-                        >
-                          {request.site.name}
-                        </button>
-                      ) : (
-                        <p className="font-semibold text-base">—</p>
-                      )}
-                      {request.site?.address && (
-                        <div className="flex items-center gap-1 mt-1">
-                          <p className="text-xs text-muted-foreground line-clamp-2">
-                            {request.site.address}
-                          </p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 p-1">
+                    {/* 1. Site Info */}
+                    <div className="flex flex-col gap-1.5 border-r border-border/40 pr-4 last:border-0 md:last:border-0 lg:last:border-0">
+                      <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+                        <MapPin className="h-3.5 w-3.5" /> Site Location
+                      </Label>
+                      <div className="flex flex-col">
+                        {request.site ? (
+                          <>
+                            <button
+                              onClick={() => setSelectedSiteId(request.site!._id)}
+                              className="font-bold text-base text-foreground hover:text-primary transition-colors text-left flex items-center gap-1"
+                            >
+                              {request.site.name}
+                            </button>
+                            {request.site.address && (
+                              <div className="flex items-start gap-1 mt-0.5 group">
+                                <span className="text-sm text-muted-foreground line-clamp-2 leading-snug" title={request.site.address}>
+                                  {request.site.address}
+                                </span>
+                                <button
+                                  onClick={() => handleOpenInMap(request.site!.address!)}
+                                  className="opacity-0 group-hover:opacity-100 transition-opacity text-primary hover:text-primary/80"
+                                  title="Open in Maps"
+                                >
+                                  <MapPin className="h-3 w-3" />
+                                </button>
+                              </div>
+                            )}
+                          </>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* 2. Created By Info */}
+                    <div className="flex flex-col gap-1.5 border-r border-border/40 pr-4 last:border-0 md:last:border-0 lg:last:border-0">
+                      <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+                        <Sparkles className="h-3.5 w-3.5" /> Created By
+                      </Label>
+                      <div className="flex flex-col">
+                        {request.creator ? (
                           <button
-                            onClick={() => handleOpenInMap(request.site!.address!)}
-                            className="text-muted-foreground hover:text-primary transition-colors p-1 rounded-sm hover:bg-muted/50"
-                            title="Open in Maps"
+                            onClick={() => setSelectedUserId(request.creator!._id)}
+                            className="font-bold text-base text-foreground hover:text-primary transition-colors text-left"
                           >
-                            <MapPin className="h-3 w-3" />
+                            {request.creator.fullName}
                           </button>
+                        ) : (
+                          <span className="text-muted-foreground font-medium">—</span>
+                        )}
+                        <span className="text-sm text-muted-foreground">
+                          {format(new Date(request.createdAt), "dd MMM yyyy, hh:mm a")}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* 3. Requested By Date */}
+                    <div className="flex flex-col gap-1.5 border-r border-border/40 pr-4 last:border-0 md:last:border-0 lg:last:border-0">
+                      <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+                        <Clock className="h-3.5 w-3.5" /> Requested By
+                      </Label>
+                      <div className="flex flex-col gap-1">
+                        <span className="font-bold text-base text-foreground">
+                          {format(new Date(request.requiredBy), "dd MMM yyyy")}
+                        </span>
+                        {(() => {
+                          const daysLeft = Math.ceil((new Date(request.requiredBy).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+                          const isUrgent = daysLeft <= 2;
+                          return (
+                            <Badge
+                              variant={isUrgent ? "destructive" : "secondary"}
+                              className={cn("w-fit px-2 py-0 h-5 text-[10px] font-medium rounded-full", !isUrgent && "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300")}
+                            >
+                              {daysLeft < 0 ? `${Math.abs(daysLeft)} days overdue` : daysLeft === 0 ? "Due Today" : `${daysLeft} days left`}
+                            </Badge>
+                          );
+                        })()}
+                      </div>
+                    </div>
+
+                    {/* 4. Summary Stats */}
+                    <div className="flex flex-col gap-1.5">
+                      <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
+                        <Package className="h-3.5 w-3.5" /> Summary
+                      </Label>
+                      <div className="flex flex-col gap-1">
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-base text-foreground">
+                            {allRequests?.length || 1} Total Items
+                          </span>
                         </div>
-                      )}
-                    </div>
-                    <div className="space-y-1">
-                      <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Created By</Label>
-                      {request.creator ? (
-                        <button
-                          onClick={() => setSelectedUserId(request.creator!._id)}
-                          className="font-semibold text-base text-foreground hover:text-primary hover:bg-muted/50 rounded-md px-2 py-1 -mx-2 -my-1 transition-colors cursor-pointer text-left"
-                        >
-                          {request.creator.fullName}
-                        </button>
-                      ) : (
-                        <p className="font-semibold text-base">—</p>
-                      )}
-                      <p className="text-xs text-muted-foreground">
-                        {format(new Date(request.createdAt), "dd MMM yyyy, hh:mm a")}
-                      </p>
-                    </div>
-                    <div className="space-y-1">
-                      <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Required By</Label>
-                      <p className="font-semibold text-base">
-                        {format(new Date(request.requiredBy), "dd MMM yyyy")}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {Math.ceil((new Date(request.requiredBy).getTime() - Date.now()) / (1000 * 60 * 60 * 24))} days remaining
-                      </p>
-                    </div>
-                    <div className="space-y-1">
-                      <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Total Items</Label>
-                      <p className="font-semibold text-base">
-                        {allRequests?.length || 1} item{(allRequests?.length || 1) > 1 ? 's' : ''}
-                      </p>
-                      {pendingItems.length > 0 && (
-                        <p className="text-xs text-muted-foreground">
-                          {pendingItems.length} pending
-                        </p>
-                      )}
+                        {(pendingItems.length > 0) && (
+                          <span className="text-sm font-medium text-amber-600 dark:text-amber-500">
+                            {pendingItems.length} Pending Approval
+                          </span>
+                        )}
+                        {(signPendingItems.length > 0) && (
+                          <span className="text-sm font-medium text-purple-600 dark:text-purple-400">
+                            {signPendingItems.length} Sign Pending
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
                 )}
@@ -1258,7 +1268,7 @@ export function RequestDetailsDialog({
                           variant="outline"
                           size="sm"
                           onClick={() => setViewMode(viewMode === "table" ? "card" : "table")}
-                          className="h-7 px-3 text-xs font-medium border-dashed border-primary/40 hover:border-primary bg-primary/5 hover:bg-primary/10 text-primary transition-all"
+                          className="h-7 px-3 text-xs font-medium border-dashed border-primary/40 hover:border-primary bg-primary/5 hover:bg-primary/10 text-slate-700 dark:text-slate-200 hover:text-slate-900 dark:hover:text-slate-100 transition-all"
                         >
                           {viewMode === "table" ? (
                             <>
@@ -1311,31 +1321,33 @@ export function RequestDetailsDialog({
                                   <Fragment key={item._id}>
                                     <TableRow
                                       className={cn(
-                                        "cursor-pointer transition-all border-b border-border hover:shadow-sm relative last:!border-b",
-                                        "border-l-[4px]", // Left border base
-
-                                        // 1. Draft - Slate
-                                        item.status === "draft" && "border-l-slate-400 bg-slate-50/30 hover:bg-slate-50/60 dark:border-l-slate-600 dark:bg-slate-900/10",
-
-                                        // 2. Pending - Amber
-                                        (item.status === "pending" || item.status === "sign_pending") && "border-l-amber-400 bg-amber-50/30 hover:bg-amber-50/60 dark:border-l-amber-600 dark:bg-amber-900/10",
-
-                                        // 3. Approved & Under Process - Blue (Includes recheck, CC, PO, part processed)
-                                        (["approved", "cc_pending", "ready_for_cc", "cc_approved", "pending_po", "ready_for_po", "ordered", "partially_processed", "direct_po", "ready_for_delivery", "recheck", "recheck_requested"].includes(item.status)) && "border-l-blue-500 bg-blue-50/20 hover:bg-blue-50/40 dark:border-l-blue-500 dark:bg-blue-900/10",
-
-                                        // 4. Out for Delivery - Orange
-                                        (["delivery_processing", "delivery_stage", "out_for_delivery"].includes(item.status)) && "border-l-orange-500 bg-orange-50/20 hover:bg-orange-50/40 dark:border-l-orange-500 dark:bg-orange-900/10",
-
-                                        // 5. Delivered - Emerald
-                                        item.status === "delivered" && "border-l-emerald-500 bg-emerald-50/20 hover:bg-emerald-50/40 dark:border-l-emerald-500 dark:bg-emerald-900/10",
-
-                                        // 6. Rejected - Rose
-                                        (["rejected", "sign_rejected", "cc_rejected", "po_rejected"].includes(item.status)) && "border-l-rose-500 bg-rose-50/20 hover:bg-rose-50/40 dark:border-l-rose-500 dark:bg-rose-900/10"
+                                        "cursor-pointer transition-all border-b border-slate-200 dark:border-slate-700 hover:shadow-sm relative",
+                                        // 1. Draft
+                                        item.status === "draft" && "bg-slate-50/30 hover:bg-slate-50/60 dark:bg-slate-900/10",
+                                        // 2. Pending
+                                        (item.status === "pending" || item.status === "sign_pending") && "bg-amber-50/30 hover:bg-amber-50/60 dark:bg-amber-900/10",
+                                        // 3. Approved
+                                        (["approved", "cc_pending", "ready_for_cc", "cc_approved", "pending_po", "ready_for_po", "ordered", "partially_processed", "direct_po", "ready_for_delivery", "recheck", "recheck_requested"].includes(item.status)) && "bg-blue-50/20 hover:bg-blue-50/40 dark:bg-blue-900/10",
+                                        // 4. Out for Delivery
+                                        (["delivery_processing", "delivery_stage", "out_for_delivery"].includes(item.status)) && "bg-orange-50/20 hover:bg-orange-50/40 dark:bg-orange-900/10",
+                                        // 5. Delivered
+                                        item.status === "delivered" && "bg-emerald-50/20 hover:bg-emerald-50/40 dark:bg-emerald-900/10",
+                                        // 6. Rejected
+                                        (["rejected", "sign_rejected", "cc_rejected", "po_rejected"].includes(item.status)) && "bg-rose-50/20 hover:bg-rose-50/40 dark:bg-rose-900/10"
                                       )}
                                       onClick={(e) => e.stopPropagation()}
                                     >
-                                      {/* Selection Checkbox (First col for manager) or Empty */}
-                                      <TableCell className="p-2 text-center w-[40px]">
+                                      {/* Selection Checkbox (First col for manager) or Empty - WITH STATUS INDICATOR */}
+                                      <TableCell className="p-2 text-center w-[40px] relative overflow-hidden">
+                                        <div className={cn(
+                                          "absolute left-0 top-[1px] bottom-[1px] w-[4px]",
+                                          item.status === "draft" && "bg-slate-400",
+                                          (item.status === "pending" || item.status === "sign_pending") && "bg-amber-400",
+                                          (["approved", "cc_pending", "ready_for_cc", "cc_approved", "pending_po", "ready_for_po", "ordered", "partially_processed", "direct_po", "ready_for_delivery", "recheck", "recheck_requested"].includes(item.status)) && "bg-blue-500",
+                                          (["delivery_processing", "delivery_stage", "out_for_delivery"].includes(item.status)) && "bg-orange-500",
+                                          item.status === "delivered" && "bg-emerald-500",
+                                          (["rejected", "sign_rejected", "cc_rejected", "po_rejected"].includes(item.status)) && "bg-rose-500"
+                                        )} />
                                         {isPending && isManager && (
                                           <Checkbox
                                             checked={isSelected}
@@ -1368,19 +1380,24 @@ export function RequestDetailsDialog({
                                             )}
                                           </div>
                                           <div className="space-y-1.5 min-w-0">
-                                            <button
-                                              onClick={(e) => {
-                                                e.stopPropagation();
-                                                setSelectedItemName(item.itemName);
-                                              }}
-                                              className="font-semibold text-base text-left hover:text-primary transition-colors focus:outline-none"
-                                            >
-                                              {item.itemName}
-                                            </button>
+                                            <div className="flex items-start gap-2">
+                                              <span className="bg-primary/10 text-primary text-[10px] font-black font-mono px-1.5 py-0.5 rounded border border-primary/20 shadow-sm shrink-0 mt-0.5">
+                                                #{idx + 1}
+                                              </span>
+                                              <button
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  setSelectedItemName(item.itemName);
+                                                }}
+                                                className="font-semibold text-base text-left hover:text-primary transition-colors focus:outline-none leading-tight"
+                                              >
+                                                {item.itemName}
+                                              </button>
+                                            </div>
                                             {item.description ? (
-                                              <p className="text-sm text-muted-foreground line-clamp-2 leading-snug" title={item.description}>
-                                                {item.description}
-                                              </p>
+                                              <div className="w-full text-sm text-muted-foreground mt-0.5">
+                                                <ExpandableText text={item.description} className="text-sm text-muted-foreground" limit={60} />
+                                              </div>
                                             ) : (
                                               <p className="text-xs text-muted-foreground/50 italic">No description</p>
                                             )}
@@ -1683,9 +1700,9 @@ export function RequestDetailsDialog({
                                         {item.itemName}
                                       </h4>
                                     </div>
-                                    <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed bg-background/50 p-2 rounded-md border border-transparent hover:border-border/30 transition-colors">
-                                      {item.description || "No description available."}
-                                    </p>
+                                    <div className="text-xs text-muted-foreground bg-background/50 p-2 rounded-md border border-transparent hover:border-border/30 transition-colors">
+                                      <ExpandableText text={item.description || "No description available."} className="text-xs text-muted-foreground" limit={60} />
+                                    </div>
                                   </div>
                                 </div>
 

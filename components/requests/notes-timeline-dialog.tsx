@@ -104,12 +104,12 @@ export function NotesTimelineDialog({
                                                         )}
                                                     </div>
                                                 </div>
-                                                <span className="text-xs text-muted-foreground shrink-0 whitespace-nowrap">
-                                                    {format(new Date(note.createdAt), "MMM d, h:mm a")}
-                                                </span>
                                             </div>
-                                            <div className="bg-card p-3 rounded-lg border shadow-sm text-sm whitespace-pre-wrap leading-relaxed break-words">
-                                                {note.content}
+                                            <div className="bg-card p-3 rounded-lg border shadow-sm text-sm leading-relaxed break-words group-hover:bg-muted/40 transition-colors">
+                                                <div className="whitespace-pre-wrap">{note.content}</div>
+                                                <div className="text-[10px] text-muted-foreground text-right mt-1.5 select-none">
+                                                    {format(new Date(note.createdAt), "h:mm a")}
+                                                </div>
                                             </div>
                                         </div>
                                     </div>

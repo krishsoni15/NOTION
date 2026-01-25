@@ -63,7 +63,14 @@ export type RequestStatus =
   | "rejected_po"
   | "ready_for_delivery"
   | "delivery_processing"
-  | "delivered";
+  | "delivered"
+  | "recheck_requested"
+  | "partially_processed"
+  | "direct_po"
+  | "ordered"
+  | "out_for_delivery"
+  | "delivery_stage"
+  | "po_rejected";
 
 export interface RequestItem {
   name: string;

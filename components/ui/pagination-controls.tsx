@@ -35,126 +35,118 @@ export function PaginationControls({
 
     return (
         <div className="flex flex-col gap-4 py-3 pb-8 sm:pb-2 w-full animate-in fade-in slide-in-from-bottom-4 duration-500">
-            {/* Mobile View (< 640px) - App-like Feel */}
-            {/* Mobile View (< 640px) - Smart Horizontal Row */}
-            <div className="sm:hidden flex flex-col gap-2 w-full px-1">
-                <div className="flex items-center justify-between gap-1 w-full">
-                    <Button
-                        variant="outline"
-                        size="icon"
-                        className="h-9 w-9 shrink-0 rounded-full shadow-sm"
-                        onClick={() => onPageChange(currentPage - 1)}
-                        disabled={currentPage <= 1}
-                    >
-                        <ChevronLeft className="h-4 w-4" />
-                    </Button>
+            {/* Mobile View (< 640px) - Single Row Compact */}
+            <div className="sm:hidden flex items-center justify-between gap-1 w-full px-1">
+                {/* Left: Previous Button */}
+                <Button
+                    variant="outline"
+                    size="icon"
+                    className="h-9 w-9 shrink-0 rounded-full shadow-sm"
+                    onClick={() => onPageChange(currentPage - 1)}
+                    disabled={currentPage <= 1}
+                >
+                    <ChevronLeft className="h-4 w-4" />
+                </Button>
 
-                    <div className="flex items-center justify-center gap-1 flex-1">
-                        {(() => {
-                            // Smart mobile pagination logic
-                            const mobileItems = [];
-                            const maxVisible = 5; // How many items to show in the scrolling area (excluding arrows)
+                {/* Center: Page Numbers */}
+                <div className="flex items-center justify-center gap-1 flex-1 overflow-x-auto scrollbar-hide">
+                    {(() => {
+                        const mobileItems = [];
 
-                            // Always show page 1
-                            mobileItems.push(
-                                <Button
-                                    key={1}
-                                    variant={currentPage === 1 ? "default" : "ghost"}
-                                    size="sm"
-                                    className={`h-8 w-8 p-0 rounded-full text-xs ${currentPage === 1 ? "shadow-md" : ""}`}
-                                    onClick={() => onPageChange(1)}
-                                >
-                                    1
-                                </Button>
-                            );
+                        // Show first page
+                        mobileItems.push(
+                            <Button
+                                key={1}
+                                variant={currentPage === 1 ? "default" : "ghost"}
+                                size="sm"
+                                className={`h-8 w-8 p-0 rounded-full text-xs ${currentPage === 1 ? "shadow-md" : ""}`}
+                                onClick={() => onPageChange(1)}
+                            >
+                                1
+                            </Button>
+                        );
 
-                            if (totalPages <= 7) {
-                                // Show all pages if few
-                                for (let i = 2; i <= totalPages; i++) {
+                        if (totalPages <= 5) {
+                            // Show all pages if 5 or fewer
+                            for (let i = 2; i <= totalPages; i++) {
+                                mobileItems.push(
+                                    <Button
+                                        key={i}
+                                        variant={currentPage === i ? "default" : "ghost"}
+                                        size="sm"
+                                        className={`h-8 w-8 p-0 rounded-full text-xs ${currentPage === i ? "shadow-md" : ""}`}
+                                        onClick={() => onPageChange(i)}
+                                    >
+                                        {i}
+                                    </Button>
+                                );
+                            }
+                        } else {
+                            // Show: 1 2 3 ... 10  OR  1 ... 4 5 ... 10  OR  1 ... 8 9 10
+                            if (currentPage <= 3) {
+                                // Start: 1 2 3 ... 10
+                                for (let i = 2; i <= 3; i++) {
                                     mobileItems.push(
-                                        <Button
-                                            key={i}
-                                            variant={currentPage === i ? "default" : "ghost"}
-                                            size="sm"
-                                            className={`h-8 w-8 p-0 rounded-full text-xs ${currentPage === i ? "shadow-md" : ""}`}
-                                            onClick={() => onPageChange(i)}
-                                        >
-                                            {i}
-                                        </Button>
+                                        <Button key={i} variant={currentPage === i ? "default" : "ghost"} size="sm" className={`h-8 w-8 p-0 rounded-full text-xs ${currentPage === i ? "shadow-md" : ""}`} onClick={() => onPageChange(i)}>{i}</Button>
+                                    );
+                                }
+                                mobileItems.push(<span key="dots" className="text-muted-foreground text-xs px-1">...</span>);
+                                mobileItems.push(
+                                    <Button key={totalPages} variant={currentPage === totalPages ? "default" : "ghost"} size="sm" className={`h-8 w-8 p-0 rounded-full text-xs ${currentPage === totalPages ? "shadow-md" : ""}`} onClick={() => onPageChange(totalPages)}>{totalPages}</Button>
+                                );
+                            } else if (currentPage >= totalPages - 2) {
+                                // End: 1 ... 8 9 10
+                                mobileItems.push(<span key="dots" className="text-muted-foreground text-xs px-1">...</span>);
+                                for (let i = totalPages - 2; i <= totalPages; i++) {
+                                    mobileItems.push(
+                                        <Button key={i} variant={currentPage === i ? "default" : "ghost"} size="sm" className={`h-8 w-8 p-0 rounded-full text-xs ${currentPage === i ? "shadow-md" : ""}`} onClick={() => onPageChange(i)}>{i}</Button>
                                     );
                                 }
                             } else {
-                                // Complex logic for many pages
-                                // Start Case: 1 2 3 4 5 ... 10
-                                if (currentPage <= 4) {
-                                    for (let i = 2; i <= 5; i++) {
-                                        mobileItems.push(
-                                            <Button key={i} variant={currentPage === i ? "default" : "ghost"} size="sm" className={`h-8 w-8 p-0 rounded-full text-xs ${currentPage === i ? "shadow-md" : ""}`} onClick={() => onPageChange(i)}>{i}</Button>
-                                        );
-                                    }
-                                    mobileItems.push(<span key="end-ellipsis" className="text-muted-foreground text-xs px-1">...</span>);
-                                    mobileItems.push(
-                                        <Button key={totalPages} variant={currentPage === totalPages ? "default" : "ghost"} size="sm" className={`h-8 w-8 p-0 rounded-full text-xs ${currentPage === totalPages ? "shadow-md" : ""}`} onClick={() => onPageChange(totalPages)}>{totalPages}</Button>
-                                    );
-                                }
-                                // End Case: 1 ... 6 7 8 9 10
-                                else if (currentPage >= totalPages - 3) {
-                                    mobileItems.push(<span key="start-ellipsis" className="text-muted-foreground text-xs px-1">...</span>);
-                                    for (let i = totalPages - 4; i <= totalPages; i++) {
-                                        mobileItems.push(
-                                            <Button key={i} variant={currentPage === i ? "default" : "ghost"} size="sm" className={`h-8 w-8 p-0 rounded-full text-xs ${currentPage === i ? "shadow-md" : ""}`} onClick={() => onPageChange(i)}>{i}</Button>
-                                        );
-                                    }
-                                }
-                                // Middle Case: 1 ... 4 5 6 ... 10
-                                else {
-                                    mobileItems.push(<span key="start-ellipsis" className="text-muted-foreground text-xs px-1">...</span>);
-                                    for (let i = currentPage - 1; i <= currentPage + 1; i++) {
-                                        mobileItems.push(
-                                            <Button key={i} variant={currentPage === i ? "default" : "ghost"} size="sm" className={`h-8 w-8 p-0 rounded-full text-xs ${currentPage === i ? "shadow-md" : ""}`} onClick={() => onPageChange(i)}>{i}</Button>
-                                        );
-                                    }
-                                    mobileItems.push(<span key="end-ellipsis" className="text-muted-foreground text-xs px-1">...</span>);
-                                    mobileItems.push(
-                                        <Button key={totalPages} variant={currentPage === totalPages ? "default" : "ghost"} size="sm" className={`h-8 w-8 p-0 rounded-full text-xs ${currentPage === totalPages ? "shadow-md" : ""}`} onClick={() => onPageChange(totalPages)}>{totalPages}</Button>
-                                    );
-                                }
+                                // Middle: 1 ... 5 ... 10
+                                mobileItems.push(<span key="dots1" className="text-muted-foreground text-xs px-1">...</span>);
+                                mobileItems.push(
+                                    <Button key={currentPage} variant="default" size="sm" className="h-8 w-8 p-0 rounded-full text-xs shadow-md" onClick={() => onPageChange(currentPage)}>{currentPage}</Button>
+                                );
+                                mobileItems.push(<span key="dots2" className="text-muted-foreground text-xs px-1">...</span>);
+                                mobileItems.push(
+                                    <Button key={totalPages} variant={currentPage === totalPages ? "default" : "ghost"} size="sm" className={`h-8 w-8 p-0 rounded-full text-xs ${currentPage === totalPages ? "shadow-md" : ""}`} onClick={() => onPageChange(totalPages)}>{totalPages}</Button>
+                                );
                             }
+                        }
 
-                            return mobileItems;
-                        })()}
-                    </div>
+                        return mobileItems;
+                    })()}
+                </div>
 
+                {/* Right: Next Button + Page Size */}
+                <div className="flex items-center gap-1 shrink-0">
                     <Button
                         variant="outline"
                         size="icon"
-                        className="h-9 w-9 shrink-0 rounded-full shadow-sm"
+                        className="h-9 w-9 rounded-full shadow-sm"
                         onClick={() => onPageChange(currentPage + 1)}
                         disabled={currentPage >= totalPages}
                     >
                         <ChevronRight className="h-4 w-4" />
                     </Button>
-                </div>
-            </div>
 
-            {/* Mobile Page Size Selector - Polished */}
-            <div className="sm:hidden flex items-center justify-center gap-3">
-                <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Rows / Page</span>
-                <Select
-                    value={pageSize.toString()}
-                    onValueChange={(value) => onPageSizeChange(Number(value))}
-                >
-                    <SelectTrigger className="h-7 w-[60px] text-xs px-2 bg-background border-input/60">
-                        <SelectValue placeholder={pageSize.toString()} />
-                    </SelectTrigger>
-                    <SelectContent side="top" align="center">
-                        {pageSizeOptions.map((option) => (
-                            <SelectItem key={option} value={option.toString()}>
-                                {option}
-                            </SelectItem>
-                        ))}
-                    </SelectContent>
-                </Select>
+                    <Select
+                        value={pageSize.toString()}
+                        onValueChange={(value) => onPageSizeChange(Number(value))}
+                    >
+                        <SelectTrigger className="h-9 w-[50px] text-xs px-1 bg-background border-input shadow-sm">
+                            <SelectValue placeholder={pageSize.toString()} />
+                        </SelectTrigger>
+                        <SelectContent side="top" align="end">
+                            {pageSizeOptions.map((option) => (
+                                <SelectItem key={option} value={option.toString()}>
+                                    {option}
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                </div>
             </div>
 
             {/* Desktop View (>= 640px) - Traditional Layout */}
@@ -178,11 +170,8 @@ export function PaginationControls({
                             </SelectContent>
                         </Select>
                     </div>
-                    <div className="w-px h-4 bg-border/60 mx-1"></div>
-                    <span className="inline-block px-2 py-0.5 bg-muted/50 rounded-md text-xs font-medium border border-border/50">
-                        {totalItems} Requests {itemCount !== undefined && <span className="opacity-70 font-normal">({itemCount} items)</span>}
-                    </span>
                 </div>
+                {/* Stats removed as requested */}
 
                 <div className="flex items-center gap-1">
                     <Button

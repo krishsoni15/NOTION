@@ -1094,7 +1094,8 @@ export function PurchaseRequestGroupCard({
                   {/* Per-item action button */}
                   {(["recheck", "pending"].includes(item.status)) && (
                     <>
-                      {/* Show additional direct action buttons first (Leftmost) */}
+                      {/* Strict conditional: Show Delivery only if authorized */}
+                      {/* Show Ready for Delivery ONLY if authorized "delivery" */}
                       {item.directAction === "delivery" && onDirectDelivery && (
                         <Button
                           size="sm"
@@ -1109,7 +1110,8 @@ export function PurchaseRequestGroupCard({
                         </Button>
                       )}
 
-                      {onDirectPO && (
+                      {/* Show Ready for PO ONLY if authorized "po" */}
+                      {item.directAction === "po" && onDirectPO && (
                         <Button
                           size="sm"
                           onClick={() => setShowReadyForPOConfirm(item._id)}
@@ -1121,8 +1123,16 @@ export function PurchaseRequestGroupCard({
                           Ready for PO
                         </Button>
                       )}
+                    </>
+                  )}
+                  {/* End of restricted action buttons */}
 
-                      {/* Always show Ready for CC option */}
+
+
+                  {/* Approved/Recheck Items Actions */}
+                  {["approved", "recheck"].includes(item.status) && (
+                    <>
+                      {/* Ready for CC Button */}
                       {onMoveToCC && (
                         <Button
                           size="sm"
@@ -1137,7 +1147,7 @@ export function PurchaseRequestGroupCard({
                         </Button>
                       )}
 
-                      {/* Check Button */}
+                      {/* Check/Split Button */}
                       {onCheck && (
                         <Button
                           size="sm"
@@ -1152,8 +1162,7 @@ export function PurchaseRequestGroupCard({
                     </>
                   )}
 
-
-
+                  {/* Ready for CC Status - View CC */}
                   {item.status === "ready_for_cc" && (
                     <Button
                       size="sm"
@@ -1235,7 +1244,7 @@ export function PurchaseRequestGroupCard({
                       Resubmit PO
                     </Button>
                   )}
-                  {["pending_po", "ready_for_delivery"].includes(item.status) && (
+                  {["ready_for_delivery"].includes(item.status) && (
                     <Button
                       size="sm"
                       onClick={() => {
@@ -1287,140 +1296,148 @@ export function PurchaseRequestGroupCard({
         onOpenChange={setIsNotesOpen}
       />
 
-      {markDeliveryItem && (
-        <CreateDeliveryDialog
-          open={!!markDeliveryItem}
-          onOpenChange={(open) => !open && setMarkDeliveryItem(null)}
-          requestId={markDeliveryItem.id}
-          poId={markDeliveryItem.poId}
-          currentQuantity={markDeliveryItem.quantity}
-          itemName={markDeliveryItem.name}
-          unit={markDeliveryItem.unit}
-        />
-      )}
+      {
+        markDeliveryItem && (
+          <CreateDeliveryDialog
+            open={!!markDeliveryItem}
+            onOpenChange={(open) => !open && setMarkDeliveryItem(null)}
+            requestId={markDeliveryItem.id}
+            poId={markDeliveryItem.poId}
+            currentQuantity={markDeliveryItem.quantity}
+            itemName={markDeliveryItem.name}
+            unit={markDeliveryItem.unit}
+          />
+        )
+      }
 
       {/* Ready for CC Confirmation Dialog */}
-      {showReadyForCCConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-200" onClick={(e) => e.stopPropagation()}>
-          <div className="w-full max-w-sm mx-4 bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 shadow-2xl p-6 transform transition-all scale-100">
-            <div className="flex flex-col items-center text-center gap-4 mb-6">
-              <div className="w-16 h-16 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center ring-8 ring-blue-50 dark:ring-blue-900/10">
-                <FileText className="h-8 w-8 text-blue-600 dark:text-blue-400" />
+      {
+        showReadyForCCConfirm && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-200" onClick={(e) => e.stopPropagation()}>
+            <div className="w-full max-w-sm mx-4 bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 shadow-2xl p-6 transform transition-all scale-100">
+              <div className="flex flex-col items-center text-center gap-4 mb-6">
+                <div className="w-16 h-16 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center ring-8 ring-blue-50 dark:ring-blue-900/10">
+                  <FileText className="h-8 w-8 text-blue-600 dark:text-blue-400" />
+                </div>
+                <div className="space-y-2">
+                  <h3 className="text-xl font-bold text-gray-900 dark:text-white tracking-tight">
+                    Ready for Cost Comparison
+                  </h3>
+                  <p className="text-sm text-gray-500 dark:text-gray-400 max-w-[260px] mx-auto leading-relaxed">
+                    Are you sure you want to mark this item as ready for cost comparison?
+                  </p>
+                </div>
               </div>
-              <div className="space-y-2">
-                <h3 className="text-xl font-bold text-gray-900 dark:text-white tracking-tight">
-                  Ready for Cost Comparison
-                </h3>
-                <p className="text-sm text-gray-500 dark:text-gray-400 max-w-[260px] mx-auto leading-relaxed">
-                  Are you sure you want to mark this item as ready for cost comparison?
-                </p>
+              <div className="grid grid-cols-2 gap-3">
+                <Button
+                  variant="outline"
+                  onClick={() => setShowReadyForCCConfirm(null)}
+                  className="w-full h-11 font-medium border-gray-200 hover:bg-gray-50 hover:text-gray-900 dark:border-gray-700 dark:hover:bg-gray-800 dark:hover:text-white transition-colors"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={() => {
+                    if (onMoveToCC && showReadyForCCConfirm) {
+                      onMoveToCC(showReadyForCCConfirm);
+                      setShowReadyForCCConfirm(null);
+                    }
+                  }}
+                  className="w-full h-11 font-medium bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-blue-500/20 transition-all hover:scale-[1.02]"
+                >
+                  Confirm
+                </Button>
               </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <Button
-                variant="outline"
-                onClick={() => setShowReadyForCCConfirm(null)}
-                className="w-full h-11 font-medium border-gray-200 hover:bg-gray-50 hover:text-gray-900 dark:border-gray-700 dark:hover:bg-gray-800 dark:hover:text-white transition-colors"
-              >
-                Cancel
-              </Button>
-              <Button
-                onClick={() => {
-                  if (onMoveToCC && showReadyForCCConfirm) {
-                    onMoveToCC(showReadyForCCConfirm);
-                    setShowReadyForCCConfirm(null);
-                  }
-                }}
-                className="w-full h-11 font-medium bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-blue-500/20 transition-all hover:scale-[1.02]"
-              >
-                Confirm
-              </Button>
             </div>
           </div>
-        </div>
-      )}
+        )
+      }
 
       {/* Ready for PO Confirmation Dialog */}
-      {showReadyForPOConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-200" onClick={(e) => e.stopPropagation()}>
-          <div className="w-full max-w-sm mx-4 bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 shadow-2xl p-6 transform transition-all scale-100">
-            <div className="flex flex-col items-center text-center gap-4 mb-6">
-              <div className="w-16 h-16 bg-emerald-100 dark:bg-emerald-900/30 rounded-full flex items-center justify-center ring-8 ring-emerald-50 dark:ring-emerald-900/10">
-                <ShoppingCart className="h-8 w-8 text-emerald-600 dark:text-emerald-400" />
+      {
+        showReadyForPOConfirm && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-200" onClick={(e) => e.stopPropagation()}>
+            <div className="w-full max-w-sm mx-4 bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 shadow-2xl p-6 transform transition-all scale-100">
+              <div className="flex flex-col items-center text-center gap-4 mb-6">
+                <div className="w-16 h-16 bg-emerald-100 dark:bg-emerald-900/30 rounded-full flex items-center justify-center ring-8 ring-emerald-50 dark:ring-emerald-900/10">
+                  <ShoppingCart className="h-8 w-8 text-emerald-600 dark:text-emerald-400" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-bold text-gray-900 dark:text-white tracking-tight">
+                    Confirm Direct PO
+                  </h3>
+                  <p className="text-sm text-gray-500 dark:text-gray-400 max-w-[260px] mx-auto leading-relaxed mt-2">
+                    This item will be marked for <span className="font-semibold text-emerald-600 dark:text-emerald-400">Direct Purchase Order</span>.
+                  </p>
+                </div>
               </div>
-              <div>
-                <h3 className="text-xl font-bold text-gray-900 dark:text-white tracking-tight">
-                  Confirm Direct PO
-                </h3>
-                <p className="text-sm text-gray-500 dark:text-gray-400 max-w-[260px] mx-auto leading-relaxed mt-2">
-                  This item will be marked for <span className="font-semibold text-emerald-600 dark:text-emerald-400">Direct Purchase Order</span>.
-                </p>
+              <div className="grid grid-cols-2 gap-3">
+                <Button
+                  variant="outline"
+                  onClick={() => setShowReadyForPOConfirm(null)}
+                  className="w-full h-11 font-medium border-gray-200 hover:bg-gray-50 hover:text-gray-900 dark:border-gray-700 dark:hover:bg-gray-800 dark:hover:text-white transition-colors"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={() => {
+                    if (onDirectPO && showReadyForPOConfirm) {
+                      onDirectPO(showReadyForPOConfirm);
+                      setShowReadyForPOConfirm(null);
+                    }
+                  }}
+                  className="w-full h-11 font-medium bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg shadow-emerald-500/20 transition-all hover:scale-[1.02]"
+                >
+                  Confirm PO
+                </Button>
               </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <Button
-                variant="outline"
-                onClick={() => setShowReadyForPOConfirm(null)}
-                className="w-full h-11 font-medium border-gray-200 hover:bg-gray-50 hover:text-gray-900 dark:border-gray-700 dark:hover:bg-gray-800 dark:hover:text-white transition-colors"
-              >
-                Cancel
-              </Button>
-              <Button
-                onClick={() => {
-                  if (onDirectPO && showReadyForPOConfirm) {
-                    onDirectPO(showReadyForPOConfirm);
-                    setShowReadyForPOConfirm(null);
-                  }
-                }}
-                className="w-full h-11 font-medium bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg shadow-emerald-500/20 transition-all hover:scale-[1.02]"
-              >
-                Confirm PO
-              </Button>
             </div>
           </div>
-        </div>
-      )}
+        )
+      }
 
       {/* Ready for Delivery Confirmation Dialog */}
-      {showReadyForDeliveryConfirm && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-200" onClick={(e) => e.stopPropagation()}>
-          <div className="w-full max-w-sm mx-4 bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 shadow-2xl p-6 transform transition-all scale-100">
-            <div className="flex flex-col items-center text-center gap-4 mb-6">
-              <div className="w-16 h-16 bg-orange-100 dark:bg-orange-900/30 rounded-full flex items-center justify-center ring-8 ring-orange-50 dark:ring-orange-900/10">
-                <Truck className="h-8 w-8 text-orange-600 dark:text-orange-400" />
+      {
+        showReadyForDeliveryConfirm && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-200" onClick={(e) => e.stopPropagation()}>
+            <div className="w-full max-w-sm mx-4 bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 shadow-2xl p-6 transform transition-all scale-100">
+              <div className="flex flex-col items-center text-center gap-4 mb-6">
+                <div className="w-16 h-16 bg-orange-100 dark:bg-orange-900/30 rounded-full flex items-center justify-center ring-8 ring-orange-50 dark:ring-orange-900/10">
+                  <Truck className="h-8 w-8 text-orange-600 dark:text-orange-400" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-bold text-gray-900 dark:text-white tracking-tight">
+                    Confirm Direct Delivery
+                  </h3>
+                  <p className="text-sm text-gray-500 dark:text-gray-400 max-w-[260px] mx-auto leading-relaxed mt-2">
+                    This item will be marked for <span className="font-semibold text-orange-600 dark:text-orange-400">Direct Delivery</span> from inventory.
+                  </p>
+                </div>
               </div>
-              <div>
-                <h3 className="text-xl font-bold text-gray-900 dark:text-white tracking-tight">
-                  Confirm Direct Delivery
-                </h3>
-                <p className="text-sm text-gray-500 dark:text-gray-400 max-w-[260px] mx-auto leading-relaxed mt-2">
-                  This item will be marked for <span className="font-semibold text-orange-600 dark:text-orange-400">Direct Delivery</span> from inventory.
-                </p>
+              <div className="grid grid-cols-2 gap-3">
+                <Button
+                  variant="outline"
+                  onClick={() => setShowReadyForDeliveryConfirm(null)}
+                  className="w-full h-11 font-medium border-gray-200 hover:bg-gray-50 hover:text-gray-900 dark:border-gray-700 dark:hover:bg-gray-800 dark:hover:text-white transition-colors"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={() => {
+                    if (onDirectDelivery && showReadyForDeliveryConfirm) {
+                      onDirectDelivery(showReadyForDeliveryConfirm);
+                      setShowReadyForDeliveryConfirm(null);
+                    }
+                  }}
+                  className="w-full h-11 font-medium bg-orange-600 hover:bg-orange-700 text-white shadow-lg shadow-orange-500/20 transition-all hover:scale-[1.02]"
+                >
+                  Confirm Delivery
+                </Button>
               </div>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <Button
-                variant="outline"
-                onClick={() => setShowReadyForDeliveryConfirm(null)}
-                className="w-full h-11 font-medium border-gray-200 hover:bg-gray-50 hover:text-gray-900 dark:border-gray-700 dark:hover:bg-gray-800 dark:hover:text-white transition-colors"
-              >
-                Cancel
-              </Button>
-              <Button
-                onClick={() => {
-                  if (onDirectDelivery && showReadyForDeliveryConfirm) {
-                    onDirectDelivery(showReadyForDeliveryConfirm);
-                    setShowReadyForDeliveryConfirm(null);
-                  }
-                }}
-                className="w-full h-11 font-medium bg-orange-600 hover:bg-orange-700 text-white shadow-lg shadow-orange-500/20 transition-all hover:scale-[1.02]"
-              >
-                Confirm Delivery
-              </Button>
             </div>
           </div>
-        </div>
-      )}
+        )
+      }
 
       {/* View DC Dialog */}
       <ViewDCDialog
@@ -1430,40 +1447,42 @@ export function PurchaseRequestGroupCard({
       />
 
       {/* Confirm Delivery Dialog */}
-      {showConfirmDelivery && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-          <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl p-8 max-w-md w-full mx-4 border border-gray-200 dark:border-gray-800">
-            <div className="flex items-center justify-center w-16 h-16 mx-auto mb-6 rounded-full bg-emerald-100 dark:bg-emerald-900/30">
-              <CheckCircle className="w-8 h-8 text-emerald-600 dark:text-emerald-400" />
-            </div>
-            <h3 className="text-2xl font-bold text-center mb-3 text-gray-900 dark:text-white">
-              Confirm Delivery
-            </h3>
-            <p className="text-center text-gray-600 dark:text-gray-400 mb-8">
-              Are you sure you want to confirm this delivery? This will mark the item as delivered.
-            </p>
-            <div className="grid grid-cols-2 gap-3">
-              <Button
-                variant="outline"
-                onClick={() => setShowConfirmDelivery(null)}
-                className="w-full h-11 font-medium border-gray-200 hover:bg-gray-50 hover:text-gray-900 dark:border-gray-700 dark:hover:bg-gray-800 dark:hover:text-white transition-colors"
-              >
-                Cancel
-              </Button>
-              <Button
-                onClick={() => {
-                  if (showConfirmDelivery) {
-                    handleConfirmDelivery(showConfirmDelivery);
-                  }
-                }}
-                className="w-full h-11 font-medium bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg shadow-emerald-500/20 transition-all hover:scale-[1.02]"
-              >
-                Confirm
-              </Button>
+      {
+        showConfirmDelivery && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+            <div className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl p-8 max-w-md w-full mx-4 border border-gray-200 dark:border-gray-800">
+              <div className="flex items-center justify-center w-16 h-16 mx-auto mb-6 rounded-full bg-emerald-100 dark:bg-emerald-900/30">
+                <CheckCircle className="w-8 h-8 text-emerald-600 dark:text-emerald-400" />
+              </div>
+              <h3 className="text-2xl font-bold text-center mb-3 text-gray-900 dark:text-white">
+                Confirm Delivery
+              </h3>
+              <p className="text-center text-gray-600 dark:text-gray-400 mb-8">
+                Are you sure you want to confirm this delivery? This will mark the item as delivered.
+              </p>
+              <div className="grid grid-cols-2 gap-3">
+                <Button
+                  variant="outline"
+                  onClick={() => setShowConfirmDelivery(null)}
+                  className="w-full h-11 font-medium border-gray-200 hover:bg-gray-50 hover:text-gray-900 dark:border-gray-700 dark:hover:bg-gray-800 dark:hover:text-white transition-colors"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={() => {
+                    if (showConfirmDelivery) {
+                      handleConfirmDelivery(showConfirmDelivery);
+                    }
+                  }}
+                  className="w-full h-11 font-medium bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg shadow-emerald-500/20 transition-all hover:scale-[1.02]"
+                >
+                  Confirm
+                </Button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )
+      }
 
       {/* Edit PO Quantity Dialog - Shows BEFORE Create DC for pending_po items */}
       <EditPOQuantityDialog

@@ -174,6 +174,9 @@ export default function SiteEngineerDashboardClient() {
               singleColumn={true}
               alwaysExpanded={true}
               simplifiedStatuses={true}
+              minimalDashboardView={true}
+              hideStatusOnCard={true}
+              hideItemCountOnCard={true}
             />
 
             {recentRequests.length === 0 && requests && (

@@ -1115,7 +1115,9 @@ export const updateRequestStatus = mutation({
 
     // Status validation
     if (currentUser.role === "manager") {
-      if (request.status !== "pending") throw new Error("Request status can only be updated from pending");
+      // Manager can update from pending, approved (correction), or recheck (re-evaluation)
+      const allowed = ["pending", "approved", "recheck"];
+      if (!allowed.includes(request.status)) throw new Error("Request status can only be updated from pending, approved, or recheck");
     } else {
       // Purchase Officer
       const allowed = ["recheck", "ready_for_cc", "cc_pending", "cc_rejected"];

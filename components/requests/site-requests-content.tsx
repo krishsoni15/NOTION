@@ -242,6 +242,24 @@ const getStatusDot = (status: string) => {
   }
 };
 
+const statusGroupMapping: Record<string, string[]> = {
+  draft: ["draft"],
+  pending: ["pending", "sign_pending"],
+  rejected: ["rejected", "sign_rejected", "cc_rejected", "rejected_po"],
+  processing: ["approved", "recheck", "ready_for_cc", "cc_pending", "cc_approved", "ready_for_po", "pending_po", "direct_po", "ordered", "partially_processed", "ready_for_delivery"],
+  out_for_delivery: ["delivery_stage", "delivery_processing"],
+  delivered: ["delivered"]
+};
+
+const filterOptions = [
+  { value: "draft", label: "Draft", color: "text-slate-600", dotColor: "bg-slate-400" },
+  { value: "pending", label: "Pending", color: "text-amber-600", dotColor: "bg-amber-500" },
+  { value: "rejected", label: "Rejected", color: "text-rose-600", dotColor: "bg-rose-500" },
+  { value: "processing", label: "Approved & Processing", color: "text-blue-600", dotColor: "bg-blue-500" },
+  { value: "out_for_delivery", label: "Out for Delivery", color: "text-orange-600", dotColor: "bg-orange-500" },
+  { value: "delivered", label: "Delivered", color: "text-emerald-600", dotColor: "bg-emerald-500" },
+];
+
 export function SiteRequestsContent() {
   const [formOpen, setFormOpen] = useState(false);
 
@@ -429,38 +447,8 @@ export function SiteRequestsContent() {
       filtered = filtered.filter((r) => {
         // Check if request status matches any selected filter group
         return statusFilter.some(filterGroup => {
-          if (filterGroup === "draft") return r.status === "draft";
-
-          if (filterGroup === "pending") return ["pending", "sign_pending"].includes(r.status);
-
-          if (filterGroup === "processing") {
-            return [
-              "approved",
-              "ready_for_cc",
-              "cc_pending",
-              "cc_approved",
-              "cc_rejected",
-              "ready_for_po",
-              "pending_po",
-              "rejected_po",
-              "ready_for_delivery", // "ready for delivery all thing sho on processign"
-              "recheck"
-            ].includes(r.status);
-          }
-
-          if (filterGroup === "rejected") {
-            return ["rejected", "sign_rejected"].includes(r.status);
-          }
-
-          if (filterGroup === "out_for_delivery") {
-            return ["delivery_processing"].includes(r.status);
-          }
-
-          if (filterGroup === "delivered") {
-            return r.status === "delivered";
-          }
-
-          return r.status === filterGroup;
+          const allowedStatuses = statusGroupMapping[filterGroup] || [filterGroup];
+          return allowedStatuses.includes(r.status);
         });
       });
     }
@@ -499,9 +487,9 @@ export function SiteRequestsContent() {
     // Load from localStorage on mount
     if (typeof window !== 'undefined') {
       const saved = localStorage.getItem('requestsPageSize');
-      return saved ? Number(saved) : 50; // Default to 50
+      return saved ? Number(saved) : 2; // Default to 2
     }
-    return 50;
+    return 2;
   });
 
   // Save page size to localStorage when it changes
@@ -630,98 +618,23 @@ export function SiteRequestsContent() {
 
                     <div className="h-px bg-border/50 my-2 mx-1" />
 
-                    {[
-                      {
-                        value: "draft",
-                        label: "Draft",
-                        color: "text-slate-600",
-                        dotColor: "bg-slate-400",
-                        activeColor: "bg-slate-100 text-slate-900 dark:bg-slate-900/40 dark:text-slate-100",
-                        hoverColor: "hover:bg-slate-50 dark:hover:bg-slate-900/20",
-                        borderColor: "border-slate-500 bg-slate-500",
-                        selectedBorder: "border-slate-200 dark:border-slate-800"
-                      },
-                      {
-                        value: "pending",
-                        label: "Pending",
-                        color: "text-amber-600",
-                        dotColor: "bg-amber-500",
-                        activeColor: "bg-amber-100 text-amber-900 dark:bg-amber-900/40 dark:text-amber-100",
-                        hoverColor: "hover:bg-amber-50 dark:hover:bg-amber-900/20",
-                        borderColor: "border-amber-500 bg-amber-500",
-                        selectedBorder: "border-amber-200 dark:border-amber-800"
-                      },
-                      {
-                        value: "rejected",
-                        label: "Rejected",
-                        color: "text-rose-600",
-                        dotColor: "bg-rose-500",
-                        activeColor: "bg-rose-100 text-rose-900 dark:bg-rose-900/40 dark:text-rose-100",
-                        hoverColor: "hover:bg-rose-50 dark:hover:bg-rose-900/20",
-                        borderColor: "border-rose-500 bg-rose-500",
-                        selectedBorder: "border-rose-200 dark:border-rose-800"
-                      },
-                      {
-                        value: "processing",
-                        label: "Processing",
-                        color: "text-indigo-600",
-                        dotColor: "bg-indigo-500",
-                        activeColor: "bg-indigo-100 text-indigo-900 dark:bg-indigo-900/40 dark:text-indigo-100",
-                        hoverColor: "hover:bg-indigo-50 dark:hover:bg-indigo-900/20",
-                        borderColor: "border-indigo-500 bg-indigo-500",
-                        selectedBorder: "border-indigo-200 dark:border-indigo-800"
-                      },
-                      {
-                        value: "out_for_delivery",
-                        label: "Out for Delivery",
-                        color: "text-orange-600",
-                        dotColor: "bg-orange-500",
-                        activeColor: "bg-orange-100 text-orange-900 dark:bg-orange-900/40 dark:text-orange-100",
-                        hoverColor: "hover:bg-orange-50 dark:hover:bg-orange-900/20",
-                        borderColor: "border-orange-500 bg-orange-500",
-                        selectedBorder: "border-orange-200 dark:border-orange-800"
-                      },
-                      {
-                        value: "delivered",
-                        label: "Delivered",
-                        color: "text-teal-600",
-                        dotColor: "bg-teal-500",
-                        activeColor: "bg-teal-100 text-teal-900 dark:bg-teal-900/40 dark:text-teal-100",
-                        hoverColor: "hover:bg-teal-50 dark:hover:bg-teal-900/20",
-                        borderColor: "border-teal-500 bg-teal-500",
-                        selectedBorder: "border-teal-200 dark:border-teal-800"
-                      },
-                    ].map((option) => {
+                    {filterOptions.map((option) => {
                       const isSelected = statusFilter.includes(option.value);
 
-                      // Calculate count for this status
+                      // Calculate count for this status group
                       const getStatusCount = () => {
                         if (!allRequests) return 0;
-                        return allRequests.filter(r => {
-                          if (option.value === "draft") return r.status === "draft";
-                          if (option.value === "pending") return ["pending", "sign_pending"].includes(r.status);
-                          if (option.value === "rejected") return ["rejected", "sign_rejected"].includes(r.status);
-                          if (option.value === "processing") {
-                            return [
-                              "approved",
-                              "ready_for_cc",
-                              "cc_pending",
-                              "cc_approved",
-                              "cc_rejected",
-                              "ready_for_po",
-                              "pending_po",
-                              "rejected_po",
-                              "ready_for_delivery",
-                              "recheck"
-                            ].includes(r.status);
-                          }
-                          if (option.value === "out_for_delivery") return ["delivery_processing", "delivery_stage"].includes(r.status);
-                          if (option.value === "delivered") return r.status === "delivered";
-                          return false;
-                        }).length;
+                        const allowedStatuses = statusGroupMapping[option.value] || [option.value];
+                        return allRequests.filter(r => allowedStatuses.includes(r.status)).length;
                       };
 
                       const count = getStatusCount();
+
+                      // Default styling classes
+                      const activeColor = "bg-primary/10 text-primary dark:bg-primary/20 dark:text-primary-foreground";
+                      const hoverColor = "hover:bg-muted/50 dark:hover:bg-muted/30";
+                      const borderColor = "border-primary bg-primary";
+                      const selectedBorder = "border-primary dark:border-primary";
 
                       return (
                         <CommandItem
@@ -736,14 +649,14 @@ export function SiteRequestsContent() {
                           className={cn(
                             "cursor-pointer py-3.5 px-3 mb-2 rounded-xl border transition-all flex items-start gap-3 h-auto group",
                             isSelected
-                              ? cn(option.activeColor, option.selectedBorder, "shadow-sm ring-1 ring-inset ring-black/5 dark:ring-white/5")
-                              : cn("bg-card border-border text-muted-foreground hover:text-foreground hover:border-border/80 shadow-sm", option.hoverColor)
+                              ? cn(activeColor, selectedBorder, "shadow-sm ring-1 ring-inset ring-black/5 dark:ring-white/5")
+                              : cn("bg-card border-border text-muted-foreground hover:text-foreground hover:border-border/80 shadow-sm", hoverColor)
                           )}
                         >
                           <div className={cn(
                             "h-5 w-5 shrink-0 rounded flex items-center justify-center transition-all mt-0.5",
                             isSelected
-                              ? cn(option.borderColor, "text-white shadow-sm")
+                              ? cn(borderColor, "text-white shadow-sm")
                               : "border-2 border-muted-foreground/30 bg-transparent group-hover:border-foreground/40"
                           )}>
                             {isSelected && <Check className="h-3.5 w-3.5" strokeWidth={3} />}
@@ -751,7 +664,7 @@ export function SiteRequestsContent() {
 
                           <div className="flex items-start gap-3 flex-1 min-w-0">
                             <div className={`w-2.5 h-2.5 rounded-full ${option.dotColor} shadow-sm shrink-0 mt-1.5`} />
-                            <span className="font-bold text-sm whitespace-normal break-words leading-tight pt-0.5">{option.label}</span>
+                            <span className={cn("font-bold text-sm whitespace-normal break-words leading-tight pt-0.5", option.color)}>{option.label}</span>
                           </div>
 
                           <div className={cn(
@@ -790,7 +703,7 @@ export function SiteRequestsContent() {
           pageSize={pageSize}
           onPageSizeChange={setPageSize}
           totalItems={totalRequestGroups}
-          pageSizeOptions={[10, 25, 50, 100]}
+          pageSizeOptions={[2, 10, 25, 50, 100]}
           itemCount={allFilteredRequests.length}
         />
       </div>
@@ -798,13 +711,15 @@ export function SiteRequestsContent() {
       <RequestsTable
         requests={paginatedRequests}
         onViewDetails={(requestId) => setSelectedRequestId(requestId)}
+        preciseStatuses={true}
+        hideStatusOnCard={true}
+        hideItemCountOnCard={true}
         onEditDraft={handleEditDraft}
         onDeleteDraft={handleDeleteDraft}
         onSendDraft={handleSendDraft}
         onConfirmDelivery={handleConfirmDelivery}
         newlySentRequestNumbers={newlySentRequestNumbers}
         viewMode={viewMode}
-        simplifiedStatuses={true}
       />
 
       <div className="mt-4 border-t pt-4">
@@ -815,7 +730,7 @@ export function SiteRequestsContent() {
           pageSize={pageSize}
           onPageSizeChange={setPageSize}
           totalItems={totalRequestGroups}
-          pageSizeOptions={[10, 35, 50, 100]}
+          pageSizeOptions={[2, 10, 25, 50, 100]}
           itemCount={allFilteredRequests.length}
         />
       </div>

@@ -33,6 +33,8 @@ import { Eye, AlertCircle, FileText, Edit, Trash2, Send, ChevronDown, ChevronUp,
 import { CompactImageGallery } from "@/components/ui/image-gallery";
 import { LazyImage } from "@/components/ui/lazy-image";
 import { cn, normalizeSearchQuery, matchesAnySearchQuery } from "@/lib/utils";
+import { useUserRole } from "@/hooks/use-user-role";
+import { ROLES } from "@/lib/auth/roles";
 import { UserInfoDialog } from "./user-info-dialog";
 import { ItemInfoDialog } from "./item-info-dialog";
 import { LocationInfoDialog } from "@/components/locations/location-info-dialog";
@@ -61,20 +63,21 @@ type RequestStatus =
   | "direct_po"
   | "sign_pending"
   | "sign_rejected"
-  | "delivery_stage";
+  | "delivery_stage"
+  | "ordered";
 
 // Helper to get card border/bg styles based on status
 const getCardStyles = (status: RequestStatus) => {
-  const baseClasses = "border rounded-xl p-4 shadow-sm hover:shadow-md transition-all duration-200";
+  const baseClasses = "border-2 sm:border-2 rounded-xl p-3 sm:p-4 shadow-xl sm:shadow-lg hover:shadow-2xl transition-all duration-200 bg-card dark:bg-card max-w-full overflow-hidden";
 
   switch (status) {
     case "draft":
-      return `${baseClasses} bg-slate-50/50 border-slate-200 dark:bg-slate-900/20 dark:border-slate-800`;
+      return `${baseClasses} border-slate-300 dark:border-slate-600`;
     case "pending":
     case "sign_pending":
-      return `${baseClasses} bg-amber-50/50 border-amber-200 dark:bg-amber-900/10 dark:border-amber-800`;
+      return `${baseClasses} border-amber-300 dark:border-amber-700`;
     case "approved":
-      return `${baseClasses} bg-emerald-50/50 border-emerald-200 dark:bg-emerald-900/10 dark:border-emerald-800`;
+      return `${baseClasses} border-emerald-300 dark:border-emerald-700`;
     case "recheck":
     case "ready_for_cc":
     case "cc_pending":
@@ -83,21 +86,21 @@ const getCardStyles = (status: RequestStatus) => {
     case "pending_po":
     case "direct_po":
     case "partially_processed":
-      return `${baseClasses} bg-indigo-50/50 border-indigo-200 dark:bg-indigo-900/10 dark:border-indigo-800`;
+      return `${baseClasses} border-indigo-300 dark:border-indigo-700`;
     case "ready_for_delivery":
     case "delivery_processing":
     case "delivery_stage":
     case "out_for_delivery":
-      return `${baseClasses} bg-orange-50/50 border-orange-200 dark:bg-orange-900/10 dark:border-orange-800`;
+      return `${baseClasses} border-orange-300 dark:border-orange-700`;
     case "delivered":
-      return `${baseClasses} bg-teal-50/50 border-teal-200 dark:bg-teal-900/10 dark:border-teal-800`;
+      return `${baseClasses} border-teal-300 dark:border-teal-700`;
     case "rejected":
     case "cc_rejected":
     case "rejected_po":
     case "sign_rejected":
-      return `${baseClasses} bg-rose-50/50 border-rose-200 dark:bg-rose-900/10 dark:border-rose-800`;
+      return `${baseClasses} border-rose-300 dark:border-rose-700`;
     default:
-      return `${baseClasses} bg-card border-border`;
+      return `${baseClasses} border-border`;
   }
 };
 
@@ -204,6 +207,10 @@ interface RequestsTableProps {
   singleColumn?: boolean; // Force single column layout
   alwaysExpanded?: boolean; // Always show expanded details (e.g. for dashboard)
   simplifiedStatuses?: boolean; // Show simplified status badges for site engineers
+  preciseStatuses?: boolean; // Show precise status badges (ungrouped) for managers
+  hideStatusOnCard?: boolean; // Hide status badge on card view
+  hideItemCountOnCard?: boolean; // Hide item count badge on card view
+  minimalDashboardView?: boolean; // Hide detailed info (Required By, Location, Items) for dashboard
 }
 
 export function RequestsTable({
@@ -222,7 +229,12 @@ export function RequestsTable({
   singleColumn = false,
   alwaysExpanded = false,
   simplifiedStatuses = false,
+  preciseStatuses = false,
+  hideStatusOnCard = false,
+  hideItemCountOnCard = false,
+  minimalDashboardView = false,
 }: RequestsTableProps) {
+  const userRole = useUserRole();
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const [selectedUserId, setSelectedUserId] = useState<Id<"users"> | null>(null);
   const [selectedItemName, setSelectedItemName] = useState<string | null>(null);
@@ -330,7 +342,7 @@ export function RequestsTable({
         title={`Stock Available: ${stockAvailable}`}
       >
         <Package className="h-3 w-3" />
-        {stockAvailable} {stockUnit} Available
+        {stockAvailable} {stockUnit}
       </Badge>
     );
   };
@@ -431,9 +443,15 @@ export function RequestsTable({
     });
   };
 
-  // Get status badge variant with simplified categories and icons
+  // Get status badge with role-based display (14 for managers, 6 for site engineers)
   const getStatusBadge = (status: RequestStatus) => {
     if (simplifiedStatuses) {
+      // User request: Don't show status text/badge on card layout, just use border color
+      return null;
+    }
+
+    // ===== MANAGER / PURCHASE VIEW - ALL 14 INTERNAL STATUSES =====
+    if (userRole === ROLES.MANAGER || userRole === ROLES.PURCHASE_OFFICER) {
       if (status === "draft") {
         return (
           <Badge variant="outline" className="bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-900/50 dark:text-slate-400 dark:border-slate-800 gap-1.5 pl-1.5 pr-2.5">
@@ -446,7 +464,7 @@ export function RequestsTable({
         return (
           <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/50 dark:text-amber-400 dark:border-amber-800 gap-1.5 pl-1.5 pr-2.5">
             <Clock className="h-3.5 w-3.5" />
-            Pending
+            Pending Approval
           </Badge>
         );
       }
@@ -458,7 +476,16 @@ export function RequestsTable({
           </Badge>
         );
       }
-      if (["delivery_processing", "delivery_stage", "out_for_delivery"].includes(status)) {
+      if (status === "recheck") return <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-950/50 dark:text-indigo-400 dark:border-indigo-800 gap-1.5 pl-1.5 pr-2.5">Recheck</Badge>;
+      if (status === "ready_for_cc") return <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/50 dark:text-blue-400 dark:border-blue-800 gap-1.5 pl-1.5 pr-2.5">Ready for CC</Badge>;
+      if (status === "cc_pending") return <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/50 dark:text-purple-400 dark:border-purple-800 gap-1.5 pl-1.5 pr-2.5">CC Pending</Badge>;
+      if (status === "cc_rejected") return <Badge variant="outline" className="bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/50 dark:text-rose-400 dark:border-rose-800 gap-1.5 pl-1.5 pr-2.5">CC Rejected</Badge>;
+      if (status === "ready_for_po") return <Badge variant="outline" className="bg-teal-50 text-teal-700 border-teal-200 dark:bg-teal-950/50 dark:text-teal-400 dark:border-teal-800 gap-1.5 pl-1.5 pr-2.5">Ready for PO</Badge>;
+      if (status === "sign_pending") return <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/50 dark:text-amber-400 dark:border-amber-800 gap-1.5 pl-1.5 pr-2.5">Sign Pending</Badge>;
+      if (status === "sign_rejected") return <Badge variant="outline" className="bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/50 dark:text-rose-400 dark:border-rose-800 gap-1.5 pl-1.5 pr-2.5">Sign Rejected</Badge>;
+      if (status === "pending_po") return <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-950/50 dark:text-orange-400 dark:border-orange-800 gap-1.5 pl-1.5 pr-2.5">Pending PO</Badge>;
+      if (status === "ready_for_delivery") return <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-400 dark:border-emerald-800 gap-1.5 pl-1.5 pr-2.5">Ready for Delivery</Badge>;
+      if (status === "out_for_delivery") {
         return (
           <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-950/50 dark:text-orange-400 dark:border-orange-800 gap-1.5 pl-1.5 pr-2.5">
             <Truck className="h-3.5 w-3.5" />
@@ -474,89 +501,69 @@ export function RequestsTable({
           </Badge>
         );
       }
-      // Everything else falls into Approved & Processing
+
+      // Handle legacy/extra statuses that might exist
+      if (status === "approved") return <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-400 dark:border-emerald-800 gap-1.5 pl-1.5 pr-2.5">Recheck</Badge>;
+      if (status === "cc_approved") return <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 dark:bg-green-950/50 dark:text-green-400 dark:border-green-800 gap-1.5 pl-1.5 pr-2.5">Ready for PO</Badge>;
+      if (status === "direct_po") return <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-950/50 dark:text-orange-400 dark:border-orange-800 gap-1.5 pl-1.5 pr-2.5">Pending PO</Badge>;
+      if (status === "ordered") return <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-400 dark:border-emerald-800 gap-1.5 pl-1.5 pr-2.5">Ready for Delivery</Badge>;
+      if (status === "partially_processed") return <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-200 dark:bg-yellow-950/50 dark:text-yellow-400 dark:border-yellow-800 gap-1.5 pl-1.5 pr-2.5">Ready for Delivery</Badge>;
+      if (status === "delivery_stage" || status === "delivery_processing") return <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-950/50 dark:text-orange-400 dark:border-orange-800 gap-1.5 pl-1.5 pr-2.5"><Truck className="h-3.5 w-3.5" />Out for Delivery</Badge>;
+      if (status === "rejected_po" || status === "po_rejected") return <Badge variant="outline" className="bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/50 dark:text-rose-400 dark:border-rose-800 gap-1.5 pl-1.5 pr-2.5">Sign Rejected</Badge>;
+      if (status === "recheck_requested") return <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-950/50 dark:text-indigo-400 dark:border-indigo-800 gap-1.5 pl-1.5 pr-2.5">Recheck</Badge>;
+
+      // Fallback for unknown statuses
+      return <Badge variant="outline">{status}</Badge>;
+    }
+
+    // ===== SITE ENGINEER VIEW - ONLY 6 SIMPLIFIED STATUSES =====
+    if (status === "draft") {
       return (
-        <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-950/50 dark:text-indigo-400 dark:border-indigo-800 gap-1.5 pl-1.5 pr-2.5">
-          <Loader2 className="h-3.5 w-3.5 animate-spin-slow" />
-          Approved & Processing
+        <Badge variant="outline" className="bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-900/50 dark:text-slate-400 dark:border-slate-800 gap-1.5 pl-1.5 pr-2.5">
+          <Pencil className="h-3.5 w-3.5" />
+          Draft
         </Badge>
       );
     }
-
-    switch (status) {
-      case "draft":
-        return (
-          <Badge variant="outline" className="bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-900/50 dark:text-slate-400 dark:border-slate-800 gap-1.5 pl-1.5 pr-2.5">
-            <Pencil className="h-3.5 w-3.5" />
-            Draft
-          </Badge>
-        );
-      case "pending":
-      case "sign_pending":
-        return (
-          <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/50 dark:text-amber-400 dark:border-amber-800 gap-1.5 pl-1.5 pr-2.5">
-            <Clock className="h-3.5 w-3.5" />
-            Pending
-          </Badge>
-        );
-      case "approved":
-        return (
-          <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-400 dark:border-emerald-800 gap-1.5 pl-1.5 pr-2.5">
-            <CheckCircle2 className="h-3.5 w-3.5" />
-            Approved
-          </Badge>
-        );
-      case "recheck":
-      case "recheck":
-      case "ready_for_cc":
-      case "cc_pending":
-      case "cc_approved":
-      case "ready_for_po":
-      case "pending_po":
-      case "direct_po":
-      case "partially_processed":
-        return (
-          <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-950/50 dark:text-indigo-400 dark:border-indigo-800 gap-1.5 pl-1.5 pr-2.5">
-            <Loader2 className="h-3.5 w-3.5 animate-spin-slow" />
-            Processing
-          </Badge>
-        );
-      case "ready_for_delivery":
-        return (
-          <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-950/50 dark:text-indigo-400 dark:border-indigo-800 gap-1.5 pl-1.5 pr-2.5">
-            <Truck className="h-3.5 w-3.5" />
-            Ready for Delivery
-          </Badge>
-        );
-      case "delivery_processing":
-      case "delivery_stage":
-      case "out_for_delivery":
-        return (
-          <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-950/50 dark:text-orange-400 dark:border-orange-800 gap-1.5 pl-1.5 pr-2.5">
-            <Truck className="h-3.5 w-3.5" />
-            Out for Delivery
-          </Badge>
-        );
-      case "delivered":
-        return (
-          <Badge variant="outline" className="bg-teal-50 text-teal-700 border-teal-200 dark:bg-teal-950/50 dark:text-teal-400 dark:border-teal-800 gap-1.5 pl-1.5 pr-2.5">
-            <Package className="h-3.5 w-3.5" />
-            Delivered
-          </Badge>
-        );
-      case "rejected":
-      case "cc_rejected":
-      case "rejected_po":
-      case "sign_rejected":
-        return (
-          <Badge variant="outline" className="bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/50 dark:text-rose-400 dark:border-rose-800 gap-1.5 pl-1.5 pr-2.5">
-            <XCircle className="h-3.5 w-3.5" />
-            Rejected
-          </Badge>
-        );
-      default:
-        return <Badge variant="outline">{status}</Badge>;
+    if (status === "pending") {
+      return (
+        <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/50 dark:text-amber-400 dark:border-amber-800 gap-1.5 pl-1.5 pr-2.5">
+          <Clock className="h-3.5 w-3.5" />
+          Pending Approval
+        </Badge>
+      );
     }
+    if (status === "rejected") {
+      return (
+        <Badge variant="outline" className="bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/50 dark:text-rose-400 dark:border-rose-800 gap-1.5 pl-1.5 pr-2.5">
+          <XCircle className="h-3.5 w-3.5" />
+          Rejected
+        </Badge>
+      );
+    }
+    if (status === "out_for_delivery") {
+      return (
+        <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-950/50 dark:text-orange-400 dark:border-orange-800 gap-1.5 pl-1.5 pr-2.5">
+          <Truck className="h-3.5 w-3.5" />
+          Out for Delivery
+        </Badge>
+      );
+    }
+    if (status === "delivered") {
+      return (
+        <Badge variant="outline" className="bg-teal-50 text-teal-700 border-teal-200 dark:bg-teal-950/50 dark:text-teal-400 dark:border-teal-800 gap-1.5 pl-1.5 pr-2.5">
+          <Package className="h-3.5 w-3.5" />
+          Delivered
+        </Badge>
+      );
+    }
+    // All other statuses → "Approved & Processing"
+    return (
+      <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-950/50 dark:text-indigo-400 dark:border-indigo-800 gap-1.5 pl-1.5 pr-2.5">
+        <Loader2 className="h-3.5 w-3.5" />
+        Approved & Processing
+      </Badge>
+    );
   };
 
   if (groupedRequestsArray.length === 0 && requests.length === 0) {
@@ -605,6 +612,30 @@ export function RequestsTable({
 
           const overallStatus = getOverallStatus();
 
+          // Helper to get item-specific background color based on status - LIGHTER & SUBTLE
+          const getItemStatusBgColor = (status: string) => {
+            if (status === "draft") return "bg-slate-50 dark:bg-slate-900/30 border-slate-200 dark:border-slate-700";
+            if (["pending", "sign_pending"].includes(status)) return "bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800";
+            if (status === "approved") return "bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800";
+            if (["recheck", "ready_for_cc", "cc_pending", "cc_approved", "ready_for_po", "pending_po", "direct_po", "partially_processed"].includes(status)) return "bg-indigo-50 dark:bg-indigo-950/30 border-indigo-200 dark:border-indigo-800";
+            if (["ready_for_delivery", "delivery_processing", "delivery_stage", "out_for_delivery"].includes(status)) return "bg-orange-50 dark:bg-orange-950/30 border-orange-200 dark:border-orange-800";
+            if (status === "delivered") return "bg-teal-50 dark:bg-teal-950/30 border-teal-200 dark:border-teal-800";
+            if (["rejected", "sign_rejected", "cc_rejected", "rejected_po"].includes(status)) return "bg-rose-50 dark:bg-rose-950/30 border-rose-200 dark:border-rose-800";
+            return "bg-card border-border";
+          };
+
+          // Helper to get item-specific left border color based on status
+          const getItemStatusBorderColor = (status: string) => {
+            if (status === "draft") return "bg-slate-400";
+            if (["pending", "sign_pending"].includes(status)) return "bg-amber-500";
+            if (status === "approved") return "bg-emerald-500";
+            if (["recheck", "ready_for_cc", "cc_pending", "cc_approved", "ready_for_po", "pending_po", "direct_po", "partially_processed"].includes(status)) return "bg-indigo-500";
+            if (["ready_for_delivery", "delivery_processing", "delivery_stage", "out_for_delivery"].includes(status)) return "bg-orange-500";
+            if (status === "delivered") return "bg-teal-500";
+            if (["rejected", "sign_rejected", "cc_rejected", "rejected_po"].includes(status)) return "bg-rose-500";
+            return "bg-primary/20";
+          };
+
           // Helper to render a single item row
           const renderItemRow = (item: Request, isFirst: boolean = false, showBadges: boolean = true, itemIndex?: number) => (
             <div className="flex gap-3 relative">
@@ -617,7 +648,7 @@ export function RequestsTable({
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 mb-0.5">
                       {itemIndex && (
-                        <span className="bg-primary/10 text-primary text-xs font-black font-mono px-2 py-0.5 rounded border border-primary/20 shadow-sm">
+                        <span className="bg-primary/10 text-primary dark:text-white text-xs font-black font-mono px-2 py-0.5 rounded border border-primary/20 dark:border-primary/40 shadow-sm">
                           #{itemIndex}
                         </span>
                       )}
@@ -625,7 +656,7 @@ export function RequestsTable({
                     </div>
                     <button
                       onClick={(e) => { e.stopPropagation(); setSelectedItemName(item.itemName); }}
-                      className="font-bold text-xl text-foreground hover:text-primary hover:underline leading-tight text-left block w-full truncate"
+                      className="font-bold text-xl text-foreground dark:text-white hover:text-primary dark:hover:text-primary hover:underline leading-tight text-left block w-full truncate"
                     >
                       {item.itemName}
                     </button>
@@ -633,14 +664,14 @@ export function RequestsTable({
 
                   <div className="flex flex-col items-end shrink-0">
                     <span className="text-sm uppercase font-bold text-muted-foreground tracking-wider mb-1">Quantity</span>
-                    <div className="flex items-baseline gap-1 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-3 py-1.5 rounded-lg shadow-sm">
-                      <span className="text-2xl font-black text-slate-900 dark:text-slate-100 tracking-tight">{item.quantity}</span>
-                      <span className="text-sm font-bold text-slate-500 dark:text-slate-400 uppercase">{item.unit}</span>
+                    <div className="flex items-baseline gap-1 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-2.5 py-1 rounded-lg shadow-sm">
+                      <span className="text-lg font-black text-slate-900 dark:text-slate-100 tracking-tight">{item.quantity}</span>
+                      <span className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase">{item.unit}</span>
                     </div>
                   </div>
                 </div>
 
-                {item.description && (
+                {item.description && !minimalDashboardView && (
                   <div className="relative group/desc">
                     <div className="flex items-center gap-2 mb-1">
                       <span className="text-sm uppercase font-bold text-muted-foreground tracking-wider">Description</span>
@@ -653,7 +684,6 @@ export function RequestsTable({
 
                 {showBadges && (
                   <div className="flex flex-wrap items-center gap-2 pt-2">
-                    {getInventoryStatusBadge(item.itemName, item.quantity, item.unit)}
                     {item.isUrgent && (
                       <Badge variant="destructive" className="h-5 px-1.5 text-[10px] gap-1 animate-pulse">
                         <AlertCircle className="h-3 w-3" />
@@ -675,17 +705,19 @@ export function RequestsTable({
               )}
             >
               {/* Card Header with Labels */}
-              <div className="flex items-start justify-between mb-4 pb-3 border-b border-border/50">
+              <div className="flex items-start justify-between mb-3 sm:mb-4 pb-2 sm:pb-3 border-b border-border/50 gap-2 sm:gap-3">
                 <div className="space-y-1">
                   <div className="flex items-center gap-2">
                     <span className="text-sm font-bold text-muted-foreground uppercase tracking-wider">Request ID</span>
                   </div>
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-2xl font-black font-mono text-primary tracking-tight">#{requestNumber}</span>
-                    <div className="scale-110 origin-left ml-1">
-                      {getStatusBadge(overallStatus || firstItem.status)}
-                    </div>
-                    {hasMultipleItems && (
+                    <span className="text-2xl font-black font-mono text-primary dark:text-white tracking-tight">#{requestNumber}</span>
+                    {!hideStatusOnCard && (
+                      <div className="scale-110 origin-left ml-1">
+                        {getStatusBadge(overallStatus || firstItem.status)}
+                      </div>
+                    )}
+                    {hasMultipleItems && !hideItemCountOnCard && (
                       <Badge variant="outline" className="text-xs px-2.5 py-1 bg-slate-50 text-slate-700 border-slate-200 dark:bg-slate-900/50 dark:text-slate-400 dark:border-slate-700">
                         {items.length} items
                       </Badge>
@@ -699,58 +731,70 @@ export function RequestsTable({
                   </div>
                 </div>
 
-                <div className="text-right space-y-2">
-                  <div>
-                    <div className="text-[10px] text-muted-foreground uppercase tracking-wider font-bold mb-0.5">Required By</div>
-                    <div className="flex items-center justify-end gap-1.5 text-sm font-semibold text-foreground">
-                      <span className={cn(
-                        new Date(firstItem.requiredBy) < new Date() ? "text-red-600" : ""
-                      )}>
-                        {format(new Date(firstItem.requiredBy), "dd MMM, yyyy")}
-                      </span>
-                    </div>
-                  </div>
-
-                  {firstItem.site && (
+                {!minimalDashboardView && (
+                  <div className="text-right space-y-2">
                     <div>
-                      <div className="text-[10px] text-muted-foreground uppercase tracking-wider font-bold mb-0.5">Site Location</div>
-                      <div
-                        className="flex items-center justify-end gap-1.5 text-xs font-medium cursor-pointer hover:text-primary transition-colors group"
-                        title={firstItem.site.name}
-                        onClick={(e) => { e.stopPropagation(); setSelectedSiteId(firstItem.siteId); }}
-                      >
-                        <MapPin className="h-3.5 w-3.5 text-primary/70 group-hover:scale-110 transition-transform" />
-                        <span className="max-w-[120px] truncate group-hover:underline">{firstItem.site.name}</span>
+                      <div className="text-[10px] text-muted-foreground uppercase tracking-wider font-bold mb-0.5">Required By</div>
+                      <div className="flex items-center justify-end gap-1.5 text-sm font-semibold text-foreground">
+                        <span className={cn(
+                          new Date(firstItem.requiredBy) < new Date() ? "text-red-600" : ""
+                        )}>
+                          {format(new Date(firstItem.requiredBy), "dd MMM, yyyy")}
+                        </span>
                       </div>
                     </div>
-                  )}
-                </div>
+
+                    {firstItem.site && (
+                      <div>
+                        <div className="text-[10px] text-muted-foreground uppercase tracking-wider font-bold mb-0.5">Site Location</div>
+                        <div
+                          className="flex items-center justify-end gap-1.5 text-xs font-medium cursor-pointer hover:text-primary transition-colors group"
+                          title={firstItem.site.name}
+                          onClick={(e) => { e.stopPropagation(); setSelectedSiteId(firstItem.siteId); }}
+                        >
+                          <MapPin className="h-3.5 w-3.5 text-primary/70 group-hover:scale-110 transition-transform" />
+                          <span className="max-w-[120px] truncate group-hover:underline">{firstItem.site.name}</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
-              {/* Items List - Always show first item */}
               <div className="space-y-4 mb-4">
-                {/* First Item - No badges in collapsed view */}
-                <div className="p-3.5 rounded-xl border bg-card/60 shadow-sm relative overflow-hidden">
-                  <div className="absolute top-0 left-0 w-1 h-full bg-primary/20"></div>
-                  {renderItemRow(items[0], true, false, items[0].itemOrder ?? items.length)}
+                {/* First Item - Always visible */}
+                <div className={cn("p-3.5 rounded-xl border shadow-md relative overflow-hidden", getItemStatusBgColor(items[0].status))}>
+                  <div className={cn("absolute top-0 left-0 w-1 h-full", getItemStatusBorderColor(items[0].status))}></div>
+                  <div className="pl-2">
+                    {renderItemRow(items[0], true, true, items[0].itemOrder ?? items.length)}
+                  </div>
                 </div>
 
-                {/* Additional Items Area */}
-                {hasMultipleItems ? (
+                {/* Additional Items Logic - Show for all to maintain structure */}
+                {(!minimalDashboardView || hasMultipleItems) && (
                   <div className="space-y-3">
-                    {/* If alwaysExpanded OR isExpanded is true, show the list. */}
-                    {isExpanded ? (
+                    {/* Check if we should show expanded list: 
+                        If minimalDashboardView is TRUE, we want to SHOW ALL ITEMS directly (expanded) 
+                        OR if it's explicitly expanded by user logic.
+                        
+                        Wait, user request says: "sho all itme inside equid ... top onsahbto exiadatd" 
+                        Interpret: Show all items inside request card, expanded on dashboard.
+                     */}
+                    {isExpanded || minimalDashboardView ? (
                       <div className={cn(
                         "space-y-3 animate-in fade-in slide-in-from-top-2 duration-200",
-                        !alwaysExpanded && "pl-3 border-l-2 border-dashed border-border/50"
+                        !alwaysExpanded && !minimalDashboardView && "pl-3 border-l-2 border-dashed border-border/50"
                       )}>
                         {items.slice(1).map((item, idx) => (
-                          <div key={item._id} className="p-3 rounded-lg border bg-muted/20 relative">
-                            {renderItemRow(item, false, true, item.itemOrder ?? (items.length - 1 - idx))}
+                          <div key={item._id} className={cn("p-3 rounded-lg border relative overflow-hidden shadow-md", getItemStatusBgColor(item.status))}>
+                            <div className={cn("absolute top-0 left-0 w-1 h-full", getItemStatusBorderColor(item.status))}></div>
+                            <div className="pl-2">
+                              {renderItemRow(item, false, true, item.itemOrder ?? (items.length - 1 - idx))}
+                            </div>
                           </div>
                         ))}
-                        {/* Only show 'Show Less' button if it's NOT alwaysExpanded */}
-                        {!alwaysExpanded && (
+                        {/* Only show 'Show Less' button if it's NOT alwaysExpanded AND NOT minimalDashboardView */}
+                        {!alwaysExpanded && !minimalDashboardView && (
                           <button
                             onClick={(e) => { e.stopPropagation(); toggleGroup(requestNumber); }}
                             className="w-full py-1 text-xs text-muted-foreground hover:text-foreground flex items-center justify-center gap-1"
@@ -760,38 +804,33 @@ export function RequestsTable({
                         )}
                       </div>
                     ) : (
-                      <button
-                        onClick={(e) => { e.stopPropagation(); toggleGroup(requestNumber); }}
-                        className="w-full py-2 px-3 rounded-lg border border-dashed border-primary/30 bg-primary/5 hover:bg-primary/10 flex items-center justify-center gap-2 text-primary font-medium text-sm transition-colors group"
+                      <Button
+                        variant={hasMultipleItems ? "secondary" : "ghost"}
+                        size="sm"
+                        onClick={(e) => {
+                          if (hasMultipleItems) {
+                            e.stopPropagation();
+                            toggleGroup(requestNumber);
+                          }
+                        }}
+                        disabled={!hasMultipleItems}
+                        className={cn(
+                          "w-full h-8 mt-2 text-xs font-semibold",
+                          !hasMultipleItems && "opacity-50 cursor-default"
+                        )}
                       >
-                        <span className="flex items-center justify-center h-5 w-5 rounded-full bg-primary/20 text-xs font-bold">
-                          +{items.length - 1}
-                        </span>
-                        <span>More Items in this Request...</span>
-                        <ChevronDown className="h-4 w-4 transition-transform group-hover:translate-y-0.5" />
-                      </button>
+                        {hasMultipleItems ? `View All (${items.length}) Items` : "Single Item"}
+                        {hasMultipleItems && <ChevronDown className="h-3.5 w-3.5 ml-1.5" />}
+                      </Button>
                     )}
                   </div>
-                ) : (
-                  // Single item indicator to maintain consistent layout - Hide if alwaysExpanded (Dashboard)
-                  !alwaysExpanded && (
-                    <div className="mt-3 space-y-3">
-                      <button
-                        disabled
-                        className="w-full py-2 px-3 rounded-lg border border-dashed border-muted bg-muted/30 flex items-center justify-center gap-2 text-muted-foreground/70 font-medium text-sm cursor-default opacity-80"
-                      >
-                        <span className="flex items-center justify-center h-5 w-5 rounded-full bg-muted text-xs font-bold text-muted-foreground">1</span>
-                        <span>Only 1 Item in this Request</span>
-                      </button>
-                    </div>
-                  )
                 )}
               </div>
 
               {/* Actions Footer */}
-              <div className="flex items-center justify-between p-3 -mx-4 -mb-4 mt-4 bg-slate-50/80 dark:bg-slate-900/40 border-t border-border/50 rounded-b-xl backdrop-blur-sm">
-                <div className="flex items-center gap-2 pl-1">
-                  <div className="flex items-center gap-3">
+              <div className="flex flex-wrap items-center justify-between gap-2 p-3 -mx-3 sm:-mx-4 -mb-3 sm:-mb-4 mt-3 sm:mt-4 bg-slate-50/80 dark:bg-slate-900/40 border-t border-border/50 rounded-b-xl backdrop-blur-sm">
+                <div className="flex items-center gap-2 pl-0 sm:pl-1 min-w-0 flex-shrink order-1">
+                  <div className="flex items-center gap-2 sm:gap-3 min-w-0">
                     {/* Avatar */}
                     <div
                       className="h-9 w-9 rounded-full bg-gradient-to-br from-white to-slate-100 dark:from-slate-800 dark:to-slate-900 border border-slate-200 dark:border-slate-700 flex items-center justify-center shadow-sm cursor-pointer hover:ring-2 hover:ring-primary/20 transition-all"
@@ -803,25 +842,25 @@ export function RequestsTable({
                       </span>
                     </div>
 
-                    <div className="flex flex-col">
+                    <div className="flex flex-col min-w-0">
                       <span className="text-[10px] uppercase font-bold text-muted-foreground/70 tracking-wider">Created By</span>
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex items-center gap-1.5 min-w-0">
                         {firstItem.creator && (
                           <span
-                            className="text-xs font-bold text-foreground hover:text-primary cursor-pointer transition-colors"
+                            className="text-xs font-bold text-foreground hover:text-primary cursor-pointer transition-colors truncate max-w-[100px] sm:max-w-none"
                             onClick={(e) => { e.stopPropagation(); setSelectedUserId(firstItem.createdBy); }}
                           >
                             {firstItem.creator.fullName}
                           </span>
                         )}
-                        <span className="text-[10px] text-muted-foreground/40">•</span>
-                        <span className="text-xs font-medium text-muted-foreground">{format(new Date(firstItem.createdAt), "dd MMM, hh:mm a")}</span>
+                        <span className="text-[10px] text-muted-foreground/40 hidden sm:inline">•</span>
+                        <span className="text-xs font-medium text-muted-foreground hidden sm:inline">{format(new Date(firstItem.createdAt), "dd MMM, hh:mm a")}</span>
                       </div>
                     </div>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-1.5 pr-1">
+                <div className="flex flex-wrap items-center gap-1 sm:gap-1.5 pr-0 sm:pr-1 order-2 justify-end sm:justify-start ml-auto sm:ml-0">
                   {/* Notes Button */}
                   <Button
                     variant="ghost"
@@ -839,7 +878,8 @@ export function RequestsTable({
                   </Button>
 
                   {/* Draft Actions */}
-                  {(firstItem.status === "draft" || firstItem.status === "rejected" || firstItem.status === "sign_rejected") && (
+                  {/* Show edit buttons only when ALL items are draft, rejected, or sign_rejected */}
+                  {items.every(item => ["draft", "rejected", "sign_rejected"].includes(item.status)) && (
                     <>
                       {onEditDraft && (
                         <Button variant="ghost" size="sm" onClick={() => onEditDraft(requestNumber)} className="h-8 w-8 p-0 rounded-full text-blue-600 hover:bg-blue-50 hover:text-blue-700" title="Edit">
@@ -1053,12 +1093,12 @@ export function RequestsTable({
                               </div>
                               <div className="min-w-0 flex-1">
                                 <div className="flex items-start gap-2">
-                                  <span className="bg-primary/10 text-primary text-[10px] font-black font-mono px-1.5 py-0.5 rounded border border-primary/20 shadow-sm shrink-0 mt-0.5">
+                                  <span className="bg-primary/10 text-primary dark:text-white text-[10px] font-black font-mono px-1.5 py-0.5 rounded border border-primary/20 dark:border-primary/40 shadow-sm shrink-0 mt-0.5">
                                     #{firstItem.itemOrder ?? items.length}
                                   </span>
                                   <button
                                     onClick={(e) => { e.stopPropagation(); setSelectedItemName(firstItem.itemName); }}
-                                    className="font-bold text-sm text-foreground mb-0.5 truncate hover:text-primary hover:underline text-left block w-full leading-tight"
+                                    className="font-bold text-sm text-foreground dark:text-white mb-0.5 truncate hover:text-primary dark:hover:text-primary/90 hover:underline text-left block w-full leading-tight"
                                     title={firstItem.itemName}
                                   >
                                     {firstItem.itemName}
@@ -1198,7 +1238,7 @@ export function RequestsTable({
                                     <span className="text-[10px] uppercase text-muted-foreground font-bold tracking-wider">{item.unit}</span>
                                   </div>
 
-                                  {/* Tags (Urgent & Inventory) */}
+                                  {/* Tags (Urgent Only) */}
                                   <div className="flex flex-col gap-1.5 items-start">
                                     {item.isUrgent && (
                                       <Badge variant="destructive" className="h-5 px-2 text-[10px] gap-1 animate-pulse shadow-sm shadow-red-500/20">
@@ -1206,7 +1246,6 @@ export function RequestsTable({
                                         Urgent
                                       </Badge>
                                     )}
-                                    {getInventoryStatusBadge(item.itemName, item.quantity, item.unit)}
                                   </div>
 
                                   {/* Actions */}

@@ -31,16 +31,24 @@ type RequestStatus =
     | "pending"
     | "approved"
     | "rejected"
+    | "recheck"
     | "ready_for_cc"
     | "cc_rejected"
     | "cc_pending"
     | "cc_approved"
     | "ready_for_po"
+    | "pending_po"
+    | "rejected_po"
+    | "ready_for_delivery"
     | "delivery_stage"
+    | "delivery_processing"
+    | "out_for_delivery"
     | "delivered"
     | "partially_processed"
+    | "direct_po"
     | "sign_pending"
-    | "sign_rejected";
+    | "sign_rejected"
+    | "ordered";
 
 export function ManagerRequestsContent() {
     const [selectedRequestId, setSelectedRequestId] = useState<Id<"requests"> | null>(null);
@@ -54,6 +62,7 @@ export function ManagerRequestsContent() {
     const [inventoryFilter, setInventoryFilter] = useState<string>("all");
     const { viewMode, toggleViewMode } = useViewMode();
 
+    /* Manager View: Shows comprehensive status breakdown */
     const allRequests = useQuery(api.requests.getAllRequests);
 
     // Collect all unique item names from requests to fetch inventory
@@ -256,22 +265,22 @@ export function ManagerRequestsContent() {
     };
 
     // Individual status options for detailed filtering with colors
+    // Individual status options for detailed filtering with colors
     const detailedStatusOptions = [
         { value: "draft", label: "Draft", count: getSmartStatusCount("draft"), color: "text-gray-500" },
         { value: "pending", label: "Pending", count: getSmartStatusCount("pending"), color: "text-amber-600" },
-        { value: "partially_processed", label: "Partially Processed", count: getSmartStatusCount("partially_processed"), color: "text-blue-600" },
-        { value: "approved", label: "Approved", count: getSmartStatusCount("approved"), color: "text-emerald-600" },
+        { value: "rejected", label: "Rejected", count: getSmartStatusCount("rejected"), color: "text-red-600" },
+        { value: "recheck", label: "Recheck", count: getSmartStatusCount("recheck"), color: "text-indigo-600" },
         { value: "ready_for_cc", label: "Ready for CC", count: getSmartStatusCount("ready_for_cc"), color: "text-indigo-600" },
         { value: "cc_pending", label: "CC Pending", count: getSmartStatusCount("cc_pending"), color: "text-purple-600" },
-        { value: "cc_approved", label: "CC Approved", count: getSmartStatusCount("cc_approved"), color: "text-green-600" },
+        { value: "cc_rejected", label: "CC Rejected", count: getSmartStatusCount("cc_rejected"), color: "text-red-500" },
         { value: "ready_for_po", label: "Ready for PO", count: getSmartStatusCount("ready_for_po"), color: "text-teal-600" },
+        { value: "sign_pending", label: "Sign Pending", count: getSmartStatusCount("sign_pending"), color: "text-amber-600" },
+        { value: "sign_rejected", label: "Sign Rejected", count: getSmartStatusCount("sign_rejected"), color: "text-red-600" },
+        { value: "pending_po", label: "Pending PO", count: getSmartStatusCount("pending_po"), color: "text-orange-600" },
         { value: "ready_for_delivery", label: "Ready for Delivery", count: getSmartStatusCount("ready_for_delivery"), color: "text-indigo-600" },
         { value: "delivery_processing", label: "Out for Delivery", count: getSmartStatusCount("delivery_processing"), color: "text-blue-600" },
         { value: "delivered", label: "Delivered", count: getSmartStatusCount("delivered"), color: "text-sky-600" },
-        { value: "rejected", label: "Rejected", count: getSmartStatusCount("rejected"), color: "text-red-600" },
-        { value: "cc_rejected", label: "CC Rejected", count: getSmartStatusCount("cc_rejected"), color: "text-red-500" },
-        { value: "sign_pending", label: "Sign Pending", count: getSmartStatusCount("sign_pending"), color: "text-amber-600" },
-        { value: "sign_rejected", label: "Sign Rejected", count: getSmartStatusCount("sign_rejected"), color: "text-red-600" },
     ];
 
     return (
@@ -439,6 +448,7 @@ export function ManagerRequestsContent() {
                     }}
                     showCreator={true}
                     viewMode={viewMode}
+                    preciseStatuses={true}
                 />
             </div>
 

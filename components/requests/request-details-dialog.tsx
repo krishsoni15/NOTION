@@ -45,10 +45,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Separator } from "@/components/ui/separator";
-import { AlertCircle, CheckCircle, XCircle, Package, ShoppingCart, MapPin, PackageX, Sparkles, FileText, PieChart, LayoutGrid, List, Edit, Image as ImageIcon, Calendar, Clock, Check } from "lucide-react";
+import { AlertCircle, CheckCircle, XCircle, Package, ShoppingCart, MapPin, PackageX, Sparkles, FileText, PieChart, LayoutGrid, List, Edit, Image as ImageIcon, Calendar, Clock, Check, Send, NotebookPen, Loader2, Truck, Pencil } from "lucide-react";
 import { useUserRole } from "@/hooks/use-user-role";
-import { CompactImageGallery } from "@/components/ui/image-gallery";
 import { ROLES } from "@/lib/auth/roles";
+import { CompactImageGallery } from "@/components/ui/image-gallery";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { UserInfoDialog } from "./user-info-dialog";
@@ -58,6 +58,7 @@ import { NotesTimelineDialog } from "./notes-timeline-dialog";
 import { PDFPreviewDialog } from "@/components/purchase/pdf-preview-dialog";
 import { EditPOQuantityDialog } from "@/components/purchase/edit-po-quantity-dialog";
 import { ExpandableText } from "@/components/ui/expandable-text";
+import { DirectPODialog, type DirectPOInitialData } from "@/components/purchase/direct-po-dialog";
 import type { Id } from "@/convex/_generated/dataModel";
 
 interface RequestDetailsDialogProps {
@@ -152,6 +153,34 @@ export function RequestDetailsDialog({
   const [editQuantityItem, setEditQuantityItem] = useState<{ id: Id<"requests">; quantity: number; name: string; unit: string } | null>(null);
   const [viewMode, setViewMode] = useState<"table" | "card">("table");
   const hasRefreshedRef = useRef(false);
+
+  // PO Creation
+  const [showDirectPODialog, setShowDirectPODialog] = useState(false);
+  const [directPOInitialData, setDirectPOInitialData] = useState<DirectPOInitialData | null>(null);
+
+  // Note handling
+  const [newNote, setNewNote] = useState("");
+  const [isSubmittingNote, setIsSubmittingNote] = useState(false);
+  const addNote = useMutation(api.notes.addNote);
+
+  const handleAddNote = async () => {
+    if (!newNote.trim() || !request?.requestNumber) return;
+
+    setIsSubmittingNote(true);
+    try {
+      await addNote({
+        requestNumber: request.requestNumber,
+        content: newNote.trim()
+      });
+      setNewNote("");
+      toast.success("Note added");
+    } catch (error) {
+      toast.error("Failed to add note");
+      console.error(error);
+    } finally {
+      setIsSubmittingNote(false);
+    }
+  };
 
   // Helper function to collect photos from both photo and photos fields
   const getItemPhotos = (item: any) => {
@@ -291,6 +320,8 @@ export function RequestDetailsDialog({
     );
   };
 
+
+
   const isManager = userRole === ROLES.MANAGER;
   const isSiteEngineer = userRole === ROLES.SITE_ENGINEER;
   const isPurchaseOfficer = userRole === ROLES.PURCHASE_OFFICER;
@@ -300,14 +331,19 @@ export function RequestDetailsDialog({
   // Simplified mobile-first layout for site engineers
   const isMobileLayout = isSiteEngineer;
 
+  // Manager permissions based on pending items or ability to modify existing items
+  const canManagerModifyStatus = (status: string) => {
+    return ["pending", "approved", "recheck", "ready_for_cc", "cc_pending", "cc_approved", "ready_for_po", "pending_po", "sign_pending", "sign_rejected", "rejected_po", "ordered", "partially_processed", "direct_po"].includes(status);
+  };
+
   // Get pending items for manager actions
   const pendingItems = allRequests?.filter((item) => item.status === "pending") || [];
   const signPendingItems = allRequests?.filter((item) => item.status === "sign_pending" || item.status === "sign_rejected") || [];
   const hasMultiplePendingItems = pendingItems.length > 1;
 
   // Manager permissions based on pending items
-  const canApprove = isManager && pendingItems.length > 0;
-  const canReject = isManager && pendingItems.length > 0;
+  const canApprove = isManager && (pendingItems.length > 0 || selectedItemsForAction.size > 0);
+  const canReject = isManager && (pendingItems.length > 0 || selectedItemsForAction.size > 0);
 
   // Check if all items in the request have the same status
   const allItemsHaveSameStatus = allRequests && allRequests.length > 0
@@ -841,69 +877,139 @@ export function RequestDetailsDialog({
   }
 
   const getStatusBadge = (status: string) => {
-    // Grouping Logic strictly based on user requirements
+    // 1. Manager View - Detailed Statuses
+    if (userRole === ROLES.MANAGER || userRole === ROLES.PURCHASE_OFFICER) {
+      if (status === "draft") {
+        return (
+          <Badge variant="outline" className="bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-900/50 dark:text-slate-400 dark:border-slate-800 gap-2 pl-2 pr-2.5 shadow-sm">
+            <div className="h-2 w-2 rounded-full bg-slate-500" />
+            Draft
+          </Badge>
+        );
+      }
+      if (status === "pending") {
+        return (
+          <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/50 dark:text-amber-400 dark:border-amber-800 gap-2 pl-2 pr-2.5 shadow-sm">
+            <div className="h-2 w-2 rounded-full bg-amber-500 animate-pulse" />
+            Pending Approval
+          </Badge>
+        );
+      }
+      if (status === "rejected") {
+        return (
+          <Badge variant="outline" className="bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/50 dark:text-rose-400 dark:border-rose-800 gap-2 pl-2 pr-2.5 shadow-sm">
+            <div className="h-2 w-2 rounded-full bg-rose-500" />
+            Rejected
+          </Badge>
+        );
+      }
+      if (status === "recheck") return <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-950/50 dark:text-indigo-400 dark:border-indigo-800 gap-1.5 pl-1.5 pr-2.5">Recheck</Badge>;
+      if (status === "ready_for_cc") return <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/50 dark:text-blue-400 dark:border-blue-800 gap-1.5 pl-1.5 pr-2.5">Ready for CC</Badge>;
+      if (status === "cc_pending") return <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/50 dark:text-purple-400 dark:border-purple-800 gap-1.5 pl-1.5 pr-2.5">CC Pending</Badge>;
+      if (status === "cc_rejected") return <Badge variant="outline" className="bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/50 dark:text-rose-400 dark:border-rose-800 gap-1.5 pl-1.5 pr-2.5">CC Rejected</Badge>;
+      if (status === "ready_for_po") return <Badge variant="outline" className="bg-teal-50 text-teal-700 border-teal-200 dark:bg-teal-950/50 dark:text-teal-400 dark:border-teal-800 gap-1.5 pl-1.5 pr-2.5">Ready for PO</Badge>;
+      if (status === "sign_pending") return <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/50 dark:text-amber-400 dark:border-amber-800 gap-1.5 pl-1.5 pr-2.5">Sign Pending</Badge>;
+      if (status === "sign_rejected") return <Badge variant="outline" className="bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/50 dark:text-rose-400 dark:border-rose-800 gap-1.5 pl-1.5 pr-2.5">Sign Rejected</Badge>;
+      if (status === "pending_po") return <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-950/50 dark:text-orange-400 dark:border-orange-800 gap-1.5 pl-1.5 pr-2.5">Pending PO</Badge>;
+      if (status === "ready_for_delivery") return <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-400 dark:border-emerald-800 gap-1.5 pl-1.5 pr-2.5">Ready for Delivery</Badge>;
 
-    // 1. Draft
+      if (status === "out_for_delivery") {
+        return (
+          <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-950/50 dark:text-orange-400 dark:border-orange-800 gap-2 pl-2 pr-2.5 shadow-sm">
+            <div className="h-2 w-2 rounded-full bg-orange-500 animate-pulse" />
+            Out for Delivery
+          </Badge>
+        );
+      }
+      if (status === "delivered") {
+        return (
+          <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-400 dark:border-emerald-800 gap-2 pl-2 pr-2.5 shadow-sm">
+            <div className="h-2 w-2 rounded-full bg-emerald-500" />
+            Delivered
+          </Badge>
+        );
+      }
+
+      // Handle legacy/extra statuses that might exist in the database
+      if (status === "approved") return <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-400 dark:border-emerald-800 gap-1.5 pl-1.5 pr-2.5">Recheck</Badge>;
+      if (status === "cc_approved") return <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 dark:bg-green-950/50 dark:text-green-400 dark:border-green-800 gap-1.5 pl-1.5 pr-2.5">Ready for PO</Badge>;
+      if (status === "direct_po") return <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-950/50 dark:text-orange-400 dark:border-orange-800 gap-1.5 pl-1.5 pr-2.5">Pending PO</Badge>;
+      if (status === "ordered") return <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-400 dark:border-emerald-800 gap-1.5 pl-1.5 pr-2.5">Ready for Delivery</Badge>;
+      if (status === "partially_processed") return <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-200 dark:bg-yellow-950/50 dark:text-yellow-400 dark:border-yellow-800 gap-1.5 pl-1.5 pr-2.5">Ready for Delivery</Badge>;
+      if (status === "delivery_stage" || status === "delivery_processing") {
+        return (
+          <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-950/50 dark:text-orange-400 dark:border-orange-800 gap-2 pl-2 pr-2.5 shadow-sm">
+            <div className="h-2 w-2 rounded-full bg-orange-500 animate-pulse" />
+            Out for Delivery
+          </Badge>
+        );
+      }
+      if (status === "rejected_po" || status === "po_rejected") return <Badge variant="outline" className="bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/50 dark:text-rose-400 dark:border-rose-800 gap-1.5 pl-1.5 pr-2.5">Sign Rejected</Badge>;
+      if (status === "recheck_requested") return <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-950/50 dark:text-indigo-400 dark:border-indigo-800 gap-1.5 pl-1.5 pr-2.5">Recheck</Badge>;
+
+      // Fallback for unknown statuses
+      return <Badge variant="outline" className="gap-1.5">{status}</Badge>;
+    }
+
+    // 2. Simplified View (Site Engineer) - 6 Main Categories
+    // 1. DRAFT
     if (status === "draft") {
       return (
-        <Badge variant="outline" className="bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-900/50 dark:text-slate-400 dark:border-slate-800 gap-2 pl-2 pr-2.5 shadow-sm">
-          <div className="h-2 w-2 rounded-full bg-slate-500" />
+        <Badge variant="outline" className="bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-900/50 dark:text-slate-400 dark:border-slate-800 gap-1.5 pl-1.5 pr-2.5">
+          <Pencil className="h-3.5 w-3.5" />
           Draft
         </Badge>
       );
     }
 
-    // 2. Pending (Includes Sign Pending)
-    if (["pending", "sign_pending"].includes(status)) {
+    // 2. PENDING (Only "pending")
+    if (status === "pending") {
       return (
-        <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/50 dark:text-amber-400 dark:border-amber-800 gap-2 pl-2 pr-2.5 shadow-sm">
-          <div className="h-2 w-2 rounded-full bg-amber-500 animate-pulse" />
-          Pending
+        <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/50 dark:text-amber-400 dark:border-amber-800 gap-1.5 pl-1.5 pr-2.5">
+          <Clock className="h-3.5 w-3.5" />
+          Pending Approval
         </Badge>
       );
     }
 
-    // 3. Rejected (Includes Sign Rejected and potential future rejection states)
-    if (["rejected", "sign_rejected", "cc_rejected", "po_rejected"].includes(status)) {
+    // 3. REJECTED (Only "rejected")
+    if (status === "rejected") {
       return (
-        <Badge variant="outline" className="bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/50 dark:text-rose-400 dark:border-rose-800 gap-2 pl-2 pr-2.5 shadow-sm">
-          <div className="h-2 w-2 rounded-full bg-rose-500" />
+        <Badge variant="outline" className="bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/50 dark:text-rose-400 dark:border-rose-800 gap-1.5 pl-1.5 pr-2.5">
+          <XCircle className="h-3.5 w-3.5" />
           Rejected
         </Badge>
       );
     }
 
-    // 4. Approved & Under Process (Includes ALL intermediate steps from Approval to Delivery)
-    if (["approved", "cc_pending", "ready_for_cc", "cc_approved", "pending_po", "ready_for_po", "ordered", "partially_processed", "direct_po", "ready_for_delivery", "recheck", "recheck_requested"].includes(status)) {
+    // 5. OUT FOR DELIVERY
+    if (status === "out_for_delivery") {
       return (
-        <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/50 dark:text-blue-400 dark:border-blue-800 gap-2 pl-2 pr-2.5 shadow-sm">
-          <div className="h-2 w-2 rounded-full bg-blue-500" />
-          Approved & Under Process
-        </Badge>
-      );
-    }
-
-    // 5. Out for Delivery
-    if (["delivery_processing", "delivery_stage", "out_for_delivery"].includes(status)) {
-      return (
-        <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-950/50 dark:text-orange-400 dark:border-orange-800 gap-2 pl-2 pr-2.5 shadow-sm">
-          <div className="h-2 w-2 rounded-full bg-orange-500 animate-pulse" />
+        <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-950/50 dark:text-orange-400 dark:border-orange-800 gap-1.5 pl-1.5 pr-2.5">
+          <Truck className="h-3.5 w-3.5" />
           Out for Delivery
         </Badge>
       );
     }
 
-    // 6. Delivered
+    // 6. DELIVERED
     if (status === "delivered") {
       return (
-        <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-400 dark:border-emerald-800 gap-2 pl-2 pr-2.5 shadow-sm">
-          <div className="h-2 w-2 rounded-full bg-emerald-500" />
+        <Badge variant="outline" className="bg-teal-50 text-teal-700 border-teal-200 dark:bg-teal-950/50 dark:text-teal-400 dark:border-teal-800 gap-1.5 pl-1.5 pr-2.5">
+          <Package className="h-3.5 w-3.5" />
           Delivered
         </Badge>
       );
     }
 
-    return <Badge variant="outline" className="gap-1.5">{status}</Badge>;
+    // 4. APPROVED & PROCESSING (All other statuses)
+    // Maps: recheck, ready_for_cc, cc_pending, cc_rejected, ready_for_po, sign_pending, sign_rejected, pending_po, ready_for_delivery
+    return (
+      <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-950/50 dark:text-indigo-400 dark:border-indigo-800 gap-1.5 pl-1.5 pr-2.5">
+        <Loader2 className="h-3.5 w-3.5" />
+        Approved & Processing
+      </Badge>
+    );
   };
 
   // Batch Process Dialog helper
@@ -1296,43 +1402,7 @@ export function RequestDetailsDialog({
                   </div>
                 )}
 
-                {/* Order Notes Section - Always Visible */}
-                <div className="mt-4 mb-2 p-3 sm:p-4 rounded-lg bg-gradient-to-br from-yellow-50/80 to-yellow-50/40 border border-yellow-200/60 dark:from-yellow-900/10 dark:to-yellow-900/5 dark:border-yellow-900/20 shadow-sm">
-                  <div className="flex items-center justify-between mb-2">
-                    <Label className="text-xs font-bold text-yellow-700 dark:text-yellow-500 uppercase tracking-wider flex items-center gap-1.5">
-                      <FileText className="h-3.5 w-3.5" />
-                      Notes & Timeline
-                    </Label>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-6 text-xs text-yellow-700 hover:text-yellow-800 hover:bg-yellow-100/50 dark:text-yellow-500 dark:hover:text-yellow-400 dark:hover:bg-yellow-900/30"
-                      onClick={() => setShowNotesTimeline(true)}
-                    >
-                      View All ({notes?.length || 0})
-                    </Button>
-                  </div>
 
-                  {latestNote ? (
-                    <div className="pl-0.5">
-                      <p className="text-sm font-medium text-foreground/90 whitespace-pre-wrap leading-relaxed line-clamp-3">
-                        {latestNote.content}
-                      </p>
-                      <p className="text-[10px] text-muted-foreground mt-2 flex items-center gap-1">
-                        <span className="w-1 h-1 rounded-full bg-muted-foreground/30" />
-                        Added by {latestNote.userName} on {format(new Date(latestNote.createdAt), "MMM d, h:mm a")}
-                      </p>
-                    </div>
-                  ) : (
-                    <div className="pl-0.5">
-                      <p className="text-sm text-muted-foreground italic">
-                        No notes yet. Click "View All" to add one.
-                      </p>
-                    </div>
-                  )}
-                </div>
-
-                <Separator />
 
 
                 {/* Request Images Gallery - Hidden for Managers */}
@@ -1392,11 +1462,10 @@ export function RequestDetailsDialog({
                           <TableHeader>
                             <TableRow className="bg-muted/40 hover:bg-muted/40 border-b">
                               <TableHead className="w-[40px] text-center p-2"></TableHead>
-                              <TableHead className="w-[50px] text-center p-2 font-bold text-xs uppercase tracking-wider text-muted-foreground">#</TableHead>
                               <TableHead className="min-w-[300px] font-bold text-xs uppercase tracking-wider text-muted-foreground">Item Details</TableHead>
                               <TableHead className="font-bold text-xs uppercase tracking-wider text-muted-foreground">Quantity</TableHead>
                               <TableHead className="w-[140px] font-bold text-xs uppercase tracking-wider text-muted-foreground">Status</TableHead>
-                              {isManager && (pendingItems.length > 0 || signPendingItems.length > 0) ? (
+                              {isManager && (pendingItems.length > 0 || signPendingItems.length > 0 || (allRequests && allRequests.some(i => canManagerModifyStatus(i.status)))) || (isPurchaseOfficer && (allRequests && allRequests.some(i => ["pending_po", "direct_po", "ready_for_po"].includes(i.status)))) ? (
                                 <TableHead className="min-w-[300px] text-right font-bold text-xs uppercase tracking-wider text-muted-foreground">Actions</TableHead>
                               ) : (
                                 <TableHead className="hidden"></TableHead>
@@ -1447,7 +1516,7 @@ export function RequestDetailsDialog({
                                           item.status === "delivered" && "bg-emerald-500",
                                           (["rejected", "sign_rejected", "cc_rejected", "po_rejected"].includes(item.status)) && "bg-rose-500"
                                         )} />
-                                        {isPending && isManager && (
+                                        {isManager && isPending && (
                                           <Checkbox
                                             checked={isSelected}
                                             onCheckedChange={() => toggleItemSelection(item._id)}
@@ -1456,13 +1525,6 @@ export function RequestDetailsDialog({
                                         )}
                                       </TableCell>
 
-                                      <TableCell className="p-2 text-center">
-                                        <div className="inline-flex items-center justify-center w-9 h-7 rounded-md bg-muted/40 border border-border/40 shadow-sm">
-                                          <span className="text-xs font-bold text-muted-foreground">
-                                            {String(displayNumber).padStart(2, '0')}
-                                          </span>
-                                        </div>
-                                      </TableCell>
                                       <TableCell className="py-3">
                                         <div className="flex items-start gap-4">
                                           <div className="flex-shrink-0 mt-0.5" onClick={(e) => e.stopPropagation()}>
@@ -1488,7 +1550,7 @@ export function RequestDetailsDialog({
                                                   e.stopPropagation();
                                                   setSelectedItemName(item.itemName);
                                                 }}
-                                                className="font-semibold text-base text-left hover:text-primary transition-colors focus:outline-none leading-tight"
+                                                className="font-semibold text-base text-left hover:text-primary dark:hover:text-primary transition-colors focus:outline-none leading-tight"
                                               >
                                                 {item.itemName}
                                               </button>
@@ -1528,7 +1590,7 @@ export function RequestDetailsDialog({
                                           {getStatusBadge(item.status)}
                                         </div>
                                       </TableCell>
-                                      {(isManager && (isPending || item.status === "sign_pending" || item.status === "cc_pending")) || (isPurchaseOfficer && item.status === "pending_po") ? (
+                                      {(isManager && (isPending || item.status === "sign_pending" || item.status === "cc_pending" || canManagerModifyStatus(item.status))) || (isPurchaseOfficer && ["pending_po", "direct_po", "ready_for_po"].includes(item.status)) ? (
                                         <TableCell className="text-right p-2 align-middle">
                                           <div className="flex items-center justify-end gap-2">
                                             {item.status === "sign_pending" || item.status === "sign_rejected" ? (
@@ -1592,71 +1654,113 @@ export function RequestDetailsDialog({
                                                   const isSplitSelected = itemIntents[item._id]?.includes("split");
 
                                                   return (
-                                                    <div className="flex items-center gap-3">
+                                                    <div className="flex items-center gap-2">
                                                       {/* Direct Delivery Checkbox */}
-                                                      {stock > 0 && !isPartial && (
-                                                        <div
-                                                          onClick={(e) => { e.stopPropagation(); toggleIntent(item._id, "direct_delivery"); }}
-                                                          className={cn(
-                                                            "flex items-center gap-2 px-2 py-1 rounded border cursor-pointer transition-all select-none",
-                                                            isDirectDeliverySelected
-                                                              ? "bg-purple-600 border-purple-600 text-white shadow-sm"
-                                                              : "bg-transparent border-purple-200 text-purple-700 hover:bg-purple-50"
-                                                          )}
-                                                        >
-                                                          <div className={cn(
-                                                            "h-3.5 w-3.5 rounded-sm border flex items-center justify-center bg-white",
-                                                            isDirectDeliverySelected ? "border-white" : "border-purple-300"
-                                                          )}>
-                                                            {isDirectDeliverySelected && <Check className="h-2.5 w-2.5 text-purple-600" />}
-                                                          </div>
-                                                          <span className="text-[11px] font-bold uppercase tracking-tight">Direct Delivery</span>
+                                                      <div
+                                                        onClick={(e) => {
+                                                          if (stock >= item.quantity) {
+                                                            e.stopPropagation();
+                                                            if (isPending) {
+                                                              toggleIntent(item._id, "direct_delivery");
+                                                            } else {
+                                                              // Immediate action for post-approval
+                                                              setShowItemDirectDeliveryConfirm(item._id);
+                                                            }
+                                                          }
+                                                        }}
+                                                        className={cn(
+                                                          "flex items-center gap-2 px-3 py-1.5 rounded-md border transition-all select-none",
+                                                          stock >= item.quantity
+                                                            ? "cursor-pointer hover:shadow-sm"
+                                                            : "cursor-not-allowed opacity-40 grayscale",
+                                                          isDirectDeliverySelected && stock >= item.quantity
+                                                            ? "bg-purple-600 border-purple-600 text-white shadow-sm hover:bg-purple-700"
+                                                            : stock >= item.quantity
+                                                              ? "bg-white dark:bg-slate-800 border-purple-300 dark:border-purple-700 text-purple-700 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-950/30"
+                                                              : "border-slate-200 dark:border-slate-700 text-slate-400 dark:text-slate-600 bg-slate-50 dark:bg-slate-900"
+                                                        )}
+                                                        title={stock >= item.quantity ? "Mark for Direct Delivery" : "Not enough stock"}
+                                                      >
+                                                        <div className={cn(
+                                                          "h-3.5 w-3.5 rounded border-2 flex items-center justify-center transition-colors",
+                                                          isDirectDeliverySelected && stock >= item.quantity ? "border-white bg-white" : "border-current bg-transparent"
+                                                        )}>
+                                                          {isDirectDeliverySelected && stock >= item.quantity && <Check className="h-2.5 w-2.5 text-purple-600" strokeWidth={3} />}
                                                         </div>
-                                                      )}
+                                                        <span className="text-[10px] font-semibold uppercase tracking-wide">Direct Delivery</span>
+                                                      </div>
 
                                                       {/* Split Checkbox */}
-                                                      {isPartial && (
-                                                        <div
-                                                          onClick={(e) => { e.stopPropagation(); toggleIntent(item._id, "split"); }}
-                                                          className={cn(
-                                                            "flex items-center gap-2 px-2 py-1 rounded border cursor-pointer transition-all select-none",
-                                                            isSplitSelected
-                                                              ? "bg-indigo-600 border-indigo-600 text-white shadow-sm"
-                                                              : "bg-transparent border-indigo-200 text-indigo-700 hover:bg-indigo-50"
-                                                          )}
-                                                        >
-                                                          <div className={cn(
-                                                            "h-3.5 w-3.5 rounded-sm border flex items-center justify-center bg-white",
-                                                            isSplitSelected ? "border-white" : "border-indigo-300"
-                                                          )}>
-                                                            {isSplitSelected && <Check className="h-2.5 w-2.5 text-indigo-600" />}
-                                                          </div>
-                                                          <span className="text-[11px] font-bold uppercase tracking-tight">Split</span>
-                                                        </div>
-                                                      )}
-
-                                                      {/* Direct PO Checkbox - Always or when no full stock */}
                                                       <div
-                                                        onClick={(e) => { e.stopPropagation(); toggleIntent(item._id, "direct_po"); }}
+                                                        onClick={(e) => {
+                                                          if (isPartial) {
+                                                            e.stopPropagation();
+                                                            if (isPending) {
+                                                              toggleIntent(item._id, "split");
+                                                            } else {
+                                                              // Immediate action for split/recheck
+                                                              handleItemApprove(item._id); // This will handle split logic based on intent, but we need intent first. 
+                                                              // Actually for immediate split, we just call updateStatus to recheck directly.
+                                                              // Let's use a simpler approach: Just direct call for recheck/split
+                                                              updateStatus({
+                                                                requestId: item._id,
+                                                                status: "recheck",
+                                                              });
+                                                              toast.info("Item marked for Recheck/Split");
+                                                            }
+                                                          }
+                                                        }}
                                                         className={cn(
-                                                          "flex items-center gap-2 px-2 py-1 rounded border cursor-pointer transition-all select-none",
+                                                          "flex items-center gap-2 px-3 py-1.5 rounded-md border transition-all select-none",
+                                                          isPartial
+                                                            ? "cursor-pointer hover:shadow-sm"
+                                                            : "cursor-not-allowed opacity-40 grayscale",
+                                                          isSplitSelected && isPartial
+                                                            ? "bg-slate-600 dark:bg-slate-500 border-slate-600 dark:border-slate-500 text-white shadow-sm hover:bg-slate-700 dark:hover:bg-slate-600"
+                                                            : isPartial
+                                                              ? "bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700/50"
+                                                              : "border-slate-200 dark:border-slate-700 text-slate-400 dark:text-slate-600 bg-slate-50 dark:bg-slate-900"
+                                                        )}
+                                                        title={isPartial ? "Mark for Split" : "Partial stock required for split"}
+                                                      >
+                                                        <div className={cn(
+                                                          "h-3.5 w-3.5 rounded border-2 flex items-center justify-center transition-colors",
+                                                          isSplitSelected && isPartial ? "border-white bg-white" : "border-current bg-transparent"
+                                                        )}>
+                                                          {isSplitSelected && isPartial && <Check className="h-2.5 w-2.5 text-slate-600" strokeWidth={3} />}
+                                                        </div>
+                                                        <span className="text-[10px] font-semibold uppercase tracking-wide">Split</span>
+                                                      </div>
+
+                                                      <div
+                                                        onClick={(e) => {
+                                                          e.stopPropagation();
+                                                          if (isPending) {
+                                                            toggleIntent(item._id, "direct_po");
+                                                          } else {
+                                                            // Immediate action confirmation
+                                                            setShowItemDirectPOConfirm(item._id);
+                                                          }
+                                                        }}
+                                                        className={cn(
+                                                          "flex items-center gap-2 px-3 py-1.5 rounded-md border cursor-pointer transition-all select-none hover:shadow-sm",
                                                           isDirectPOSelected
-                                                            ? "bg-orange-600 border-orange-600 text-white shadow-sm"
-                                                            : "bg-transparent border-orange-200 text-orange-700 hover:bg-orange-50"
+                                                            ? "bg-orange-600 border-orange-600 text-white shadow-sm hover:bg-orange-700"
+                                                            : "bg-white dark:bg-slate-800 border-orange-300 dark:border-orange-700 text-orange-700 dark:text-orange-400 hover:bg-orange-50 dark:hover:bg-orange-950/30"
                                                         )}
                                                       >
                                                         <div className={cn(
-                                                          "h-3.5 w-3.5 rounded-sm border flex items-center justify-center bg-white",
-                                                          isDirectPOSelected ? "border-white" : "border-orange-300"
+                                                          "h-3.5 w-3.5 rounded border-2 flex items-center justify-center transition-colors",
+                                                          isDirectPOSelected ? "border-white bg-white" : "border-current bg-transparent"
                                                         )}>
-                                                          {isDirectPOSelected && <Check className="h-2.5 w-2.5 text-orange-600" />}
+                                                          {isDirectPOSelected && <Check className="h-2.5 w-2.5 text-orange-600" strokeWidth={3} />}
                                                         </div>
-                                                        <span className="text-[11px] font-bold uppercase tracking-tight">Direct PO</span>
+                                                        <span className="text-[10px] font-semibold uppercase tracking-wide">Direct PO</span>
                                                       </div>
                                                     </div>
                                                   );
                                                 })()}
-                                                {isPurchaseOfficer && item.status === "pending_po" && (
+                                                {isPurchaseOfficer && ["pending_po", "direct_po", "ready_for_po"].includes(item.status) && (
                                                   <Button
                                                     variant="outline"
                                                     size="sm"
@@ -1676,8 +1780,40 @@ export function RequestDetailsDialog({
                                                     Edit Qty
                                                   </Button>
                                                 )}
+
+                                                {/* Create PO Button for Purchase Officer */}
+                                                {isPurchaseOfficer && ["direct_po", "ready_for_po", "pending_po"].includes(item.status) && (
+                                                  <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    className="h-8 border-blue-200 text-blue-700 hover:bg-blue-50 hover:text-blue-800"
+                                                    title="Create PO"
+                                                    onClick={(e) => {
+                                                      e.stopPropagation();
+                                                      // Prepare initial data
+                                                      setDirectPOInitialData({
+                                                        requestNumber: request?.requestNumber,
+                                                        deliverySiteId: request?.site?._id,
+                                                        deliverySiteName: request?.site?.name,
+                                                        items: [{
+                                                          requestId: item._id,
+                                                          itemDescription: item.itemName,
+                                                          description: item.description,
+                                                          quantity: item.quantity,
+                                                          unit: item.unit,
+                                                          unitPrice: 0,
+                                                        }]
+                                                      });
+                                                      setShowDirectPODialog(true);
+                                                    }}
+                                                  >
+                                                    <ShoppingCart className="h-4 w-4 mr-1.5" />
+                                                    Create PO
+                                                  </Button>
+                                                )}
                                               </>
-                                            )}
+                                            )
+                                            }
                                           </div>
                                         </TableCell>
                                       ) : (
@@ -1785,26 +1921,26 @@ export function RequestDetailsDialog({
                                         </div>
                                       )}
                                     </div>
-                                    <div className="absolute -top-3 -left-2 bg-background shadow-sm border px-2 py-0.5 rounded-md z-10 w-max pointer-events-none ring-1 ring-black/5">
-                                      <span className="text-[10px] font-bold uppercase tracking-widest whitespace-nowrap text-foreground/70">
-                                        Item {String(displayNumber).padStart(2, '0')}
-                                      </span>
-                                    </div>
                                   </div>
 
                                   {/* Content Container */}
                                   <div className="min-w-0 flex-1 flex flex-col justify-between h-full space-y-3 pt-3">
                                     <div className="flex items-start justify-between gap-3">
-                                      <h4
-                                        className="font-bold text-lg leading-snug text-foreground hover:text-primary transition-colors cursor-pointer line-clamp-2"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          setSelectedItemName(item.itemName);
-                                        }}
-                                        title={item.itemName}
-                                      >
-                                        {item.itemName}
-                                      </h4>
+                                      <div className="flex items-start gap-2">
+                                        <span className="bg-primary/10 text-primary text-[10px] font-black font-mono px-1.5 py-0.5 rounded border border-primary/20 shadow-sm shrink-0 mt-0.5">
+                                          #{idx + 1}
+                                        </span>
+                                        <h4
+                                          className="font-bold text-lg leading-snug text-foreground hover:text-primary dark:hover:text-primary transition-colors cursor-pointer line-clamp-2"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setSelectedItemName(item.itemName);
+                                          }}
+                                          title={item.itemName}
+                                        >
+                                          {item.itemName}
+                                        </h4>
+                                      </div>
                                     </div>
                                     <div className="text-xs text-muted-foreground bg-background/50 p-2 rounded-md border border-transparent hover:border-border/30 transition-colors">
                                       <ExpandableText text={item.description || "No description available."} className="text-xs text-muted-foreground" limit={60} />
@@ -1903,46 +2039,64 @@ export function RequestDetailsDialog({
                                           return (
                                             <div className="flex flex-wrap gap-2">
                                               {/* Direct Delivery Checkbox */}
-                                              {stock > 0 && !isPartial && (
-                                                <div
-                                                  onClick={(e) => { e.stopPropagation(); toggleIntent(item._id, "direct_delivery"); }}
-                                                  className={cn(
-                                                    "flex items-center gap-2 px-2 py-1 rounded border cursor-pointer transition-all select-none",
-                                                    isDirectDeliverySelected
-                                                      ? "bg-purple-600 border-purple-600 text-white shadow-sm"
-                                                      : "bg-transparent border-purple-200 text-purple-700 hover:bg-purple-50"
-                                                  )}
-                                                >
-                                                  <div className={cn(
-                                                    "h-3.5 w-3.5 rounded-sm border flex items-center justify-center bg-white",
-                                                    isDirectDeliverySelected ? "border-white" : "border-purple-300"
-                                                  )}>
-                                                    {isDirectDeliverySelected && <Check className="h-2.5 w-2.5 text-purple-600" />}
-                                                  </div>
-                                                  <span className="text-[10px] font-bold uppercase tracking-tight">Direct Delivery</span>
+                                              <div
+                                                onClick={(e) => {
+                                                  if (stock >= item.quantity) {
+                                                    e.stopPropagation();
+                                                    toggleIntent(item._id, "direct_delivery");
+                                                  }
+                                                }}
+                                                className={cn(
+                                                  "flex items-center gap-2 px-2 py-1 rounded border transition-all select-none",
+                                                  stock >= item.quantity
+                                                    ? "cursor-pointer"
+                                                    : "cursor-not-allowed opacity-50 grayscale bg-muted/30",
+                                                  isDirectDeliverySelected && stock >= item.quantity
+                                                    ? "bg-purple-600 border-purple-600 text-white shadow-sm"
+                                                    : stock >= item.quantity
+                                                      ? "bg-transparent border-purple-200 text-purple-700 hover:bg-purple-50"
+                                                      : "border-slate-200 text-slate-400"
+                                                )}
+                                                title={stock >= item.quantity ? "Mark for Direct Delivery" : "Not enough stock"}
+                                              >
+                                                <div className={cn(
+                                                  "h-3.5 w-3.5 rounded-sm border flex items-center justify-center bg-white",
+                                                  isDirectDeliverySelected && stock >= item.quantity ? "border-white" : "border-current"
+                                                )}>
+                                                  {isDirectDeliverySelected && stock >= item.quantity && <Check className="h-2.5 w-2.5 text-purple-600" />}
                                                 </div>
-                                              )}
+                                                <span className="text-[10px] font-bold uppercase tracking-tight">Direct Delivery</span>
+                                              </div>
 
                                               {/* Split Checkbox */}
-                                              {isPartial && (
-                                                <div
-                                                  onClick={(e) => { e.stopPropagation(); toggleIntent(item._id, "split"); }}
-                                                  className={cn(
-                                                    "flex items-center gap-2 px-2 py-1 rounded border cursor-pointer transition-all select-none",
-                                                    isSplitSelected
-                                                      ? "bg-indigo-600 border-indigo-600 text-white shadow-sm"
-                                                      : "bg-transparent border-indigo-200 text-indigo-700 hover:bg-indigo-50"
-                                                  )}
-                                                >
-                                                  <div className={cn(
-                                                    "h-3.5 w-3.5 rounded-sm border flex items-center justify-center bg-white",
-                                                    isSplitSelected ? "border-white" : "border-indigo-300"
-                                                  )}>
-                                                    {isSplitSelected && <Check className="h-2.5 w-2.5 text-indigo-600" />}
-                                                  </div>
-                                                  <span className="text-[10px] font-bold uppercase tracking-tight">Split</span>
+                                              <div
+                                                onClick={(e) => {
+                                                  if (isPartial) {
+                                                    e.stopPropagation();
+                                                    toggleIntent(item._id, "split");
+                                                  }
+                                                }}
+                                                className={cn(
+                                                  "flex items-center gap-2 px-2 py-1 rounded border transition-all select-none",
+                                                  isPartial
+                                                    ? "cursor-pointer"
+                                                    : "cursor-not-allowed opacity-50 grayscale bg-muted/30",
+                                                  isSplitSelected && isPartial
+                                                    ? "bg-indigo-600 border-indigo-600 text-white shadow-sm"
+                                                    : isPartial
+                                                      ? "bg-transparent border-indigo-200 text-indigo-700 hover:bg-indigo-50"
+                                                      : "border-slate-200 text-slate-400"
+                                                )}
+                                                title={isPartial ? "Mark for Split" : "Partial stock required for split"}
+                                              >
+                                                <div className={cn(
+                                                  "h-3.5 w-3.5 rounded-sm border flex items-center justify-center bg-white",
+                                                  isSplitSelected && isPartial ? "border-white" : "border-current"
+                                                )}>
+                                                  {isSplitSelected && isPartial && <Check className="h-2.5 w-2.5 text-indigo-600" />}
                                                 </div>
-                                              )}
+                                                <span className="text-[10px] font-bold uppercase tracking-tight">Split</span>
+                                              </div>
 
                                               {/* Direct PO Checkbox */}
                                               <div
@@ -2059,79 +2213,120 @@ export function RequestDetailsDialog({
                   )}
                 </div>
 
-                {/* Approval Information */}
-                {request.approvedBy && (
-                  <>
-                    <Separator />
+                {/* Approval Information Removed (Simplified) */}
+                {/* Rejection Information - Consolidated */}
+                {((allRequests && allRequests.some(i => (i.status === "rejected" || i.status === "sign_rejected") && i.rejectionReason)) || request.rejectionReason) && (
+                  <div className="space-y-3 pt-2">
+                    <Label className="text-xs font-bold text-destructive uppercase tracking-wider flex items-center gap-2">
+                      <AlertCircle className="h-3.5 w-3.5" />
+                      Rejection Details
+                    </Label>
                     <div className="space-y-2">
-                      <Label className="text-muted-foreground">Approval Details</Label>
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <p className="text-sm">
-                            <span className="text-muted-foreground">Approved by:</span>{" "}
-                            {request.approver?.fullName || "—"}
-                          </p>
-                        </div>
-                        <div>
-                          <p className="text-sm">
-                            <span className="text-muted-foreground">Approved at:</span>{" "}
-                            {request.approvedAt
-                              ? format(new Date(request.approvedAt), "dd/MM/yyyy HH:mm")
-                              : "—"}
-                          </p>
-                        </div>
-                      </div>
-                      {/* Show rejection reasons for all rejected items */}
-                      {allRequests && allRequests.filter(item => (item.status === "rejected" || item.status === "sign_rejected") && item.rejectionReason).length > 0 && (
-                        <div className="space-y-2">
-                          <Label className="text-sm font-medium text-destructive">Rejection Reasons</Label>
-                          {allRequests
-                            .filter(item => (item.status === "rejected" || item.status === "sign_rejected") && item.rejectionReason)
-                            .map((item, index) => (
-                              <div key={item._id} className="p-3 bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-800 rounded-md">
-                                <div className="flex items-start gap-2">
-                                  <XCircle className="h-4 w-4 text-red-600 mt-0.5 flex-shrink-0" />
-                                  <div className="flex-1 min-w-0">
-                                    <div className="text-sm font-medium text-red-800 dark:text-red-300 mb-1">
-                                      {item.itemName} ({item.quantity} {item.unit})
-                                    </div>
-                                    <div className="text-sm text-red-700 dark:text-red-400">
-                                      {item.rejectionReason}
-                                    </div>
-                                  </div>
-                                </div>
+                      {allRequests && allRequests.some(i => (i.status === "rejected" || i.status === "sign_rejected") && i.rejectionReason) ? (
+                        allRequests
+                          .filter(item => (item.status === "rejected" || item.status === "sign_rejected") && item.rejectionReason)
+                          .map((item) => (
+                            <div key={item._id} className="p-3 bg-red-50/50 dark:bg-red-950/10 border-l-2 border-red-500 rounded-r-md">
+                              <div className="flex flex-col gap-1">
+                                <span className="text-xs font-bold text-red-900 dark:text-red-200">
+                                  {item.itemName}
+                                </span>
+                                <span className="text-sm text-red-700 dark:text-red-300 leading-snug">
+                                  {item.rejectionReason}
+                                </span>
                               </div>
-                            ))}
-                        </div>
-                      )}
-                      {/* Fallback for single item rejection */}
-                      {request.rejectionReason && (!allRequests || allRequests.filter(item => item.status === "rejected" || item.status === "sign_rejected").length === 0) && (
-                        <div>
-                          <p className="text-sm">
-                            <span className="text-muted-foreground">Rejection reason:</span>{" "}
-                            <span className="text-destructive">
-                              {request.rejectionReason}
-                            </span>
-                          </p>
+                            </div>
+                          ))
+                      ) : (
+                        <div className="p-3 bg-red-50/50 dark:bg-red-950/10 border-l-2 border-red-500 rounded-r-md">
+                          <span className="text-sm text-red-700 dark:text-red-300 leading-snug">
+                            {request.rejectionReason}
+                          </span>
                         </div>
                       )}
                     </div>
-                  </>
+                  </div>
                 )}
+
 
                 {/* Delivery Information */}
                 {request.deliveryMarkedAt && (
                   <>
-                    <Separator />
+                    <Separator className="my-4" />
                     <div>
-                      <Label className="text-muted-foreground">Delivery</Label>
-                      <p className="text-sm">
-                        Marked as delivered on{" "}
-                        {format(new Date(request.deliveryMarkedAt), "dd/MM/yyyy HH:mm")}
-                      </p>
+                      <Label className="text-muted-foreground text-xs uppercase tracking-wider">Delivery Status</Label>
+                      <div className="mt-1 flex items-center gap-2 text-sm font-medium text-emerald-600 dark:text-emerald-400">
+                        <CheckCircle className="h-4 w-4" />
+                        Delivered on {format(new Date(request.deliveryMarkedAt), "dd MMM, hh:mm a")}
+                      </div>
                     </div>
                   </>
                 )}
+
+                {/* Notes Section - Refined */}
+                <Separator className="my-4" />
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <h4 className="text-sm font-bold flex items-center gap-2">
+                      <NotebookPen className="h-4 w-4 text-primary" />
+                      Notes & Timeline
+                    </h4>
+                    {notes && notes.length > 0 && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 text-[10px] font-medium text-muted-foreground hover:text-primary px-2"
+                        onClick={() => setShowNotesTimeline(true)}
+                      >
+                        View History ({notes.length})
+                      </Button>
+                    )}
+                  </div>
+
+                  {/* Latest Note Preview */}
+                  {latestNote ? (
+                    <div className="bg-muted/40 p-3 rounded-lg border border-border/50 text-sm relative group">
+                      <div className="flex justify-between items-start mb-1.5">
+                        <div className="flex items-center gap-2">
+                          <div className="h-5 w-5 rounded-full bg-primary/10 flex items-center justify-center text-[10px] font-bold text-primary">
+                            {latestNote.userName.charAt(0)}
+                          </div>
+                          <span className="font-semibold text-xs">{latestNote.userName}</span>
+                        </div>
+                        <span className="text-[10px] text-muted-foreground">{format(new Date(latestNote.createdAt), "MMM d, h:mm a")}</span>
+                      </div>
+                      <p className="text-foreground/80 text-xs leading-relaxed pl-7">{latestNote.content}</p>
+                    </div>
+                  ) : (
+                    <div className="text-center py-4 bg-muted/20 rounded-lg border border-dashed border-border/60">
+                      <p className="text-xs text-muted-foreground italic">No notes added yet</p>
+                    </div>
+                  )}
+
+                  {/* Add Note Input */}
+                  <div className="flex gap-2 items-end pt-1">
+                    <Textarea
+                      value={newNote}
+                      onChange={(e) => setNewNote(e.target.value)}
+                      placeholder="Type a note..."
+                      className="min-h-[38px] h-[38px] py-2 text-sm resize-none flex-1 bg-background focus:h-[60px] transition-all duration-200"
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && !e.shiftKey) {
+                          e.preventDefault();
+                          handleAddNote();
+                        }
+                      }}
+                    />
+                    <Button
+                      size="icon"
+                      onClick={handleAddNote}
+                      disabled={!newNote.trim() || isSubmittingNote}
+                      className="h-[38px] w-[38px] shrink-0 shadow-sm"
+                    >
+                      {isSubmittingNote ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                    </Button>
+                  </div>
+                </div>
 
                 {/* Actions - Simplified for Mobile Site Engineers */}
                 {canMarkDelivery && isMobileLayout && (
@@ -2720,19 +2915,20 @@ export function RequestDetailsDialog({
                       <CheckCircle className="h-4 w-4 mr-2" />
                       {selectedItemsForAction.size > 0
                         ? `Approve (${selectedItemsForAction.size})`
-                        : "Approve All"}
+                        : "Approve"}
                     </Button>
                   )}
                 </div>
               )}
             </div>
           </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        </DialogContent >
+      </Dialog >
 
       {/* User Info Dialog */}
-      <UserInfoDialog
-        open={!!selectedUserId}
+      < UserInfoDialog
+        open={!!selectedUserId
+        }
         onOpenChange={(open) => {
           if (!open) setSelectedUserId(null);
         }}
@@ -2740,7 +2936,7 @@ export function RequestDetailsDialog({
       />
 
       {/* Item Info Dialog */}
-      <ItemInfoDialog
+      < ItemInfoDialog
         open={!!selectedItemName}
         onOpenChange={(open) => {
           if (!open) setSelectedItemName(null);
@@ -2749,7 +2945,7 @@ export function RequestDetailsDialog({
       />
 
       {/* Site Info Dialog */}
-      <LocationInfoDialog
+      < LocationInfoDialog
         open={!!selectedSiteId}
         onOpenChange={(open) => {
           if (!open) setSelectedSiteId(null);
@@ -2834,7 +3030,7 @@ export function RequestDetailsDialog({
                   )}
                   style={{ pointerEvents: 'auto' }}
                 >
-                  {isLoading ? "Processing..." : (typeof showSignPendingApproveConfirm === 'string' ? "Confirm Approve" : "Approve All")}
+                  {isLoading ? "Processing..." : (typeof showSignPendingApproveConfirm === 'string' ? "Confirm Approve" : "Confirm")}
                 </Button>
               </div>
             </div>
@@ -2856,6 +3052,13 @@ export function RequestDetailsDialog({
           setEditQuantityItem(null);
           // Data will refresh automatically via Convex reactivity
         }}
+      />
+
+      {/* Direct PO Creation Dialog */}
+      <DirectPODialog
+        open={showDirectPODialog}
+        onOpenChange={setShowDirectPODialog}
+        initialData={directPOInitialData}
       />
 
     </div >

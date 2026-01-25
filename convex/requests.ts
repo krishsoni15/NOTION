@@ -1094,7 +1094,8 @@ export const updateRequestStatus = mutation({
       v.literal("rejected"),
       v.literal("direct_po"),
       v.literal("delivery_stage"),
-      v.literal("ready_for_po")
+      v.literal("ready_for_po"),
+      v.literal("recheck")
     ),
     rejectionReason: v.optional(v.string()),
     directAction: v.optional(v.union(v.literal("delivery"), v.literal("po"))),
@@ -1199,7 +1200,7 @@ export const updateRequestStatus = mutation({
 export const bulkUpdateRequestStatus = mutation({
   args: {
     requestIds: v.array(v.id("requests")),
-    status: v.union(v.literal("approved"), v.literal("rejected"), v.literal("direct_po"), v.literal("delivery_stage")), // Added delivery_stage
+    status: v.union(v.literal("approved"), v.literal("rejected"), v.literal("direct_po"), v.literal("delivery_stage"), v.literal("recheck")), // Added delivery_stage and recheck
     rejectionReason: v.optional(v.string()),
   },
   handler: async (ctx, args) => {

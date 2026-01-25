@@ -1092,7 +1092,7 @@ export function PurchaseRequestGroupCard({
                 </div>
                 <div className="flex items-center gap-2">
                   {/* Per-item action button */}
-                  {(item.status === "recheck") && (
+                  {(["recheck", "pending"].includes(item.status)) && (
                     <>
                       {/* Show additional direct action buttons first (Leftmost) */}
                       {item.directAction === "delivery" && onDirectDelivery && (
@@ -1109,13 +1109,12 @@ export function PurchaseRequestGroupCard({
                         </Button>
                       )}
 
-                      {item.directAction === "po" && onDirectPO && (
+                      {onDirectPO && (
                         <Button
                           size="sm"
                           onClick={() => setShowReadyForPOConfirm(item._id)}
-                          disabled={hasFullStock}
-                          title={hasFullStock ? "Full stock available in inventory." : ""}
-                          className="text-xs h-7 px-3 bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-600 hover:text-white hover:border-emerald-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed font-medium shadow-sm dark:bg-emerald-900/20 dark:text-emerald-300 dark:border-emerald-800 dark:hover:bg-emerald-600"
+                          title="Ready for PO"
+                          className="text-xs h-7 px-3 bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-600 hover:text-white hover:border-emerald-600 transition-all font-medium shadow-sm dark:bg-emerald-900/20 dark:text-emerald-300 dark:border-emerald-800 dark:hover:bg-emerald-600"
                           variant="outline"
                         >
                           <ShoppingCart className="h-3.5 w-3.5 mr-1.5" />

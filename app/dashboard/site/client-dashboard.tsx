@@ -10,6 +10,13 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Plus, Activity, ChevronRight, MapPin, Calendar, Package, AlertTriangle, CheckCircle2, X, Send } from "lucide-react";
 import { MaterialRequestForm } from "@/components/requests/material-request-form";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import Link from "next/link";
@@ -35,6 +42,7 @@ export default function SiteEngineerDashboardClient() {
   const [isCreateRequestOpen, setIsCreateRequestOpen] = useState(false);
   const [editDraftNumber, setEditDraftNumber] = useState<string | null>(null);
   const [selectedRequestId, setSelectedRequestId] = useState<Id<"requests"> | null>(null);
+  const [limit, setLimit] = useState(20);
 
   // Handlers state
   const [draftToDelete, setDraftToDelete] = useState<string | null>(null);
@@ -54,7 +62,7 @@ export default function SiteEngineerDashboardClient() {
 
   // Sort by updatedAt desc and take top 20
   const recentRequests = requests
-    ? [...requests].sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 20)
+    ? [...requests].sort((a, b) => b.updatedAt - a.updatedAt).slice(0, limit)
     : [];
 
   const handleEditDraft = (requestNumber: string) => {
@@ -117,14 +125,39 @@ export default function SiteEngineerDashboardClient() {
 
         {/* Live Activity Section */}
         <section className="space-y-4">
-          <div className="flex items-center justify-between px-1">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 px-1">
             <h2 className="text-lg font-bold flex items-center gap-2">
-              <Activity className="h-4 w-4 text-primary" />
-              Live Activity
+              <div className="p-1.5 rounded-lg bg-primary/10 text-primary shadow-sm ring-1 ring-primary/20">
+                <Activity className="h-4 w-4" />
+              </div>
+              <span className="bg-gradient-to-br from-foreground to-foreground/70 bg-clip-text text-transparent">Live Activity</span>
             </h2>
-            <Link href="/dashboard/site/requests" className="text-xs font-semibold text-primary hover:underline flex items-center bg-primary/10 px-2 py-1 rounded-full">
-              View All <ChevronRight className="h-3 w-3 ml-0.5" />
-            </Link>
+
+            <div className="flex items-center gap-2 self-end sm:self-auto">
+              <div className="flex items-center bg-white/50 dark:bg-black/20 backdrop-blur-sm rounded-lg border border-border/50 shadow-sm p-0.5 transition-all hover:border-primary/20 hover:shadow-md hover:shadow-primary/5">
+                <Select value={String(limit)} onValueChange={(v) => setLimit(Number(v))}>
+                  <SelectTrigger className="h-7 border-none bg-transparent shadow-none focus:ring-0 gap-1 text-xs font-medium w-auto min-w-[90px] hover:bg-muted/50 transition-colors rounded-md data-[state=open]:bg-muted">
+                    <span className="text-muted-foreground">Show:</span>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent align="end" className="min-w-[100px]">
+                    <SelectItem value="10">10 items</SelectItem>
+                    <SelectItem value="20">20 items</SelectItem>
+                    <SelectItem value="50">50 items</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="w-px h-6 bg-border/60 mx-1" />
+
+              <Link
+                href="/dashboard/site/requests"
+                className="group text-xs font-semibold text-primary hover:text-primary/80 flex items-center bg-primary/5 hover:bg-primary/10 border border-primary/10 hover:border-primary/20 px-3 py-1.5 rounded-lg transition-all"
+              >
+                View All
+                <ChevronRight className="h-3 w-3 ml-0.5 transition-transform group-hover:translate-x-0.5" />
+              </Link>
+            </div>
           </div>
 
           <div className="min-h-[200px]">

@@ -192,6 +192,7 @@ export const getUserRequests = query({
               _id: creator._id,
               fullName: creator.fullName,
               role: creator.role,
+              profileImage: creator.profileImage,
             }
             : null,
           approver: approver
@@ -199,6 +200,7 @@ export const getUserRequests = query({
               _id: approver._id,
               fullName: approver.fullName,
               role: approver.role,
+              profileImage: approver.profileImage,
             }
             : null,
           selectedVendorId,
@@ -297,6 +299,7 @@ export const getRequestsReadyForCC = query({
               _id: creator._id,
               fullName: creator.fullName,
               role: creator.role,
+              profileImage: creator.profileImage,
             }
             : null,
           approver: approver
@@ -304,6 +307,7 @@ export const getRequestsReadyForCC = query({
               _id: approver._id,
               fullName: approver.fullName,
               role: approver.role,
+              profileImage: approver.profileImage,
             }
             : null,
           selectedVendorId,
@@ -494,6 +498,7 @@ export const getPurchaseRequestsByStatus = query({
               _id: creator._id,
               fullName: creator.fullName,
               role: creator.role,
+              profileImage: creator.profileImage,
             }
             : null,
           approver: approver
@@ -501,6 +506,7 @@ export const getPurchaseRequestsByStatus = query({
               _id: approver._id,
               fullName: approver.fullName,
               role: approver.role,
+              profileImage: approver.profileImage,
             }
             : null,
           selectedVendorId,
@@ -600,12 +606,14 @@ export const getAllRequests = query({
               _id: creator._id,
               fullName: creator.fullName,
               role: creator.role,
+              profileImage: creator.profileImage,
             }
             : null,
           approver: approver
             ? {
               _id: approver._id,
               fullName: approver.fullName,
+              profileImage: approver.profileImage,
             }
             : null,
           selectedVendorId,
@@ -740,12 +748,14 @@ export const getRequestById = query({
         ? {
           _id: creator._id,
           fullName: creator.fullName,
+          profileImage: creator.profileImage,
         }
         : null,
       approver: approver
         ? {
           _id: approver._id,
           fullName: approver.fullName,
+          profileImage: approver.profileImage,
         }
         : null,
     };

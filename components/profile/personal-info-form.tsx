@@ -12,8 +12,9 @@ import { api } from "@/convex/_generated/api";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { cn } from "@/lib/utils";
 import { toast } from "sonner";
-import { Loader2, Save, X, Edit, Camera } from "lucide-react";
+import { Loader2, Save, X, Edit, Camera, ShieldAlert } from "lucide-react";
 import { Doc } from "@/convex/_generated/dataModel";
 import { AddressAutocomplete } from "@/components/vendors/address-autocomplete";
 
@@ -24,6 +25,8 @@ interface PersonalInfoFormProps {
 
 export function PersonalInfoForm({ convexUser, clerkUserId }: PersonalInfoFormProps) {
   const updateProfile = useMutation(api.users.updateProfile);
+
+  const isManager = convexUser?.role === "manager";
 
   const [isEditing, setIsEditing] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -62,6 +65,12 @@ export function PersonalInfoForm({ convexUser, clerkUserId }: PersonalInfoFormPr
         toast.error("Please select an image file");
         return;
       }
+
+      // Auto-enter edit mode if not already
+      if (!isEditing) {
+        setIsEditing(true);
+      }
+
       setSelectedImage(file);
       setShouldRemoveImage(false);
 
@@ -191,6 +200,16 @@ export function PersonalInfoForm({ convexUser, clerkUserId }: PersonalInfoFormPr
       </div>
 
       {/* Profile Image - Only show when editing, or read-only view in header handles it */}
+      {/* Profile Image - Hidden input always available for header trigger */}
+      <input
+        id="personal-profile-image-upload"
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={handleImageSelect}
+        disabled={isLoading || isUploading}
+      />
+
       {isEditing && (
         <div className="flex flex-col gap-2">
           <Label>Profile Photo</Label>
@@ -231,39 +250,35 @@ export function PersonalInfoForm({ convexUser, clerkUserId }: PersonalInfoFormPr
               <p className="text-sm font-medium">Profile Photo</p>
               <p className="text-xs text-muted-foreground">Click to upload or change your photo.</p>
             </div>
-
-            <input
-              id="personal-profile-image-upload"
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={handleImageSelect}
-              disabled={isLoading || isUploading}
-            />
           </div>
         </div>
       )}
 
       {/* Full Name */}
       <div className="space-y-2">
-        <Label htmlFor="fullName">Full Name *</Label>
+        <Label htmlFor="fullName" className={cn(!isManager && "text-muted-foreground/60")}>
+          Full Name {isManager && "*"}
+        </Label>
         <Input
           id="fullName"
           value={formData.fullName}
           onChange={(e) =>
             setFormData({ ...formData, fullName: e.target.value })
           }
-          disabled={!isEditing || isLoading}
-          required
+          disabled={!isEditing || !isManager || isLoading}
+          required={isManager}
           placeholder="John Doe"
-          className={!isEditing ? "bg-muted cursor-not-allowed" : "bg-background border-2 border-primary focus:border-primary"}
+          className={(!isEditing || !isManager) ? "bg-muted cursor-not-allowed opacity-80" : "bg-background border-2 border-primary focus:border-primary"}
         />
+        {!isManager && isEditing && (
+          <p className="text-[10px] text-amber-600 font-bold uppercase tracking-tight">Only managers can change your official name</p>
+        )}
       </div>
 
       {/* Phone Number */}
       <div className="space-y-2">
-        <Label htmlFor="phoneNumber">
-          Phone Number <span className="text-muted-foreground text-xs">(optional)</span>
+        <Label htmlFor="phoneNumber" className={cn(!isManager && "text-muted-foreground/60")}>
+          Phone Number <span className="text-muted-foreground text-xs">(official)</span>
         </Label>
         <Input
           id="phoneNumber"
@@ -272,22 +287,25 @@ export function PersonalInfoForm({ convexUser, clerkUserId }: PersonalInfoFormPr
           onChange={(e) =>
             setFormData({ ...formData, phoneNumber: e.target.value })
           }
-          disabled={!isEditing || isLoading}
+          disabled={!isEditing || !isManager || isLoading}
           placeholder="+1234567890"
-          className={!isEditing ? "bg-muted cursor-not-allowed" : "bg-background border-2 border-primary focus:border-primary"}
+          className={(!isEditing || !isManager) ? "bg-muted cursor-not-allowed opacity-80" : "bg-background border-2 border-primary focus:border-primary"}
         />
       </div>
 
       {/* Address */}
-      <AddressAutocomplete
-        value={formData.address}
-        onChange={(address) => setFormData({ ...formData, address })}
-        disabled={!isEditing || isLoading}
-        label="Address"
-        placeholder="Search address or type manually..."
-        id="address"
-        showMapLink={true}
-      />
+      <div className="space-y-2">
+        <AddressAutocomplete
+          value={formData.address}
+          onChange={(address) => setFormData({ ...formData, address })}
+          disabled={!isEditing || !isManager || isLoading}
+          label="Base Address"
+          placeholder="Search address or type manually..."
+          id="address"
+          showMapLink={true}
+          className={(!isEditing || !isManager) ? "bg-muted cursor-not-allowed opacity-80" : ""}
+        />
+      </div>
 
       {/* Role (read-only) */}
       <div className="space-y-2">

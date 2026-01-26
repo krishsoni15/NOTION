@@ -26,7 +26,7 @@ import { ROLE_LABELS } from "@/lib/auth/roles";
 import { PersonalInfoForm } from "./personal-info-form";
 
 import { PasswordForm } from "./password-form";
-import { User, Lock, Shield, MapPin } from "lucide-react";
+import { User, Lock, Shield, MapPin, Camera } from "lucide-react";
 import { UserAvatar } from "@/components/user-management/user-avatar";
 
 export function ProfileContent() {
@@ -72,22 +72,35 @@ export function ProfileContent() {
   return (
     <div className="space-y-6">
       {/* Profile Header Card */}
-      {/* Profile Header Card */}
       <Card className="overflow-hidden border-border/50 shadow-md">
         <div className="h-32 bg-gradient-to-r from-primary/20 via-primary/10 to-transparent" />
         <CardContent className="p-6 relative">
           <div className="flex flex-col sm:flex-row items-end sm:items-end gap-6 -mt-12">
-            <div className="relative">
+            <div className="relative group cursor-pointer" onClick={() => {
+              const input = document.getElementById('personal-profile-image-upload') as HTMLInputElement;
+              if (input) {
+                // Smooth scroll to the form first if not visible
+                document.querySelector('.personal-info-card')?.scrollIntoView({ behavior: 'smooth' });
+                // We need to trigger edit mode first, but since the input is hidden, 
+                // we'll just handle this gracefully in the form component or by clicking it directly.
+                input.click();
+              }
+            }}>
               <UserAvatar
                 name={displayName}
                 image={convexUser?.profileImage}
                 size="xl"
-                className="h-32 w-32 border-4 border-background shadow-xl rounded-full"
+                className="h-32 w-32 border-4 border-background shadow-xl rounded-full transition-transform group-hover:scale-[1.02]"
               />
+              <div className="absolute inset-0 bg-black/40 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity border-4 border-white/20">
+                <Camera className="h-8 w-8 text-white" />
+              </div>
               <div className={cn(
-                "absolute bottom-2 right-2 h-5 w-5 rounded-full border-2 border-background",
+                "absolute bottom-2 right-2 h-6 w-6 rounded-full border-2 border-background flex items-center justify-center",
                 convexUser?.isActive ? "bg-green-500" : "bg-destructive"
-              )} />
+              )}>
+                {convexUser?.isActive && <div className="h-2 w-2 bg-white rounded-full animate-pulse" />}
+              </div>
             </div>
 
             <div className="flex-1 text-center sm:text-left space-y-2 mb-2">
@@ -135,78 +148,29 @@ export function ProfileContent() {
         </TabsList>
 
         <TabsContent value="personal" className="space-y-4">
-          <Card>
+          <Card className="personal-info-card">
             <CardHeader>
               <CardTitle>Personal Information</CardTitle>
               <CardDescription>
-                {isManager
-                  ? "Update your personal details and contact information"
-                  : "View your personal details and contact information"
-                }
+                Update your personal details and profile photo to keep your account information current.
               </CardDescription>
             </CardHeader>
             <CardContent>
-              {isManager ? (
-                // Manager: Show editable form
-                <PersonalInfoForm
-                  convexUser={convexUser}
-                  clerkUserId={user.id}
-                />
-              ) : (
-                // Non-manager: Show read-only view
-                <div className="space-y-6">
-                  {/* Username */}
-                  <div className="space-y-2">
-                    <Label className="text-muted-foreground">Username</Label>
-                    <p className="text-sm font-medium">@{convexUser?.username || user.username}</p>
-                  </div>
+              {/* Show editable form for all users on their own profile */}
+              <PersonalInfoForm
+                convexUser={convexUser}
+                clerkUserId={user.id}
+              />
 
-                  {/* Full Name */}
-                  <div className="space-y-2">
-                    <Label className="text-muted-foreground">Full Name</Label>
-                    <p className="text-sm font-medium">{convexUser?.fullName || "Not set"}</p>
-                  </div>
-
-                  {/* Phone Number */}
-                  <div className="space-y-2">
-                    <Label className="text-muted-foreground">Phone Number</Label>
-                    <p className="text-sm font-medium">{convexUser?.phoneNumber || "Not set"}</p>
-                  </div>
-
-                  {/* Address */}
-                  <div className="space-y-2">
-                    <Label className="text-muted-foreground">Address</Label>
-                    <div className="flex items-center gap-2">
-                      <p className="text-sm font-medium flex-1">{convexUser?.address || "Not set"}</p>
-                      {convexUser?.address && (
-                        <button
-                          onClick={() => handleOpenInMap(convexUser.address)}
-                          className="text-primary hover:text-primary/80 hover:bg-primary/10 rounded-full p-2 transition-colors shrink-0 border border-primary/20 hover:border-primary/40"
-                          title="Open in Maps"
-                        >
-                          <MapPin className="h-4 w-4" />
-                        </button>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Role */}
-                  <div className="space-y-2">
-                    <Label className="text-muted-foreground">Role</Label>
-                    <p className="text-sm font-medium capitalize">
-                      {convexUser?.role ? ROLE_LABELS[convexUser.role] : "Not set"}
+              {/* Admin Info Message */}
+              {!isManager && (
+                <div className="mt-6 rounded-lg border bg-muted/50 p-4 flex items-start gap-3">
+                  <Shield className="h-5 w-5 text-muted-foreground mt-0.5" />
+                  <div className="flex-1">
+                    <p className="text-sm font-medium mb-1">Profile Permissions</p>
+                    <p className="text-sm text-muted-foreground">
+                      You can update your personal details and profile photo. Contact your administrator if you need to change your assigned role or site locations.
                     </p>
-                  </div>
-
-                  {/* Info Message */}
-                  <div className="rounded-lg border bg-muted/50 p-4 flex items-start gap-3">
-                    <Shield className="h-5 w-5 text-muted-foreground mt-0.5" />
-                    <div className="flex-1">
-                      <p className="text-sm font-medium mb-1">Profile Management</p>
-                      <p className="text-sm text-muted-foreground">
-                        Only managers can edit user profiles and change passwords. Contact your administrator if you need to update your information.
-                      </p>
-                    </div>
                   </div>
                 </div>
               )}
@@ -219,44 +183,20 @@ export function ProfileContent() {
             <CardHeader>
               <CardTitle>{isManager ? "Change Password" : "Security Settings"}</CardTitle>
               <CardDescription>
-                {isManager
-                  ? "Update your password to keep your account secure"
-                  : "Your account security information"
-                }
+                Update your password regularly to keep your account secure.
               </CardDescription>
             </CardHeader>
             <CardContent>
-              {isManager ? (
-                // Manager: Show password change form
-                <PasswordForm />
-              ) : (
-                // Non-manager: Show read-only view
-                <div className="space-y-6">
-                  {/* Password Info */}
-                  <div className="space-y-2">
-                    <Label className="text-muted-foreground">Password</Label>
-                    <p className="text-sm font-medium">••••••••</p>
-                  </div>
+              <PasswordForm />
 
-                  {/* Last Updated */}
-                  {convexUser?.updatedAt && (
-                    <div className="space-y-2">
-                      <Label className="text-muted-foreground">Last Updated</Label>
-                      <p className="text-sm font-medium">
-                        {new Date(convexUser.updatedAt).toLocaleDateString()}
-                      </p>
-                    </div>
-                  )}
-
-                  {/* Info Message */}
-                  <div className="rounded-lg border bg-muted/50 p-4 flex items-start gap-3">
-                    <Lock className="h-5 w-5 text-muted-foreground mt-0.5" />
-                    <div className="flex-1">
-                      <p className="text-sm font-medium mb-1">Password Management</p>
-                      <p className="text-sm text-muted-foreground">
-                        Only managers can change passwords. Contact your administrator if you need to reset your password.
-                      </p>
-                    </div>
+              {!isManager && (
+                <div className="mt-6 rounded-lg border bg-muted/50 p-4 flex items-start gap-3">
+                  <Lock className="h-5 w-5 text-muted-foreground mt-0.5" />
+                  <div className="flex-1">
+                    <p className="text-sm font-medium mb-1">Account Security</p>
+                    <p className="text-sm text-muted-foreground">
+                      Keep your account secure by using a strong password. If you forget your password, please contact your manager for a reset.
+                    </p>
                   </div>
                 </div>
               )}
@@ -267,4 +207,3 @@ export function ProfileContent() {
     </div>
   );
 }
-

@@ -29,7 +29,7 @@ import {
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { ExpandableText } from "@/components/ui/expandable-text";
-import { Eye, AlertCircle, FileText, Edit, Trash2, Send, ChevronDown, ChevronUp, ChevronRight, MapPin, Package, PackageX, Sparkles, NotebookPen, LayoutGrid, Table as TableIcon, ShoppingCart, Truck, Clock, CheckCircle2, XCircle, Loader2, Pencil } from "lucide-react";
+import { Eye, AlertCircle, FileText, Edit, Trash2, Send, ChevronDown, ChevronUp, ChevronRight, MapPin, Package, PackageX, Sparkles, NotebookPen, LayoutGrid, Table as TableIcon, ShoppingCart, Truck, Clock, CheckCircle2, XCircle, Loader2, Pencil, RefreshCw } from "lucide-react";
 import { CompactImageGallery } from "@/components/ui/image-gallery";
 import { LazyImage } from "@/components/ui/lazy-image";
 import { cn, normalizeSearchQuery, matchesAnySearchQuery } from "@/lib/utils";
@@ -67,38 +67,40 @@ type RequestStatus =
   | "ordered";
 
 // Helper to get card border/bg styles based on status
-const getCardStyles = (status: RequestStatus) => {
-  const baseClasses = "border-2 sm:border-2 rounded-xl p-3 sm:p-4 shadow-xl sm:shadow-lg hover:shadow-2xl transition-all duration-200 bg-card dark:bg-card max-w-full overflow-hidden";
+const getCardStyles = (status: RequestStatus | "mixed") => {
+  const baseClasses = "group border-2 rounded-2xl p-4 sm:p-5 shadow-sm hover:shadow-xl transition-all duration-300 bg-card max-w-full overflow-hidden relative";
+
+  if (status === "mixed") return `${baseClasses} border-slate-200 dark:border-slate-800`;
 
   switch (status) {
     case "draft":
-      return `${baseClasses} border-slate-300 dark:border-slate-600`;
+      return `${baseClasses} border-slate-300 dark:border-slate-700 bg-slate-50/10`;
     case "pending":
     case "sign_pending":
-      return `${baseClasses} border-amber-300 dark:border-amber-700`;
-    case "approved":
-      return `${baseClasses} border-emerald-300 dark:border-emerald-700`;
-    case "recheck":
-    case "ready_for_cc":
-    case "cc_pending":
-    case "cc_approved":
-    case "ready_for_po":
-    case "pending_po":
-    case "direct_po":
-    case "partially_processed":
-      return `${baseClasses} border-indigo-300 dark:border-indigo-700`;
-    case "ready_for_delivery":
-    case "delivery_processing":
-    case "delivery_stage":
-    case "out_for_delivery":
-      return `${baseClasses} border-orange-300 dark:border-orange-700`;
-    case "delivered":
-      return `${baseClasses} border-teal-300 dark:border-teal-700`;
+      return `${baseClasses} border-amber-300 dark:border-amber-700 bg-amber-50/10`;
     case "rejected":
     case "cc_rejected":
     case "rejected_po":
     case "sign_rejected":
-      return `${baseClasses} border-rose-300 dark:border-rose-700`;
+      return `${baseClasses} border-rose-400 dark:border-rose-900 bg-rose-50/10`;
+    case "recheck":
+      return `${baseClasses} border-indigo-400 dark:border-indigo-900 bg-indigo-50/10`;
+    case "ready_for_cc":
+      return `${baseClasses} border-blue-400 dark:border-blue-900 bg-blue-50/10`;
+    case "cc_pending":
+      return `${baseClasses} border-purple-400 dark:border-purple-900 bg-purple-50/10`;
+    case "ready_for_po":
+      return `${baseClasses} border-teal-400 dark:border-teal-900 bg-teal-50/10`;
+    case "pending_po":
+    case "direct_po":
+      return `${baseClasses} border-orange-400 dark:border-orange-900 bg-orange-50/10`;
+    case "ready_for_delivery":
+    case "delivered":
+      return `${baseClasses} border-emerald-400 dark:border-emerald-900 bg-emerald-50/10`;
+    case "out_for_delivery":
+    case "delivery_processing":
+    case "delivery_stage":
+      return `${baseClasses} border-sky-400 dark:border-sky-900 bg-sky-50/10`;
     default:
       return `${baseClasses} border-border`;
   }
@@ -182,11 +184,13 @@ interface Request {
     _id: Id<"users">;
     fullName: string;
     role: string;
+    profileImage?: string;
   } | null;
   approver?: {
     _id: Id<"users">;
     fullName: string;
     role: string;
+    profileImage?: string;
   } | null;
   notesCount?: number;
 }
@@ -444,17 +448,25 @@ export function RequestsTable({
   };
 
   // Get status badge with role-based display (14 for managers, 6 for site engineers)
-  const getStatusBadge = (status: RequestStatus) => {
-    if (simplifiedStatuses) {
+  const getStatusBadge = (status: RequestStatus | "mixed") => {
+    if (simplifiedStatuses && !preciseStatuses) {
       // User request: Don't show status text/badge on card layout, just use border color
       return null;
     }
 
-    // ===== MANAGER / PURCHASE VIEW - ALL 14 INTERNAL STATUSES =====
-    if (userRole === ROLES.MANAGER || userRole === ROLES.PURCHASE_OFFICER) {
+    // ===== PRECISE / MANAGER VIEW - ALL 14 INTERNAL STATUSES =====
+    if (preciseStatuses || userRole === ROLES.MANAGER || userRole === ROLES.PURCHASE_OFFICER) {
+      if (status === "mixed") {
+        return (
+          <Badge variant="outline" className="bg-slate-100/50 text-slate-700 border-slate-300 dark:bg-slate-900/50 dark:text-slate-400 dark:border-slate-800 gap-1.5 pl-1.5 pr-2.5 font-bold shadow-sm">
+            <Sparkles className="h-3.5 w-3.5" />
+            Mixed Status
+          </Badge>
+        );
+      }
       if (status === "draft") {
         return (
-          <Badge variant="outline" className="bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-900/50 dark:text-slate-400 dark:border-slate-800 gap-1.5 pl-1.5 pr-2.5">
+          <Badge variant="outline" className="bg-slate-100 text-slate-700 border-slate-300 dark:bg-slate-900/80 dark:text-slate-200 dark:border-slate-700 gap-1.5 pl-1.5 pr-2.5 font-bold shadow-sm">
             <Pencil className="h-3.5 w-3.5" />
             Draft
           </Badge>
@@ -462,32 +474,95 @@ export function RequestsTable({
       }
       if (status === "pending") {
         return (
-          <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/50 dark:text-amber-400 dark:border-amber-800 gap-1.5 pl-1.5 pr-2.5">
+          <Badge variant="outline" className="bg-amber-100/80 text-amber-800 border-amber-300 dark:bg-amber-900/60 dark:text-amber-100 dark:border-amber-700 gap-1.5 pl-1.5 pr-2.5 font-bold shadow-sm ring-1 ring-amber-400/20">
             <Clock className="h-3.5 w-3.5" />
-            Pending Approval
+            Approval Pending
           </Badge>
         );
       }
       if (status === "rejected") {
         return (
-          <Badge variant="outline" className="bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/50 dark:text-rose-400 dark:border-rose-800 gap-1.5 pl-1.5 pr-2.5">
+          <Badge variant="outline" className="bg-rose-100/80 text-rose-800 border-rose-300 dark:bg-rose-900/60 dark:text-rose-100 dark:border-rose-700 gap-1.5 pl-1.5 pr-2.5 font-bold shadow-sm">
             <XCircle className="h-3.5 w-3.5" />
             Rejected
           </Badge>
         );
       }
-      if (status === "recheck") return <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-950/50 dark:text-indigo-400 dark:border-indigo-800 gap-1.5 pl-1.5 pr-2.5">Recheck</Badge>;
-      if (status === "ready_for_cc") return <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/50 dark:text-blue-400 dark:border-blue-800 gap-1.5 pl-1.5 pr-2.5">Ready for CC</Badge>;
-      if (status === "cc_pending") return <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/50 dark:text-purple-400 dark:border-purple-800 gap-1.5 pl-1.5 pr-2.5">CC Pending</Badge>;
-      if (status === "cc_rejected") return <Badge variant="outline" className="bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/50 dark:text-rose-400 dark:border-rose-800 gap-1.5 pl-1.5 pr-2.5">CC Rejected</Badge>;
-      if (status === "ready_for_po") return <Badge variant="outline" className="bg-teal-50 text-teal-700 border-teal-200 dark:bg-teal-950/50 dark:text-teal-400 dark:border-teal-800 gap-1.5 pl-1.5 pr-2.5">Ready for PO</Badge>;
-      if (status === "sign_pending") return <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/50 dark:text-amber-400 dark:border-amber-800 gap-1.5 pl-1.5 pr-2.5">Sign Pending</Badge>;
-      if (status === "sign_rejected") return <Badge variant="outline" className="bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/50 dark:text-rose-400 dark:border-rose-800 gap-1.5 pl-1.5 pr-2.5">Sign Rejected</Badge>;
-      if (status === "pending_po") return <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-950/50 dark:text-orange-400 dark:border-orange-800 gap-1.5 pl-1.5 pr-2.5">Pending PO</Badge>;
-      if (status === "ready_for_delivery") return <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-400 dark:border-emerald-800 gap-1.5 pl-1.5 pr-2.5">Ready for Delivery</Badge>;
+      if (status === "recheck") {
+        return (
+          <Badge variant="outline" className="bg-indigo-100/80 text-indigo-800 border-indigo-300 dark:bg-indigo-900/60 dark:text-indigo-100 dark:border-indigo-700 gap-1.5 pl-1.5 pr-2.5 font-bold shadow-sm">
+            <RefreshCw className="h-3.5 w-3.5" />
+            Recheck Req.
+          </Badge>
+        );
+      }
+      if (status === "ready_for_cc") {
+        return (
+          <Badge variant="outline" className="bg-blue-100/80 text-blue-800 border-blue-300 dark:bg-blue-900/60 dark:text-blue-100 dark:border-blue-700 gap-1.5 pl-1.5 pr-2.5 font-bold shadow-sm ring-1 ring-blue-400/20">
+            <FileText className="h-3.5 w-3.5" />
+            Ready for CC
+          </Badge>
+        );
+      }
+      if (status === "cc_pending") {
+        return (
+          <Badge variant="outline" className="bg-purple-100/80 text-purple-800 border-purple-300 dark:bg-purple-900/60 dark:text-purple-100 dark:border-purple-700 gap-1.5 pl-1.5 pr-2.5 font-bold shadow-sm">
+            <Clock className="h-3.5 w-3.5" />
+            CC In Progress
+          </Badge>
+        );
+      }
+      if (status === "cc_rejected") {
+        return (
+          <Badge variant="outline" className="bg-rose-50 text-rose-700 border-rose-300 dark:bg-rose-950/50 dark:text-rose-200 dark:border-rose-800 gap-1.5 pl-1.5 pr-2.5 font-bold shadow-sm">
+            <XCircle className="h-3.5 w-3.5" />
+            CC Rejected
+          </Badge>
+        );
+      }
+      if (status === "ready_for_po") {
+        return (
+          <Badge variant="outline" className="bg-teal-100/80 text-teal-800 border-teal-300 dark:bg-teal-900/60 dark:text-teal-100 dark:border-teal-700 gap-1.5 pl-1.5 pr-2.5 font-bold shadow-sm ring-1 ring-teal-400/20">
+            <ShoppingCart className="h-3.5 w-3.5" />
+            Ready for PO
+          </Badge>
+        );
+      }
+      if (status === "sign_pending") {
+        return (
+          <Badge variant="outline" className="bg-amber-100/60 text-amber-700 border-amber-300 dark:bg-amber-900/40 dark:text-amber-200 dark:border-amber-800 gap-1.5 pl-1.5 pr-2.5 font-bold shadow-sm">
+            <Pencil className="h-3.5 w-3.5" />
+            Sign Pending
+          </Badge>
+        );
+      }
+      if (status === "sign_rejected") {
+        return (
+          <Badge variant="outline" className="bg-rose-100/60 text-rose-700 border-rose-300 dark:bg-rose-900/40 dark:text-rose-200 dark:border-rose-800 gap-1.5 pl-1.5 pr-2.5 font-bold shadow-sm">
+            <XCircle className="h-3.5 w-3.5" />
+            Sign Rejected
+          </Badge>
+        );
+      }
+      if (status === "pending_po") {
+        return (
+          <Badge variant="outline" className="bg-orange-100/80 text-orange-800 border-orange-300 dark:bg-orange-900/60 dark:text-orange-100 dark:border-orange-700 gap-1.5 pl-1.5 pr-2.5 font-bold shadow-sm">
+            <Clock className="h-3.5 w-3.5" />
+            PO Pending
+          </Badge>
+        );
+      }
+      if (status === "ready_for_delivery") {
+        return (
+          <Badge variant="outline" className="bg-emerald-100/80 text-emerald-800 border-emerald-300 dark:bg-emerald-900/60 dark:text-emerald-100 dark:border-emerald-700 gap-1.5 pl-1.5 pr-2.5 font-bold shadow-sm ring-1 ring-emerald-400/20">
+            <Package className="h-3.5 w-3.5" />
+            Ready to Ship
+          </Badge>
+        );
+      }
       if (status === "out_for_delivery") {
         return (
-          <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-950/50 dark:text-orange-400 dark:border-orange-800 gap-1.5 pl-1.5 pr-2.5">
+          <Badge variant="outline" className="bg-sky-100/80 text-sky-800 border-sky-300 dark:bg-sky-900/60 dark:text-sky-100 dark:border-sky-700 gap-1.5 pl-1.5 pr-2.5 font-bold shadow-sm animate-pulse">
             <Truck className="h-3.5 w-3.5" />
             Out for Delivery
           </Badge>
@@ -495,28 +570,26 @@ export function RequestsTable({
       }
       if (status === "delivered") {
         return (
-          <Badge variant="outline" className="bg-teal-50 text-teal-700 border-teal-200 dark:bg-teal-950/50 dark:text-teal-400 dark:border-teal-800 gap-1.5 pl-1.5 pr-2.5">
-            <Package className="h-3.5 w-3.5" />
+          <Badge variant="outline" className="bg-emerald-500 text-white border-emerald-600 dark:bg-emerald-600 dark:border-emerald-500 gap-1.5 pl-1.5 pr-2.5 font-black shadow-md">
+            <CheckCircle2 className="h-3.5 w-3.5" />
             Delivered
           </Badge>
         );
       }
 
-      // Handle legacy/extra statuses that might exist
-      if (status === "approved") return <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-400 dark:border-emerald-800 gap-1.5 pl-1.5 pr-2.5">Recheck</Badge>;
-      if (status === "cc_approved") return <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 dark:bg-green-950/50 dark:text-green-400 dark:border-green-800 gap-1.5 pl-1.5 pr-2.5">Ready for PO</Badge>;
-      if (status === "direct_po") return <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-950/50 dark:text-orange-400 dark:border-orange-800 gap-1.5 pl-1.5 pr-2.5">Pending PO</Badge>;
-      if (status === "ordered") return <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-400 dark:border-emerald-800 gap-1.5 pl-1.5 pr-2.5">Ready for Delivery</Badge>;
-      if (status === "partially_processed") return <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-200 dark:bg-yellow-950/50 dark:text-yellow-400 dark:border-yellow-800 gap-1.5 pl-1.5 pr-2.5">Ready for Delivery</Badge>;
-      if (status === "delivery_stage" || status === "delivery_processing") return <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-950/50 dark:text-orange-400 dark:border-orange-800 gap-1.5 pl-1.5 pr-2.5"><Truck className="h-3.5 w-3.5" />Out for Delivery</Badge>;
-      if (status === "rejected_po" || status === "po_rejected") return <Badge variant="outline" className="bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/50 dark:text-rose-400 dark:border-rose-800 gap-1.5 pl-1.5 pr-2.5">Sign Rejected</Badge>;
-      if (status === "recheck_requested") return <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-950/50 dark:text-indigo-400 dark:border-indigo-800 gap-1.5 pl-1.5 pr-2.5">Recheck</Badge>;
+      // Handle extra statuses
+      if (status === "approved") return <Badge variant="outline" className="bg-emerald-100/80 text-emerald-800 border-emerald-300 dark:bg-emerald-900/60 dark:text-emerald-100 gap-1.5 pl-1.5 pr-2.5 font-bold shadow-sm">Approved</Badge>;
+      if (status === "cc_approved") return <Badge variant="outline" className="bg-teal-100/80 text-teal-800 border-teal-300 dark:bg-teal-900/60 dark:text-teal-100 gap-1.5 pl-1.5 pr-2.5 font-bold shadow-sm">CC Approved</Badge>;
+      if (status === "direct_po") return <Badge variant="outline" className="bg-orange-100/80 text-orange-800 border-orange-300 dark:bg-orange-900/60 dark:text-orange-100 gap-1.5 pl-1.5 pr-2.5 font-bold shadow-sm">Direct PO</Badge>;
+      if (status === "ordered") return <Badge variant="outline" className="bg-emerald-100/80 text-emerald-800 border-emerald-300 dark:bg-emerald-900/60 dark:text-emerald-100 gap-1.5 pl-1.5 pr-2.5 font-bold shadow-sm">Ordered</Badge>;
+      if (status === "partially_processed") return <Badge variant="outline" className="bg-yellow-100/80 text-yellow-800 border-yellow-300 dark:bg-yellow-900/60 dark:text-yellow-100 gap-1.5 pl-1.5 pr-2.5 font-bold shadow-sm">Partial</Badge>;
+      if (status === "delivery_stage" || status === "delivery_processing") return <Badge variant="outline" className="bg-sky-100/80 text-sky-800 border-sky-300 dark:bg-sky-900/60 dark:text-sky-100 gap-1.5 pl-1.5 pr-2.5 font-bold shadow-sm"><Truck className="h-3.5 w-3.5" />In Delivery</Badge>;
+      if (status === "rejected_po" || status === "po_rejected") return <Badge variant="outline" className="bg-rose-100/80 text-rose-800 border-rose-300 dark:bg-rose-900/60 dark:text-rose-100 gap-1.5 pl-1.5 pr-2.5 font-bold shadow-sm">PO Rejected</Badge>;
 
-      // Fallback for unknown statuses
       return <Badge variant="outline">{status}</Badge>;
     }
 
-    // ===== SITE ENGINEER VIEW - ONLY 6 SIMPLIFIED STATUSES =====
+    // ===== SIMPLIFIED / SITE ENGINEER VIEW - ONLY 6 SIMPLIFIED STATUSES =====
     if (status === "draft") {
       return (
         <Badge variant="outline" className="bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-900/50 dark:text-slate-400 dark:border-slate-800 gap-1.5 pl-1.5 pr-2.5">
@@ -586,10 +659,10 @@ export function RequestsTable({
   const CardView = () => (
     <>
       <div className={cn(
-        "grid gap-4",
+        "grid gap-6",
         singleColumn
           ? "grid-cols-1"
-          : "grid-cols-1 min-[1000px]:grid-cols-2 min-[1900px]:grid-cols-3"
+          : "grid-cols-1 md:grid-cols-2 2xl:grid-cols-3"
       )}>
         {groupedRequestsArray.map((group) => {
           const { requestNumber, items, firstItem } = group;
@@ -604,22 +677,23 @@ export function RequestsTable({
             : true;
 
           const getOverallStatus = () => {
-            if (allItemsHaveSameStatus) return items[0].status;
-            const processedStatuses = items.filter(item => !["pending", "draft"].includes(item.status));
-            if (processedStatuses.length > 0 && processedStatuses.length < items.length) return "partially_processed";
-            return null;
+            return items[0].status;
           };
 
           const overallStatus = getOverallStatus();
 
           // Helper to get item-specific background color based on status - LIGHTER & SUBTLE
           const getItemStatusBgColor = (status: string) => {
-            if (status === "draft") return "bg-slate-50 dark:bg-slate-900/30 border-slate-200 dark:border-slate-700";
+            if (status === "draft") return "bg-slate-50 dark:bg-slate-900/30 border-slate-200 dark:border-slate-800";
             if (["pending", "sign_pending"].includes(status)) return "bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800";
-            if (status === "approved") return "bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800";
-            if (["recheck", "ready_for_cc", "cc_pending", "cc_approved", "ready_for_po", "pending_po", "direct_po", "partially_processed"].includes(status)) return "bg-indigo-50 dark:bg-indigo-950/30 border-indigo-200 dark:border-indigo-800";
-            if (["ready_for_delivery", "delivery_processing", "delivery_stage", "out_for_delivery"].includes(status)) return "bg-orange-50 dark:bg-orange-950/30 border-orange-200 dark:border-orange-800";
-            if (status === "delivered") return "bg-teal-50 dark:bg-teal-950/30 border-teal-200 dark:border-teal-800";
+            if (status === "approved" || status === "ready_for_delivery") return "bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800";
+            if (status === "delivered") return "bg-green-100/50 dark:bg-green-900/30 border-green-300 dark:border-green-800";
+            if (status === "recheck") return "bg-indigo-50 dark:bg-indigo-950/30 border-indigo-200 dark:border-indigo-800";
+            if (status === "ready_for_cc") return "bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-800";
+            if (status === "cc_pending") return "bg-purple-50 dark:bg-purple-950/30 border-purple-200 dark:border-purple-800";
+            if (status === "ready_for_po") return "bg-teal-50 dark:bg-teal-950/30 border-teal-200 dark:border-teal-800";
+            if (["pending_po", "direct_po"].includes(status)) return "bg-orange-50 dark:bg-orange-950/30 border-orange-200 dark:border-orange-800";
+            if (["out_for_delivery", "delivery_processing", "delivery_stage"].includes(status)) return "bg-sky-50 dark:bg-sky-950/30 border-sky-200 dark:border-sky-800";
             if (["rejected", "sign_rejected", "cc_rejected", "rejected_po"].includes(status)) return "bg-rose-50 dark:bg-rose-950/30 border-rose-200 dark:border-rose-800";
             return "bg-card border-border";
           };
@@ -627,12 +701,16 @@ export function RequestsTable({
           // Helper to get item-specific left border color based on status
           const getItemStatusBorderColor = (status: string) => {
             if (status === "draft") return "bg-slate-400";
-            if (["pending", "sign_pending"].includes(status)) return "bg-amber-500";
-            if (status === "approved") return "bg-emerald-500";
-            if (["recheck", "ready_for_cc", "cc_pending", "cc_approved", "ready_for_po", "pending_po", "direct_po", "partially_processed"].includes(status)) return "bg-indigo-500";
-            if (["ready_for_delivery", "delivery_processing", "delivery_stage", "out_for_delivery"].includes(status)) return "bg-orange-500";
-            if (status === "delivered") return "bg-teal-500";
-            if (["rejected", "sign_rejected", "cc_rejected", "rejected_po"].includes(status)) return "bg-rose-500";
+            if (["pending", "sign_pending"].includes(status)) return "bg-amber-500 shadow-[0_0_10px_rgba(245,158,11,0.3)]";
+            if (status === "approved" || status === "ready_for_delivery") return "bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.3)]";
+            if (status === "delivered") return "bg-green-600 shadow-[0_0_10px_rgba(22,163,74,0.3)]";
+            if (status === "recheck") return "bg-indigo-500";
+            if (status === "ready_for_cc") return "bg-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.3)]";
+            if (status === "cc_pending") return "bg-purple-500 shadow-[0_0_10px_rgba(168,85,247,0.3)]";
+            if (status === "ready_for_po") return "bg-teal-500 shadow-[0_0_10px_rgba(20,184,166,0.3)]";
+            if (["pending_po", "direct_po"].includes(status)) return "bg-orange-500 shadow-[0_0_10px_rgba(249,115,22,0.3)]";
+            if (["out_for_delivery", "delivery_processing", "delivery_stage"].includes(status)) return "bg-sky-500 shadow-[0_0_10px_rgba(14,165,233,0.3)]";
+            if (["rejected", "sign_rejected", "cc_rejected", "rejected_po"].includes(status)) return "bg-rose-500 shadow-[0_0_10px_rgba(244,63,94,0.3)]";
             return "bg-primary/20";
           };
 
@@ -685,9 +763,9 @@ export function RequestsTable({
                 {showBadges && (
                   <div className="flex flex-wrap items-center gap-2 pt-2">
                     {item.isUrgent && (
-                      <Badge variant="destructive" className="h-5 px-1.5 text-[10px] gap-1 animate-pulse">
-                        <AlertCircle className="h-3 w-3" />
-                        Urgent
+                      <Badge variant="destructive" className="h-6 px-2.5 text-xs font-black gap-1.5 shadow-md shadow-red-500/20 border-red-400">
+                        <AlertCircle className="h-3.5 w-3.5" />
+                        URGENT
                       </Badge>
                     )}
                   </div>
@@ -706,26 +784,21 @@ export function RequestsTable({
             >
               {/* Card Header with Labels */}
               <div className="flex items-start justify-between mb-3 sm:mb-4 pb-2 sm:pb-3 border-b border-border/50 gap-2 sm:gap-3">
-                <div className="space-y-1">
+                <div className="space-y-1.5 flex-1 min-w-0">
                   <div className="flex items-center gap-2">
-                    <span className="text-sm font-bold text-muted-foreground uppercase tracking-wider">Request ID</span>
+                    <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest opacity-70">Request ID</span>
                   </div>
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-2xl font-black font-mono text-primary dark:text-white tracking-tight">#{requestNumber}</span>
+                    <span className="text-xl sm:text-2xl font-black font-mono text-primary dark:text-white tracking-tighter">#{requestNumber}</span>
                     {!hideStatusOnCard && (
-                      <div className="scale-110 origin-left ml-1">
+                      <div className="scale-125 origin-left ml-2 sm:ml-3">
                         {getStatusBadge(overallStatus || firstItem.status)}
                       </div>
                     )}
-                    {hasMultipleItems && !hideItemCountOnCard && (
-                      <Badge variant="outline" className="text-xs px-2.5 py-1 bg-slate-50 text-slate-700 border-slate-200 dark:bg-slate-900/50 dark:text-slate-400 dark:border-slate-700">
-                        {items.length} items
-                      </Badge>
-                    )}
                     {urgentCount > 0 && (
-                      <Badge variant="destructive" className="h-6 px-2.5 text-xs gap-1.5 animate-pulse items-center">
+                      <Badge variant="destructive" className="ml-2 h-7 px-3 text-xs font-black gap-1.5 shadow-md animate-pulse border-red-500">
                         <AlertCircle className="h-3.5 w-3.5" />
-                        Urgent: {urgentCount}/{items.length}
+                        URGENT: {urgentCount}/{items.length}
                       </Badge>
                     )}
                   </div>
@@ -831,32 +904,51 @@ export function RequestsTable({
               <div className="flex flex-wrap items-center justify-between gap-2 p-3 -mx-3 sm:-mx-4 -mb-3 sm:-mb-4 mt-3 sm:mt-4 bg-slate-50/80 dark:bg-slate-900/40 border-t border-border/50 rounded-b-xl backdrop-blur-sm">
                 <div className="flex items-center gap-2 pl-0 sm:pl-1 min-w-0 flex-shrink order-1">
                   <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-                    {/* Avatar */}
-                    <div
-                      className="h-9 w-9 rounded-full bg-gradient-to-br from-white to-slate-100 dark:from-slate-800 dark:to-slate-900 border border-slate-200 dark:border-slate-700 flex items-center justify-center shadow-sm cursor-pointer hover:ring-2 hover:ring-primary/20 transition-all"
-                      onClick={(e) => { e.stopPropagation(); setSelectedUserId(firstItem.createdBy); }}
-                      title="View User Profile"
-                    >
-                      <span className="text-xs font-black text-slate-700 dark:text-slate-300">
-                        {firstItem.creator?.fullName?.charAt(0).toUpperCase() || "?"}
-                      </span>
-                    </div>
+                    {showCreator && (
+                      <>
+                        {/* Avatar */}
+                        <div
+                          className="h-9 w-9 rounded-full bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-center overflow-hidden shadow-sm cursor-pointer hover:ring-2 hover:ring-primary/20 transition-all"
+                          onClick={(e) => { e.stopPropagation(); setSelectedUserId(firstItem.createdBy); }}
+                          title={`View ${firstItem.creator?.fullName || "User"}'s profile`}
+                        >
+                          {firstItem.creator?.profileImage ? (
+                            <LazyImage
+                              src={firstItem.creator.profileImage}
+                              alt={firstItem.creator.fullName}
+                              className="h-full w-full object-cover"
+                            />
+                          ) : (
+                            <span className="text-xs font-black text-slate-700 dark:text-slate-300">
+                              {firstItem.creator?.fullName?.charAt(0).toUpperCase() || "?"}
+                            </span>
+                          )}
+                        </div>
 
-                    <div className="flex flex-col min-w-0">
-                      <span className="text-[10px] uppercase font-bold text-muted-foreground/70 tracking-wider">Created By</span>
-                      <div className="flex items-center gap-1.5 min-w-0">
-                        {firstItem.creator && (
-                          <span
-                            className="text-xs font-bold text-foreground hover:text-primary cursor-pointer transition-colors truncate max-w-[100px] sm:max-w-none"
-                            onClick={(e) => { e.stopPropagation(); setSelectedUserId(firstItem.createdBy); }}
-                          >
-                            {firstItem.creator.fullName}
-                          </span>
-                        )}
-                        <span className="text-[10px] text-muted-foreground/40 hidden sm:inline">•</span>
-                        <span className="text-xs font-medium text-muted-foreground hidden sm:inline">{format(new Date(firstItem.createdAt), "dd MMM, hh:mm a")}</span>
+                        <div className="flex flex-col min-w-0">
+                          <span className="text-[10px] uppercase font-bold text-muted-foreground/70 tracking-wider">Created By</span>
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            {firstItem.creator && (
+                              <span
+                                className="text-xs font-bold text-foreground hover:text-primary cursor-pointer transition-colors truncate max-w-[100px] sm:max-w-none"
+                                onClick={(e) => { e.stopPropagation(); setSelectedUserId(firstItem.createdBy); }}
+                              >
+                                {firstItem.creator.fullName}
+                              </span>
+                            )}
+                            <span className="text-[10px] text-muted-foreground/40 hidden sm:inline">•</span>
+                            <span className="text-xs font-medium text-muted-foreground hidden sm:inline">{format(new Date(firstItem.createdAt), "dd MMM, hh:mm a")}</span>
+                          </div>
+                        </div>
+                      </>
+                    )}
+
+                    {!showCreator && (
+                      <div className="flex flex-col min-w-0">
+                        <span className="text-[10px] uppercase font-bold text-muted-foreground/70 tracking-wider">Created</span>
+                        <span className="text-xs font-bold text-foreground truncate select-all">{format(new Date(firstItem.createdAt), "dd MMM, hh:mm a")}</span>
                       </div>
-                    </div>
+                    )}
                   </div>
                 </div>
 
@@ -948,13 +1040,13 @@ export function RequestsTable({
           <div className="overflow-x-auto">
             <Table>
               <TableHeader>
-                <TableRow className="bg-muted/80 hover:bg-muted/80 border-b-2 border-primary/20">
+                <TableRow className="bg-muted/30 hover:bg-muted/30 border-b border-border">
                   <TableHead className="w-[50px]"></TableHead>
-                  <TableHead className="w-[120px] font-extrabold text-sm uppercase tracking-wider text-foreground/80">Request ID</TableHead>
-                  <TableHead className="min-w-[180px] font-extrabold text-sm uppercase tracking-wider text-foreground/80">Location</TableHead>
-                  <TableHead className="w-[150px] font-extrabold text-sm uppercase tracking-wider text-foreground/80">Dates</TableHead>
-                  <TableHead className="min-w-[350px] font-extrabold text-sm uppercase tracking-wider text-foreground/80">Item Details</TableHead>
-                  <TableHead className="text-right min-w-[100px] font-extrabold text-sm uppercase tracking-wider text-foreground/80">Actions</TableHead>
+                  <TableHead className="w-[120px] font-bold text-xs uppercase tracking-tight text-muted-foreground/80">Request ID</TableHead>
+                  <TableHead className="min-w-[180px] font-bold text-xs uppercase tracking-tight text-muted-foreground/80">Location</TableHead>
+                  <TableHead className="w-[150px] font-bold text-xs uppercase tracking-tight text-muted-foreground/80">Dates</TableHead>
+                  <TableHead className="min-w-[350px] font-bold text-xs uppercase tracking-tight text-muted-foreground/80">Item Details</TableHead>
+                  <TableHead className="text-right min-w-[100px] font-bold text-xs uppercase tracking-tight text-muted-foreground/80">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -977,35 +1069,47 @@ export function RequestsTable({
                   const getStatusBorderColor = (status: string) => {
                     if (status === "draft") return "border-l-slate-400";
                     if (["pending", "sign_pending"].includes(status)) return "border-l-amber-500";
-                    if (status === "approved") return "border-l-emerald-500";
-                    if (["recheck", "ready_for_cc", "cc_pending", "cc_approved", "ready_for_po", "pending_po", "direct_po", "partially_processed"].includes(status)) return "border-l-indigo-500";
-                    if (["ready_for_delivery", "delivery_processing", "delivery_stage", "out_for_delivery"].includes(status)) return "border-l-orange-500";
-                    if (status === "delivered") return "border-l-teal-500";
-                    if (["rejected", "sign_rejected", "cc_rejected", "rejected_po", "cc_rejected"].includes(status)) return "border-l-rose-500";
+                    if (status === "approved" || status === "ready_for_delivery") return "border-l-emerald-500";
+                    if (status === "delivered") return "border-l-green-600";
+                    if (status === "recheck") return "border-l-indigo-500";
+                    if (status === "ready_for_cc") return "border-l-blue-500";
+                    if (status === "cc_pending") return "border-l-purple-500";
+                    if (status === "ready_for_po") return "border-l-teal-500";
+                    if (["pending_po", "direct_po"].includes(status)) return "border-l-orange-500";
+                    if (["out_for_delivery", "delivery_processing", "delivery_stage"].includes(status)) return "border-l-sky-500";
+                    if (["rejected", "sign_rejected", "cc_rejected", "rejected_po"].includes(status)) return "border-l-rose-500";
                     return "border-l-muted";
                   };
 
                   // Get status background color for table row - VISIBLE & PREMIUM
                   const getStatusBgColor = (status: string) => {
-                    if (status === "draft") return "bg-slate-50/80 dark:bg-slate-900/40 hover:bg-slate-100 dark:hover:bg-slate-900/60";
-                    if (["pending", "sign_pending"].includes(status)) return "bg-amber-50/80 dark:bg-amber-950/20 hover:bg-amber-100 dark:hover:bg-amber-950/30";
-                    if (status === "approved") return "bg-emerald-50/80 dark:bg-emerald-950/20 hover:bg-emerald-100 dark:hover:bg-emerald-950/30";
-                    if (["recheck", "ready_for_cc", "cc_pending", "cc_approved", "ready_for_po", "pending_po", "direct_po", "partially_processed"].includes(status)) return "bg-indigo-50/80 dark:bg-indigo-950/20 hover:bg-indigo-100 dark:hover:bg-indigo-950/30";
-                    if (["ready_for_delivery", "delivery_processing", "delivery_stage", "out_for_delivery"].includes(status)) return "bg-orange-50/80 dark:bg-orange-950/20 hover:bg-orange-100 dark:hover:bg-orange-950/30";
-                    if (status === "delivered") return "bg-teal-50/80 dark:bg-teal-950/20 hover:bg-teal-100 dark:hover:bg-teal-950/30";
-                    if (["rejected", "sign_rejected", "cc_rejected", "rejected_po", "cc_rejected"].includes(status)) return "bg-rose-50/80 dark:bg-rose-950/20 hover:bg-rose-100 dark:hover:bg-rose-950/30";
-                    return "bg-card hover:bg-accent/50";
+                    if (status === "draft") return "bg-slate-50/80 dark:bg-slate-950/20 hover:bg-slate-100/50 dark:hover:bg-slate-900/40";
+                    if (["pending", "sign_pending"].includes(status)) return "bg-amber-50/80 dark:bg-amber-950/20 hover:bg-amber-100/50 dark:hover:bg-amber-950/40";
+                    if (status === "approved" || status === "ready_for_delivery") return "bg-emerald-50/80 dark:bg-emerald-950/20 hover:bg-emerald-100/50 dark:hover:bg-emerald-950/40";
+                    if (status === "delivered") return "bg-green-50/80 dark:bg-green-950/20 hover:bg-green-100/50 dark:hover:bg-green-950/40";
+                    if (status === "recheck") return "bg-indigo-50/80 dark:bg-indigo-950/20 hover:bg-indigo-100/50 dark:hover:bg-indigo-950/40";
+                    if (status === "ready_for_cc") return "bg-blue-50/80 dark:bg-blue-950/20 hover:bg-blue-100/50 dark:hover:bg-blue-950/40";
+                    if (status === "cc_pending") return "bg-purple-50/80 dark:bg-purple-950/20 hover:bg-purple-100/50 dark:hover:bg-purple-950/40";
+                    if (status === "ready_for_po") return "bg-teal-50/80 dark:bg-teal-950/20 hover:bg-teal-100/50 dark:hover:bg-teal-950/40";
+                    if (["pending_po", "direct_po"].includes(status)) return "bg-orange-50/80 dark:bg-orange-950/20 hover:bg-orange-100/50 dark:hover:bg-orange-950/40";
+                    if (["out_for_delivery", "delivery_processing", "delivery_stage"].includes(status)) return "bg-sky-50/80 dark:bg-sky-950/20 hover:bg-sky-100/50 dark:hover:bg-sky-950/40";
+                    if (["rejected", "sign_rejected", "cc_rejected", "rejected_po"].includes(status)) return "bg-rose-50/80 dark:bg-rose-950/20 hover:bg-rose-100/50 dark:hover:bg-rose-950/40";
+                    return "bg-card hover:bg-accent/30";
                   };
 
                   // Get status bar color - EXPLICIT classes for Tailwind JIT
                   const getStatusBarColor = (status: string) => {
                     if (status === "draft") return "bg-slate-400";
                     if (["pending", "sign_pending"].includes(status)) return "bg-amber-500";
-                    if (status === "approved") return "bg-emerald-500";
-                    if (["recheck", "ready_for_cc", "cc_pending", "cc_approved", "ready_for_po", "pending_po", "direct_po", "partially_processed"].includes(status)) return "bg-indigo-500";
-                    if (["ready_for_delivery", "delivery_processing", "delivery_stage", "out_for_delivery"].includes(status)) return "bg-orange-500";
-                    if (status === "delivered") return "bg-teal-500";
-                    if (["rejected", "sign_rejected", "cc_rejected", "rejected_po", "cc_rejected"].includes(status)) return "bg-rose-500";
+                    if (status === "approved" || status === "ready_for_delivery") return "bg-emerald-500";
+                    if (status === "delivered") return "bg-green-600";
+                    if (status === "recheck") return "bg-indigo-500";
+                    if (status === "ready_for_cc") return "bg-blue-500";
+                    if (status === "cc_pending") return "bg-purple-500";
+                    if (status === "ready_for_po") return "bg-teal-500";
+                    if (["pending_po", "direct_po"].includes(status)) return "bg-orange-500";
+                    if (["out_for_delivery", "delivery_processing", "delivery_stage"].includes(status)) return "bg-sky-500";
+                    if (["rejected", "sign_rejected", "cc_rejected", "rejected_po"].includes(status)) return "bg-rose-500";
                     return "bg-muted";
                   };
 

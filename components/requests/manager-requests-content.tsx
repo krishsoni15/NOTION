@@ -24,7 +24,10 @@ import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, Command
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { PaginationControls } from "@/components/ui/pagination-controls";
 import type { Id } from "@/convex/_generated/dataModel";
+
+type SortOption = "newest" | "oldest" | "items_desc" | "items_asc";
 
 type RequestStatus =
     | "draft"
@@ -60,7 +63,12 @@ export function ManagerRequestsContent() {
     const [categoryFilter, setCategoryFilter] = useState<string>("all");
     const [statusFilter, setStatusFilter] = useState<string[]>([]);
     const [inventoryFilter, setInventoryFilter] = useState<string>("all");
-    const { viewMode, toggleViewMode } = useViewMode();
+    const [sortBy, setSortBy] = useState<SortOption>("newest");
+    const { viewMode, toggleViewMode } = useViewMode("manager-requests-view-mode");
+
+    // Pagination State
+    const [currentPage, setCurrentPage] = useState(1);
+    const [pageSize, setPageSize] = useState(10);
 
     /* Manager View: Shows comprehensive status breakdown */
     const allRequests = useQuery(api.requests.getAllRequests);
@@ -166,6 +174,63 @@ export function ManagerRequestsContent() {
         });
     }, [allRequests, searchQuery, workFilter, categoryFilter, statusFilter, inventoryFilter, inventoryStatus]);
 
+    // Group and Sort Logic for Pagination
+    const groupedAndSortedRequests = useMemo(() => {
+        if (!filteredRequests) return [];
+
+        // Group by requestNumber
+        const groups = new Map<string, any[]>();
+        filteredRequests.forEach((req) => {
+            const group = groups.get(req.requestNumber) || [];
+            group.push(req);
+            groups.set(req.requestNumber, group);
+        });
+
+        const sortedGroups = Array.from(groups.entries()).map(([requestNumber, items]) => ({
+            requestNumber,
+            items,
+            latestUpdate: Math.max(...items.map(i => i.updatedAt)),
+            createdAt: Math.min(...items.map(i => i.createdAt)),
+            itemCount: items.length
+        }));
+
+        // Sort groups
+        sortedGroups.sort((a, b) => {
+            switch (sortBy) {
+                case "newest":
+                    return b.latestUpdate - a.latestUpdate;
+                case "oldest":
+                    return a.latestUpdate - b.latestUpdate;
+                case "items_desc":
+                    return b.itemCount - a.itemCount;
+                case "items_asc":
+                    return a.itemCount - b.itemCount;
+                default:
+                    return 0;
+            }
+        });
+
+        return sortedGroups;
+    }, [filteredRequests, sortBy]);
+
+    // Flatten paginated groups back to items for RequestsTable
+    const paginatedItems = useMemo(() => {
+        const totalGroups = groupedAndSortedRequests.length;
+        const totalPages = Math.ceil(totalGroups / pageSize);
+
+        // Ensure current page is valid
+        const validPage = Math.min(currentPage, Math.max(1, totalPages));
+        if (validPage !== currentPage && totalGroups > 0) {
+            setCurrentPage(validPage);
+        }
+
+        const startIndex = (validPage - 1) * pageSize;
+        const pageGroups = groupedAndSortedRequests.slice(startIndex, startIndex + pageSize);
+
+        // Flatten
+        return pageGroups.flatMap(g => g.items);
+    }, [groupedAndSortedRequests, currentPage, pageSize]);
+
     // --- Smart Counts Logic ---
 
     // 1. Available requests for Work Filter (Filtered by Category & Status)
@@ -267,19 +332,19 @@ export function ManagerRequestsContent() {
     // Individual status options for detailed filtering with colors
     // Individual status options for detailed filtering with colors
     const detailedStatusOptions = [
-        { value: "draft", label: "Draft", count: getSmartStatusCount("draft"), color: "text-gray-500" },
+        { value: "draft", label: "Draft", count: getSmartStatusCount("draft"), color: "text-slate-500" },
         { value: "pending", label: "Pending", count: getSmartStatusCount("pending"), color: "text-amber-600" },
         { value: "rejected", label: "Rejected", count: getSmartStatusCount("rejected"), color: "text-red-600" },
         { value: "recheck", label: "Recheck", count: getSmartStatusCount("recheck"), color: "text-indigo-600" },
-        { value: "ready_for_cc", label: "Ready for CC", count: getSmartStatusCount("ready_for_cc"), color: "text-indigo-600" },
+        { value: "ready_for_cc", label: "Ready for CC", count: getSmartStatusCount("ready_for_cc"), color: "text-blue-600" },
         { value: "cc_pending", label: "CC Pending", count: getSmartStatusCount("cc_pending"), color: "text-purple-600" },
         { value: "cc_rejected", label: "CC Rejected", count: getSmartStatusCount("cc_rejected"), color: "text-red-500" },
         { value: "ready_for_po", label: "Ready for PO", count: getSmartStatusCount("ready_for_po"), color: "text-teal-600" },
         { value: "sign_pending", label: "Sign Pending", count: getSmartStatusCount("sign_pending"), color: "text-amber-600" },
         { value: "sign_rejected", label: "Sign Rejected", count: getSmartStatusCount("sign_rejected"), color: "text-red-600" },
         { value: "pending_po", label: "Pending PO", count: getSmartStatusCount("pending_po"), color: "text-orange-600" },
-        { value: "ready_for_delivery", label: "Ready for Delivery", count: getSmartStatusCount("ready_for_delivery"), color: "text-indigo-600" },
-        { value: "delivery_processing", label: "Out for Delivery", count: getSmartStatusCount("delivery_processing"), color: "text-blue-600" },
+        { value: "ready_for_delivery", label: "Ready for Delivery", count: getSmartStatusCount("ready_for_delivery"), color: "text-emerald-600" },
+        { value: "out_for_delivery", label: "Out for Delivery", count: getSmartStatusCount("out_for_delivery"), color: "text-orange-600" },
         { value: "delivered", label: "Delivered", count: getSmartStatusCount("delivered"), color: "text-sky-600" },
     ];
 
@@ -287,160 +352,172 @@ export function ManagerRequestsContent() {
         <>
             <div className="space-y-6">
                 {/* Search and Filters */}
-                <Card>
-                    <CardContent className="pt-6">
-                        <div className="flex flex-col gap-4">
-                            <div className="flex flex-col sm:flex-row gap-6">
-                                <div className="flex-1 relative">
-                                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
-                                    <Input
-                                        placeholder="Search by request number, item, site, or creator..."
-                                        value={searchQuery}
-                                        onChange={(e) => setSearchQuery(e.target.value)}
-                                        className="pl-10"
-                                    />
-                                </div>
-                                <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
-                                    <div className="w-full sm:w-[180px]">
-                                        <Select value={workFilter} onValueChange={setWorkFilter}>
-                                            <SelectTrigger className="h-9">
-                                                <SelectValue placeholder="Scope" />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="all">All Requests</SelectItem>
-                                                <SelectItem value="work_pending">Detail Review ({workCounts.work_pending || 0})</SelectItem>
-                                            </SelectContent>
-                                        </Select>
-                                    </div>
-                                    <div className="w-full sm:w-[200px]">
-                                        <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-                                            <SelectTrigger className="h-9">
-                                                <Filter className="h-4 w-4 mr-2" />
-                                                <SelectValue placeholder="Category" />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="all">All Categories</SelectItem>
-                                                <SelectItem value="site_engineer">Site Engineer ({categoryCounts.site_engineer || 0})</SelectItem>
-                                                <SelectItem value="purchases">Purchases ({categoryCounts.purchases || 0})</SelectItem>
-                                            </SelectContent>
-                                        </Select>
-                                    </div>
-                                    <div className="w-full sm:w-[180px]">
-                                        <Select value={inventoryFilter} onValueChange={setInventoryFilter}>
-                                            <SelectTrigger className="h-9">
-                                                <Package className="h-4 w-4 mr-2" />
-                                                <SelectValue placeholder="Inventory" />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="all">All Inventory</SelectItem>
-                                                <SelectItem value="new_item">New Item</SelectItem>
-                                                <SelectItem value="out_of_stock">Out of Stock</SelectItem>
-                                                <SelectItem value="partially_stocked">Partially Stocked</SelectItem>
-                                                <SelectItem value="in_stock">In Stock</SelectItem>
-                                            </SelectContent>
-                                        </Select>
-                                    </div>
-                                    <div className="w-full sm:w-[180px]">
-                                        <Popover>
-                                            <PopoverTrigger asChild>
-                                                <Button variant="outline" className="h-9 w-full justify-between px-3 text-left font-normal">
-                                                    <span className="truncate">
-                                                        {statusFilter.length === 0
-                                                            ? "All Statuses"
-                                                            : `${statusFilter.length} Selected`}
-                                                    </span>
-                                                    <Filter className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                                                </Button>
-                                            </PopoverTrigger>
-                                            <PopoverContent className="w-[220px] p-0" align="start">
-                                                <Command>
-                                                    <CommandInput placeholder="Search status..." />
-                                                    <CommandList>
-                                                        <CommandEmpty>No status found.</CommandEmpty>
-                                                        <CommandGroup>
-                                                            <CommandItem
-                                                                onSelect={() => setStatusFilter([])}
-                                                                className="cursor-pointer"
-                                                            >
-                                                                <div className={cn(
-                                                                    "mr-2 flex h-4 w-4 items-center justify-center rounded-sm border border-primary",
-                                                                    statusFilter.length === 0
-                                                                        ? "bg-primary text-primary-foreground"
-                                                                        : "opacity-50 [&_svg]:invisible"
-                                                                )}>
-                                                                    <Check className={cn("h-4 w-4")} />
-                                                                </div>
-                                                                <span>All Statuses</span>
-                                                            </CommandItem>
-                                                            <CommandSeparator className="my-1" />
-                                                            {detailedStatusOptions.map((option) => {
-                                                                const isSelected = statusFilter.includes(option.value);
-                                                                return (
-                                                                    <CommandItem
-                                                                        key={option.value}
-                                                                        onSelect={() => {
-                                                                            if (isSelected) {
-                                                                                setStatusFilter(statusFilter.filter((s) => s !== option.value));
-                                                                            } else {
-                                                                                setStatusFilter([...statusFilter, option.value]);
-                                                                            }
-                                                                        }}
-                                                                        className="cursor-pointer"
-                                                                    >
-                                                                        <div className={cn(
-                                                                            "mr-2 flex h-4 w-4 items-center justify-center rounded-sm border",
-                                                                            isSelected
-                                                                                ? "bg-primary border-primary text-primary-foreground"
-                                                                                : "opacity-50 [&_svg]:invisible border-input",
-                                                                            // If not selected, tint the border slightly with the color (optional), or just keep standard.
-                                                                            // Here we keep standard border but colored text. 
-                                                                        )}>
-                                                                            <Check className={cn("h-4 w-4")} />
-                                                                        </div>
-                                                                        <span className={cn("flex-1", option.color)}>{option.label}</span>
-                                                                        <span className="ml-auto text-xs text-muted-foreground">
-                                                                            {option.count}
-                                                                        </span>
-                                                                    </CommandItem>
-                                                                );
-                                                            })}
-                                                        </CommandGroup>
-                                                    </CommandList>
-                                                </Command>
-                                            </PopoverContent>
-                                        </Popover>
-                                    </div>
-                                </div>
-                            </div>
-                            {/* View Mode Toggle */}
-                            <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-2">
-                                    <span className="text-sm font-medium text-muted-foreground mr-2">View:</span>
-                                    <Button
-                                        variant="outline"
-                                        size="icon"
-                                        onClick={toggleViewMode}
-                                        className="h-8 w-8"
-                                        title={viewMode === "card" ? "Show Table" : "Show Cards"}
-                                    >
-                                        {viewMode === "card" ? (
-                                            <TableIcon className="h-4 w-4" />
-                                        ) : (
-                                            <LayoutGrid className="h-4 w-4" />
-                                        )}
-                                    </Button>
-                                </div>
-                                <div className="text-sm text-muted-foreground">
-                                    {filteredRequests.length} {filteredRequests.length === 1 ? 'request' : 'requests'}
-                                </div>
-                            </div>
+                {/* Enhanced Toolbar */}
+                <div className="flex flex-col gap-3 bg-card p-4 rounded-xl border border-border shadow-sm">
+                    {/* Row 1: Search and View Mode */}
+                    <div className="flex items-center gap-3">
+                        <div className="relative flex-1">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                            <Input
+                                placeholder="Search by request #, item, site, or creator..."
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                className="pl-9 h-10 bg-muted/30 border-muted-foreground/20 focus-visible:ring-primary/20 transition-all font-medium w-full"
+                            />
                         </div>
-                    </CardContent>
-                </Card>
+                        <Button
+                            variant="outline"
+                            size="icon"
+                            onClick={toggleViewMode}
+                            className="h-10 w-10 flex-shrink-0 bg-muted/30 border-muted-foreground/20 hover:bg-primary/10 hover:border-primary/30 hover:text-primary transition-all"
+                        >
+                            {viewMode === "card" ? <TableIcon className="h-5 w-5" /> : <LayoutGrid className="h-5 w-5" />}
+                        </Button>
+                    </div>
 
-                {/* Requests Table */}
+                    {/* Row 2: Primary Filters */}
+                    <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-border/50">
+                        <Select value={workFilter} onValueChange={setWorkFilter}>
+                            <SelectTrigger className="h-9 w-[160px] bg-muted/20 border-muted-foreground/10">
+                                <SelectValue placeholder="All Requests" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">Total: {allRequests?.length || 0}</SelectItem>
+                                <SelectItem value="work_pending">Detail Review ({workCounts.work_pending || 0})</SelectItem>
+                            </SelectContent>
+                        </Select>
+
+                        <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+                            <SelectTrigger className="h-9 w-[170px] bg-muted/20 border-muted-foreground/10">
+                                <Filter className="h-3.5 w-3.5 mr-2 opacity-70" />
+                                <SelectValue placeholder="Category" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All Categories</SelectItem>
+                                <SelectItem value="site_engineer">Site Eng. ({categoryCounts.site_engineer || 0})</SelectItem>
+                                <SelectItem value="purchases">Purchases ({categoryCounts.purchases || 0})</SelectItem>
+                            </SelectContent>
+                        </Select>
+
+                        <Select value={inventoryFilter} onValueChange={setInventoryFilter}>
+                            <SelectTrigger className="h-9 w-[160px] bg-muted/20 border-muted-foreground/10">
+                                <Package className="h-3.5 w-3.5 mr-2 opacity-70" />
+                                <SelectValue placeholder="Inventory" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All Inventory</SelectItem>
+                                <SelectItem value="new_item">New Item</SelectItem>
+                                <SelectItem value="out_of_stock">Out of Stock</SelectItem>
+                                <SelectItem value="partially_stocked">Partially</SelectItem>
+                                <SelectItem value="in_stock">In Stock</SelectItem>
+                            </SelectContent>
+                        </Select>
+
+                        <Popover>
+                            <PopoverTrigger asChild>
+                                <Button variant="outline" className="h-9 min-w-[140px] justify-between px-3 text-left font-normal bg-muted/20 border-muted-foreground/10">
+                                    <span className="truncate">
+                                        {statusFilter.length === 0 ? "All Statuses" : `${statusFilter.length} Selected`}
+                                    </span>
+                                    <Filter className="ml-2 h-3.5 w-3.5 shrink-0 opacity-50" />
+                                </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-[280px] p-0" align="start">
+                                <Command>
+                                    <CommandInput placeholder="Search status..." />
+                                    <CommandList className="max-h-[600px]">
+                                        <CommandEmpty>No status found.</CommandEmpty>
+                                        <CommandGroup className="p-2">
+                                            <CommandItem
+                                                onSelect={() => setStatusFilter([])}
+                                                className={cn(
+                                                    "cursor-pointer py-2 px-3 mb-1 rounded-lg transition-all flex items-center gap-3 h-auto group",
+                                                    statusFilter.length === 0
+                                                        ? "bg-primary/10 text-primary"
+                                                        : "hover:bg-muted/50 text-muted-foreground hover:text-foreground"
+                                                )}
+                                            >
+                                                <div className={cn(
+                                                    "h-2 w-2 rounded-full",
+                                                    statusFilter.length === 0 ? "bg-primary" : "bg-muted-foreground/30"
+                                                )} />
+                                                <span className="font-bold text-sm flex-1">All Statuses</span>
+                                                {statusFilter.length === 0 && <Check className="h-4 w-4 text-primary" strokeWidth={3} />}
+                                            </CommandItem>
+
+                                            <Separator className="my-1.5 mx-1 opacity-50" />
+
+                                            {detailedStatusOptions.map((option) => {
+                                                const isSelected = statusFilter.includes(option.value);
+                                                return (
+                                                    <CommandItem
+                                                        key={option.value}
+                                                        onSelect={() => {
+                                                            if (isSelected) setStatusFilter(statusFilter.filter(s => s !== option.value));
+                                                            else setStatusFilter([...statusFilter, option.value]);
+                                                        }}
+                                                        className={cn(
+                                                            "cursor-pointer py-2 px-3 mb-1 rounded-lg transition-all flex items-center gap-3 h-auto group",
+                                                            isSelected
+                                                                ? "bg-primary/5 text-primary"
+                                                                : "hover:bg-muted/30 text-muted-foreground hover:text-foreground"
+                                                        )}
+                                                    >
+                                                        <div className={cn(
+                                                            "h-2 w-2 rounded-full shrink-0",
+                                                            isSelected ? "bg-primary" : "bg-muted-foreground/20"
+                                                        )} />
+                                                        <span className={cn("flex-1 font-bold text-sm truncate", option.color)}>{option.label}</span>
+                                                        <span className="text-[10px] font-black px-1.5 py-0.5 rounded-full bg-muted/50 text-muted-foreground">
+                                                            {option.count}
+                                                        </span>
+                                                        {isSelected && <Check className="h-4 w-4 text-primary shrink-0" strokeWidth={3} />}
+                                                    </CommandItem>
+                                                );
+                                            })}
+                                        </CommandGroup>
+                                    </CommandList>
+                                </Command>
+                            </PopoverContent>
+                        </Popover>
+
+                        <div className="ml-auto flex items-center gap-2">
+                            <Select value={sortBy} onValueChange={(v) => setSortBy(v as SortOption)}>
+                                <SelectTrigger className="h-9 w-[150px] bg-muted/20 border-muted-foreground/10">
+                                    <SelectValue placeholder="Sort" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="newest">Newest First</SelectItem>
+                                    <SelectItem value="oldest">Oldest First</SelectItem>
+                                    <SelectItem value="items_desc">Most Items</SelectItem>
+                                    <SelectItem value="items_asc">Fewest Items</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Pagination Controls - Top */}
+                <div className="bg-card p-2 rounded-xl border border-border shadow-sm flex items-center justify-between">
+                    <div className="pl-4 text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                        Found <span className="text-foreground font-black">{filteredRequests.length}</span> items in <span className="text-foreground font-black">{groupedAndSortedRequests.length}</span> request groups
+                    </div>
+                    <PaginationControls
+                        currentPage={currentPage}
+                        totalPages={Math.ceil(groupedAndSortedRequests.length / pageSize)}
+                        onPageChange={setCurrentPage}
+                        pageSize={pageSize}
+                        onPageSizeChange={setPageSize}
+                        totalItems={groupedAndSortedRequests.length}
+                        pageSizeOptions={[10, 25, 50, 100]}
+                        itemCount={groupedAndSortedRequests.length > 0 ? Math.min(pageSize, groupedAndSortedRequests.length - (currentPage - 1) * pageSize) : 0}
+                        className="py-0 border-none shadow-none"
+                    />
+                </div>
+
+                {/* Main Content */}
                 <RequestsTable
-                    requests={filteredRequests as any}
+                    requests={paginatedItems as any}
                     onViewDetails={(requestId) => setSelectedRequestId(requestId)}
                     onOpenCC={(requestId, requestIds) => {
                         setCCRequestId(requestId);
@@ -449,7 +526,26 @@ export function ManagerRequestsContent() {
                     showCreator={true}
                     viewMode={viewMode}
                     preciseStatuses={true}
+                    hideStatusOnCard={true}
+                    hideItemCountOnCard={true}
                 />
+
+                {/* Pagination Controls - Bottom */}
+                {groupedAndSortedRequests.length > pageSize && (
+                    <Card className="bg-card p-2 border-border shadow-sm">
+                        <PaginationControls
+                            currentPage={currentPage}
+                            totalPages={Math.ceil(groupedAndSortedRequests.length / pageSize)}
+                            onPageChange={setCurrentPage}
+                            pageSize={pageSize}
+                            onPageSizeChange={setPageSize}
+                            totalItems={groupedAndSortedRequests.length}
+                            pageSizeOptions={[10, 25, 50, 100]}
+                            itemCount={groupedAndSortedRequests.length > 0 ? Math.min(pageSize, groupedAndSortedRequests.length - (currentPage - 1) * pageSize) : 0}
+                            className="py-0 border-none shadow-none"
+                        />
+                    </Card>
+                )}
             </div>
 
             <RequestDetailsDialog

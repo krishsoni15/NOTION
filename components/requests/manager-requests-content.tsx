@@ -498,10 +498,7 @@ export function ManagerRequestsContent() {
                 </div>
 
                 {/* Pagination Controls - Top */}
-                <div className="bg-card p-2 rounded-xl border border-border shadow-sm flex items-center justify-between">
-                    <div className="pl-4 text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                        Found <span className="text-foreground font-black">{filteredRequests.length}</span> items in <span className="text-foreground font-black">{groupedAndSortedRequests.length}</span> request groups
-                    </div>
+                <div className="bg-card p-2 rounded-xl border border-border shadow-sm">
                     <PaginationControls
                         currentPage={currentPage}
                         totalPages={Math.ceil(groupedAndSortedRequests.length / pageSize)}

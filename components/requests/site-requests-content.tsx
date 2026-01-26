@@ -555,12 +555,7 @@ export function SiteRequestsContent() {
                 <X className="h-3 w-3" />
               </Button>
             )}
-            {/* Search results counter */}
-            {searchStats && (
-              <div className="absolute -bottom-6 left-0 text-xs text-muted-foreground">
-                Found {searchStats.totalAfterSearch} of {searchStats.totalBeforeSearch} requests
-              </div>
-            )}
+            {/* Search results counter removed */}
           </div>
           <Button
             variant="outline"

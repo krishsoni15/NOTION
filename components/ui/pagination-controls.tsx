@@ -154,19 +154,31 @@ export function PaginationControls({
 
             {/* Desktop View (>= 640px) - Traditional Layout */}
             <div className="hidden sm:flex items-center justify-between gap-4 w-full">
-                <div className="flex items-center gap-3 text-sm text-muted-foreground whitespace-nowrap">
-                    <div className="flex items-center gap-2">
-                        <span className="font-medium text-xs uppercase tracking-wide opacity-80">Show</span>
+                <div className="flex items-center gap-5 py-1">
+                    {/* Total Section - Now First */}
+                    <div className="flex items-center gap-2.5">
+                        <span className="text-[9px] font-black tracking-widest text-slate-500/70 dark:text-slate-400/70 uppercase">Total</span>
+                        <div className="flex items-center h-8 px-4 rounded-full border-2 border-primary/20 bg-primary/5 shadow-sm hover:border-primary/40 transition-all cursor-default group">
+                            <span className="font-black text-xs text-primary">{totalItems}</span>
+                            <span className="text-[9px] ml-1.5 font-bold text-primary/40 uppercase tracking-tighter">Items</span>
+                        </div>
+                    </div>
+
+                    <div className="h-4 w-px bg-slate-200 dark:bg-slate-800" />
+
+                    {/* Show Section */}
+                    <div className="flex items-center gap-2.5">
+                        <span className="text-[9px] font-black tracking-widest text-slate-500/70 dark:text-slate-400/70 uppercase">Show</span>
                         <Select
                             value={pageSize.toString()}
                             onValueChange={(value) => onPageSizeChange(Number(value))}
                         >
-                            <SelectTrigger className="h-8 w-[75px] bg-background border-input/60 shadow-sm">
+                            <SelectTrigger className="h-8 w-[72px] bg-slate-100/50 dark:bg-slate-800/50 border-none shadow-none font-bold text-xs hover:bg-slate-200/50 dark:hover:bg-slate-700/50 transition-all focus:ring-1 focus:ring-primary/20 rounded-lg pr-2">
                                 <SelectValue placeholder={pageSize.toString()} />
                             </SelectTrigger>
-                            <SelectContent side="top">
+                            <SelectContent side="top" className="min-w-[72px] rounded-xl border-slate-200 dark:border-primary/20 shadow-xl overflow-hidden">
                                 {pageSizeOptions.map((option) => (
-                                    <SelectItem key={option} value={option.toString()}>
+                                    <SelectItem key={option} value={option.toString()} className="text-xs font-bold focus:bg-primary/10 focus:text-primary transition-colors cursor-pointer">
                                         {option}
                                     </SelectItem>
                                 ))}
@@ -174,7 +186,6 @@ export function PaginationControls({
                         </Select>
                     </div>
                 </div>
-                {/* Stats removed as requested */}
 
                 <div className="flex items-center gap-1">
                     <Button

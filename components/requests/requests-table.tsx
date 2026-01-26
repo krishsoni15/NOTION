@@ -68,39 +68,40 @@ type RequestStatus =
 
 // Helper to get card border/bg styles based on status
 const getCardStyles = (status: RequestStatus | "mixed") => {
-  const baseClasses = "group border-2 rounded-2xl p-4 sm:p-5 shadow-sm hover:shadow-xl transition-all duration-300 bg-card max-w-full overflow-hidden relative";
+  const baseClasses = "group border-l-[6px] border-y-0 border-r-0 rounded-2xl p-4 sm:p-5 shadow-sm hover:shadow-xl transition-all duration-300 bg-card max-w-full overflow-hidden relative";
 
   if (status === "mixed") return `${baseClasses} border-slate-200 dark:border-slate-800`;
 
   switch (status) {
     case "draft":
-      return `${baseClasses} border-slate-300 dark:border-slate-700 bg-slate-50/10`;
+      return `${baseClasses} border-slate-400 dark:border-slate-600 bg-slate-50/10`;
     case "pending":
     case "sign_pending":
-      return `${baseClasses} border-amber-300 dark:border-amber-700 bg-amber-50/10`;
+      return `${baseClasses} border-amber-500 dark:border-amber-600 bg-amber-50/10`;
     case "rejected":
     case "cc_rejected":
     case "rejected_po":
     case "sign_rejected":
-      return `${baseClasses} border-rose-400 dark:border-rose-900 bg-rose-50/10`;
+      return `${baseClasses} border-rose-500 dark:border-rose-600 bg-rose-50/10`;
     case "recheck":
-      return `${baseClasses} border-indigo-400 dark:border-indigo-900 bg-indigo-50/10`;
+      return `${baseClasses} border-indigo-500 dark:border-indigo-600 bg-indigo-50/10`;
     case "ready_for_cc":
-      return `${baseClasses} border-blue-400 dark:border-blue-900 bg-blue-50/10`;
+      return `${baseClasses} border-blue-500 dark:border-blue-600 bg-blue-50/10`;
     case "cc_pending":
-      return `${baseClasses} border-purple-400 dark:border-purple-900 bg-purple-50/10`;
+      return `${baseClasses} border-purple-500 dark:border-purple-600 bg-purple-50/10`;
     case "ready_for_po":
-      return `${baseClasses} border-teal-400 dark:border-teal-900 bg-teal-50/10`;
+      return `${baseClasses} border-teal-500 dark:border-teal-600 bg-teal-50/10`;
     case "pending_po":
     case "direct_po":
-      return `${baseClasses} border-orange-400 dark:border-orange-900 bg-orange-50/10`;
+      return `${baseClasses} border-orange-500 dark:border-orange-600 bg-orange-50/10`;
     case "ready_for_delivery":
+      return `${baseClasses} border-emerald-500 dark:border-emerald-600 bg-emerald-50/10`;
     case "delivered":
-      return `${baseClasses} border-emerald-400 dark:border-emerald-900 bg-emerald-50/10`;
+      return `${baseClasses} border-green-600 dark:border-green-600 bg-emerald-50/10`;
     case "out_for_delivery":
     case "delivery_processing":
     case "delivery_stage":
-      return `${baseClasses} border-sky-400 dark:border-sky-900 bg-sky-50/10`;
+      return `${baseClasses} border-sky-500 dark:border-sky-600 bg-sky-50/10`;
     default:
       return `${baseClasses} border-border`;
   }

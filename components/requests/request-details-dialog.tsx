@@ -45,7 +45,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Separator } from "@/components/ui/separator";
-import { AlertCircle, CheckCircle, XCircle, Package, ShoppingCart, MapPin, PackageX, Sparkles, FileText, PieChart, LayoutGrid, List, Edit, Image as ImageIcon, Calendar, Clock, Check, Send, NotebookPen, Loader2, Truck, Pencil } from "lucide-react";
+import { AlertCircle, CheckCircle, XCircle, Package, ShoppingCart, MapPin, PackageX, Sparkles, FileText, PieChart, LayoutGrid, List, Edit, Image as ImageIcon, Calendar, Clock, Check, Send, NotebookPen, Loader2, Truck, Pencil, GitFork } from "lucide-react";
 import { useUserRole } from "@/hooks/use-user-role";
 import { ROLES } from "@/lib/auth/roles";
 import { CompactImageGallery } from "@/components/ui/image-gallery";
@@ -877,138 +877,219 @@ export function RequestDetailsDialog({
   }
 
   const getStatusBadge = (status: string) => {
-    // 1. Manager View - Detailed Statuses
+    const statusConfig: Record<string, { label: string; color: string; dot: string; icon?: any; border: string }> = {
+      draft: { label: "Draft", color: "bg-slate-50 text-slate-700 border-slate-200 dark:bg-slate-800/50 dark:text-slate-300 dark:border-slate-700", dot: "bg-slate-500", icon: Pencil, border: "border-slate-400" },
+      pending: { label: "Pending", color: "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/40 dark:text-amber-400 dark:border-amber-800", dot: "bg-amber-500 animate-pulse", icon: Clock, border: "border-amber-400" },
+      approved: { label: "Approved", color: "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/40 dark:text-blue-400 dark:border-blue-800", dot: "bg-blue-500", icon: CheckCircle, border: "border-blue-500" },
+      rejected: { label: "Rejected", color: "bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-900/40 dark:text-rose-400 dark:border-rose-800", dot: "bg-rose-500", icon: XCircle, border: "border-rose-500" },
+      recheck: { label: "Recheck", color: "bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-900/40 dark:text-indigo-400 dark:border-indigo-800", dot: "bg-indigo-500", icon: Loader2, border: "border-indigo-500" },
+      ready_for_cc: { label: "Ready for CC", color: "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/40 dark:text-blue-400 dark:border-blue-800", dot: "bg-blue-500", icon: Loader2, border: "border-blue-500" },
+      cc_pending: { label: "CC Pending", color: "bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-900/40 dark:text-purple-400 dark:border-purple-800", dot: "bg-purple-500", icon: Loader2, border: "border-purple-500" },
+      cc_rejected: { label: "CC Rejected", color: "bg-red-50 text-red-700 border-red-200 dark:bg-red-900/40 dark:text-red-400 dark:border-red-800", dot: "bg-red-500", icon: XCircle, border: "border-red-500" },
+      ready_for_po: { label: "Ready for PO", color: "bg-teal-50 text-teal-700 border-teal-200 dark:bg-teal-900/40 dark:text-teal-400 dark:border-teal-800", dot: "bg-teal-500", icon: Loader2, border: "border-teal-500" },
+      sign_pending: { label: "Sign Pending", color: "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/40 dark:text-amber-400 dark:border-amber-800", dot: "bg-amber-500", icon: Clock, border: "border-amber-400" },
+      sign_rejected: { label: "Sign Rejected", color: "bg-red-50 text-red-700 border-red-200 dark:bg-red-900/40 dark:text-red-400 dark:border-red-800", dot: "bg-red-500", icon: XCircle, border: "border-red-500" },
+      pending_po: { label: "Pending PO", color: "bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-900/40 dark:text-orange-400 dark:border-orange-800", dot: "bg-orange-500", icon: ShoppingCart, border: "border-orange-500" },
+      ready_for_delivery: { label: "Ready for Delivery", color: "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/40 dark:text-emerald-400 dark:border-emerald-800", dot: "bg-emerald-500", icon: Package, border: "border-emerald-500" },
+      out_for_delivery: { label: "Out for Delivery", color: "bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-900/40 dark:text-orange-400 dark:border-orange-800", dot: "bg-orange-500 animate-pulse", icon: Truck, border: "border-orange-500" },
+      delivered: { label: "Delivered", color: "bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-900/40 dark:text-sky-400 dark:border-sky-800", dot: "bg-sky-500", icon: CheckCircle, border: "border-sky-500" },
+    };
+
+    const config = statusConfig[status] || {
+      label: status.replace(/_/g, " "),
+      color: "bg-slate-100 text-slate-700 dark:bg-slate-800",
+      dot: "bg-slate-400 dark:bg-slate-600",
+      icon: Loader2,
+      border: "border-slate-400"
+    };
+
     if (userRole === ROLES.MANAGER || userRole === ROLES.PURCHASE_OFFICER) {
-      if (status === "draft") {
-        return (
-          <Badge variant="outline" className="bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-900/50 dark:text-slate-400 dark:border-slate-800 gap-2 pl-2 pr-2.5 shadow-sm">
-            <div className="h-2 w-2 rounded-full bg-slate-500" />
-            Draft
-          </Badge>
-        );
-      }
-      if (status === "pending") {
-        return (
-          <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/50 dark:text-amber-400 dark:border-amber-800 gap-2 pl-2 pr-2.5 shadow-sm">
-            <div className="h-2 w-2 rounded-full bg-amber-500 animate-pulse" />
-            Pending Approval
-          </Badge>
-        );
-      }
-      if (status === "rejected") {
-        return (
-          <Badge variant="outline" className="bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/50 dark:text-rose-400 dark:border-rose-800 gap-2 pl-2 pr-2.5 shadow-sm">
-            <div className="h-2 w-2 rounded-full bg-rose-500" />
-            Rejected
-          </Badge>
-        );
-      }
-      if (status === "recheck") return <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-950/50 dark:text-indigo-400 dark:border-indigo-800 gap-1.5 pl-1.5 pr-2.5">Recheck</Badge>;
-      if (status === "ready_for_cc") return <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/50 dark:text-blue-400 dark:border-blue-800 gap-1.5 pl-1.5 pr-2.5">Ready for CC</Badge>;
-      if (status === "cc_pending") return <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-950/50 dark:text-purple-400 dark:border-purple-800 gap-1.5 pl-1.5 pr-2.5">CC Pending</Badge>;
-      if (status === "cc_rejected") return <Badge variant="outline" className="bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/50 dark:text-rose-400 dark:border-rose-800 gap-1.5 pl-1.5 pr-2.5">CC Rejected</Badge>;
-      if (status === "ready_for_po") return <Badge variant="outline" className="bg-teal-50 text-teal-700 border-teal-200 dark:bg-teal-950/50 dark:text-teal-400 dark:border-teal-800 gap-1.5 pl-1.5 pr-2.5">Ready for PO</Badge>;
-      if (status === "sign_pending") return <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/50 dark:text-amber-400 dark:border-amber-800 gap-1.5 pl-1.5 pr-2.5">Sign Pending</Badge>;
-      if (status === "sign_rejected") return <Badge variant="outline" className="bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/50 dark:text-rose-400 dark:border-rose-800 gap-1.5 pl-1.5 pr-2.5">Sign Rejected</Badge>;
-      if (status === "pending_po") return <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-950/50 dark:text-orange-400 dark:border-orange-800 gap-1.5 pl-1.5 pr-2.5">Pending PO</Badge>;
-      if (status === "ready_for_delivery") return <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-400 dark:border-emerald-800 gap-1.5 pl-1.5 pr-2.5">Ready for Delivery</Badge>;
-
-      if (status === "out_for_delivery") {
-        return (
-          <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-950/50 dark:text-orange-400 dark:border-orange-800 gap-2 pl-2 pr-2.5 shadow-sm">
-            <div className="h-2 w-2 rounded-full bg-orange-500 animate-pulse" />
-            Out for Delivery
-          </Badge>
-        );
-      }
-      if (status === "delivered") {
-        return (
-          <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-400 dark:border-emerald-800 gap-2 pl-2 pr-2.5 shadow-sm">
-            <div className="h-2 w-2 rounded-full bg-emerald-500" />
-            Delivered
-          </Badge>
-        );
-      }
-
-      // Handle legacy/extra statuses that might exist in the database
-      if (status === "approved") return <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-400 dark:border-emerald-800 gap-1.5 pl-1.5 pr-2.5">Recheck</Badge>;
-      if (status === "cc_approved") return <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200 dark:bg-green-950/50 dark:text-green-400 dark:border-green-800 gap-1.5 pl-1.5 pr-2.5">Ready for PO</Badge>;
-      if (status === "direct_po") return <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-950/50 dark:text-orange-400 dark:border-orange-800 gap-1.5 pl-1.5 pr-2.5">Pending PO</Badge>;
-      if (status === "ordered") return <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/50 dark:text-emerald-400 dark:border-emerald-800 gap-1.5 pl-1.5 pr-2.5">Ready for Delivery</Badge>;
-      if (status === "partially_processed") return <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-200 dark:bg-yellow-950/50 dark:text-yellow-400 dark:border-yellow-800 gap-1.5 pl-1.5 pr-2.5">Ready for Delivery</Badge>;
-      if (status === "delivery_stage" || status === "delivery_processing") {
-        return (
-          <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-950/50 dark:text-orange-400 dark:border-orange-800 gap-2 pl-2 pr-2.5 shadow-sm">
-            <div className="h-2 w-2 rounded-full bg-orange-500 animate-pulse" />
-            Out for Delivery
-          </Badge>
-        );
-      }
-      if (status === "rejected_po" || status === "po_rejected") return <Badge variant="outline" className="bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/50 dark:text-rose-400 dark:border-rose-800 gap-1.5 pl-1.5 pr-2.5">Sign Rejected</Badge>;
-      if (status === "recheck_requested") return <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-950/50 dark:text-indigo-400 dark:border-indigo-800 gap-1.5 pl-1.5 pr-2.5">Recheck</Badge>;
-
-      // Fallback for unknown statuses
-      return <Badge variant="outline" className="gap-1.5">{status}</Badge>;
-    }
-
-    // 2. Simplified View (Site Engineer) - 6 Main Categories
-    // 1. DRAFT
-    if (status === "draft") {
       return (
-        <Badge variant="outline" className="bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-900/50 dark:text-slate-400 dark:border-slate-800 gap-1.5 pl-1.5 pr-2.5">
-          <Pencil className="h-3.5 w-3.5" />
-          Draft
+        <Badge variant="outline" className={cn("gap-1.5 pl-1.5 pr-2.5 py-0.5 border shadow-none text-[10px] font-bold uppercase tracking-tight", config.color)}>
+          <div className={cn("h-1.5 w-1.5 rounded-full", config.dot)} />
+          {config.label}
         </Badge>
       );
     }
 
-    // 2. PENDING (Only "pending")
-    if (status === "pending") {
-      return (
-        <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/50 dark:text-amber-400 dark:border-amber-800 gap-1.5 pl-1.5 pr-2.5">
-          <Clock className="h-3.5 w-3.5" />
-          Pending Approval
-        </Badge>
-      );
-    }
-
-    // 3. REJECTED (Only "rejected")
-    if (status === "rejected") {
-      return (
-        <Badge variant="outline" className="bg-rose-50 text-rose-700 border-rose-200 dark:bg-rose-950/50 dark:text-rose-400 dark:border-rose-800 gap-1.5 pl-1.5 pr-2.5">
-          <XCircle className="h-3.5 w-3.5" />
-          Rejected
-        </Badge>
-      );
-    }
-
-    // 5. OUT FOR DELIVERY
-    if (status === "out_for_delivery") {
-      return (
-        <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-950/50 dark:text-orange-400 dark:border-orange-800 gap-1.5 pl-1.5 pr-2.5">
-          <Truck className="h-3.5 w-3.5" />
-          Out for Delivery
-        </Badge>
-      );
-    }
-
-    // 6. DELIVERED
-    if (status === "delivered") {
-      return (
-        <Badge variant="outline" className="bg-teal-50 text-teal-700 border-teal-200 dark:bg-teal-950/50 dark:text-teal-400 dark:border-teal-800 gap-1.5 pl-1.5 pr-2.5">
-          <Package className="h-3.5 w-3.5" />
-          Delivered
-        </Badge>
-      );
-    }
-
-    // 4. APPROVED & PROCESSING (All other statuses)
-    // Maps: recheck, ready_for_cc, cc_pending, cc_rejected, ready_for_po, sign_pending, sign_rejected, pending_po, ready_for_delivery
+    const Icon = config.icon || Loader2;
     return (
-      <Badge variant="outline" className="bg-indigo-50 text-indigo-700 border-indigo-200 dark:bg-indigo-950/50 dark:text-indigo-400 dark:border-indigo-800 gap-1.5 pl-1.5 pr-2.5">
-        <Loader2 className="h-3.5 w-3.5" />
-        Approved & Processing
+      <Badge variant="outline" className={cn("gap-1.5 pl-1.5 pr-2.5 py-0.5 border shadow-none text-[10px] font-bold uppercase tracking-tight", config.color)}>
+        <Icon className="h-3 w-3" />
+        {config.label}
       </Badge>
+    );
+  };
+
+  const getStatusBorderClass = (status: string) => {
+    const mapping: Record<string, string> = {
+      draft: "border-slate-400 dark:border-slate-500",
+      pending: "border-amber-400 dark:border-amber-500",
+      sign_pending: "border-amber-400 dark:border-amber-500",
+      approved: "border-blue-500 dark:border-blue-400",
+      ready_for_cc: "border-blue-500 dark:border-blue-400",
+      cc_pending: "border-purple-500 dark:border-purple-400",
+      sign_rejected: "border-red-500 dark:border-red-400",
+      rejected: "border-rose-500 dark:border-rose-400",
+      cc_rejected: "border-rose-500 dark:border-rose-400",
+      po_rejected: "border-rose-500 dark:border-rose-400",
+      recheck: "border-indigo-500 dark:border-indigo-400",
+      pending_po: "border-orange-500 dark:border-orange-400",
+      ready_for_delivery: "border-emerald-500 dark:border-emerald-400",
+      out_for_delivery: "border-orange-500 dark:border-orange-400",
+      delivered: "border-sky-500 dark:border-sky-400",
+      ready_for_po: "border-teal-500 dark:border-teal-400"
+    };
+    return mapping[status] || "border-slate-400 dark:border-slate-500";
+  };
+
+  const getStatusBgTint = (status: string) => {
+    const mapping: Record<string, string> = {
+      // Gray
+      draft: "bg-slate-50/80 dark:bg-slate-900/20 hover:bg-slate-100/50 dark:hover:bg-slate-900/40",
+
+      // Amber/Yellow
+      pending: "bg-amber-50/80 dark:bg-amber-950/20 hover:bg-amber-100/50 dark:hover:bg-amber-950/40",
+      sign_pending: "bg-amber-50/80 dark:bg-amber-950/20 hover:bg-amber-100/50 dark:hover:bg-amber-950/40",
+      partially_processed: "bg-yellow-50/80 dark:bg-yellow-900/20 hover:bg-yellow-100/50 dark:hover:bg-yellow-950/40",
+
+      // Emerald/Green
+      approved: "bg-emerald-50/80 dark:bg-emerald-950/20 hover:bg-emerald-100/50 dark:hover:bg-emerald-950/40",
+      ready_for_delivery: "bg-emerald-50/80 dark:bg-emerald-950/20 hover:bg-emerald-100/50 dark:hover:bg-emerald-950/40",
+      delivered: "bg-green-50/80 dark:bg-green-950/20 hover:bg-green-100/50 dark:hover:bg-green-950/40",
+
+      // Red/Rose
+      rejected: "bg-rose-50/80 dark:bg-rose-950/20 hover:bg-rose-100/50 dark:hover:bg-rose-950/40",
+      sign_rejected: "bg-rose-50/80 dark:bg-rose-950/20 hover:bg-rose-100/50 dark:hover:bg-rose-950/40",
+      cc_rejected: "bg-rose-50/80 dark:bg-rose-950/20 hover:bg-rose-100/50 dark:hover:bg-rose-950/40",
+      rejected_po: "bg-rose-50/80 dark:bg-rose-950/20 hover:bg-rose-100/50 dark:hover:bg-rose-950/40",
+
+      // Indigo
+      recheck: "bg-indigo-50/80 dark:bg-indigo-950/20 hover:bg-indigo-100/50 dark:hover:bg-indigo-950/40",
+
+      // Blue
+      ready_for_cc: "bg-blue-50/80 dark:bg-blue-950/20 hover:bg-blue-100/50 dark:hover:bg-blue-950/40",
+
+      // Purple
+      cc_pending: "bg-purple-50/80 dark:bg-purple-950/20 hover:bg-purple-100/50 dark:hover:bg-purple-950/40",
+      cc_approved: "bg-purple-50/80 dark:bg-purple-950/20 hover:bg-purple-100/50 dark:hover:bg-purple-950/40",
+
+      // Teal
+      ready_for_po: "bg-teal-50/80 dark:bg-teal-950/20 hover:bg-teal-100/50 dark:hover:bg-teal-950/40",
+
+      // Orange
+      pending_po: "bg-orange-50/80 dark:bg-orange-950/20 hover:bg-orange-100/50 dark:hover:bg-orange-950/40",
+      direct_po: "bg-orange-50/80 dark:bg-orange-950/20 hover:bg-orange-100/50 dark:hover:bg-orange-950/40",
+
+      // Sky
+      out_for_delivery: "bg-sky-50/80 dark:bg-sky-950/20 hover:bg-sky-100/50 dark:hover:bg-sky-950/40",
+      delivery_processing: "bg-sky-50/80 dark:bg-sky-950/20 hover:bg-sky-100/50 dark:hover:bg-sky-950/40",
+      delivery_stage: "bg-sky-50/80 dark:bg-sky-950/20 hover:bg-sky-100/50 dark:hover:bg-sky-950/40",
+    };
+    return mapping[status] || "bg-card hover:bg-accent/50 dark:bg-slate-900/40";
+  };
+
+  const RenderActionSegments = ({ item, isCard = false }: { item: any; isCard?: boolean }) => {
+    const status = inventoryStatus?.[item.itemName];
+    const stock = status?.centralStock || 0;
+    const isPartial = stock > 0 && stock < item.quantity;
+    const isDirectDeliverySelected = itemIntents[item._id]?.includes("direct_delivery");
+    const isDirectPOSelected = itemIntents[item._id]?.includes("direct_po");
+    const isSplitSelected = itemIntents[item._id]?.includes("split");
+    const isPending = item.status === "pending";
+    const canModify = isPending || item.status === "approved";
+
+    // Dynamic border color based on selection
+    const getSegmentBorder = () => {
+      if (!canModify) return "border-border/40 opacity-50";
+      if (isDirectDeliverySelected) return "border-purple-500 shadow-[0_0_15px_rgba(168,85,247,0.3)]";
+      if (isSplitSelected) return "border-blue-500 shadow-[0_0_15px_rgba(59,130,246,0.3)]";
+      if (isDirectPOSelected) return "border-orange-500 shadow-[0_0_15px_rgba(249,115,22,0.3)]";
+      return "border-border/60";
+    };
+
+    return (
+      <div className={cn("flex w-full items-center", !isCard && "max-w-[420px] ml-auto gap-3")}>
+        {!isCard && <span className="text-[10px] font-black uppercase text-muted-foreground tracking-widest min-w-fit">Fulfillment:</span>}
+        <div className={cn(
+          "flex items-center border rounded-xl bg-background dark:bg-slate-950 transition-all h-10 divide-x divide-border/20 overflow-hidden w-full",
+          getSegmentBorder(),
+        )}>
+          {/* Direct Delivery Button */}
+          <div
+            onClick={(e) => {
+              if (canModify && stock >= item.quantity) {
+                e.stopPropagation();
+                if (isPending) toggleIntent(item._id, "direct_delivery");
+                else setShowItemDirectDeliveryConfirm(item._id);
+              }
+            }}
+            className={cn(
+              "flex items-center gap-2 px-3 h-full transition-all select-none flex-1 justify-center relative group/btn",
+              (canModify && stock >= item.quantity)
+                ? "cursor-pointer hover:bg-purple-50 dark:hover:bg-purple-950/30"
+                : "cursor-not-allowed bg-muted/20 opacity-40 grayscale",
+              isDirectDeliverySelected && stock >= item.quantity
+                ? "bg-purple-600 text-white shadow-[inset_0_0_10px_rgba(0,0,0,0.2)]"
+                : cn("font-bold", (canModify && stock >= item.quantity) ? "text-purple-600 dark:text-purple-400" : "text-muted-foreground")
+            )}
+            title={stock >= item.quantity ? "Mark for Direct Delivery" : "Not enough stock"}
+          >
+            <Truck className={cn("h-3.5 w-3.5 transition-transform", isDirectDeliverySelected ? "scale-110" : "group-hover/btn:scale-110")} />
+            <span className="text-[10px] tracking-tight uppercase font-black">Deliver</span>
+          </div>
+
+          {/* Split Button */}
+          <div
+            onClick={(e) => {
+              if (canModify && isPartial) {
+                e.stopPropagation();
+                if (isPending) toggleIntent(item._id, "split");
+                else {
+                  updateStatus({ requestId: item._id, status: "recheck" });
+                  toast.info("Item marked for Split");
+                }
+              }
+            }}
+            className={cn(
+              "flex items-center gap-2 px-3 h-full transition-all select-none flex-1 justify-center relative group/btn",
+              (canModify && isPartial)
+                ? "cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-950/30"
+                : "cursor-not-allowed bg-muted/20 opacity-40 grayscale",
+              isSplitSelected && isPartial
+                ? "bg-blue-600 text-white shadow-[inset_0_0_10px_rgba(0,0,0,0.2)]"
+                : cn("font-bold", (canModify && isPartial) ? "text-blue-600 dark:text-blue-400" : "text-muted-foreground")
+            )}
+            title={isPartial ? "Mark for Split" : "Partial stock required for split"}
+          >
+            <GitFork className={cn("h-3.5 w-3.5 transition-transform", isSplitSelected ? "rotate-90 scale-110" : "group-hover/btn:rotate-90")} />
+            <span className="text-[10px] tracking-tight uppercase font-black">Split</span>
+          </div>
+
+          {/* Direct PO Button */}
+          <div
+            onClick={(e) => {
+              if (canModify) {
+                e.stopPropagation();
+                if (isPending) toggleIntent(item._id, "direct_po");
+                else setShowItemDirectPOConfirm(item._id);
+              }
+            }}
+            className={cn(
+              "flex items-center gap-2 px-3 h-full transition-all select-none flex-1 justify-center relative group/btn",
+              canModify
+                ? "cursor-pointer hover:bg-orange-50 dark:hover:bg-orange-950/30"
+                : "cursor-not-allowed bg-muted/20 opacity-40 grayscale",
+              isDirectPOSelected
+                ? "bg-orange-600 text-white shadow-[inset_0_0_10px_rgba(0,0,0,0.2)]"
+                : cn("font-bold", canModify ? "text-orange-600 dark:text-orange-400" : "text-muted-foreground")
+            )}
+          >
+            <ShoppingCart className={cn("h-3.5 w-3.5 transition-transform", isDirectPOSelected ? "scale-110" : "group-hover/btn:scale-110")} />
+            <span className="text-[10px] tracking-tight uppercase font-black whitespace-nowrap">Direct PO</span>
+          </div>
+        </div>
+      </div>
     );
   };
 
@@ -1316,10 +1397,10 @@ export function RequestDetailsDialog({
                                 </span>
                                 <button
                                   onClick={() => handleOpenInMap(request.site!.address!)}
-                                  className="opacity-0 group-hover:opacity-100 transition-opacity text-primary hover:text-primary/80"
+                                  className="text-primary hover:text-primary/80 flex-shrink-0 mt-0.5"
                                   title="Open in Maps"
                                 >
-                                  <MapPin className="h-3 w-3" />
+                                  <MapPin className="h-3.5 w-3.5" />
                                 </button>
                               </div>
                             )}
@@ -1432,24 +1513,15 @@ export function RequestDetailsDialog({
                       )}
                     </Label>
                     {allRequests && allRequests.length > 0 && (
-                      <div className="flex items-center ml-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setViewMode(viewMode === "table" ? "card" : "table")}
-                          className="h-7 px-3 text-xs font-medium border-dashed border-primary/40 hover:border-primary bg-primary/5 hover:bg-primary/10 text-slate-700 dark:text-slate-200 hover:text-slate-900 dark:hover:text-slate-100 transition-all"
-                        >
-                          {viewMode === "table" ? (
-                            <>
-                              <LayoutGrid className="h-3.5 w-3.5 mr-1.5" /> Grid View
-                            </>
-                          ) : (
-                            <>
-                              <List className="h-3.5 w-3.5 mr-1.5" /> Table View
-                            </>
-                          )}
-                        </Button>
-                      </div>
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        onClick={() => setViewMode(viewMode === "table" ? "card" : "table")}
+                        className="h-8 w-8 ml-2 bg-muted/30 border-muted-foreground/20 hover:bg-primary/10 hover:border-primary/30 hover:text-primary transition-all"
+                        title={viewMode === "table" ? "Switch to Grid View" : "Switch to Table View"}
+                      >
+                        {viewMode === "table" ? <LayoutGrid className="h-4 w-4" /> : <List className="h-4 w-4" />}
+                      </Button>
                     )}
                   </div>
 
@@ -1457,8 +1529,8 @@ export function RequestDetailsDialog({
                   {/* Display all items - Conditional Layout */}
                   {allRequests && allRequests.length > 0 ? (
                     viewMode === "table" ? (
-                      <div className="border rounded-xl bg-card shadow-sm">
-                        <Table>
+                      <div className="space-y-2">
+                        <Table style={{ borderCollapse: 'separate', borderSpacing: '0 8px' }}>
                           <TableHeader>
                             <TableRow className="bg-muted/40 hover:bg-muted/40 border-b">
                               <TableHead className="w-[40px] text-center p-2"></TableHead>
@@ -1489,40 +1561,32 @@ export function RequestDetailsDialog({
                                   <Fragment key={item._id}>
                                     <TableRow
                                       className={cn(
-                                        "cursor-pointer transition-all border-b border-slate-200 dark:border-slate-700 hover:shadow-sm relative",
-                                        // 1. Draft
-                                        item.status === "draft" && "bg-slate-50/30 hover:bg-slate-50/60 dark:bg-slate-900/10",
-                                        // 2. Pending
-                                        (item.status === "pending" || item.status === "sign_pending") && "bg-amber-50/30 hover:bg-amber-50/60 dark:bg-amber-900/10",
-                                        // 3. Approved
-                                        (["approved", "cc_pending", "ready_for_cc", "cc_approved", "pending_po", "ready_for_po", "ordered", "partially_processed", "direct_po", "ready_for_delivery", "recheck", "recheck_requested"].includes(item.status)) && "bg-blue-50/20 hover:bg-blue-50/40 dark:bg-blue-900/10",
-                                        // 4. Out for Delivery
-                                        (["delivery_processing", "delivery_stage", "out_for_delivery"].includes(item.status)) && "bg-orange-50/20 hover:bg-orange-50/40 dark:bg-orange-900/10",
-                                        // 5. Delivered
-                                        item.status === "delivered" && "bg-emerald-50/20 hover:bg-emerald-50/40 dark:bg-emerald-900/10",
-                                        // 6. Rejected
-                                        (["rejected", "sign_rejected", "cc_rejected", "po_rejected"].includes(item.status)) && "bg-rose-50/20 hover:bg-rose-50/40 dark:bg-rose-900/10"
+                                        "cursor-pointer transition-all relative h-[80px]",
+                                        getStatusBgTint(item.status),
+                                        "hover:brightness-[0.98] dark:hover:brightness-110",
+                                        getStatusBorderClass(item.status),
+                                        // Left Border Only - Color Inherited
+                                        "[&>td:first-child]:border-l-[6px] [&>td:first-child]:border-l-[color:inherit]",
+                                        // Top/Bottom/Right - Neutral/Transparent
+                                        "[&>td]:border-y [&>td]:border-r-0 [&>td]:border-border/30",
+                                        "[&>td:last-child]:border-r",
+                                        "rounded-lg border-separate",
+                                        "hover:shadow-md shadow-sm",
+                                        isSelected && "ring-4 ring-primary/20 bg-primary/5"
                                       )}
                                       onClick={(e) => e.stopPropagation()}
                                     >
-                                      {/* Selection Checkbox (First col for manager) or Empty - WITH STATUS INDICATOR */}
-                                      <TableCell className="p-2 text-center w-[40px] relative overflow-hidden">
-                                        <div className={cn(
-                                          "absolute left-0 top-[1px] bottom-[1px] w-[4px]",
-                                          item.status === "draft" && "bg-slate-400",
-                                          (item.status === "pending" || item.status === "sign_pending") && "bg-amber-400",
-                                          (["approved", "cc_pending", "ready_for_cc", "cc_approved", "pending_po", "ready_for_po", "ordered", "partially_processed", "direct_po", "ready_for_delivery", "recheck", "recheck_requested"].includes(item.status)) && "bg-blue-500",
-                                          (["delivery_processing", "delivery_stage", "out_for_delivery"].includes(item.status)) && "bg-orange-500",
-                                          item.status === "delivered" && "bg-emerald-500",
-                                          (["rejected", "sign_rejected", "cc_rejected", "po_rejected"].includes(item.status)) && "bg-rose-500"
-                                        )} />
-                                        {isManager && isPending && (
-                                          <Checkbox
-                                            checked={isSelected}
-                                            onCheckedChange={() => toggleItemSelection(item._id)}
-                                            className="h-4 w-4"
-                                          />
-                                        )}
+                                      {/* Selection Checkbox */}
+                                      <TableCell className="p-2 text-center w-[45px] relative rounded-l-lg overflow-hidden">
+                                        <div className="flex items-center justify-center h-full w-full">
+                                          {isManager && isPending && (
+                                            <Checkbox
+                                              checked={isSelected}
+                                              onCheckedChange={() => toggleItemSelection(item._id)}
+                                              className="h-4 w-4 relative z-10"
+                                            />
+                                          )}
+                                        </div>
                                       </TableCell>
 
                                       <TableCell className="py-3">
@@ -1580,7 +1644,7 @@ export function RequestDetailsDialog({
                                           </div>
                                         </div>
                                       </TableCell>
-                                      <TableCell className="py-3 align-top">
+                                      <TableCell className="py-3 align-top rounded-r-lg overflow-hidden">
                                         <div className="flex flex-col gap-1.5 items-start">
                                           {item.isUrgent && (
                                             <Badge variant="destructive" className="px-2 py-0.5 h-6 text-[10px] font-bold shadow-[0_0_15px_rgba(239,68,68,0.6)] animate-pulse mb-1.5 uppercase tracking-wider border-red-400 ring-1 ring-red-500/50">
@@ -1591,229 +1655,79 @@ export function RequestDetailsDialog({
                                         </div>
                                       </TableCell>
                                       {(isManager && (isPending || item.status === "sign_pending" || item.status === "cc_pending" || canManagerModifyStatus(item.status))) || (isPurchaseOfficer && ["pending_po", "direct_po", "ready_for_po"].includes(item.status)) ? (
-                                        <TableCell className="text-right p-2 align-middle">
-                                          <div className="flex items-center justify-end gap-2">
+                                        <TableCell className="text-right p-4 align-middle rounded-r-lg overflow-hidden">
+                                          <div className="flex items-center justify-end gap-3 min-w-[300px]">
                                             {item.status === "sign_pending" || item.status === "sign_rejected" ? (
-                                              <>
+                                              <div className="flex items-center gap-2">
                                                 <Button
                                                   variant="outline"
                                                   size="sm"
-                                                  className="h-8 border-emerald-200 text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800"
-                                                  title="Approve"
-                                                  onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    setShowSignPendingApproveConfirm(item._id);
-                                                  }}
+                                                  className="h-9 border-emerald-200 text-emerald-700 hover:bg-emerald-50"
+                                                  onClick={(e) => { e.stopPropagation(); setShowSignPendingApproveConfirm(item._id); }}
                                                   disabled={isLoading}
                                                 >
-                                                  <CheckCircle className="h-4 w-4 mr-1.5" />
-                                                  Approve
+                                                  <CheckCircle className="h-4 w-4 mr-1.5" /> Approve
                                                 </Button>
                                                 {item.status === "sign_pending" && (
                                                   <Button
                                                     variant="outline"
                                                     size="sm"
-                                                    className="h-8 border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700"
-                                                    title="Reject"
+                                                    className="h-9 border-red-200 text-red-600 hover:bg-red-50"
                                                     onClick={(e) => { e.stopPropagation(); setShowItemRejectionInput(item._id); }}
                                                     disabled={isLoading}
                                                   >
-                                                    <XCircle className="h-4 w-4 mr-1.5" />
-                                                    Reject
+                                                    <XCircle className="h-4 w-4 mr-1.5" /> Reject
                                                   </Button>
                                                 )}
-                                              </>
+                                              </div>
                                             ) : item.status === "cc_pending" ? (
-                                              onOpenCC ? (
+                                              onOpenCC && (
                                                 <Button
                                                   variant="outline"
                                                   size="sm"
-                                                  onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    onOpenCC(item._id);
-                                                  }}
-                                                  className="h-8 border-blue-200 text-blue-700 hover:bg-blue-50 hover:text-blue-800"
-                                                  title="View CC"
+                                                  onClick={(e) => { e.stopPropagation(); onOpenCC(item._id); }}
+                                                  className="h-9 border-blue-200 text-blue-700 hover:bg-blue-50"
                                                 >
-                                                  <FileText className="h-4 w-4 mr-1.5" />
-                                                  View CC
+                                                  <FileText className="h-4 w-4 mr-1.5" /> View CC
                                                 </Button>
-                                              ) : null
+                                              )
                                             ) : (
-                                              // Intent Toggles Only - Actions moved to Footer
-                                              <>
-                                                {(() => {
-                                                  const status = inventoryStatus?.[item.itemName];
-                                                  const stock = status?.centralStock || 0;
-                                                  const isPartial = stock > 0 && stock < item.quantity;
-                                                  // const isFull = stock >= item.quantity; // Not directly used in new logic
-
-                                                  // Check if intents are selected
-                                                  const isDirectDeliverySelected = itemIntents[item._id]?.includes("direct_delivery");
-                                                  const isDirectPOSelected = itemIntents[item._id]?.includes("direct_po");
-                                                  const isSplitSelected = itemIntents[item._id]?.includes("split");
-
-                                                  return (
-                                                    <div className="flex items-center gap-2">
-                                                      {/* Direct Delivery Checkbox */}
-                                                      <div
-                                                        onClick={(e) => {
-                                                          if (stock >= item.quantity) {
-                                                            e.stopPropagation();
-                                                            if (isPending) {
-                                                              toggleIntent(item._id, "direct_delivery");
-                                                            } else {
-                                                              // Immediate action for post-approval
-                                                              setShowItemDirectDeliveryConfirm(item._id);
-                                                            }
-                                                          }
-                                                        }}
-                                                        className={cn(
-                                                          "flex items-center gap-2 px-3 py-1.5 rounded-md border transition-all select-none",
-                                                          stock >= item.quantity
-                                                            ? "cursor-pointer hover:shadow-sm"
-                                                            : "cursor-not-allowed opacity-40 grayscale",
-                                                          isDirectDeliverySelected && stock >= item.quantity
-                                                            ? "bg-purple-600 border-purple-600 text-white shadow-sm hover:bg-purple-700"
-                                                            : stock >= item.quantity
-                                                              ? "bg-white dark:bg-slate-800 border-purple-300 dark:border-purple-700 text-purple-700 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-950/30"
-                                                              : "border-slate-200 dark:border-slate-700 text-slate-400 dark:text-slate-600 bg-slate-50 dark:bg-slate-900"
-                                                        )}
-                                                        title={stock >= item.quantity ? "Mark for Direct Delivery" : "Not enough stock"}
-                                                      >
-                                                        <div className={cn(
-                                                          "h-3.5 w-3.5 rounded border-2 flex items-center justify-center transition-colors",
-                                                          isDirectDeliverySelected && stock >= item.quantity ? "border-white bg-white" : "border-current bg-transparent"
-                                                        )}>
-                                                          {isDirectDeliverySelected && stock >= item.quantity && <Check className="h-2.5 w-2.5 text-purple-600" strokeWidth={3} />}
-                                                        </div>
-                                                        <span className="text-[10px] font-semibold uppercase tracking-wide">Direct Delivery</span>
-                                                      </div>
-
-                                                      {/* Split Checkbox */}
-                                                      <div
-                                                        onClick={(e) => {
-                                                          if (isPartial) {
-                                                            e.stopPropagation();
-                                                            if (isPending) {
-                                                              toggleIntent(item._id, "split");
-                                                            } else {
-                                                              // Immediate action for split/recheck
-                                                              handleItemApprove(item._id); // This will handle split logic based on intent, but we need intent first. 
-                                                              // Actually for immediate split, we just call updateStatus to recheck directly.
-                                                              // Let's use a simpler approach: Just direct call for recheck/split
-                                                              updateStatus({
-                                                                requestId: item._id,
-                                                                status: "recheck",
-                                                              });
-                                                              toast.info("Item marked for Recheck/Split");
-                                                            }
-                                                          }
-                                                        }}
-                                                        className={cn(
-                                                          "flex items-center gap-2 px-3 py-1.5 rounded-md border transition-all select-none",
-                                                          isPartial
-                                                            ? "cursor-pointer hover:shadow-sm"
-                                                            : "cursor-not-allowed opacity-40 grayscale",
-                                                          isSplitSelected && isPartial
-                                                            ? "bg-slate-600 dark:bg-slate-500 border-slate-600 dark:border-slate-500 text-white shadow-sm hover:bg-slate-700 dark:hover:bg-slate-600"
-                                                            : isPartial
-                                                              ? "bg-white dark:bg-slate-800 border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700/50"
-                                                              : "border-slate-200 dark:border-slate-700 text-slate-400 dark:text-slate-600 bg-slate-50 dark:bg-slate-900"
-                                                        )}
-                                                        title={isPartial ? "Mark for Split" : "Partial stock required for split"}
-                                                      >
-                                                        <div className={cn(
-                                                          "h-3.5 w-3.5 rounded border-2 flex items-center justify-center transition-colors",
-                                                          isSplitSelected && isPartial ? "border-white bg-white" : "border-current bg-transparent"
-                                                        )}>
-                                                          {isSplitSelected && isPartial && <Check className="h-2.5 w-2.5 text-slate-600" strokeWidth={3} />}
-                                                        </div>
-                                                        <span className="text-[10px] font-semibold uppercase tracking-wide">Split</span>
-                                                      </div>
-
-                                                      <div
-                                                        onClick={(e) => {
-                                                          e.stopPropagation();
-                                                          if (isPending) {
-                                                            toggleIntent(item._id, "direct_po");
-                                                          } else {
-                                                            // Immediate action confirmation
-                                                            setShowItemDirectPOConfirm(item._id);
-                                                          }
-                                                        }}
-                                                        className={cn(
-                                                          "flex items-center gap-2 px-3 py-1.5 rounded-md border cursor-pointer transition-all select-none hover:shadow-sm",
-                                                          isDirectPOSelected
-                                                            ? "bg-orange-600 border-orange-600 text-white shadow-sm hover:bg-orange-700"
-                                                            : "bg-white dark:bg-slate-800 border-orange-300 dark:border-orange-700 text-orange-700 dark:text-orange-400 hover:bg-orange-50 dark:hover:bg-orange-950/30"
-                                                        )}
-                                                      >
-                                                        <div className={cn(
-                                                          "h-3.5 w-3.5 rounded border-2 flex items-center justify-center transition-colors",
-                                                          isDirectPOSelected ? "border-white bg-white" : "border-current bg-transparent"
-                                                        )}>
-                                                          {isDirectPOSelected && <Check className="h-2.5 w-2.5 text-orange-600" strokeWidth={3} />}
-                                                        </div>
-                                                        <span className="text-[10px] font-semibold uppercase tracking-wide">Direct PO</span>
-                                                      </div>
-                                                    </div>
-                                                  );
-                                                })()}
+                                              <div className="flex items-center gap-3">
+                                                <RenderActionSegments item={item} />
                                                 {isPurchaseOfficer && ["pending_po", "direct_po", "ready_for_po"].includes(item.status) && (
-                                                  <Button
-                                                    variant="outline"
-                                                    size="sm"
-                                                    className="h-8 border-blue-200 text-blue-700 hover:bg-blue-50 hover:text-blue-800"
-                                                    title="Edit Quantity"
-                                                    onClick={(e) => {
-                                                      e.stopPropagation();
-                                                      setEditQuantityItem({
-                                                        id: item._id,
-                                                        quantity: item.quantity,
-                                                        name: item.itemName,
-                                                        unit: item.unit
-                                                      });
-                                                    }}
-                                                  >
-                                                    <Edit className="h-4 w-4 mr-1.5" />
-                                                    Edit Qty
-                                                  </Button>
+                                                  <div className="flex items-center gap-2 border-l pl-3 border-border/60">
+                                                    <Button
+                                                      variant="outline"
+                                                      size="sm"
+                                                      className="h-9 border-blue-200 text-blue-700 hover:bg-blue-50"
+                                                      onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        setEditQuantityItem({ id: item._id, quantity: item.quantity, name: item.itemName, unit: item.unit });
+                                                      }}
+                                                    >
+                                                      <Edit className="h-4 w-4" />
+                                                    </Button>
+                                                    <Button
+                                                      variant="default"
+                                                      size="sm"
+                                                      className="h-9"
+                                                      onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        setDirectPOInitialData({
+                                                          requestNumber: request?.requestNumber,
+                                                          deliverySiteId: request?.site?._id,
+                                                          deliverySiteName: request?.site?.name,
+                                                          items: [{ requestId: item._id, itemDescription: item.itemName, description: item.description, quantity: item.quantity, unit: item.unit, unitPrice: 0 }]
+                                                        });
+                                                        setShowDirectPODialog(true);
+                                                      }}
+                                                    >
+                                                      <ShoppingCart className="h-4 w-4 mr-1.5" /> Order
+                                                    </Button>
+                                                  </div>
                                                 )}
-
-                                                {/* Create PO Button for Purchase Officer */}
-                                                {isPurchaseOfficer && ["direct_po", "ready_for_po", "pending_po"].includes(item.status) && (
-                                                  <Button
-                                                    variant="outline"
-                                                    size="sm"
-                                                    className="h-8 border-blue-200 text-blue-700 hover:bg-blue-50 hover:text-blue-800"
-                                                    title="Create PO"
-                                                    onClick={(e) => {
-                                                      e.stopPropagation();
-                                                      // Prepare initial data
-                                                      setDirectPOInitialData({
-                                                        requestNumber: request?.requestNumber,
-                                                        deliverySiteId: request?.site?._id,
-                                                        deliverySiteName: request?.site?.name,
-                                                        items: [{
-                                                          requestId: item._id,
-                                                          itemDescription: item.itemName,
-                                                          description: item.description,
-                                                          quantity: item.quantity,
-                                                          unit: item.unit,
-                                                          unitPrice: 0,
-                                                        }]
-                                                      });
-                                                      setShowDirectPODialog(true);
-                                                    }}
-                                                  >
-                                                    <ShoppingCart className="h-4 w-4 mr-1.5" />
-                                                    Create PO
-                                                  </Button>
-                                                )}
-                                              </>
-                                            )
-                                            }
+                                              </div>
+                                            )}
                                           </div>
                                         </TableCell>
                                       ) : (
@@ -1885,10 +1799,16 @@ export function RequestDetailsDialog({
                               <div
                                 key={item._id}
                                 className={cn(
-                                  "group relative flex flex-col rounded-xl border bg-card text-card-foreground shadow-sm transition-all duration-200 hover:shadow-md hover:border-primary/20",
-                                  item.status === "approved" && "border-green-200 bg-green-50/10 dark:border-green-800 dark:bg-green-950/5",
-                                  item.status === "rejected" && "border-red-200 bg-red-50/10 dark:border-red-800 dark:bg-red-950/5",
-                                  isSelected && "ring-2 ring-primary border-primary"
+                                  "group relative flex flex-col rounded-2xl bg-card text-card-foreground shadow-sm transition-all duration-300 hover:shadow-xl overflow-hidden hover:-translate-y-1",
+                                  getStatusBgTint(item.status),
+                                  // Apply status color class (inherits to Left primarily)
+                                  getStatusBorderClass(item.status),
+                                  // Left thick border inheriting status color
+                                  "border-l-[6px] border-l-[color:inherit]",
+                                  // Other sides neutral/thin (overriding status color)
+                                  "border-t border-r border-b border-t-border/40 border-r-border/40 border-b-border/40",
+
+                                  isSelected && "ring-4 ring-primary/20 bg-primary/5"
                                 )}
                               >
                                 {/* Selection Checkbox */}
@@ -1903,10 +1823,10 @@ export function RequestDetailsDialog({
                                 )}
 
                                 {/* Top Section: Image & Basic Info */}
-                                <div className="p-4 flex gap-5 border-b border-border/40 bg-muted/10 items-start min-h-[120px]">
+                                <div className="p-5 flex gap-6 border-b border-border/40 bg-muted/10 items-start min-h-[120px]">
                                   {/* Image Container - Fixed Width */}
-                                  <div className="flex-shrink-0 relative w-[80px]">
-                                    <div className="w-full aspect-square rounded-md overflow-hidden bg-background ring-1 ring-border/50 flex items-center justify-center">
+                                  <div className="flex-shrink-0 relative w-[85px]">
+                                    <div className="w-full aspect-square rounded-xl overflow-hidden bg-background ring-1 ring-border/50 flex items-center justify-center group-hover:ring-primary/20 transition-all shadow-sm">
                                       {itemPhotos.length > 0 ? (
                                         <CompactImageGallery
                                           images={itemPhotos}
@@ -1915,23 +1835,23 @@ export function RequestDetailsDialog({
                                           className="w-full h-full object-cover"
                                         />
                                       ) : (
-                                        <div className="flex flex-col items-center justify-center opacity-20">
+                                        <div className="flex flex-col items-center justify-center opacity-30">
                                           <ImageIcon className="h-6 w-6 mb-1" />
-                                          <span className="text-[8px] font-bold uppercase tracking-widest">No Image</span>
+                                          <span className="text-[7px] font-black uppercase tracking-widest leading-none">EMPTY</span>
                                         </div>
                                       )}
                                     </div>
                                   </div>
 
                                   {/* Content Container */}
-                                  <div className="min-w-0 flex-1 flex flex-col justify-between h-full space-y-3 pt-3">
-                                    <div className="flex items-start justify-between gap-3">
-                                      <div className="flex items-start gap-2">
+                                  <div className="min-w-0 flex-1 flex flex-col justify-between h-full pt-1">
+                                    <div className="flex flex-col gap-1.5">
+                                      <div className="flex items-start gap-2.5">
                                         <span className="bg-primary/10 text-primary text-[10px] font-black font-mono px-1.5 py-0.5 rounded border border-primary/20 shadow-sm shrink-0 mt-0.5">
                                           #{idx + 1}
                                         </span>
                                         <h4
-                                          className="font-bold text-lg leading-snug text-foreground hover:text-primary dark:hover:text-primary transition-colors cursor-pointer line-clamp-2"
+                                          className="font-black text-lg leading-tight text-foreground dark:text-white hover:text-primary transition-colors cursor-pointer line-clamp-2 uppercase tracking-tight"
                                           onClick={(e) => {
                                             e.stopPropagation();
                                             setSelectedItemName(item.itemName);
@@ -1941,30 +1861,35 @@ export function RequestDetailsDialog({
                                           {item.itemName}
                                         </h4>
                                       </div>
-                                    </div>
-                                    <div className="text-xs text-muted-foreground bg-background/50 p-2 rounded-md border border-transparent hover:border-border/30 transition-colors">
-                                      <ExpandableText text={item.description || "No description available."} className="text-xs text-muted-foreground" limit={60} />
+                                      <div className="text-xs text-muted-foreground/90 dark:text-slate-300 leading-relaxed line-clamp-2 pr-2">
+                                        {item.description || "No description provided for this item."}
+                                      </div>
                                     </div>
                                   </div>
                                 </div>
 
-                                {/* Info Row */}
-                                <div className="p-3 flex items-center justify-between gap-3 bg-card/50">
-                                  <div className="flex flex-col">
-                                    <span className="text-[10px] font-bold uppercase text-muted-foreground tracking-wider mb-0.5">Quantity</span>
-                                    <Badge variant="secondary" className="h-6 font-semibold px-2">
-                                      {item.quantity} <span className="opacity-70 font-normal ml-1">{item.unit}</span>
-                                    </Badge>
+                                {/* Info Table-like Rows */}
+                                <div className="grid grid-cols-2 divide-x divide-border/40 border-b border-border/40 bg-card/30">
+                                  <div className="p-3 flex flex-col gap-1.5">
+                                    <span className="text-[10px] font-bold uppercase text-muted-foreground tracking-widest leading-none">Quantity</span>
+                                    <div className="flex items-baseline gap-1">
+                                      <span className="text-lg font-black text-foreground">{item.quantity}</span>
+                                      <span className="text-[10px] font-bold text-muted-foreground uppercase">{item.unit}</span>
+                                    </div>
                                   </div>
-                                  <div className="flex flex-col items-end gap-1">
-                                    {item.isUrgent && <Badge variant="destructive" className="h-4 text-[10px] px-1 py-0 uppercase tracking-wider">Urgent</Badge>}
-                                    {getStatusBadge(item.status)}
+                                  <div className="p-3 flex flex-col gap-1.5 items-end">
+                                    <span className="text-[10px] font-bold uppercase text-muted-foreground tracking-widest leading-none">Current Status</span>
+                                    <div className="flex flex-col items-end gap-1">
+                                      {getStatusBadge(item.status)}
+                                      {item.isUrgent && <Badge variant="destructive" className="h-4 text-[9px] px-1 font-black uppercase tracking-widest animate-pulse border-none">Urgent</Badge>}
+                                    </div>
                                   </div>
                                 </div>
 
-                                {/* Status / Inventory */}
-                                <div className="px-3 pb-3">
-                                  <div className="w-full">
+                                {/* Inventory Row - Table-like */}
+                                <div className="px-3 py-2 bg-muted/5 border-b border-border/40 flex items-center justify-between gap-4">
+                                  <span className="text-[10px] font-bold uppercase text-muted-foreground tracking-widest min-w-fit">Inventory</span>
+                                  <div className="flex-1 overflow-hidden">
                                     {getInventoryStatusBadge(item.itemName, item.quantity, item.unit)}
                                   </div>
                                 </div>
@@ -1978,34 +1903,30 @@ export function RequestDetailsDialog({
 
                                 {/* Actions Footer for Cards */}
                                 {isManager && (isPending || item.status === "sign_pending" || item.status === "sign_rejected" || item.status === "cc_pending") && (
-                                  <div className="p-2 grid grid-cols-2 gap-2 border-t bg-muted/10">
+                                  <div className={cn(
+                                    "p-3 border-t bg-muted/5 w-full",
+                                    (item.status === "sign_pending" || item.status === "sign_rejected") ? "grid grid-cols-2 gap-3" : "flex"
+                                  )}>
                                     {item.status === "sign_pending" || item.status === "sign_rejected" ? (
                                       <>
                                         <Button
                                           variant="outline"
                                           size="sm"
-                                          className="h-8 border-emerald-200 text-emerald-700 hover:bg-emerald-50"
-                                          title="Approve"
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            setShowSignPendingApproveConfirm(item._id);
-                                          }}
+                                          className="h-9 border-emerald-200 text-emerald-700 hover:bg-emerald-50"
+                                          onClick={(e) => { e.stopPropagation(); setShowSignPendingApproveConfirm(item._id); }}
                                           disabled={isLoading}
                                         >
-                                          <CheckCircle className="h-4 w-4 mr-1.5" />
-                                          Approve
+                                          <CheckCircle className="h-4 w-4 mr-1.5" /> Approve
                                         </Button>
                                         {item.status === "sign_pending" && (
                                           <Button
                                             variant="outline"
                                             size="sm"
-                                            className="h-8 border-red-200 text-red-600 hover:bg-red-50"
-                                            title="Reject"
+                                            className="h-9 border-red-200 text-red-600 hover:bg-red-50"
                                             onClick={(e) => { e.stopPropagation(); setShowItemRejectionInput(item._id); }}
                                             disabled={isLoading}
                                           >
-                                            <XCircle className="h-4 w-4 mr-1.5" />
-                                            Reject
+                                            <XCircle className="h-4 w-4 mr-1.5" /> Reject
                                           </Button>
                                         )}
                                       </>
@@ -2014,114 +1935,14 @@ export function RequestDetailsDialog({
                                         <Button
                                           variant="outline"
                                           size="sm"
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            onOpenCC(item._id);
-                                          }}
-                                          className="h-8 border-blue-200 text-blue-700 hover:bg-blue-50"
-                                          title="View CC"
+                                          onClick={(e) => { e.stopPropagation(); onOpenCC(item._id); }}
+                                          className="h-9 border-blue-200 text-blue-700 hover:bg-blue-50 w-full"
                                         >
-                                          <FileText className="h-4 w-4 mr-1.5" />
-                                          View CC
+                                          <FileText className="h-4 w-4 mr-1.5" /> View CC
                                         </Button>
                                       ) : null
                                     ) : (
-                                      <>
-                                        {(() => {
-                                          const status = inventoryStatus?.[item.itemName];
-                                          const stock = status?.centralStock || 0;
-                                          const isPartial = stock > 0 && stock < item.quantity;
-                                          // Check if intents are selected
-                                          const isDirectDeliverySelected = itemIntents[item._id]?.includes("direct_delivery");
-                                          const isDirectPOSelected = itemIntents[item._id]?.includes("direct_po");
-                                          const isSplitSelected = itemIntents[item._id]?.includes("split");
-
-                                          return (
-                                            <div className="flex flex-wrap gap-2">
-                                              {/* Direct Delivery Checkbox */}
-                                              <div
-                                                onClick={(e) => {
-                                                  if (stock >= item.quantity) {
-                                                    e.stopPropagation();
-                                                    toggleIntent(item._id, "direct_delivery");
-                                                  }
-                                                }}
-                                                className={cn(
-                                                  "flex items-center gap-2 px-2 py-1 rounded border transition-all select-none",
-                                                  stock >= item.quantity
-                                                    ? "cursor-pointer"
-                                                    : "cursor-not-allowed opacity-50 grayscale bg-muted/30",
-                                                  isDirectDeliverySelected && stock >= item.quantity
-                                                    ? "bg-purple-600 border-purple-600 text-white shadow-sm"
-                                                    : stock >= item.quantity
-                                                      ? "bg-transparent border-purple-200 text-purple-700 hover:bg-purple-50"
-                                                      : "border-slate-200 text-slate-400"
-                                                )}
-                                                title={stock >= item.quantity ? "Mark for Direct Delivery" : "Not enough stock"}
-                                              >
-                                                <div className={cn(
-                                                  "h-3.5 w-3.5 rounded-sm border flex items-center justify-center bg-white",
-                                                  isDirectDeliverySelected && stock >= item.quantity ? "border-white" : "border-current"
-                                                )}>
-                                                  {isDirectDeliverySelected && stock >= item.quantity && <Check className="h-2.5 w-2.5 text-purple-600" />}
-                                                </div>
-                                                <span className="text-[10px] font-bold uppercase tracking-tight">Direct Delivery</span>
-                                              </div>
-
-                                              {/* Split Checkbox */}
-                                              <div
-                                                onClick={(e) => {
-                                                  if (isPartial) {
-                                                    e.stopPropagation();
-                                                    toggleIntent(item._id, "split");
-                                                  }
-                                                }}
-                                                className={cn(
-                                                  "flex items-center gap-2 px-2 py-1 rounded border transition-all select-none",
-                                                  isPartial
-                                                    ? "cursor-pointer"
-                                                    : "cursor-not-allowed opacity-50 grayscale bg-muted/30",
-                                                  isSplitSelected && isPartial
-                                                    ? "bg-indigo-600 border-indigo-600 text-white shadow-sm"
-                                                    : isPartial
-                                                      ? "bg-transparent border-indigo-200 text-indigo-700 hover:bg-indigo-50"
-                                                      : "border-slate-200 text-slate-400"
-                                                )}
-                                                title={isPartial ? "Mark for Split" : "Partial stock required for split"}
-                                              >
-                                                <div className={cn(
-                                                  "h-3.5 w-3.5 rounded-sm border flex items-center justify-center bg-white",
-                                                  isSplitSelected && isPartial ? "border-white" : "border-current"
-                                                )}>
-                                                  {isSplitSelected && isPartial && <Check className="h-2.5 w-2.5 text-indigo-600" />}
-                                                </div>
-                                                <span className="text-[10px] font-bold uppercase tracking-tight">Split</span>
-                                              </div>
-
-                                              {/* Direct PO Checkbox */}
-                                              <div
-                                                onClick={(e) => { e.stopPropagation(); toggleIntent(item._id, "direct_po"); }}
-                                                className={cn(
-                                                  "flex items-center gap-2 px-2 py-1 rounded border cursor-pointer transition-all select-none",
-                                                  isDirectPOSelected
-                                                    ? "bg-orange-600 border-orange-600 text-white shadow-sm"
-                                                    : "bg-transparent border-orange-200 text-orange-700 hover:bg-orange-50"
-                                                )}
-                                              >
-                                                <div className={cn(
-                                                  "h-3.5 w-3.5 rounded-sm border flex items-center justify-center bg-white",
-                                                  isDirectPOSelected ? "border-white" : "border-orange-300"
-                                                )}>
-                                                  {isDirectPOSelected && <Check className="h-2.5 w-2.5 text-orange-600" />}
-                                                </div>
-                                                <span className="text-[10px] font-bold uppercase tracking-tight">Direct PO</span>
-                                              </div>
-                                            </div>
-                                          );
-                                        })()}
-
-                                        {/* Actions moved to footer */}
-                                      </>
+                                      <RenderActionSegments item={item} isCard />
                                     )}
                                   </div>
                                 )}

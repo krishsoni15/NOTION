@@ -24,6 +24,8 @@ export default defineSchema({
     ),
     assignedSites: v.optional(v.array(v.id("sites"))), // Sites assigned to site engineers
     isActive: v.boolean(),
+    profileImage: v.optional(v.string()), // Profile image URL
+    profileImageKey: v.optional(v.string()), // Profile image storage key
     createdBy: v.optional(v.id("users")), // Manager who created this user (null for first manager)
     createdAt: v.number(),
     updatedAt: v.number(),

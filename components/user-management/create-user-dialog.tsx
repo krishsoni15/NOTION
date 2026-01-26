@@ -28,7 +28,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { ROLES, ROLE_LABELS, Role } from "@/lib/auth/roles";
-import { Eye, EyeOff } from "lucide-react";
+
+import { Eye, EyeOff, Loader2, X, Camera } from "lucide-react";
 import { SiteSelector } from "./site-selector";
 import { AddressAutocomplete } from "@/components/vendors/address-autocomplete";
 import { toast } from "sonner";
@@ -41,10 +42,16 @@ interface CreateUserDialogProps {
 
 export function CreateUserDialog({ open, onOpenChange }: CreateUserDialogProps) {
   const createUser = useMutation(api.users.createUser);
+  const updateUser = useMutation(api.users.updateUser);
 
   const [isLoading, setIsLoading] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+
+  // Image state
+  const [selectedImage, setSelectedImage] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
 
   // Form state
   const [formData, setFormData] = useState({
@@ -71,8 +78,57 @@ export function CreateUserDialog({ open, onOpenChange }: CreateUserDialogProps) 
       });
       setShowPassword(false);
       setError("");
+      // Reset image
+      setSelectedImage(null);
+      setImagePreview(null);
     }
     onOpenChange(newOpen);
+  };
+
+  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      if (!file.type.startsWith("image/")) {
+        toast.error("Please select an image file");
+        return;
+      }
+      setSelectedImage(file);
+
+      // Create preview
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        setImagePreview(e.target?.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleRemoveImage = () => {
+    setSelectedImage(null);
+    setImagePreview(null);
+  };
+
+  const uploadImage = async (file: File, userId: string) => {
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("userId", userId);
+
+      const response = await fetch("/api/upload/image", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to upload image");
+      }
+
+      const data = await response.json();
+      return { imageUrl: data.imageUrl, imageKey: data.imageKey };
+    } catch (error) {
+      console.error("Error uploading image:", error);
+      throw error;
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -107,11 +163,11 @@ export function CreateUserDialog({ open, onOpenChange }: CreateUserDialogProps) 
       const { clerkUserId } = await clerkResponse.json();
 
       // Step 2: Create user in Convex with assigned sites
-      const assignedSites = formData.role === ROLES.SITE_ENGINEER && formData.assignedSites.length > 0 
-        ? formData.assignedSites 
+      const assignedSites = formData.role === ROLES.SITE_ENGINEER && formData.assignedSites.length > 0
+        ? formData.assignedSites
         : undefined;
-      
-      await createUser({
+
+      const userId = await createUser({
         clerkUserId,
         username: formData.username,
         fullName: formData.fullName,
@@ -120,6 +176,26 @@ export function CreateUserDialog({ open, onOpenChange }: CreateUserDialogProps) 
         role: formData.role as Role,
         assignedSites: assignedSites,
       });
+
+      // Step 3: Upload image if selected
+      if (userId && selectedImage) {
+        setIsUploading(true);
+        try {
+          const imageData = await uploadImage(selectedImage, userId);
+
+          // Step 4: Update user with image
+          await updateUser({
+            userId,
+            profileImage: imageData.imageUrl,
+            profileImageKey: imageData.imageKey,
+          });
+        } catch (uploadError) {
+          console.error("Failed to upload profile image:", uploadError);
+          toast.warning("User created but profile image failed to upload");
+        } finally {
+          setIsUploading(false);
+        }
+      }
 
       // Show success message with site count
       const successMessage = formData.role === ROLES.SITE_ENGINEER && assignedSites
@@ -142,12 +218,56 @@ export function CreateUserDialog({ open, onOpenChange }: CreateUserDialogProps) 
       <DialogContent className="sm:max-w-[550px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Create New User</DialogTitle>
-          <DialogDescription>
-            Create a new user account and assign a role. Required fields are marked with *.
-          </DialogDescription>
+
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4 py-2">
+          {/* Profile Image */}
+          <div className="flex flex-col items-center gap-4 py-2">
+            <div className="relative group">
+              <div className="h-24 w-24 rounded-full overflow-hidden border-2 border-border relative bg-muted flex items-center justify-center">
+                {imagePreview ? (
+                  <img
+                    src={imagePreview}
+                    alt="Profile"
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <Camera className="h-8 w-8 text-muted-foreground/50" />
+                )}
+
+                {/* Overlay for edit */}
+                <label
+                  htmlFor="create-profile-image-upload"
+                  className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer text-white text-xs font-medium"
+                >
+                  {imagePreview ? "Change" : "Upload"}
+                </label>
+              </div>
+
+              {imagePreview && (
+                <button
+                  type="button"
+                  onClick={handleRemoveImage}
+                  className="absolute -top-1 -right-1 bg-destructive text-destructive-foreground rounded-full p-1 shadow-sm hover:bg-destructive/90 transition-colors"
+                  title="Remove photo"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              )}
+            </div>
+
+            <input
+              id="create-profile-image-upload"
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handleImageSelect}
+              disabled={isLoading || isUploading}
+            />
+            <p className="text-xs text-muted-foreground">Profile Photo (Optional)</p>
+          </div>
+
           <div className="space-y-1.5">
             <Label htmlFor="fullName" className="text-sm">Full Name *</Label>
             <Input
@@ -190,24 +310,24 @@ export function CreateUserDialog({ open, onOpenChange }: CreateUserDialogProps) 
                   setFormData({ ...formData, password: e.target.value })
                 }
                 required
-              disabled={isLoading}
-              minLength={6}
-              className="pr-10 h-9"
-            />
-            <button
-              type="button"
-              onClick={() => setShowPassword(!showPassword)}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-              disabled={isLoading}
-              tabIndex={-1}
-            >
-              {showPassword ? (
-                <EyeOff className="h-4 w-4" />
-              ) : (
-                <Eye className="h-4 w-4" />
-              )}
-            </button>
-          </div>
+                disabled={isLoading}
+                minLength={6}
+                className="pr-10 h-9"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                disabled={isLoading}
+                tabIndex={-1}
+              >
+                {showPassword ? (
+                  <EyeOff className="h-4 w-4" />
+                ) : (
+                  <Eye className="h-4 w-4" />
+                )}
+              </button>
+            </div>
           </div>
 
           <div className="space-y-1.5">
@@ -234,6 +354,7 @@ export function CreateUserDialog({ open, onOpenChange }: CreateUserDialogProps) 
             label="Address"
             placeholder="Search address or type manually..."
             id="address"
+            showMapLink={true}
           />
 
           <div className="space-y-1.5">
@@ -291,11 +412,13 @@ export function CreateUserDialog({ open, onOpenChange }: CreateUserDialogProps) 
             >
               Cancel
             </Button>
-            <Button type="submit" disabled={isLoading}>
-              {isLoading ? (
+            <Button type="submit" disabled={isLoading || isUploading}>
+              {isLoading || isUploading ? (
                 <>
-                  <span className="mr-2">Creating...</span>
-                  <span className="h-4 w-4 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin" />
+                  <span className="mr-2">
+                    {isUploading ? "Uploading..." : "Creating..."}
+                  </span>
+                  <Loader2 className="h-4 w-4 animate-spin" />
                 </>
               ) : (
                 "Create User"

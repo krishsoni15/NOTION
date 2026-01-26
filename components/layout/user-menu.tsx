@@ -21,6 +21,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { UserAvatar } from "@/components/user-management/user-avatar";
 import { Button } from "@/components/ui/button";
 import {
   User,
@@ -92,12 +93,15 @@ export function UserMenu() {
           variant="ghost"
           className="relative h-10 gap-2 rounded-full pl-2 pr-3 hover:bg-accent/50 transition-all hover:shadow-sm"
         >
-          <Avatar className="h-8 w-8 border-2 border-primary/20">
-            <AvatarImage src={user.imageUrl} alt={displayName} />
-            <AvatarFallback className="bg-primary text-primary-foreground text-xs font-semibold">
-              {initials}
-            </AvatarFallback>
-          </Avatar>
+          <div className="relative">
+            <UserAvatar
+              name={displayName}
+              image={convexUser?.profileImage}
+              size="sm"
+              className="border-2 border-primary/20"
+            />
+            <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full bg-green-500 ring-2 ring-background shadow-[0_0_8px_rgba(34,197,94,0.4)]" />
+          </div>
           <span className="hidden md:inline-block text-sm font-medium max-w-[120px] truncate">
             {displayName}
           </span>
@@ -114,12 +118,15 @@ export function UserMenu() {
         <DropdownMenuLabel className="font-normal p-0">
           <div className="flex flex-col space-y-2 py-2 px-1">
             <div className="flex items-center gap-3">
-              <Avatar className="h-12 w-12 border-2 border-primary/20">
-                <AvatarImage src={user.imageUrl} alt={displayName} />
-                <AvatarFallback className="bg-primary text-primary-foreground font-semibold">
-                  {initials}
-                </AvatarFallback>
-              </Avatar>
+              <div className="relative">
+                <UserAvatar
+                  name={displayName}
+                  image={convexUser?.profileImage}
+                  size="lg"
+                  className="border-2 border-primary/20"
+                />
+                <span className="absolute bottom-0 right-0 h-3.5 w-3.5 rounded-full bg-green-500 ring-4 ring-popover" />
+              </div>
               <div className="flex flex-col">
                 <p className="text-sm font-semibold leading-none">{displayName}</p>
                 <p className="text-xs text-muted-foreground mt-1">@{user.username}</p>

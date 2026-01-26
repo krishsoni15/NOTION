@@ -141,8 +141,8 @@ export function ImageSlider({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         className={cn(
-          "max-w-4xl w-full p-0 bg-black/95 border-none",
-          isFullscreen ? "max-w-none w-screen h-screen" : "max-h-[90vh]"
+          "max-w-6xl w-full p-0 bg-black/95 border-none overflow-hidden",
+          isFullscreen ? "max-w-none w-screen h-screen" : "h-[90vh]"
         )}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
@@ -152,121 +152,154 @@ export function ImageSlider({
           <DialogTitle>{itemName} - Image {currentIndex + 1} of {images.length}</DialogTitle>
         </VisuallyHidden>
 
-        {/* Header */}
-        <div className="absolute top-0 left-0 right-0 z-10 flex items-center justify-between p-4 bg-gradient-to-b from-black/50 to-transparent">
-          <div className="text-white">
-            <h3 className="font-medium">{itemName}</h3>
-            <p className="text-sm text-white/70">
-              {currentIndex + 1} of {images.length}
-            </p>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={downloadImage}
-              className="text-white hover:bg-white/20"
-            >
-              <Download className="h-4 w-4" />
-            </Button>
-
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={toggleFullscreen}
-              className="text-white hover:bg-white/20"
-            >
-              {isFullscreen ? (
-                <Minimize2 className="h-4 w-4" />
-              ) : (
-                <Maximize2 className="h-4 w-4" />
-              )}
-            </Button>
-
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => onOpenChange(false)}
-              className="text-white hover:bg-white/20"
-            >
-              <X className="h-4 w-4" />
-            </Button>
-          </div>
-        </div>
-
-        {/* Main Image */}
-        <div className="relative flex items-center justify-center h-full min-h-[400px]">
-          {/* Previous Button */}
+        <div className="flex w-full h-full">
+          {/* Sidebar Thumbnails (Left) */}
           {images.length > 1 && (
-            <Button
-              variant="ghost"
-              size="lg"
-              onClick={goToPrevious}
-              className="absolute left-4 z-10 text-white hover:bg-white/20 disabled:opacity-50"
-              disabled={images.length <= 1}
-            >
-              <ChevronLeft className="h-8 w-8" />
-            </Button>
-          )}
-
-          {/* Image */}
-          <div className="relative max-h-full max-w-full flex items-center justify-center">
-            <LazyImage
-              src={currentImage.imageUrl}
-              alt={`${itemName} ${currentIndex + 1}`}
-              className={cn(
-                "max-h-full max-w-full object-contain",
-                isFullscreen ? "h-screen w-auto" : "h-auto w-auto"
-              )}
-              priority
-            />
-          </div>
-
-          {/* Next Button */}
-          {images.length > 1 && (
-            <Button
-              variant="ghost"
-              size="lg"
-              onClick={goToNext}
-              className="absolute right-4 z-10 text-white hover:bg-white/20 disabled:opacity-50"
-              disabled={images.length <= 1}
-            >
-              <ChevronRight className="h-8 w-8" />
-            </Button>
-          )}
-        </div>
-
-        {/* Thumbnail Navigation */}
-        {images.length > 1 && (
-          <div className="absolute bottom-0 left-0 right-0 p-4 bg-gradient-to-t from-black/50 to-transparent">
-            <div className="flex items-center justify-center gap-2 max-w-full overflow-x-auto">
+            <div className="w-28 flex-shrink-0 h-full border-r border-white/10 bg-black/40 overflow-y-auto custom-scrollbar p-2 hidden sm:flex flex-col gap-3">
               {images.map((image, index) => (
                 <button
                   key={image.imageKey}
                   onClick={() => goToImage(index)}
                   className={cn(
-                    "flex-shrink-0 w-16 h-16 rounded border-2 overflow-hidden transition-all",
+                    "w-full aspect-square rounded-md overflow-hidden transition-all relative group flex-shrink-0",
                     index === currentIndex
-                      ? "border-white shadow-lg scale-110"
-                      : "border-white/50 opacity-70 hover:opacity-100"
+                      ? "ring-2 ring-primary ring-offset-2 ring-offset-black"
+                      : "opacity-60 hover:opacity-100 ring-1 ring-white/10"
                   )}
                 >
                   <LazyImage
                     src={image.imageUrl}
                     alt={`Thumbnail ${index + 1}`}
-                    className="w-full h-full object-cover"
+                    className="w-full h-full object-cover transition-transform group-hover:scale-110"
                   />
+                  {index === currentIndex && (
+                    <div className="absolute inset-0 bg-primary/10 mix-blend-overlay" />
+                  )}
                 </button>
               ))}
             </div>
-          </div>
-        )}
+          )}
 
-        {/* Keyboard Shortcuts Hint */}
-        <div className="absolute bottom-4 right-4 text-white/50 text-xs">
-          <div className="bg-black/50 rounded px-2 py-1">
-            ← → Navigate • F Fullscreen • D Download • Esc Close
+          {/* Main Content Area */}
+          <div className="flex-1 relative flex flex-col h-full bg-black/50">
+            {/* Header Overlay */}
+            <div className="absolute top-0 left-0 right-0 z-20 flex items-center justify-between p-4 bg-gradient-to-b from-black/80 to-transparent pointer-events-none">
+              <div className="text-white pointer-events-auto">
+                <h3 className="font-medium text-sm md:text-base line-clamp-1">{itemName}</h3>
+                <p className="text-xs text-white/70">
+                  {currentIndex + 1} / {images.length}
+                </p>
+              </div>
+
+              <div className="flex items-center gap-2 md:gap-3 pointer-events-auto">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={downloadImage}
+                  className="text-white/80 hover:text-white hover:bg-white/10 h-9 w-9 rounded-full transition-colors"
+                  title="Download Image"
+                >
+                  <Download className="h-5 w-5" />
+                </Button>
+
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={toggleFullscreen}
+                  className="text-white/80 hover:text-white hover:bg-white/10 h-9 w-9 rounded-full transition-colors"
+                  title="Toggle Fullscreen"
+                >
+                  {isFullscreen ? (
+                    <Minimize2 className="h-5 w-5" />
+                  ) : (
+                    <Maximize2 className="h-5 w-5" />
+                  )}
+                </Button>
+
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => onOpenChange(false)}
+                  className="bg-white/10 text-white hover:bg-red-500 hover:text-white h-9 w-9 rounded-full transition-all border border-white/10 shadow-sm"
+                  title="Close"
+                >
+                  <X className="h-5 w-5" />
+                </Button>
+              </div>
+            </div>
+
+            {/* Main Image */}
+            <div className="flex-1 relative flex items-center justify-center p-4">
+              {/* Previous Button */}
+              {images.length > 1 && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={goToPrevious}
+                  className="absolute left-4 z-10 text-white hover:bg-white/10 disabled:opacity-50 h-12 w-12 rounded-full hidden md:flex"
+                  disabled={images.length <= 1}
+                >
+                  <ChevronLeft className="h-8 w-8" />
+                </Button>
+              )}
+
+              {/* Image */}
+              <div className="relative w-full h-full flex items-center justify-center">
+                <LazyImage
+                  src={currentImage.imageUrl}
+                  alt={`${itemName} ${currentIndex + 1}`}
+                  className={cn(
+                    "max-h-full max-w-full object-contain shadow-2xl transition-all duration-300",
+                    isFullscreen ? "scale-100" : "scale-[0.98]"
+                  )}
+                  priority
+                />
+              </div>
+
+              {/* Next Button */}
+              {images.length > 1 && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={goToNext}
+                  className="absolute right-4 z-10 text-white hover:bg-white/10 disabled:opacity-50 h-12 w-12 rounded-full hidden md:flex"
+                  disabled={images.length <= 1}
+                >
+                  <ChevronRight className="h-8 w-8" />
+                </Button>
+              )}
+            </div>
+
+            {/* Mobile Bottom Thumbnails (Visible only on small screens) */}
+            {images.length > 1 && (
+              <div className="sm:hidden h-20 flex-shrink-0 border-t border-white/10 p-2 bg-black/60 overflow-x-auto">
+                <div className="flex gap-2 min-w-min">
+                  {images.map((image, index) => (
+                    <button
+                      key={image.imageKey}
+                      onClick={() => goToImage(index)}
+                      className={cn(
+                        "h-full aspect-square rounded-md overflow-hidden relative flex-shrink-0",
+                        index === currentIndex ? "ring-2 ring-white" : "opacity-60"
+                      )}
+                    >
+                      <LazyImage
+                        src={image.imageUrl}
+                        alt=""
+                        className="w-full h-full object-cover"
+                      />
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Keyboard Shortcuts Hint */}
+            <div className="absolute bottom-4 right-4 text-white/30 text-[10px] hidden md:block">
+              <div className="bg-black/40 backdrop-blur-md rounded px-2 py-1 border border-white/5">
+                ← → Navigate • F Fullscreen • Esc Close
+              </div>
+            </div>
           </div>
         </div>
       </DialogContent>

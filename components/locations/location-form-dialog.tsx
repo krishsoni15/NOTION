@@ -73,10 +73,13 @@ export function LocationFormDialog({
 
   // Check for duplicate location name
   useEffect(() => {
-    if (formData.name.trim() && !locationId) {
+    if (formData.name.trim()) {
       const nameLower = formData.name.trim().toLowerCase();
       const existingLocation = allLocations?.find(
-        (loc) => loc.name.toLowerCase() === nameLower && loc.isActive
+        (loc) =>
+          loc.name.toLowerCase() === nameLower &&
+          loc.isActive &&
+          loc._id !== locationId
       );
       if (existingLocation) {
         setError(`Location "${formData.name}" already exists`);
@@ -110,7 +113,7 @@ export function LocationFormDialog({
       });
     }
     setError("");
-  }, [initialData, open]);
+  }, [locationId, open]);
 
   const handleOpenChange = (newOpen: boolean) => {
     if (!newOpen) {
@@ -136,16 +139,22 @@ export function LocationFormDialog({
       return;
     }
 
-    // Check for duplicate before submitting (only for new locations)
-    if (!locationId) {
-      const nameLower = formData.name.trim().toLowerCase();
-      const existingLocation = allLocations?.find(
-        (loc) => loc.name.toLowerCase() === nameLower && loc.isActive
-      );
-      if (existingLocation) {
-        setError(`Location "${formData.name}" already exists`);
-        return;
-      }
+    if (!formData.address.trim()) {
+      setError("Address is required");
+      return;
+    }
+
+    // Check for duplicate before submitting
+    const nameLower = formData.name.trim().toLowerCase();
+    const existingLocation = allLocations?.find(
+      (loc) =>
+        loc.name.toLowerCase() === nameLower &&
+        loc.isActive &&
+        loc._id !== locationId
+    );
+    if (existingLocation) {
+      setError(`Location "${formData.name}" already exists`);
+      return;
     }
 
     setIsLoading(true);
@@ -190,11 +199,7 @@ export function LocationFormDialog({
       <DialogContent className="sm:max-w-[550px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{locationId ? "Edit Location" : "Add New Location"}</DialogTitle>
-          <DialogDescription>
-            {locationId
-              ? "Update location information. Required fields are marked with *."
-              : "Create a new location. Required fields are marked with *."}
-          </DialogDescription>
+
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4 py-2">
@@ -206,7 +211,7 @@ export function LocationFormDialog({
               value={formData.type}
               onValueChange={(value) => setFormData({ ...formData, type: value as "site" | "inventory" })}
               className="flex gap-4"
-              disabled={isLoading || !!locationId} // Disable type change on edit to prevent confusion or data loss, or allow it? User didn't specify, but usually changing type is rare. Let's allow it for now if new, maybe disable on edit if critical. For now allow.
+              disabled={isLoading}
             >
               <div className="flex items-center space-x-2">
                 <RadioGroupItem value="site" id="type-site" />
@@ -220,7 +225,9 @@ export function LocationFormDialog({
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="name" className="text-sm">{formData.type === "inventory" ? "Store Name *" : "Site Name *"}</Label>
+            <Label htmlFor="name" className="text-sm">
+              {formData.type === "inventory" ? "Store Name *" : "Site Name *"}
+            </Label>
             <Input
               id="name"
               placeholder={formData.type === "inventory" ? "Enter store name" : "Enter site name"}
@@ -253,14 +260,18 @@ export function LocationFormDialog({
           )}
 
           <div className="space-y-1.5">
-            <AddressAutocomplete
-              value={formData.address}
-              onChange={(address) => setFormData({ ...formData, address })}
-              disabled={isLoading}
-              label="Address"
-              placeholder="Search address..."
-              id="address"
-            />
+            <div className="space-y-1.5">
+              <AddressAutocomplete
+                value={formData.address}
+                onChange={(address) => setFormData({ ...formData, address })}
+                disabled={isLoading}
+                label="Address"
+                placeholder="Search address..."
+                id="address"
+                required={true}
+                showMapLink={true}
+              />
+            </div>
           </div>
 
           <div className="space-y-1.5">

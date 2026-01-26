@@ -83,6 +83,7 @@ export function InventoryFormDialog({
   const [formImageSliderInitialIndex, setFormImageSliderInitialIndex] = useState(0);
   const [isDragOver, setIsDragOver] = useState(false);
   const uploadInputRef = useRef<HTMLInputElement>(null);
+  const formInitializedRef = useRef(false);
 
   const canEdit = userRole === ROLES.PURCHASE_OFFICER && !isAddImageMode; // Only Purchase Officers can edit item details
   // Purchase Officer can add images when creating or editing items
@@ -109,42 +110,49 @@ export function InventoryFormDialog({
     vendorIds: [] as Id<"vendors">[],
   });
 
+  // Reset initialized ref when dialog closes or itemId changes
+  useEffect(() => {
+    if (!open) {
+      formInitializedRef.current = false;
+    }
+  }, [open, itemId]);
+
   // Load initial data
   useEffect(() => {
-    // Set form data from initialData or currentItem
-    if (initialData) {
-      setFormData({
-        itemName: initialData.itemName,
-        description: initialData.description || "",
-        hsnSacCode: initialData.hsnSacCode || "",
-        unit: initialData.unit,
-        centralStock: initialData.centralStock,
-        vendorIds: initialData.vendorIds || (initialData.vendorId ? [initialData.vendorId] : []),
-      });
-    } else if (currentItem) {
-      // Support both old vendorId and new vendorIds format
-      const vendorIds = (currentItem as any).vendorIds ||
-        (currentItem.vendorId ? [currentItem.vendorId] : []);
-      setFormData({
-        itemName: currentItem.itemName,
-        description: currentItem.description || "",
-        hsnSacCode: (currentItem as any).hsnSacCode || "",
-        unit: currentItem.unit ?? "",
-        centralStock: currentItem.centralStock || 0,
-        vendorIds: vendorIds,
-      });
-    } else {
-      setFormData({
-        itemName: "",
-        description: "",
-        hsnSacCode: "",
-        unit: "",
-        centralStock: 0,
-        vendorIds: [],
-      });
+    // Only initialize form data once per session/item when open
+    if (open && !formInitializedRef.current) {
+      if (initialData) {
+        setFormData({
+          itemName: initialData.itemName,
+          description: initialData.description || "",
+          hsnSacCode: initialData.hsnSacCode || "",
+          unit: initialData.unit,
+          centralStock: initialData.centralStock,
+          vendorIds: initialData.vendorIds || (initialData.vendorId ? [initialData.vendorId] : []),
+        });
+        formInitializedRef.current = true;
+      } else if (currentItem) {
+        // Support both old vendorId and new vendorIds format
+        const vendorIds = (currentItem as any).vendorIds ||
+          (currentItem.vendorId ? [currentItem.vendorId] : []);
+        setFormData({
+          itemName: currentItem.itemName,
+          description: currentItem.description || "",
+          hsnSacCode: (currentItem as any).hsnSacCode || "",
+          unit: currentItem.unit ?? "",
+          centralStock: currentItem.centralStock || 0,
+          vendorIds: vendorIds,
+        });
+        formInitializedRef.current = true;
+      } else if (!itemId && mode === "create") {
+        // Initialize empty for create mode if needed, though state default is empty
+        formInitializedRef.current = true;
+      }
     }
+  }, [initialData, currentItem, open, itemId, mode]);
 
-    // Always load images from currentItem if available (for both edit and add-image modes)
+  // Load images separately - allow updates from server to reflect (e.g. upload completion)
+  useEffect(() => {
     if (currentItem && currentItem.images) {
       if (currentItem.images.length > 0) {
         setExistingImages(currentItem.images);
@@ -154,13 +162,13 @@ export function InventoryFormDialog({
       } else {
         setExistingImages([]);
       }
-    } else {
-      setExistingImages([]);
+    } else if (!currentItem?.images) {
+      // Only clear if we are sure we should? 
+      // If currentItem is loading, it might be undefined.
+      // But usually we want to respect the server state for images.
+      // For new items, this won't run as currentItem is null.
     }
-
-    setSelectedImages([]);
-    setError("");
-  }, [initialData, currentItem, isAddImageMode, open]);
+  }, [currentItem, open]);
 
   const handleOpenChange = (newOpen: boolean) => {
     if (!newOpen) {
@@ -312,6 +320,11 @@ export function InventoryFormDialog({
         setIsLoading(false);
         return;
       }
+      if (!formData.description.trim()) {
+        setError("Description is required");
+        setIsLoading(false);
+        return;
+      }
       if (formData.centralStock === undefined || formData.centralStock <= 0) {
         setError("Central stock is required and must be greater than 0");
         setIsLoading(false);
@@ -321,7 +334,7 @@ export function InventoryFormDialog({
 
     try {
       if (isAddImageMode && itemId) {
-        // Add images only
+        // ... existing image upload logic ...
         if (selectedImages.length === 0) {
           setError("Please select at least one image");
           setIsLoading(false);
@@ -359,7 +372,7 @@ export function InventoryFormDialog({
           setIsUploading(false);
         }
       } else if (itemId && canEdit) {
-        // Update existing item
+        // ... existing update item logic ...
         await updateItem({
           itemId,
           itemName: formData.itemName,
@@ -392,7 +405,7 @@ export function InventoryFormDialog({
         toast.success("Inventory item updated successfully");
         handleOpenChange(false);
       } else if (canEdit) {
-        // Create new item first
+        // ... existing create item logic ...
         const newItemId = await createItem({
           itemName: formData.itemName,
           description: formData.description,
@@ -447,13 +460,7 @@ export function InventoryFormDialog({
                 ? "Edit Inventory Item"
                 : "Add New Inventory Item"}
           </DialogTitle>
-          <DialogDescription>
-            {isAddImageMode
-              ? "Manage images for this inventory item - add new images or remove existing ones"
-              : itemId
-                ? "Update inventory item information. Required fields are marked with * (Item Name, Central Stock)."
-                : "Create a new inventory item. Required fields are marked with * (Item Name, Central Stock)."}
-          </DialogDescription>
+
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-5 py-2">
@@ -488,7 +495,7 @@ export function InventoryFormDialog({
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="description">Description <span className="text-muted-foreground text-xs">(optional)</span></Label>
+                <Label htmlFor="description">Description *</Label>
                 <div className="relative">
                   <textarea
                     id="description"
@@ -496,6 +503,7 @@ export function InventoryFormDialog({
                     placeholder="Enter item description..."
                     value={formData.description}
                     onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                    required
                     disabled={isLoading || !canEdit}
                   />
                 </div>

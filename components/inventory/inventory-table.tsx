@@ -8,7 +8,7 @@
  * Manager and Site Engineer: Read-only, but Site Engineer can add images
  */
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import {
@@ -21,12 +21,18 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { InventoryCard } from "./inventory-card";
+import { ReadMoreText } from "@/components/ui/read-more-text";
 import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -40,22 +46,6 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 import { MoreHorizontal, Edit, Trash2, Image as ImageIcon, Plus, Package, Building2, Calendar, Box, Info, Mail, Phone, Hash, MapPin } from "lucide-react";
 import { ImageSlider } from "@/components/ui/image-slider";
 import { LazyImage } from "@/components/ui/lazy-image";
@@ -65,7 +55,9 @@ import { ROLES } from "@/lib/auth/roles";
 import { InventoryFormDialog } from "./inventory-form-dialog";
 import { ItemInfoDialog } from "../requests/item-info-dialog";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 import type { Doc, Id } from "@/convex/_generated/dataModel";
+import { VendorDetailsDialog } from "./vendor-details-dialog";
 
 type ViewMode = "table" | "card";
 
@@ -75,7 +67,9 @@ interface InventoryTableProps {
   onRefresh?: () => void;
 }
 
+
 export function InventoryTable({ items, viewMode = "table", onRefresh }: InventoryTableProps) {
+
   const userRole = useUserRole();
   const deleteItem = useMutation(api.inventory.deleteInventoryItem);
   const removeImage = useMutation(api.inventory.removeImageFromInventory);
@@ -92,6 +86,7 @@ export function InventoryTable({ items, viewMode = "table", onRefresh }: Invento
   const [imageSliderImages, setImageSliderImages] = useState<Array<{ imageUrl: string; imageKey: string }>>([]);
   const [imageSliderItemName, setImageSliderItemName] = useState("");
   const [imageSliderInitialIndex, setImageSliderInitialIndex] = useState(0);
+  const [selectedVendorDetails, setSelectedVendorDetails] = useState<any>(null);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   const canPerformCRUD = userRole === ROLES.PURCHASE_OFFICER; // Only Purchase Officers can edit/delete
@@ -103,6 +98,19 @@ export function InventoryTable({ items, viewMode = "table", onRefresh }: Invento
     setImageSliderInitialIndex(initialIndex);
     setImageSliderOpen(true);
   };
+
+  const initialFormData = useMemo(() => {
+    if (!editingItem) return null;
+    return {
+      itemName: editingItem.itemName,
+      description: editingItem.description,
+      hsnSacCode: editingItem.hsnSacCode,
+      unit: editingItem.unit ?? "",
+      centralStock: editingItem.centralStock ?? 0,
+      vendorIds: (editingItem as any).vendorIds ||
+        (editingItem.vendorId ? [editingItem.vendorId] : []),
+    };
+  }, [editingItem]);
 
   if (!items) {
     return <div className="text-center py-8 text-muted-foreground">Loading...</div>;
@@ -116,330 +124,16 @@ export function InventoryTable({ items, viewMode = "table", onRefresh }: Invento
     );
   }
 
-  const InventoryCard = ({ item }: { item: Doc<"inventory"> }) => {
-    return (
-      <Card className="hover:shadow-lg transition-all border-border/50">
-        <CardHeader className="pb-4 border-b border-border/50">
-          <div className="flex items-start justify-between gap-3">
-            <div className="flex-1 min-w-0">
-              <CardTitle className="text-base font-semibold flex items-center gap-2 mb-1">
-                <Package className="h-4 w-4 text-primary shrink-0" />
-                <button
-                  onClick={() => setSelectedItemName(item.itemName)}
-                  className="truncate text-foreground hover:text-primary hover:bg-muted/50 rounded-full px-3 py-1.5 -mx-2 -my-1 transition-colors cursor-pointer text-left border border-transparent hover:border-primary/20"
-                >
-                  {item.itemName}
-                </button>
-              </CardTitle>
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Badge variant="outline" className="text-xs">
-                  {item.unit}
-                </Badge>
-              </div>
-            </div>
-            {(canPerformCRUD || canAddImages) && (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon" className="h-8 w-8">
-                    <MoreHorizontal className="h-4 w-4" />
-                    <span className="sr-only">Actions</span>
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end">
-                  <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                  <DropdownMenuSeparator />
-                  {canPerformCRUD && (
-                    <>
-                      <DropdownMenuItem onClick={() => setEditingItem(item)}>
-                        <Edit className="h-4 w-4 mr-2" />
-                        Edit Item
-                      </DropdownMenuItem>
-                      <DropdownMenuSeparator />
-                    </>
-                  )}
-                  {canAddImages && (
-                    <DropdownMenuItem onClick={() => setAddingImageItem(item)}>
-                      <ImageIcon className="h-4 w-4 mr-2" />
-                      Manage Images
-                    </DropdownMenuItem>
-                  )}
-                  {canPerformCRUD && (
-                    <>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem
-                        onClick={() => setDeletingItem(item)}
-                        className="text-destructive focus:text-destructive"
-                      >
-                        <Trash2 className="h-4 w-4 mr-2" />
-                        Delete Item
-                      </DropdownMenuItem>
-                    </>
-                  )}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            )}
-          </div>
-        </CardHeader>
-        <CardContent className="pt-4 space-y-3">
-          {/* Image Display - Show prominently if available */}
-          {item.images && item.images.length > 0 && (
-            <div className="mb-3">
-              <div className="flex justify-center">
-                <div className="relative group">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      console.log('Opening image slider for:', item.itemName, item.images);
-                      openImageSlider(item.images || [], item.itemName, 0);
-                    }}
-                    className="block"
-                  >
-                    <LazyImage
-                      src={item.images[0].imageUrl}
-                      alt={`${item.itemName} main image`}
-                      width={120}
-                      height={80}
-                      className="rounded-lg border-2 border-border hover:border-primary transition-colors object-cover w-full max-w-[120px] h-[80px]"
-                    />
-                  </button>
-                  {item.images.length > 1 && (
-                    <div className="absolute -bottom-2 -right-2 bg-primary text-primary-foreground rounded-full text-xs px-2 py-1 font-medium shadow-sm">
-                      +{item.images.length - 1}
-                    </div>
-                  )}
-                  {canPerformCRUD && (
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (item.images && item.images[0]) {
-                          handleRemoveImage(item._id, item.images[0].imageKey);
-                        }
-                      }}
-                      disabled={removingImageKey === (item.images && item.images[0]?.imageKey)}
-                      className="absolute -top-2 -right-2 bg-destructive text-destructive-foreground rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity text-xs w-6 h-6 flex items-center justify-center hover:bg-destructive/90 z-10"
-                    >
-                      ×
-                    </button>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
 
-          <div className="flex items-start gap-2 text-sm">
-            <Box className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
-            <div className="flex-1 min-w-0">
-              <p className="text-muted-foreground text-xs">Central Stock</p>
-              <p className="font-medium">{item.centralStock}</p>
-            </div>
-          </div>
-
-          <div className="flex items-start gap-2 text-sm">
-            <div className="flex-1 min-w-0">
-              <p className="text-muted-foreground text-xs">HSN/SAC</p>
-              <p className="font-medium">{item.hsnSacCode || "—"}</p>
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-muted-foreground text-xs">Description</p>
-              <p className="font-medium truncate" title={item.description || ""}>{item.description || "—"}</p>
-            </div>
-          </div>
-          {((item as any).vendors && (item as any).vendors.length > 0) || (item as any).vendor ? (
-            <div className="flex items-start gap-2 text-sm">
-              <Building2 className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
-              <div className="flex-1 min-w-0">
-                <p className="text-muted-foreground text-xs">
-                  {(item as any).vendors?.length > 1 ? "Vendors" : "Vendor"}
-                </p>
-                <div className="flex flex-wrap items-center gap-1.5 mt-1">
-                  {((item as any).vendors && (item as any).vendors.length > 0)
-                    ? (item as any).vendors.map((vendor: any) => (
-                      <div key={vendor._id} className="flex items-center gap-1">
-                        <Popover>
-                          <PopoverTrigger asChild>
-                            <Badge
-                              variant="outline"
-                              className="text-xs cursor-pointer hover:bg-primary/10 transition-colors"
-                            >
-                              {vendor.companyName}
-                            </Badge>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-80 p-4" align="start">
-                            <div className="space-y-3">
-                              <div>
-                                <h4 className="font-semibold text-sm mb-2 flex items-center gap-2">
-                                  <Building2 className="h-4 w-4 text-primary" />
-                                  {vendor.companyName}
-                                </h4>
-                              </div>
-                              <div className="space-y-2 text-sm">
-                                <div className="flex items-start gap-2">
-                                  <Mail className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
-                                  <div>
-                                    <p className="text-xs text-muted-foreground">Email</p>
-                                    <p className="font-medium">{vendor.email}</p>
-                                  </div>
-                                </div>
-                                {vendor.phone && (
-                                  <div className="flex items-start gap-2">
-                                    <Phone className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
-                                    <div>
-                                      <p className="text-xs text-muted-foreground">Phone</p>
-                                      <p className="font-medium">{vendor.phone}</p>
-                                    </div>
-                                  </div>
-                                )}
-                                <div className="flex items-start gap-2">
-                                  <Hash className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
-                                  <div>
-                                    <p className="text-xs text-muted-foreground">GST Number</p>
-                                    <p className="font-medium">{vendor.gstNumber}</p>
-                                  </div>
-                                </div>
-                                {vendor.address && (
-                                  <div className="flex items-start gap-2">
-                                    <MapPin className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
-                                    <div>
-                                      <p className="text-xs text-muted-foreground">Address</p>
-                                      <p className="font-medium text-xs">{vendor.address}</p>
-                                    </div>
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          </PopoverContent>
-                        </Popover>
-                      </div>
-                    ))
-                    : (item as any).vendor && (
-                      <div className="flex items-center gap-1">
-                        <Popover>
-                          <PopoverTrigger asChild>
-                            <Badge
-                              variant="outline"
-                              className="text-xs cursor-pointer hover:bg-primary/10 transition-colors"
-                            >
-                              {(item as any).vendor.companyName}
-                            </Badge>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-80 p-4" align="start">
-                            <div className="space-y-3">
-                              <div>
-                                <h4 className="font-semibold text-sm mb-2 flex items-center gap-2">
-                                  <Building2 className="h-4 w-4 text-primary" />
-                                  {(item as any).vendor.companyName}
-                                </h4>
-                              </div>
-                              <div className="space-y-2 text-sm">
-                                <div className="flex items-start gap-2">
-                                  <Mail className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
-                                  <div>
-                                    <p className="text-xs text-muted-foreground">Email</p>
-                                    <p className="font-medium">{(item as any).vendor.email}</p>
-                                  </div>
-                                </div>
-                                {(item as any).vendor.phone && (
-                                  <div className="flex items-start gap-2">
-                                    <Phone className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
-                                    <div>
-                                      <p className="text-xs text-muted-foreground">Phone</p>
-                                      <p className="font-medium">{(item as any).vendor.phone}</p>
-                                    </div>
-                                  </div>
-                                )}
-                                <div className="flex items-start gap-2">
-                                  <Hash className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
-                                  <div>
-                                    <p className="text-xs text-muted-foreground">GST Number</p>
-                                    <p className="font-medium">{(item as any).vendor.gstNumber}</p>
-                                  </div>
-                                </div>
-                                {(item as any).vendor.address && (
-                                  <div className="flex items-start gap-2">
-                                    <MapPin className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
-                                    <div>
-                                      <p className="text-xs text-muted-foreground">Address</p>
-                                      <p className="font-medium text-xs">{(item as any).vendor.address}</p>
-                                    </div>
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          </PopoverContent>
-                        </Popover>
-                        <Popover>
-                          <PopoverTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-5 w-5 p-0 hover:bg-primary/10"
-                              onClick={(e) => e.stopPropagation()}
-                            >
-                              <Info className="h-3 w-3 text-primary" />
-                            </Button>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-80 p-4" align="start">
-                            <div className="space-y-3">
-                              <div>
-                                <h4 className="font-semibold text-sm mb-2 flex items-center gap-2">
-                                  <Building2 className="h-4 w-4 text-primary" />
-                                  {(item as any).vendor.companyName}
-                                </h4>
-                              </div>
-                              <div className="space-y-2 text-sm">
-                                <div className="flex items-start gap-2">
-                                  <Mail className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
-                                  <div>
-                                    <p className="text-xs text-muted-foreground">Email</p>
-                                    <p className="font-medium">{(item as any).vendor.email}</p>
-                                  </div>
-                                </div>
-                                {((item as any).vendor as any).phone && (
-                                  <div className="flex items-start gap-2">
-                                    <Phone className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
-                                    <div>
-                                      <p className="text-xs text-muted-foreground">Phone</p>
-                                      <p className="font-medium">{((item as any).vendor as any).phone}</p>
-                                    </div>
-                                  </div>
-                                )}
-                                {((item as any).vendor as any).gstNumber && (
-                                  <div className="flex items-start gap-2">
-                                    <Hash className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
-                                    <div>
-                                      <p className="text-xs text-muted-foreground">GST Number</p>
-                                      <p className="font-medium">{((item as any).vendor as any).gstNumber}</p>
-                                    </div>
-                                  </div>
-                                )}
-                                {((item as any).vendor as any).address && (
-                                  <div className="flex items-start gap-2">
-                                    <MapPin className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
-                                    <div>
-                                      <p className="text-xs text-muted-foreground">Address</p>
-                                      <p className="font-medium text-xs">{((item as any).vendor as any).address}</p>
-                                    </div>
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          </PopoverContent>
-                        </Popover>
-                      </div>
-                    )}
-                </div>
-              </div>
-            </div>
-          ) : null}
-          <div className="flex items-center gap-2 text-xs text-muted-foreground pt-2 border-t">
-            <Calendar className="h-3.5 w-3.5" />
-            <span>Created {new Date(item.createdAt).toLocaleDateString()}</span>
-          </div>
-        </CardContent>
-      </Card >
-    );
+  const handleEdit = (item: Doc<"inventory">) => setEditingItem(item);
+  const handleDeleteTrigger = (item: Doc<"inventory">) => setDeletingItem(item);
+  const handleManageImages = (item: Doc<"inventory">) => setAddingImageItem(item);
+  const handleImageClick = (item: Doc<"inventory">, index: number) => {
+    if (item.images && item.images.length > 0) {
+      openImageSlider(item.images, item.itemName, index);
+    }
   };
+
 
   const handleDelete = async () => {
     if (!deletingItem) return;
@@ -491,46 +185,71 @@ export function InventoryTable({ items, viewMode = "table", onRefresh }: Invento
     <>
       {/* Table View */}
       {viewMode === "table" && (
-        <div className="border rounded-lg overflow-hidden">
+        <div className="border rounded-xl overflow-hidden shadow-sm bg-background">
           <div className="overflow-x-auto">
             <Table>
-              <TableHeader>
+              <TableHeader className="bg-muted/40">
                 <TableRow>
-                  <TableHead>Item Name</TableHead>
-                  <TableHead>Unit</TableHead>
-                  <TableHead>HSN/SAC</TableHead>
-                  <TableHead>Description</TableHead>
-                  <TableHead>Central Stock</TableHead>
-                  <TableHead>Vendor</TableHead>
-                  <TableHead>Images</TableHead>
-                  <TableHead>Created</TableHead>
+                  <TableHead className="w-[200px] font-semibold text-xs uppercase tracking-wider text-muted-foreground/80">Item Name</TableHead>
+                  <TableHead className="w-[100px] font-semibold text-xs uppercase tracking-wider text-muted-foreground/80">Stock</TableHead>
+                  <TableHead className="w-[80px] font-semibold text-xs uppercase tracking-wider text-muted-foreground/80">Unit</TableHead>
+                  <TableHead className="w-[120px] font-semibold text-xs uppercase tracking-wider text-muted-foreground/80">HSN/SAC</TableHead>
+                  <TableHead className="min-w-[200px] font-semibold text-xs uppercase tracking-wider text-muted-foreground/80">Description</TableHead>
+                  <TableHead className="w-[180px] font-semibold text-xs uppercase tracking-wider text-muted-foreground/80">Vendor</TableHead>
+                  <TableHead className="w-[80px] font-semibold text-xs uppercase tracking-wider text-muted-foreground/80">Images</TableHead>
+                  <TableHead className="w-[120px] font-semibold text-xs uppercase tracking-wider text-muted-foreground/80">Created</TableHead>
                   {(canPerformCRUD || canAddImages) && (
-                    <TableHead className="text-right">Actions</TableHead>
+                    <TableHead className="w-[60px] text-right font-semibold text-xs uppercase tracking-wider text-muted-foreground/80">Actions</TableHead>
                   )}
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {items.map((item) => (
-                  <TableRow key={item._id}>
-                    <TableCell className="font-medium">
+                {items.map((item, index) => (
+                  <TableRow
+                    key={item._id}
+                    className={cn(
+                      "group transition-all duration-300 border-b last:border-0",
+                      "hover:bg-primary/5 hover:shadow-sm hover:z-10 hover:relative", // Hover effects
+                      index % 2 === 0 ? "bg-background" : "bg-muted/20", // Clear zebra striping
+                      "animate-in fade-in slide-in-from-bottom-3" // Entrance animation
+                    )}
+                    style={{
+                      animationDelay: `${index * 50}ms`,
+                      animationFillMode: 'both'
+                    }}
+                  >
+                    <TableCell className="font-medium align-top py-4 pl-4">
                       <button
                         onClick={() => setSelectedItemName(item.itemName)}
-                        className="font-semibold text-sm text-foreground hover:text-primary hover:bg-muted/50 rounded-full px-3 py-1.5 -mx-2 -my-1 transition-colors cursor-pointer text-left border border-transparent hover:border-primary/20"
+                        className="font-bold text-sm text-foreground hover:text-primary transition-colors text-left line-clamp-2"
                       >
                         {item.itemName}
                       </button>
                     </TableCell>
-                    <TableCell>
-                      <Badge variant="outline">{item.unit}</Badge>
-                    </TableCell>
-                    <TableCell>{item.hsnSacCode || "—"}</TableCell>
-                    <TableCell>
-                      <div className="max-w-[200px] truncate" title={item.description || ""}>
-                        {item.description || "—"}
+                    <TableCell className="align-top py-4">
+                      <div className="flex items-center gap-1">
+                        <span className={cn(
+                          "font-bold tabular-nums",
+                          (item.centralStock || 0) > 0 ? "text-primary" : "text-destructive"
+                        )}>
+                          {item.centralStock}
+                        </span>
                       </div>
                     </TableCell>
-                    <TableCell>{item.centralStock}</TableCell>
-                    <TableCell>
+                    <TableCell className="align-top py-4">
+                      <Badge variant="outline" className="font-mono text-[10px] uppercase bg-background/50 backdrop-blur-sm">{item.unit}</Badge>
+                    </TableCell>
+                    <TableCell className="align-top py-4 text-sm text-muted-foreground font-medium">
+                      {item.hsnSacCode || <span className="text-muted-foreground/30">—</span>}
+                    </TableCell>
+                    <TableCell className="align-top py-4">
+                      <ReadMoreText
+                        text={item.description || "—"}
+                        className="text-sm text-foreground/80 leading-relaxed max-w-[250px]"
+                        truncateLength={60}
+                      />
+                    </TableCell>
+                    <TableCell className="align-top py-4">
                       {((item as any).vendors && (item as any).vendors.length > 0) ? (
                         <div className="flex flex-wrap items-center gap-1.5">
                           {(item as any).vendors.slice(0, 2).map((vendor: any) => (
@@ -538,13 +257,14 @@ export function InventoryTable({ items, viewMode = "table", onRefresh }: Invento
                               <Popover>
                                 <PopoverTrigger asChild>
                                   <Badge
-                                    variant="outline"
-                                    className="text-xs cursor-pointer hover:bg-primary/10 transition-colors"
+                                    variant="secondary"
+                                    className="text-[10px] cursor-pointer hover:bg-primary/10 transition-colors font-semibold border-transparent hover:border-primary/20"
                                   >
                                     {vendor.companyName}
                                   </Badge>
                                 </PopoverTrigger>
                                 <PopoverContent className="w-80 p-4" align="start">
+                                  {/* Existing Vendor Popover Content */}
                                   <div className="space-y-3">
                                     <div>
                                       <h4 className="font-semibold text-sm mb-2 flex items-center gap-2">
@@ -592,133 +312,88 @@ export function InventoryTable({ items, viewMode = "table", onRefresh }: Invento
                             </div>
                           ))}
                           {(item as any).vendors.length > 2 && (
-                            <Badge variant="outline" className="text-xs">
-                              +{(item as any).vendors.length - 2}
-                            </Badge>
+                            <Popover>
+                              <PopoverTrigger asChild>
+                                <Badge variant="outline" className="text-[10px] bg-background cursor-pointer hover:bg-primary/5 transition-colors">
+                                  +{(item as any).vendors.length - 2}
+                                </Badge>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-72 p-0 rounded-lg shadow-lg border-border" align="start">
+                                <div className="p-3 bg-muted/40 border-b border-border/50">
+                                  <h4 className="font-semibold text-xs text-foreground">All Associated Vendors</h4>
+                                </div>
+                                <div className="max-h-[200px] overflow-y-auto p-2 space-y-1">
+                                  {(item as any).vendors.map((vendor: any, idx: number) => (
+                                    <button
+                                      key={idx}
+                                      onClick={() => setSelectedVendorDetails(vendor)}
+                                      className="w-full text-left p-2 hover:bg-muted/50 rounded-md transition-all duration-200 text-sm group/vendor border border-transparent hover:border-border/50 hover:shadow-sm"
+                                    >
+                                      <div className="flex items-center gap-2 mb-1">
+                                        <Building2 className="h-3.5 w-3.5 text-primary group-hover/vendor:scale-110 transition-transform" />
+                                        <span className="font-medium text-xs text-foreground group-hover/vendor:text-primary transition-colors">{vendor.companyName}</span>
+                                      </div>
+                                      {vendor.email && (
+                                        <div className="flex items-center gap-2 text-muted-foreground ml-0.5">
+                                          <Mail className="h-3 w-3" />
+                                          <span className="text-[10px] truncate">{vendor.email}</span>
+                                        </div>
+                                      )}
+                                    </button>
+                                  ))}
+                                </div>
+                              </PopoverContent>
+                            </Popover>
                           )}
                         </div>
                       ) : (item as any).vendor ? (
-                        <div className="flex items-center gap-1">
-                          <Popover>
-                            <PopoverTrigger asChild>
-                              <Badge
-                                variant="outline"
-                                className="text-xs cursor-pointer hover:bg-primary/10 transition-colors"
-                              >
-                                {(item as any).vendor.companyName}
-                              </Badge>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-80 p-4" align="start">
-                              <div className="space-y-3">
-                                <div>
-                                  <h4 className="font-semibold text-sm mb-2 flex items-center gap-2">
-                                    <Building2 className="h-4 w-4 text-primary" />
-                                    {(item as any).vendor.companyName}
-                                  </h4>
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <Badge
+                              variant="secondary"
+                              className="text-[10px] cursor-pointer hover:bg-primary/10 transition-colors font-semibold border-transparent hover:border-primary/20"
+                            >
+                              {(item as any).vendor.companyName}
+                            </Badge>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-80 p-4" align="start">
+                            {/* Existing Single Vendor Popover Content - same structure */}
+                            <div className="space-y-3">
+                              <div>
+                                <h4 className="font-semibold text-sm mb-2 flex items-center gap-2">
+                                  <Building2 className="h-4 w-4 text-primary" />
+                                  {(item as any).vendor.companyName}
+                                </h4>
+                              </div>
+                              <div className="space-y-2 text-sm">
+                                {/* Simplified vendor details for table view */}
+                                <div className="grid gap-1">
+                                  <div className="flex justify-between"><span className="text-muted-foreground">Email:</span> <span>{(item as any).vendor.email}</span></div>
+                                  {(item as any).vendor.phone && <div className="flex justify-between"><span className="text-muted-foreground">Phone:</span> <span>{(item as any).vendor.phone}</span></div>}
+                                  {(item as any).vendor.gstNumber && <div className="flex justify-between"><span className="text-muted-foreground">GST:</span> <span>{(item as any).vendor.gstNumber}</span></div>}
                                 </div>
-                                <div className="space-y-2 text-sm">
-                                  <div className="flex items-start gap-2">
-                                    <Mail className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
-                                    <div>
-                                      <p className="text-xs text-muted-foreground">Email</p>
-                                      <p className="font-medium">{(item as any).vendor.email}</p>
-                                    </div>
-                                  </div>
-                                  {(item as any).vendor.phone && (
-                                    <div className="flex items-start gap-2">
-                                      <Phone className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
-                                      <div>
-                                        <p className="text-xs text-muted-foreground">Phone</p>
-                                        <p className="font-medium">{(item as any).vendor.phone}</p>
-                                      </div>
-                                    </div>
-                                  )}
-                                  <div className="flex items-start gap-2">
-                                    <Hash className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
-                                    <div>
-                                      <p className="text-xs text-muted-foreground">GST Number</p>
-                                      <p className="font-medium">{(item as any).vendor.gstNumber}</p>
-                                    </div>
-                                  </div>
-                                  {(item as any).vendor.address && (
-                                    <div className="flex items-start gap-2">
-                                      <MapPin className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
-                                      <div>
-                                        <p className="text-xs text-muted-foreground">Address</p>
-                                        <p className="font-medium text-xs">{(item as any).vendor.address}</p>
-                                      </div>
-                                    </div>
-                                  )}
+                                <div className="pt-2 border-t border-border/50">
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="w-full h-7 text-xs font-medium text-primary hover:text-primary/80 hover:bg-primary/5"
+                                    onClick={() => setSelectedVendorDetails((item as any).vendor)}
+                                  >
+                                    View Full Details
+                                  </Button>
                                 </div>
                               </div>
-                            </PopoverContent>
-                          </Popover>
-                          <Popover>
-                            <PopoverTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-5 w-5 p-0 hover:bg-primary/10"
-                              >
-                                <Info className="h-3 w-3 text-primary" />
-                              </Button>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-80 p-4" align="start">
-                              <div className="space-y-3">
-                                <div>
-                                  <h4 className="font-semibold text-sm mb-2 flex items-center gap-2">
-                                    <Building2 className="h-4 w-4 text-primary" />
-                                    {(item as any).vendor.companyName}
-                                  </h4>
-                                </div>
-                                <div className="space-y-2 text-sm">
-                                  <div className="flex items-start gap-2">
-                                    <Mail className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
-                                    <div>
-                                      <p className="text-xs text-muted-foreground">Email</p>
-                                      <p className="font-medium">{(item as any).vendor.email}</p>
-                                    </div>
-                                  </div>
-                                  {((item as any).vendor as any).phone && (
-                                    <div className="flex items-start gap-2">
-                                      <Phone className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
-                                      <div>
-                                        <p className="text-xs text-muted-foreground">Phone</p>
-                                        <p className="font-medium">{((item as any).vendor as any).phone}</p>
-                                      </div>
-                                    </div>
-                                  )}
-                                  {((item as any).vendor as any).gstNumber && (
-                                    <div className="flex items-start gap-2">
-                                      <Hash className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
-                                      <div>
-                                        <p className="text-xs text-muted-foreground">GST Number</p>
-                                        <p className="font-medium">{((item as any).vendor as any).gstNumber}</p>
-                                      </div>
-                                    </div>
-                                  )}
-                                  {((item as any).vendor as any).address && (
-                                    <div className="flex items-start gap-2">
-                                      <MapPin className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
-                                      <div>
-                                        <p className="text-xs text-muted-foreground">Address</p>
-                                        <p className="font-medium text-xs">{((item as any).vendor as any).address}</p>
-                                      </div>
-                                    </div>
-                                  )}
-                                </div>
-                              </div>
-                            </PopoverContent>
-                          </Popover>
-                        </div>
+                            </div>
+                          </PopoverContent>
+                        </Popover>
                       ) : (
-                        "—"
+                        <span className="text-muted-foreground/30 text-xs italic">No Vendor</span>
                       )}
                     </TableCell>
-                    <TableCell>
+                    <TableCell className="align-top py-4">
                       <div className="flex items-center gap-2">
                         {item.images && item.images.length > 0 ? (
-                          <div className="relative group">
+                          <div className="relative group hover:scale-105 transition-transform duration-200">
                             <button
                               type="button"
                               onClick={() => openImageSlider(item.images || [], item.itemName, 0)}
@@ -729,34 +404,34 @@ export function InventoryTable({ items, viewMode = "table", onRefresh }: Invento
                                 alt={`${item.itemName} 1`}
                                 width={40}
                                 height={40}
-                                className="rounded border hover:border-primary transition-colors"
+                                className="rounded-md border border-border/50 shadow-sm hover:border-primary/50 transition-colors h-10 w-10 object-cover"
                               />
                             </button>
                             {item.images.length > 1 && (
-                              <div className="absolute -bottom-1 -right-1 bg-primary text-primary-foreground rounded-full text-xs w-5 h-5 flex items-center justify-center font-medium">
+                              <div className="absolute -bottom-1 -right-1 bg-black/80 backdrop-blur-sm text-white rounded-full text-[8px] w-4 h-4 flex items-center justify-center font-bold ring-1 ring-white/20 shadow-sm">
                                 +{item.images.length - 1}
                               </div>
                             )}
                           </div>
                         ) : (
-                          <div className="text-xs text-muted-foreground">
-                            No images
+                          <div className="h-10 w-10 rounded-md bg-muted/30 border border-transparent flex items-center justify-center text-muted-foreground/20">
+                            <ImageIcon className="h-4 w-4" />
                           </div>
                         )}
                       </div>
                     </TableCell>
-                    <TableCell className="text-muted-foreground text-sm">
+                    <TableCell className="text-muted-foreground/70 text-xs align-top py-4 font-normal">
                       {new Date(item.createdAt).toLocaleDateString()}
                     </TableCell>
                     {(canPerformCRUD || canAddImages) && (
-                      <TableCell className="text-right">
+                      <TableCell className="text-right align-top py-4 pr-4">
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
                             <Button
                               variant="ghost"
                               size="icon"
                               disabled={loadingItemId === item._id}
-                              className="h-8 w-8"
+                              className="h-8 w-8 text-muted-foreground/50 hover:text-primary hover:bg-primary/5 rounded-full"
                             >
                               <MoreHorizontal className="h-4 w-4" />
                               <span className="sr-only">Actions</span>
@@ -766,13 +441,10 @@ export function InventoryTable({ items, viewMode = "table", onRefresh }: Invento
                             <DropdownMenuLabel>Actions</DropdownMenuLabel>
                             <DropdownMenuSeparator />
                             {canPerformCRUD && (
-                              <>
-                                <DropdownMenuItem onClick={() => setEditingItem(item)}>
-                                  <Edit className="h-4 w-4 mr-2" />
-                                  Edit Item
-                                </DropdownMenuItem>
-                                <DropdownMenuSeparator />
-                              </>
+                              <DropdownMenuItem onClick={() => setEditingItem(item)}>
+                                <Edit className="h-4 w-4 mr-2" />
+                                Edit Item
+                              </DropdownMenuItem>
                             )}
                             {canAddImages && (
                               <DropdownMenuItem onClick={() => setAddingImageItem(item)}>
@@ -806,9 +478,23 @@ export function InventoryTable({ items, viewMode = "table", onRefresh }: Invento
 
       {/* Card View */}
       {viewMode === "card" && (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4">
-          {items.map((item) => (
-            <InventoryCard key={item._id} item={item} />
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6 pt-4 pb-10">
+          {items?.map((item, index) => (
+            <div
+              key={item._id}
+              className="animate-in fade-in slide-in-from-bottom-5"
+              style={{ animationDelay: `${index * 50}ms`, animationFillMode: 'both' }}
+            >
+              <InventoryCard
+                item={item}
+                onEdit={handleEdit}
+                onDelete={handleDeleteTrigger}
+                onManageImages={handleManageImages}
+                onImageClick={handleImageClick}
+                canPerformCRUD={canPerformCRUD}
+                canAddImages={canAddImages}
+              />
+            </div>
           ))}
         </div>
       )}
@@ -824,17 +510,7 @@ export function InventoryTable({ items, viewMode = "table", onRefresh }: Invento
             }
           }}
           itemId={editingItem?._id}
-          initialData={editingItem
-            ? {
-              itemName: editingItem.itemName,
-              description: editingItem.description,
-              hsnSacCode: editingItem.hsnSacCode,
-              unit: editingItem.unit ?? "",
-              centralStock: editingItem.centralStock ?? 0,
-              vendorIds: (editingItem as any).vendorIds ||
-                (editingItem.vendorId ? [editingItem.vendorId] : []),
-            }
-            : null}
+          initialData={initialFormData}
           mode="edit"
         />
       )}
@@ -895,6 +571,12 @@ export function InventoryTable({ items, viewMode = "table", onRefresh }: Invento
         open={imageSliderOpen}
         onOpenChange={setImageSliderOpen}
         itemName={imageSliderItemName}
+      />
+
+      <VendorDetailsDialog
+        open={!!selectedVendorDetails}
+        onOpenChange={(open) => !open && setSelectedVendorDetails(null)}
+        vendor={selectedVendorDetails}
       />
     </>
   );

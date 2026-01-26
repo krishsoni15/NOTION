@@ -1,5 +1,7 @@
 "use client";
 
+import { cn } from "@/lib/utils";
+
 /**
  * Profile Content Component
  * 
@@ -22,8 +24,10 @@ import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { ROLE_LABELS } from "@/lib/auth/roles";
 import { PersonalInfoForm } from "./personal-info-form";
+
 import { PasswordForm } from "./password-form";
 import { User, Lock, Shield, MapPin } from "lucide-react";
+import { UserAvatar } from "@/components/user-management/user-avatar";
 
 export function ProfileContent() {
   const { user, isLoaded } = useUser();
@@ -68,33 +72,42 @@ export function ProfileContent() {
   return (
     <div className="space-y-6">
       {/* Profile Header Card */}
-      <Card>
-        <CardContent className="p-6">
-          <div className="flex flex-col sm:flex-row items-center sm:items-start gap-6">
-            <Avatar className="h-24 w-24 border-4 border-primary/20">
-              <AvatarImage src={user.imageUrl} alt={displayName} />
-              <AvatarFallback className="bg-primary text-primary-foreground text-2xl font-bold">
-                {initials}
-              </AvatarFallback>
-            </Avatar>
+      {/* Profile Header Card */}
+      <Card className="overflow-hidden border-border/50 shadow-md">
+        <div className="h-32 bg-gradient-to-r from-primary/20 via-primary/10 to-transparent" />
+        <CardContent className="p-6 relative">
+          <div className="flex flex-col sm:flex-row items-end sm:items-end gap-6 -mt-12">
+            <div className="relative">
+              <UserAvatar
+                name={displayName}
+                image={convexUser?.profileImage}
+                size="xl"
+                className="h-32 w-32 border-4 border-background shadow-xl rounded-full"
+              />
+              <div className={cn(
+                "absolute bottom-2 right-2 h-5 w-5 rounded-full border-2 border-background",
+                convexUser?.isActive ? "bg-green-500" : "bg-destructive"
+              )} />
+            </div>
 
-            <div className="flex-1 text-center sm:text-left space-y-3">
+            <div className="flex-1 text-center sm:text-left space-y-2 mb-2">
               <div>
-                <h2 className="text-2xl font-bold">{displayName}</h2>
-                <p className="text-muted-foreground">@{user.username}</p>
+                <h2 className="text-3xl font-bold tracking-tight">{displayName}</h2>
+                <p className="text-muted-foreground font-medium">@{user.username}</p>
               </div>
 
               <div className="flex flex-wrap gap-2 justify-center sm:justify-start">
                 {convexUser?.role && (
-                  <Badge variant="secondary" className="gap-1.5">
+                  <Badge variant="secondary" className="px-3 py-1 gap-1.5 text-sm font-medium bg-primary/10 text-primary border-primary/20 hover:bg-primary/20">
                     <Shield className="h-3.5 w-3.5" />
                     {ROLE_LABELS[convexUser.role]}
                   </Badge>
                 )}
-                <Badge 
+                <Badge
                   variant={convexUser?.isActive ? "default" : "destructive"}
+                  className="px-3 py-1 text-sm font-medium"
                 >
-                  {convexUser?.isActive ? "Active" : "Inactive"}
+                  {convexUser?.isActive ? "Active Account" : "Inactive Account"}
                 </Badge>
               </div>
 
@@ -126,7 +139,7 @@ export function ProfileContent() {
             <CardHeader>
               <CardTitle>Personal Information</CardTitle>
               <CardDescription>
-                {isManager 
+                {isManager
                   ? "Update your personal details and contact information"
                   : "View your personal details and contact information"
                 }
@@ -135,8 +148,8 @@ export function ProfileContent() {
             <CardContent>
               {isManager ? (
                 // Manager: Show editable form
-                <PersonalInfoForm 
-                  convexUser={convexUser} 
+                <PersonalInfoForm
+                  convexUser={convexUser}
                   clerkUserId={user.id}
                 />
               ) : (

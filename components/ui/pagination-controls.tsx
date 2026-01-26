@@ -2,6 +2,7 @@
 
 import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import {
     Select,
     SelectContent,
@@ -19,6 +20,7 @@ interface PaginationControlsProps {
     totalItems: number;
     pageSizeOptions?: number[];
     itemCount?: number;
+    className?: string;
 }
 
 export function PaginationControls({
@@ -30,11 +32,12 @@ export function PaginationControls({
     totalItems,
     pageSizeOptions = [10, 25, 50, 100],
     itemCount,
+    className,
 }: PaginationControlsProps) {
     if (totalItems === 0) return null;
 
     return (
-        <div className="flex flex-col gap-4 py-3 pb-8 sm:pb-2 w-full animate-in fade-in slide-in-from-bottom-4 duration-500">
+        <div className={cn("flex flex-col gap-4 py-2 w-full animate-in fade-in slide-in-from-bottom-4 duration-500", className)}>
             {/* Mobile View (< 640px) - Single Row Compact */}
             <div className="sm:hidden flex items-center justify-between gap-1 w-full px-1">
                 {/* Left: Previous Button */}

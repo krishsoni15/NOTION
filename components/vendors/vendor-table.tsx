@@ -110,23 +110,29 @@ export function VendorTable({ vendors, viewMode = "table" }: VendorTableProps) {
 
   const VendorCard = ({ vendor }: { vendor: Doc<"vendors"> }) => {
     return (
-      <Card className="hover:shadow-lg transition-all border-border/50">
-        <CardHeader className="pb-4 border-b border-border/50">
+      <Card className="h-full flex flex-col hover:shadow-md transition-all duration-200 border border-border bg-card group rounded-xl overflow-hidden">
+        <CardHeader className="p-4 pb-3 border-b border-border/40 bg-muted/5">
           <div className="flex items-start justify-between gap-3">
             <div className="flex-1 min-w-0">
-              <CardTitle className="text-base font-semibold flex items-center gap-2 mb-1">
-                <Building2 className="h-4 w-4 text-primary shrink-0" />
-                <span className="truncate">{vendor.companyName}</span>
-              </CardTitle>
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Hash className="h-3.5 w-3.5 shrink-0" />
-                <span className="truncate">{vendor.gstNumber}</span>
+              <div className="flex items-center gap-2 mb-1.5">
+                <div className="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0 border border-primary/10">
+                  <Building2 className="h-4.5 w-4.5 text-primary" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <CardTitle className="text-base font-bold truncate pr-2 leading-tight" title={vendor.companyName}>
+                    {vendor.companyName}
+                  </CardTitle>
+                </div>
               </div>
+              <Badge variant="secondary" className="font-mono text-[10px] h-5 px-1.5 ml-11 text-muted-foreground border-border/50 bg-background/50 w-fit max-w-[calc(100%-2.75rem)] truncate">
+                <Hash className="h-3 w-3 mr-1 opacity-50 shrink-0" />
+                {vendor.gstNumber}
+              </Badge>
             </div>
             {canPerformCRUD && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon" className="h-8 w-8">
+                  <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground/70 hover:text-foreground shrink-0 -mr-2 -mt-1">
                     <MoreHorizontal className="h-4 w-4" />
                     <span className="sr-only">Actions</span>
                   </Button>
@@ -139,62 +145,70 @@ export function VendorTable({ vendors, viewMode = "table" }: VendorTableProps) {
                     Edit Vendor
                   </DropdownMenuItem>
                   {canDelete && (
-                    <DropdownMenuItem
-                      onClick={() => setDeletingVendor(vendor)}
-                      className="text-destructive focus:text-destructive"
-                    >
-                      <Trash2 className="h-4 w-4 mr-2" />
-                      Delete Vendor
-                    </DropdownMenuItem>
+                    <>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        onClick={() => setDeletingVendor(vendor)}
+                        className="text-destructive focus:text-destructive"
+                      >
+                        <Trash2 className="h-4 w-4 mr-2" />
+                        Delete Vendor
+                      </DropdownMenuItem>
+                    </>
                   )}
                 </DropdownMenuContent>
               </DropdownMenu>
             )}
           </div>
         </CardHeader>
-        <CardContent className="pt-4 space-y-3">
-          {vendor.contactName && (
-            <div className="flex items-start gap-2 text-sm">
-              <User className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
-              <div className="flex-1 min-w-0">
-                <p className="text-muted-foreground text-xs">Contact Person</p>
-                <p className="truncate">{vendor.contactName}</p>
+        <CardContent className="p-4 pt-4 space-y-4 flex-1 flex flex-col">
+          <div className="grid grid-cols-2 gap-4">
+            {vendor.contactName && (
+              <div className="space-y-1">
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <User className="h-3 w-3" />
+                  <span className="text-[10px] uppercase font-bold tracking-wider opacity-70">Contact</span>
+                </div>
+                <p className="text-sm font-medium pl-5 truncate">{vendor.contactName}</p>
               </div>
+            )}
+            {vendor.phone && (
+              <div className="space-y-1">
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <Phone className="h-3 w-3" />
+                  <span className="text-[10px] uppercase font-bold tracking-wider opacity-70">Phone</span>
+                </div>
+                <p className="text-sm font-medium pl-5 font-mono text-xs">{vendor.phone}</p>
+              </div>
+            )}
+          </div>
+
+          <div className="space-y-1 pt-1">
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <Mail className="h-3 w-3" />
+              <span className="text-[10px] uppercase font-bold tracking-wider opacity-70">Email</span>
             </div>
-          )}
-          <div className="flex items-start gap-2 text-sm">
-            <Mail className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
-            <div className="flex-1 min-w-0">
-              <p className="text-muted-foreground text-xs">Email</p>
-              <p className="truncate">{vendor.email}</p>
+            <p className="text-sm font-medium pl-5 truncate hover:text-primary transition-colors cursor-pointer" title={vendor.email}>{vendor.email}</p>
+          </div>
+
+          <div className="space-y-1 pt-1">
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <MapPin className="h-3 w-3" />
+              <span className="text-[10px] uppercase font-bold tracking-wider opacity-70">Address</span>
+            </div>
+            <div className="pl-5 flex items-start gap-2">
+              <p className="text-sm text-balance text-muted-foreground leading-relaxed line-clamp-2">{vendor.address}</p>
+              <button
+                onClick={() => handleOpenInMap(vendor.address)}
+                className="text-primary hover:text-primary/80 hover:bg-primary/5 p-1 rounded-md transition-colors shrink-0"
+                title="Open in Maps"
+              >
+                <MapPin className="h-3.5 w-3.5" />
+              </button>
             </div>
           </div>
-          {vendor.phone && (
-            <div className="flex items-start gap-2 text-sm">
-              <Phone className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
-              <div className="flex-1 min-w-0">
-                <p className="text-muted-foreground text-xs">Phone</p>
-                <p>{vendor.phone}</p>
-              </div>
-            </div>
-          )}
-          <div className="flex items-start gap-2 text-sm">
-            <MapPin className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
-            <div className="flex-1 min-w-0">
-              <p className="text-muted-foreground text-xs">Address</p>
-              <div className="flex items-center gap-1">
-                <p className="line-clamp-2 flex-1">{vendor.address}</p>
-                <button
-                  onClick={() => handleOpenInMap(vendor.address)}
-                  className="text-muted-foreground hover:text-primary transition-colors p-2 rounded-full hover:bg-muted/50 shrink-0 border border-muted-foreground/20 hover:border-primary/40"
-                  title="Open in Maps"
-                >
-                  <MapPin className="h-3 w-3" />
-                </button>
-              </div>
-            </div>
-          </div>
-          <div className="flex items-center gap-2 text-xs text-muted-foreground pt-2 border-t">
+
+          <div className="mt-auto pt-4 border-t border-border/50 flex items-center gap-2 text-xs text-muted-foreground/60">
             <Calendar className="h-3.5 w-3.5" />
             <span>Created {new Date(vendor.createdAt).toLocaleDateString()}</span>
           </div>
@@ -207,51 +221,65 @@ export function VendorTable({ vendors, viewMode = "table" }: VendorTableProps) {
     <>
       {/* Table View */}
       {viewMode === "table" && (
-        <div className="border rounded-lg overflow-hidden">
+        <div className="border rounded-xl overflow-hidden shadow-sm bg-background">
           <div className="overflow-x-auto">
             <Table>
-              <TableHeader>
+              <TableHeader className="bg-muted/40">
                 <TableRow>
-                  <TableHead>Company Name</TableHead>
-                  <TableHead>Contact Person</TableHead>
-                  <TableHead>Email</TableHead>
-                  <TableHead>Phone</TableHead>
-                  <TableHead>GST Number</TableHead>
-                  <TableHead>Address</TableHead>
-                  <TableHead>Created</TableHead>
-                  {canPerformCRUD && <TableHead className="text-right">Actions</TableHead>}
+                  <TableHead className="w-[180px] font-semibold text-xs uppercase tracking-wider text-muted-foreground/80">Company Name</TableHead>
+                  <TableHead className="w-[140px] font-semibold text-xs uppercase tracking-wider text-muted-foreground/80">Contact Person</TableHead>
+                  <TableHead className="w-[160px] font-semibold text-xs uppercase tracking-wider text-muted-foreground/80">Email</TableHead>
+                  <TableHead className="w-[120px] font-semibold text-xs uppercase tracking-wider text-muted-foreground/80">Phone</TableHead>
+                  <TableHead className="w-[140px] font-semibold text-xs uppercase tracking-wider text-muted-foreground/80">GST Number</TableHead>
+                  <TableHead className="min-w-[200px] font-semibold text-xs uppercase tracking-wider text-muted-foreground/80">Address</TableHead>
+                  <TableHead className="w-[100px] font-semibold text-xs uppercase tracking-wider text-muted-foreground/80">Created</TableHead>
+                  {canPerformCRUD && <TableHead className="w-[60px] text-right font-semibold text-xs uppercase tracking-wider text-muted-foreground/80">Actions</TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {vendors.map((vendor) => (
-                  <TableRow key={vendor._id}>
-                    <TableCell className="font-medium">{vendor.companyName}</TableCell>
-                    <TableCell>{vendor.contactName || "—"}</TableCell>
-                    <TableCell>{vendor.email}</TableCell>
-                    <TableCell>{vendor.phone || "—"}</TableCell>
-                    <TableCell>
-                      <Badge variant="outline">{vendor.gstNumber}</Badge>
+                {vendors.map((vendor, index) => (
+                  <TableRow
+                    key={vendor._id}
+                    className={`
+                        group transition-all duration-300 border-b last:border-0 hover:bg-primary/5 hover:shadow-sm hover:z-10 hover:relative
+                        ${index % 2 === 0 ? "bg-background" : "bg-muted/20"}
+                        animate-in fade-in slide-in-from-bottom-3
+                    `}
+                    style={{ animationDelay: `${index * 50}ms`, animationFillMode: 'both' }}
+                  >
+                    <TableCell className="align-top py-4 pl-4">
+                      <div className="font-bold text-sm text-foreground hover:text-primary transition-colors cursor-default">
+                        {vendor.companyName}
+                      </div>
                     </TableCell>
-                    <TableCell className="max-w-xs">
-                      <div className="flex items-center gap-2">
-                        <span className="truncate flex-1">{vendor.address}</span>
+                    <TableCell className="align-top py-4 font-medium text-sm text-muted-foreground">
+                      {vendor.contactName || <span className="text-muted-foreground/30">—</span>}
+                    </TableCell>
+                    <TableCell className="align-top py-4 text-sm font-medium">{vendor.email}</TableCell>
+                    <TableCell className="align-top py-4 text-xs font-mono">{vendor.phone || <span className="text-muted-foreground/30 font-sans text-sm">—</span>}</TableCell>
+                    <TableCell className="align-top py-4">
+                      <Badge variant="outline" className="font-mono text-[10px] bg-background/50">{vendor.gstNumber}</Badge>
+                    </TableCell>
+                    <TableCell className="align-top py-4 max-w-xs">
+                      <div className="flex items-start gap-2 group/addr">
+                        <span className="text-sm text-muted-foreground line-clamp-2 leading-relaxed flex-1">{vendor.address}</span>
                         <button
                           onClick={() => handleOpenInMap(vendor.address)}
-                          className="text-muted-foreground hover:text-primary transition-colors p-2 rounded-full hover:bg-muted/50 shrink-0 border border-muted-foreground/20 hover:border-primary/40"
+                          className="text-primary opacity-0 group-hover/addr:opacity-100 transition-opacity p-1 hover:bg-primary/10 rounded"
                           title="Open in Maps"
                         >
-                          <MapPin className="h-3 w-3" />
+                          <MapPin className="h-3.5 w-3.5" />
                         </button>
                       </div>
                     </TableCell>
-                    <TableCell className="text-muted-foreground text-sm">
+                    <TableCell className="text-muted-foreground/70 text-xs align-top py-4">
                       {new Date(vendor.createdAt).toLocaleDateString()}
                     </TableCell>
                     {canPerformCRUD && (
-                      <TableCell className="text-right">
+                      <TableCell className="text-right align-top py-4 pr-4">
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-8 w-8">
+                            <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground/50 hover:text-primary hover:bg-primary/5 rounded-full">
                               <MoreHorizontal className="h-4 w-4" />
                               <span className="sr-only">Actions</span>
                             </Button>
@@ -264,13 +292,16 @@ export function VendorTable({ vendors, viewMode = "table" }: VendorTableProps) {
                               Edit Vendor
                             </DropdownMenuItem>
                             {canDelete && (
-                              <DropdownMenuItem
-                                onClick={() => setDeletingVendor(vendor)}
-                                className="text-destructive focus:text-destructive"
-                              >
-                                <Trash2 className="h-4 w-4 mr-2" />
-                                Delete Vendor
-                              </DropdownMenuItem>
+                              <>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem
+                                  onClick={() => setDeletingVendor(vendor)}
+                                  className="text-destructive focus:text-destructive"
+                                >
+                                  <Trash2 className="h-4 w-4 mr-2" />
+                                  Delete Vendor
+                                </DropdownMenuItem>
+                              </>
                             )}
                           </DropdownMenuContent>
                         </DropdownMenu>
@@ -286,9 +317,15 @@ export function VendorTable({ vendors, viewMode = "table" }: VendorTableProps) {
 
       {/* Card View */}
       {viewMode === "card" && (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4">
-          {vendors.map((vendor) => (
-            <VendorCard key={vendor._id} vendor={vendor} />
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4 sm:gap-6 pt-2 pb-10">
+          {vendors.map((vendor, index) => (
+            <div
+              key={vendor._id}
+              className="animate-in fade-in slide-in-from-bottom-5 h-full"
+              style={{ animationDelay: `${index * 50}ms`, animationFillMode: 'both' }}
+            >
+              <VendorCard vendor={vendor} />
+            </div>
           ))}
         </div>
       )}

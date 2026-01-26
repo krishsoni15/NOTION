@@ -37,6 +37,7 @@ interface AddressAutocompleteProps {
   placeholder?: string;
   id?: string;
   className?: string;
+  showMapLink?: boolean;
 }
 
 export function AddressAutocomplete({
@@ -48,6 +49,7 @@ export function AddressAutocomplete({
   placeholder = "Search address...",
   id = "address",
   className,
+  showMapLink = false,
 }: AddressAutocompleteProps) {
   const [searchValue, setSearchValue] = useState(value);
   const [suggestions, setSuggestions] = useState<AddressSuggestion[]>([]);
@@ -103,12 +105,12 @@ export function AddressAutocomplete({
       indiaResults = indiaResults.sort((a: AddressSuggestion, b: AddressSuggestion) => {
         const aState = a.properties.state?.toLowerCase() || "";
         const bState = b.properties.state?.toLowerCase() || "";
-        const isGujarat = (state: string) => 
+        const isGujarat = (state: string) =>
           state === "gujarat" || state === "gujrat" || state.includes("gujarat");
-        
+
         const aIsGujarat = isGujarat(aState);
         const bIsGujarat = isGujarat(bState);
-        
+
         // Check if it's a local address (has street address, suburb, or district)
         const isLocalAddress = (suggestion: AddressSuggestion) => {
           return !!(
@@ -117,36 +119,36 @@ export function AddressAutocomplete({
             suggestion.properties.district
           );
         };
-        
+
         const aIsLocal = isLocalAddress(a);
         const bIsLocal = isLocalAddress(b);
-        
+
         // Priority order:
         // 1. Gujarat local addresses
         // 2. Gujarat cities
         // 3. Other states local addresses
         // 4. Other states cities
-        
+
         if (aIsGujarat && !bIsGujarat) return -1;
         if (!aIsGujarat && bIsGujarat) return 1;
-        
+
         // Both are Gujarat or both are not Gujarat
         if (aIsGujarat && bIsGujarat) {
           // Within Gujarat, prioritize local addresses
           if (aIsLocal && !bIsLocal) return -1;
           if (!aIsLocal && bIsLocal) return 1;
         }
-        
+
         // Both are not Gujarat
         if (!aIsGujarat && !bIsGujarat) {
           // Prioritize local addresses
           if (aIsLocal && !bIsLocal) return -1;
           if (!aIsLocal && bIsLocal) return 1;
         }
-        
+
         return 0;
       });
-      
+
       setSuggestions(indiaResults);
     } catch (err) {
       console.error("Error fetching address suggestions:", err);
@@ -254,9 +256,22 @@ export function AddressAutocomplete({
             disabled={disabled || !isReady}
             className="h-9 pl-9 pr-9 focus-visible:ring-2 focus-visible:ring-primary/20"
           />
-          {isLoading && (
+          {isLoading ? (
             <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground animate-spin" />
-          )}
+          ) : showMapLink && searchValue ? (
+            <button
+              type="button"
+              onClick={() => {
+                const encodedAddress = encodeURIComponent(searchValue);
+                const mapUrl = `https://www.google.com/maps/search/?api=1&query=${encodedAddress}`;
+                window.open(mapUrl, '_blank');
+              }}
+              className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 text-muted-foreground hover:text-primary hover:bg-primary/10 rounded-md transition-colors z-10"
+              title="Open in Google Maps"
+            >
+              <MapPin className="h-4 w-4" />
+            </button>
+          ) : null}
         </div>
 
         {!isReady && (
@@ -275,11 +290,11 @@ export function AddressAutocomplete({
               {suggestions.map((suggestion, index) => {
                 const formattedAddress =
                   suggestion.properties.formatted || suggestion.formatted;
-                
+
                 // Check if it's Gujarat
                 const state = suggestion.properties.state?.toLowerCase() || "";
                 const isGujarat = state === "gujarat" || state === "gujrat" || state.includes("gujarat");
-                
+
                 // Better address formatting
                 const addressParts = [
                   suggestion.properties.address_line1,
@@ -287,22 +302,22 @@ export function AddressAutocomplete({
                   suggestion.properties.suburb,
                   suggestion.properties.district,
                 ].filter(Boolean);
-                
-                const mainText = addressParts.length > 0 
+
+                const mainText = addressParts.length > 0
                   ? addressParts.join(", ")
                   : suggestion.properties.city || formattedAddress;
-                
+
                 const locationParts = [
                   suggestion.properties.city,
                   suggestion.properties.state,
                   suggestion.properties.postcode,
                 ].filter(Boolean);
-                
+
                 const secondaryText = locationParts.length > 0
                   ? locationParts.join(", ")
                   : formattedAddress.includes(mainText)
-                  ? formattedAddress.replace(mainText, "").trim().replace(/^,\s*/, "")
-                  : "";
+                    ? formattedAddress.replace(mainText, "").trim().replace(/^,\s*/, "")
+                    : "";
 
                 return (
                   <button

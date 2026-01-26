@@ -22,9 +22,11 @@ import {
 } from "@/components/ui/select";
 // ... imports
 import { Plus, Search, LayoutGrid, Table2, RefreshCw } from "lucide-react";
+import { PaginationControls } from "@/components/ui/pagination-controls";
 import { LocationFormDialog } from "./location-form-dialog";
 import { LocationTable } from "./location-table";
 import { useViewMode } from "@/hooks/use-view-mode";
+import { cn } from "@/lib/utils";
 
 type ViewMode = "table" | "card";
 type SortOption = "newest" | "oldest" | "name_asc" | "name_desc";
@@ -40,19 +42,35 @@ export function LocationManagement() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const { isLoaded, isSignedIn } = useAuth();
 
+
   // Onlyfetch sites if user is signed in
   const locations = useQuery(
     api.sites.getAllSites,
     isLoaded && isSignedIn ? { includeInactive: true } : "skip"
   );
 
-  const handleRefresh = () => {
-    setIsRefreshing(true);
-    setRefreshKey((prev) => prev + 1);
-    setTimeout(() => {
-      setIsRefreshing(false);
-    }, 1000);
-  };
+  // Pagination State
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(() => {
+    // Load from localStorage on mount
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('locationPageSize');
+      return saved ? Number(saved) : 10;
+    }
+    return 10;
+  });
+
+  // Save page size to localStorage when it changes
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('locationPageSize', pageSize.toString());
+    }
+  }, [pageSize]);
+
+  // Reset page when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, statusFilter, typeFilter, sortBy]);
 
   // Filter and sort locations
   const filteredAndSortedLocations = useMemo(() => {
@@ -106,109 +124,136 @@ export function LocationManagement() {
 
   return (
     <div className="space-y-4">
-      {/* Action bar */}
-      <div className="flex flex-col sm:flex-row gap-3 justify-between items-start sm:items-center">
-        <div className="flex items-center gap-2">
-          <p className="text-sm text-muted-foreground">
-            <span className="font-medium text-foreground">{locations?.length || 0}</span> locations
-            {filteredAndSortedLocations && filteredAndSortedLocations.length !== locations?.length && (
-              <span className="ml-1">
-                ({filteredAndSortedLocations.length} shown)
-              </span>
-            )}
-          </p>
+      {/* Search and Filters Toolbar */}
+      <div className="flex flex-col gap-3 bg-card p-3 rounded-xl border border-border shadow-sm">
+        {/* Row 1: Search and View Toggle */}
+        <div className="flex items-center gap-3">
+          {/* Search bar */}
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              type="text"
+              placeholder="Search by name, code, address, or description..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-9 h-10 bg-muted/30 border-muted-foreground/20 focus-visible:ring-primary/20 transition-all font-medium w-full"
+            />
+          </div>
+
+          {/* View mode toggle */}
           <Button
             variant="outline"
             size="icon"
-            onClick={handleRefresh}
-            className="h-8 w-8"
-            title="Refresh"
-            disabled={isRefreshing}
+            onClick={toggleViewMode}
+            className="h-10 w-10 flex-shrink-0 bg-muted/30 border-muted-foreground/20 hover:bg-primary/10 hover:border-primary/30 hover:text-primary transition-all"
+            title={viewMode === "card" ? "Switch to Table View" : "Switch to Card View"}
           >
-            <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+            {viewMode === "card" ? (
+              <Table2 className="h-5 w-5" />
+            ) : (
+              <LayoutGrid className="h-5 w-5" />
+            )}
           </Button>
         </div>
-        <Button onClick={() => setIsCreateDialogOpen(true)} className="w-full sm:w-auto h-9" size="sm">
-          <Plus className="h-4 w-4 mr-2" />
-          Add Location
-        </Button>
-      </div>
 
-      {/* Search and Filters */}
-      <div className="flex flex-col gap-2.5">
-        {/* Search bar */}
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            type="text"
-            placeholder="Search by name, code, address, or description..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-9 h-9"
-          />
-        </div>
+        {/* Row 2: Filters and Actions */}
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2 border-t border-border/50">
+          <div className="flex items-center gap-2 w-full sm:w-auto overflow-x-auto pb-1 sm:pb-0">
+            <Select value={typeFilter} onValueChange={setTypeFilter}>
+              <SelectTrigger className="w-[120px] h-10 text-sm bg-muted/30 border-muted-foreground/20 font-medium">
+                <SelectValue placeholder="Type" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Types</SelectItem>
+                <SelectItem value="site">Site</SelectItem>
+                <SelectItem value="inventory">Inventory</SelectItem>
+                <SelectItem value="other">Others</SelectItem>
+              </SelectContent>
+            </Select>
 
-        {/* Filters row */}
-        <div className="flex flex-col sm:flex-row gap-2">
-          <Select value={typeFilter} onValueChange={setTypeFilter}>
-            <SelectTrigger className="w-full sm:w-[120px] h-9 text-sm">
-              <SelectValue placeholder="Type" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Types</SelectItem>
-              <SelectItem value="site">Site</SelectItem>
-              <SelectItem value="inventory">Inventory</SelectItem>
-            </SelectContent>
-          </Select>
+            <Select value={statusFilter} onValueChange={setStatusFilter}>
+              <SelectTrigger className="w-[120px] h-10 text-sm bg-muted/30 border-muted-foreground/20 font-medium">
+                <SelectValue placeholder="Status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Status</SelectItem>
+                <SelectItem value="active">Active</SelectItem>
+                <SelectItem value="inactive">Inactive</SelectItem>
+              </SelectContent>
+            </Select>
 
-          <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-full sm:w-[120px] h-9 text-sm">
-              <SelectValue placeholder="Status" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Status</SelectItem>
-              <SelectItem value="active">Active</SelectItem>
-              <SelectItem value="inactive">Inactive</SelectItem>
-            </SelectContent>
-          </Select>
-
-          <Select value={sortBy} onValueChange={(value) => setSortBy(value as SortOption)}>
-            <SelectTrigger className="w-full sm:w-[140px] h-9 text-sm">
-              <SelectValue placeholder="Sort" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="newest">Newest</SelectItem>
-              <SelectItem value="oldest">Oldest</SelectItem>
-              <SelectItem value="name_asc">Name A-Z</SelectItem>
-              <SelectItem value="name_desc">Name Z-A</SelectItem>
-            </SelectContent>
-          </Select>
-
-          {/* View mode toggle */}
-          <div className="flex gap-1 ml-auto">
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={toggleViewMode}
-              className="h-9 w-9 flex-shrink-0"
-              title={viewMode === "card" ? "Show Table" : "Show Cards"}
-            >
-              {viewMode === "card" ? (
-                <Table2 className="h-4 w-4" />
-              ) : (
-                <LayoutGrid className="h-4 w-4" />
-              )}
-            </Button>
+            <Select value={sortBy} onValueChange={(value) => setSortBy(value as SortOption)}>
+              <SelectTrigger className="w-[140px] h-10 text-sm bg-muted/30 border-muted-foreground/20 font-medium">
+                <SelectValue placeholder="Sort" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="newest">Newest First</SelectItem>
+                <SelectItem value="oldest">Oldest First</SelectItem>
+                <SelectItem value="name_asc">Name (A-Z)</SelectItem>
+                <SelectItem value="name_desc">Name (Z-A)</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
+
+          <Button
+            onClick={() => setIsCreateDialogOpen(true)}
+            className="h-10 px-6 shadow-sm hover:shadow-md transition-all font-semibold w-full sm:w-auto"
+          >
+            <Plus className="h-5 w-5 mr-1.5" />
+            Add Location
+          </Button>
         </div>
       </div>
 
-      {/* Location table/cards */}
-      <LocationTable
-        key={refreshKey}
-        locations={filteredAndSortedLocations ?? undefined}
-        viewMode={viewMode}
-      />
+      {/* Pagination Logic */}
+      {(() => {
+        const totalItems = filteredAndSortedLocations?.length || 0;
+        const totalPages = Math.ceil(totalItems / pageSize);
+        const paginatedLocations = filteredAndSortedLocations?.slice(
+          (currentPage - 1) * pageSize,
+          currentPage * pageSize
+        );
+
+        return (
+          <>
+            {/* Top Pagination */}
+            <div className="mb-4 bg-card p-2 rounded-xl border border-border shadow-sm">
+              <PaginationControls
+                currentPage={currentPage}
+                totalPages={totalPages}
+                onPageChange={setCurrentPage}
+                pageSize={pageSize}
+                onPageSizeChange={setPageSize}
+                totalItems={totalItems}
+                pageSizeOptions={[10, 25, 50, 100]}
+                itemCount={paginatedLocations?.length || 0}
+                className="py-0"
+              />
+            </div>
+
+            <LocationTable
+              key={refreshKey}
+              locations={paginatedLocations}
+              viewMode={viewMode}
+            />
+
+            {/* Bottom Pagination */}
+            <div className="mt-4 bg-card p-2 rounded-xl border border-border shadow-sm">
+              <PaginationControls
+                currentPage={currentPage}
+                totalPages={totalPages}
+                onPageChange={setCurrentPage}
+                pageSize={pageSize}
+                onPageSizeChange={setPageSize}
+                totalItems={totalItems}
+                pageSizeOptions={[10, 25, 50, 100]}
+                itemCount={paginatedLocations?.length || 0}
+                className="py-0"
+              />
+            </div>
+          </>
+        );
+      })()}
 
       {/* Create location dialog */}
       <LocationFormDialog

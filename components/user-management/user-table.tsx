@@ -57,6 +57,7 @@ import { EditUserDialog } from "./edit-user-dialog";
 import { toast } from "sonner";
 import { OnlineIndicator } from "@/components/chat/online-indicator";
 import { useMultipleUserPresence } from "@/hooks/use-presence";
+import { UserAvatar } from "./user-avatar";
 
 type ViewMode = "table" | "card";
 
@@ -91,10 +92,8 @@ export function UserTable({ users, viewMode = "table" }: UserTableProps) {
     setCurrentPage(1);
   }, [users]);
 
-  const totalPages = users ? Math.ceil(users.length / ITEMS_PER_PAGE) : 0;
-  const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
-  const endIndex = startIndex + ITEMS_PER_PAGE;
-  const paginatedUsers = users?.slice(startIndex, endIndex) ?? [];
+  // Users are already paginated by the parent component
+  const paginatedUsers = users ?? [];
 
   // Get presence status for all paginated users
   const userIds = paginatedUsers.map((u) => u._id);
@@ -219,159 +218,155 @@ export function UserTable({ users, viewMode = "table" }: UserTableProps) {
     const isOnline = userPresence?.[user._id]?.isOnline ?? false;
 
     return (
-      <Card className="hover:shadow-lg transition-all border-border/50">
-        <CardHeader className="pb-4 border-b border-border/50">
+      <Card className="h-full flex flex-col hover:shadow-md transition-all duration-200 border border-border bg-card group rounded-xl overflow-hidden hover:border-primary/20">
+        <CardHeader className="p-4 pb-3 border-b border-border/40 bg-gradient-to-br from-primary/5 to-transparent">
           <div className="flex items-start justify-between gap-3">
             <div className="flex-1 min-w-0">
-              <CardTitle className="text-base font-semibold flex items-center gap-2 mb-1">
-                <OnlineIndicator
-                  isOnline={isOnline}
-                  className="shrink-0"
-                />
-                <span className="truncate">{user.fullName}</span>
-                {isCurrentUser && (
-                  <Badge variant="secondary" className="text-xs shrink-0">You</Badge>
-                )}
-              </CardTitle>
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <User className="h-3.5 w-3.5 shrink-0" />
-                <span className="truncate">@{user.username}</span>
+              <div className="flex items-center gap-2 mb-1.5">
+                <div className="relative">
+                  <UserAvatar
+                    name={user.fullName}
+                    image={user.profileImage}
+                    size="md"
+                    className="shadow-sm border-primary/10"
+                  />
+                  {isOnline && (
+                    <span className="absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full bg-green-500 ring-2 ring-background shadow-[0_0_8px_rgba(34,197,94,0.4)]" />
+                  )}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <CardTitle className="text-base font-bold truncate pr-2 leading-tight flex items-center gap-2">
+                    {user.fullName}
+                    {isCurrentUser && <Badge variant="secondary" className="text-[10px] h-4 px-1 bg-primary/10 text-primary border-primary/10">You</Badge>}
+                  </CardTitle>
+                </div>
+              </div>
+              <div className="pl-11 flex flex-col gap-1">
+                <Badge variant="outline" className="font-mono text-[10px] h-5 px-1.5 w-fit text-muted-foreground border-border/50 bg-background/40 backdrop-blur-sm flex items-center gap-1">
+                  <Shield className="h-3 w-3 opacity-50" />
+                  {ROLE_LABELS[user.role]}
+                </Badge>
               </div>
             </div>
             <UserActions user={user} />
           </div>
         </CardHeader>
-        <CardContent className="pt-4 space-y-4">
-          {/* Role and Status Section */}
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <div className="flex items-center gap-1.5 text-xs text-muted-foreground uppercase tracking-wide">
-                <Shield className="h-3 w-3" />
-                <span>Role</span>
+        <CardContent className="p-4 pt-4 space-y-4 flex-1 flex flex-col text-sm">
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <span className="text-[10px] uppercase font-bold tracking-wider opacity-70">Username</span>
               </div>
-              <Badge variant="outline" className="text-xs font-medium">
-                {ROLE_LABELS[user.role]}
-              </Badge>
+              <p className="font-medium pl-0.5 truncate text-foreground/80">@{user.username}</p>
             </div>
-            <div className="space-y-1.5">
-              <div className="flex items-center gap-1.5 text-xs text-muted-foreground uppercase tracking-wide">
-                <span>Status</span>
+            <div className="space-y-1">
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <span className="text-[10px] uppercase font-bold tracking-wider opacity-70">Status</span>
               </div>
-              <Badge variant={user.isActive ? "default" : "secondary"} className="text-xs font-medium">
-                {user.isActive ? "Active" : "Disabled"}
+              <Badge variant={user.isActive ? "default" : "secondary"} className="h-5 text-[10px] px-1.5 font-bold tracking-wide">
+                {user.isActive ? "ACTIVE" : "DISABLED"}
               </Badge>
             </div>
           </div>
 
-          {/* Divider */}
-          <div className="border-t border-border/50" />
-
-          {/* Contact Information */}
-          <div className="space-y-3">
-            <div className="flex items-start gap-2.5">
-              <Phone className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
-              <div className="flex-1 min-w-0">
-                <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Phone</p>
-                <p className="text-sm font-medium">{user.phoneNumber || "—"}</p>
-              </div>
+          <div className="space-y-1 pt-1">
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <Phone className="h-3 w-3" />
+              <span className="text-[10px] uppercase font-bold tracking-wider opacity-70">Phone</span>
             </div>
-            {user.address && (
-              <div className="flex items-start gap-2.5">
-                <MapPin className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-1">
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Address</p>
-                      <p className="text-sm font-medium line-clamp-2">{user.address}</p>
-                    </div>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleOpenInMap(user.address);
-                      }}
-                      className="text-primary hover:text-primary/80 hover:bg-primary/10 rounded-full p-2 transition-colors shrink-0 border border-primary/20 hover:border-primary/40"
-                      title="Open in Maps"
-                    >
-                      <MapPin className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-            <div className="flex items-start gap-2.5">
-              <Calendar className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
-              <div className="flex-1 min-w-0">
-                <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Created</p>
-                <p className="text-sm font-medium">{new Date(user.createdAt).toLocaleDateString()}</p>
-              </div>
-            </div>
+            <p className="font-medium pl-5 truncate font-mono text-xs text-foreground/80">{user.phoneNumber || "-"}</p>
           </div>
 
-          {/* Assigned Sites Section */}
-          {user.role === ROLES.SITE_ENGINEER && user.assignedSites && user.assignedSites.length > 0 && (
-            <>
-              <div className="border-t border-border/50" />
-              <div className="space-y-2">
-                <div className="flex items-center gap-1.5 text-xs text-muted-foreground uppercase tracking-wide">
+          {user.address && (
+            <div className="space-y-1 pt-1">
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <MapPin className="h-3 w-3" />
+                <span className="text-[10px] uppercase font-bold tracking-wider opacity-70">Address</span>
+              </div>
+              <div className="pl-5 flex items-start gap-2">
+                <p className="text-balance text-muted-foreground leading-relaxed line-clamp-2 text-xs">{user.address}</p>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleOpenInMap(user.address);
+                  }}
+                  className="text-primary hover:text-primary/80 hover:bg-primary/5 p-1 rounded-md transition-colors shrink-0"
+                  title="Open in Maps"
+                >
                   <MapPin className="h-3.5 w-3.5" />
-                  <span>Assigned Sites</span>
-                </div>
-                <div className="flex flex-wrap gap-1.5 items-center">
-                  {user.assignedSites.map((siteId) => {
-                    const site = allSites?.find((s) => s._id === siteId);
-                    return site ? (
-                      <div key={siteId} className="flex items-center gap-1">
-                        <Badge
-                          variant="secondary"
-                          className="text-xs font-medium cursor-pointer hover:bg-primary/10 transition-colors"
-                          onClick={() => setSelectedSiteId(site._id)}
-                        >
-                          {site.name}
-                        </Badge>
-                        <div className="space-y-3">
-                          <div>
-                            <h4 className="font-semibold text-sm mb-2 flex items-center gap-2">
-                              <Building2 className="h-4 w-4 text-primary" />
-                              {site.name}
-                            </h4>
-                          </div>
-                          <div className="space-y-2 text-sm">
-                            {site.code && (
-                              <div className="flex items-start gap-2">
-                                <Hash className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
-                                <div>
-                                  <p className="text-xs text-muted-foreground">Site Code</p>
-                                  <p className="font-medium">{site.code}</p>
-                                </div>
-                              </div>
-                            )}
-                            {site.address && (
-                              <div className="flex items-start gap-2">
-                                <MapPin className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
-                                <div>
-                                  <p className="text-xs text-muted-foreground">Address</p>
-                                  <p className="font-medium text-xs">{site.address}</p>
-                                </div>
-                              </div>
-                            )}
-                            {site.description && (
-                              <div className="flex items-start gap-2">
-                                <Info className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
-                                <div>
-                                  <p className="text-xs text-muted-foreground">Description</p>
-                                  <p className="font-medium text-xs">{site.description}</p>
-                                </div>
-                              </div>
-                            )}
-                          </div>
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Assigned Sites Summary */}
+          {user.role === ROLES.SITE_ENGINEER && user.assignedSites && user.assignedSites.length > 0 && (
+            <div className="space-y-1 pt-1">
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <Building2 className="h-3 w-3" />
+                <span className="text-[10px] uppercase font-bold tracking-wider opacity-70">Assigned Sites</span>
+              </div>
+              <div className="pl-5 flex flex-wrap gap-1.5">
+                {user.assignedSites.slice(0, 3).map(siteId => {
+                  const site = allSites?.find(s => s._id === siteId);
+                  return site ? (
+                    <Badge
+                      key={siteId}
+                      variant="secondary"
+                      className="text-[10px] h-5 px-1.5 cursor-pointer hover:bg-primary/20 transition-colors border-transparent hover:border-primary/20"
+                      onClick={() => setSelectedSiteId(site._id)}
+                      title="View Site Details"
+                    >
+                      {site.name}
+                    </Badge>
+                  ) : null;
+                })}
+                {user.assignedSites.length > 3 && (
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Badge
+                        variant="outline"
+                        className="text-[10px] h-5 px-1.5 cursor-pointer hover:bg-muted/80 transition-colors"
+                      >
+                        +{user.assignedSites.length - 3} more
+                      </Badge>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-56 p-2" align="start">
+                      <div className="space-y-2">
+                        <div className="text-xs font-semibold text-muted-foreground px-2 pb-1 border-b">
+                          Remaining Assigned Sites
+                        </div>
+                        <div className="flex flex-col gap-1 max-h-[200px] overflow-y-auto">
+                          {user.assignedSites.slice(3).map(siteId => {
+                            const site = allSites?.find(s => s._id === siteId);
+                            return site ? (
+                              <Button
+                                key={siteId}
+                                variant="ghost"
+                                size="sm"
+                                className="justify-start h-8 px-2 text-xs w-full font-normal truncate"
+                                onClick={() => setSelectedSiteId(site._id)}
+                              >
+                                <Building2 className="h-3 w-3 mr-2 text-muted-foreground" />
+                                <span className="truncate">{site.name}</span>
+                              </Button>
+                            ) : null;
+                          })}
                         </div>
                       </div>
-                    ) : null;
-                  })}
-                </div>
+                    </PopoverContent>
+                  </Popover>
+                )}
               </div>
-            </>
+            </div>
           )}
+
+          <div className="mt-auto pt-4 border-t border-border/50 flex items-center justify-between text-xs text-muted-foreground/60">
+            <div className="flex items-center gap-2">
+              <Calendar className="h-3.5 w-3.5" />
+              <span>Created {new Date(user.createdAt).toLocaleDateString()}</span>
+            </div>
+          </div>
         </CardContent>
       </Card>
     );
@@ -381,139 +376,141 @@ export function UserTable({ users, viewMode = "table" }: UserTableProps) {
     <div className="space-y-4">
       {/* Table View */}
       {viewMode === "table" && (
-        <div className="border rounded-lg overflow-hidden">
+        <div className="border rounded-xl overflow-hidden shadow-sm bg-background">
           <div className="overflow-x-auto">
             <Table>
-              <TableHeader>
-                <TableRow className="bg-muted/50 hover:bg-muted/50">
-                  <TableHead className="font-semibold text-foreground">Full Name</TableHead>
-                  <TableHead className="font-semibold text-foreground">Username</TableHead>
-                  <TableHead className="font-semibold text-foreground">Role</TableHead>
-                  <TableHead className="font-semibold text-foreground">Phone</TableHead>
-                  <TableHead className="font-semibold text-foreground">Address</TableHead>
-                  <TableHead className="font-semibold text-foreground">Sites</TableHead>
-                  <TableHead className="font-semibold text-foreground">Status</TableHead>
-                  <TableHead className="font-semibold text-foreground">Created</TableHead>
-                  <TableHead className="text-right font-semibold text-foreground">Actions</TableHead>
+              <TableHeader className="bg-muted/40">
+                <TableRow>
+                  <TableHead className="w-[180px] font-semibold text-xs uppercase tracking-wider text-muted-foreground/80">Full Name</TableHead>
+                  <TableHead className="w-[120px] font-semibold text-xs uppercase tracking-wider text-muted-foreground/80">Username</TableHead>
+                  <TableHead className="w-[120px] font-semibold text-xs uppercase tracking-wider text-muted-foreground/80">Role</TableHead>
+                  <TableHead className="w-[120px] font-semibold text-xs uppercase tracking-wider text-muted-foreground/80">Phone</TableHead>
+                  <TableHead className="min-w-[200px] font-semibold text-xs uppercase tracking-wider text-muted-foreground/80">Address</TableHead>
+                  <TableHead className="w-[150px] font-semibold text-xs uppercase tracking-wider text-muted-foreground/80">Sites</TableHead>
+                  <TableHead className="w-[100px] font-semibold text-xs uppercase tracking-wider text-muted-foreground/80">Status</TableHead>
+                  <TableHead className="w-[100px] font-semibold text-xs uppercase tracking-wider text-muted-foreground/80">Created</TableHead>
+                  <TableHead className="w-[60px] text-right font-semibold text-xs uppercase tracking-wider text-muted-foreground/80">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {paginatedUsers.map((user) => {
+                {paginatedUsers.map((user, index) => {
                   const isCurrentUser = user.clerkUserId === clerkUser?.id;
 
                   return (
-                    <TableRow key={user._id} className="hover:bg-muted/30">
-                      <TableCell className="font-medium">
-                        <div className="flex items-center gap-2">
-                          <OnlineIndicator
-                            isOnline={userPresence?.[user._id]?.isOnline ?? false}
-                            className="shrink-0"
-                          />
-                          <span>{user.fullName}</span>
+                    <TableRow
+                      key={user._id}
+                      className={`
+                          group transition-all duration-300 border-b last:border-0 hover:bg-primary/5 hover:shadow-sm hover:z-10 hover:relative
+                          ${index % 2 === 0 ? "bg-background" : "bg-muted/20"}
+                          animate-in fade-in slide-in-from-bottom-3
+                      `}
+                      style={{ animationDelay: `${index * 50}ms`, animationFillMode: 'both' }}
+                    >
+                      <TableCell className="align-top py-4 pl-4 font-medium">
+                        <div className="flex items-center gap-2.5">
+                          <div className="relative shrink-0">
+                            <UserAvatar
+                              name={user.fullName}
+                              image={user.profileImage}
+                              size="sm"
+                            />
+                            {userPresence?.[user._id]?.isOnline && (
+                              <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-green-500 ring-2 ring-background" />
+                            )}
+                          </div>
+                          <span className="text-sm font-bold text-foreground hover:text-primary transition-colors cursor-default">{user.fullName}</span>
                           {isCurrentUser && (
-                            <Badge variant="secondary" className="ml-1 text-xs">You</Badge>
+                            <Badge variant="secondary" className="ml-1 text-[10px] h-4 px-1">You</Badge>
                           )}
                         </div>
                       </TableCell>
-                      <TableCell>{user.username}</TableCell>
-                      <TableCell>
-                        <Badge variant="outline">{ROLE_LABELS[user.role]}</Badge>
+                      <TableCell className="align-top py-4 text-sm font-medium text-muted-foreground">@{user.username}</TableCell>
+                      <TableCell className="align-top py-4">
+                        <Badge variant="outline" className="font-mono text-[10px] bg-background/50 h-5 px-2">{ROLE_LABELS[user.role]}</Badge>
                       </TableCell>
-                      <TableCell>{user.phoneNumber}</TableCell>
-                      <TableCell className="max-w-xs">
+                      <TableCell className="align-top py-4 text-xs font-mono">{user.phoneNumber || <span className="text-muted-foreground/30 font-sans text-sm">—</span>}</TableCell>
+                      <TableCell className="align-top py-4 max-w-xs">
                         {user.address ? (
-                          <div className="flex items-center gap-2">
-                            <span className="truncate flex-1">{user.address}</span>
+                          <div className="flex items-start gap-2 group/addr">
+                            <span className="text-sm text-muted-foreground line-clamp-2 leading-relaxed flex-1">{user.address}</span>
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
                                 handleOpenInMap(user.address);
                               }}
-                              className="text-primary hover:text-primary/80 hover:bg-primary/10 rounded-full p-2 transition-colors shrink-0 border border-primary/20 hover:border-primary/40"
+                              className="text-primary opacity-0 group-hover/addr:opacity-100 transition-opacity p-1 hover:bg-primary/10 rounded"
                               title="Open in Maps"
                             >
                               <MapPin className="h-3.5 w-3.5" />
                             </button>
                           </div>
                         ) : (
-                          "—"
+                          <span className="text-muted-foreground/30">—</span>
                         )}
                       </TableCell>
-                      <TableCell>
+                      <TableCell className="align-top py-4">
                         {user.role === ROLES.SITE_ENGINEER && user.assignedSites && user.assignedSites.length > 0 ? (
-                          <div className="flex flex-wrap gap-1 items-center">
-                            {user.assignedSites.map((siteId) => {
+                          <div className="flex flex-wrap gap-1.5 items-center">
+                            {user.assignedSites.slice(0, 2).map((siteId) => {
                               const site = allSites?.find((s) => s._id === siteId);
                               return site ? (
-                                <div key={siteId} className="flex items-center gap-1">
-                                  <Popover>
-                                    <PopoverTrigger asChild>
-                                      <Badge
-                                        variant="secondary"
-                                        className="text-xs cursor-pointer hover:bg-primary/10 transition-colors"
-                                      >
-                                        {site.name}
-                                      </Badge>
-                                    </PopoverTrigger>
-                                    <PopoverContent className="w-80 p-4" align="start">
-                                      <div className="space-y-3">
-                                        <div>
-                                          <h4 className="font-semibold text-sm mb-2 flex items-center gap-2">
-                                            <Building2 className="h-4 w-4 text-primary" />
-                                            {site.name}
-                                          </h4>
-                                        </div>
-                                        <div className="space-y-2 text-sm">
-                                          {site.code && (
-                                            <div className="flex items-start gap-2">
-                                              <Hash className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
-                                              <div>
-                                                <p className="text-xs text-muted-foreground">Site Code</p>
-                                                <p className="font-medium">{site.code}</p>
-                                              </div>
-                                            </div>
-                                          )}
-                                          {site.address && (
-                                            <div className="flex items-start gap-2">
-                                              <MapPin className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
-                                              <div>
-                                                <p className="text-xs text-muted-foreground">Address</p>
-                                                <p className="font-medium text-xs">{site.address}</p>
-                                              </div>
-                                            </div>
-                                          )}
-                                          {site.description && (
-                                            <div className="flex items-start gap-2">
-                                              <Info className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
-                                              <div>
-                                                <p className="text-xs text-muted-foreground">Description</p>
-                                                <p className="font-medium text-xs">{site.description}</p>
-                                              </div>
-                                            </div>
-                                          )}
-                                        </div>
-                                      </div>
-                                    </PopoverContent>
-                                  </Popover>
-                                </div>
+                                <Badge
+                                  key={siteId}
+                                  variant="secondary"
+                                  className="text-[10px] cursor-pointer hover:bg-primary/20 transition-colors h-5 px-1.5 border-transparent hover:border-primary/20"
+                                  onClick={() => setSelectedSiteId(site._id)}
+                                >
+                                  {site.name}
+                                </Badge>
                               ) : null;
                             })}
+                            {user.assignedSites.length > 2 && (
+                              <Popover>
+                                <PopoverTrigger asChild>
+                                  <Badge variant="outline" className="text-[10px] h-5 px-1.5 text-muted-foreground cursor-pointer hover:bg-muted/80">+{user.assignedSites.length - 2}</Badge>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-56 p-2" align="start">
+                                  <div className="space-y-2">
+                                    <div className="text-xs font-semibold text-muted-foreground px-2 pb-1 border-b">
+                                      All Assigned Sites ({user.assignedSites.length})
+                                    </div>
+                                    <div className="flex flex-col gap-1 max-h-[200px] overflow-y-auto">
+                                      {user.assignedSites.slice(2).map(siteId => {
+                                        const site = allSites?.find(s => s._id === siteId);
+                                        return site ? (
+                                          <Button
+                                            key={siteId}
+                                            variant="ghost"
+                                            size="sm"
+                                            className="justify-start h-8 px-2 text-xs w-full font-normal truncate"
+                                            onClick={() => setSelectedSiteId(site._id)}
+                                          >
+                                            <Building2 className="h-3 w-3 mr-2 text-muted-foreground" />
+                                            <span className="truncate">{site.name}</span>
+                                          </Button>
+                                        ) : null;
+                                      })}
+                                    </div>
+                                  </div>
+                                </PopoverContent>
+                              </Popover>
+                            )}
                           </div>
                         ) : user.role === ROLES.SITE_ENGINEER ? (
-                          <span className="text-xs text-muted-foreground">No sites assigned</span>
+                          <span className="text-xs text-muted-foreground/50 italic">No sites assigned</span>
                         ) : (
-                          <span className="text-xs text-muted-foreground">—</span>
+                          <span className="text-muted-foreground/30">—</span>
                         )}
                       </TableCell>
-                      <TableCell>
-                        <Badge variant={user.isActive ? "default" : "secondary"}>
+                      <TableCell className="align-top py-4">
+                        <Badge variant={user.isActive ? "default" : "secondary"} className="h-5 text-[10px] px-2 uppercase tracking-wider font-bold">
                           {user.isActive ? "Active" : "Disabled"}
                         </Badge>
                       </TableCell>
-                      <TableCell className="text-muted-foreground text-sm">
+                      <TableCell className="text-muted-foreground/70 text-xs align-top py-4">
                         {new Date(user.createdAt).toLocaleDateString()}
                       </TableCell>
-                      <TableCell className="text-right">
+                      <TableCell className="text-right align-top py-4 pr-4">
                         <UserActions user={user} />
                       </TableCell>
                     </TableRow>
@@ -527,63 +524,16 @@ export function UserTable({ users, viewMode = "table" }: UserTableProps) {
 
       {/* Card View */}
       {viewMode === "card" && (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4">
-          {paginatedUsers.map((user) => (
-            <UserCard key={user._id} user={user} />
-          ))}
-        </div>
-      )}
-
-      {/* Pagination */}
-      {totalPages > 1 && (
-        <div className="flex items-center justify-between px-2">
-          <div className="text-sm text-muted-foreground">
-            Showing {startIndex + 1} to {Math.min(endIndex, users.length)} of {users.length} users
-          </div>
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-              disabled={currentPage === 1}
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4 sm:gap-6 pt-2 pb-10">
+          {paginatedUsers.map((user, index) => (
+            <div
+              key={user._id}
+              className="animate-in fade-in slide-in-from-bottom-5 h-full"
+              style={{ animationDelay: `${index * 50}ms`, animationFillMode: 'both' }}
             >
-              <ChevronLeft className="h-4 w-4 mr-1" />
-              Previous
-            </Button>
-            <div className="flex items-center gap-1">
-              {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => {
-                if (
-                  page === 1 ||
-                  page === totalPages ||
-                  (page >= currentPage - 1 && page <= currentPage + 1)
-                ) {
-                  return (
-                    <Button
-                      key={page}
-                      variant={currentPage === page ? "default" : "outline"}
-                      size="sm"
-                      onClick={() => setCurrentPage(page)}
-                      className="w-8 h-8 p-0"
-                    >
-                      {page}
-                    </Button>
-                  );
-                } else if (page === currentPage - 2 || page === currentPage + 2) {
-                  return <span key={page} className="px-2">...</span>;
-                }
-                return null;
-              })}
+              <UserCard user={user} />
             </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-              disabled={currentPage === totalPages}
-            >
-              Next
-              <ChevronRight className="h-4 w-4 ml-1" />
-            </Button>
-          </div>
+          ))}
         </div>
       )}
 

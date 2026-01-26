@@ -230,6 +230,8 @@ export const createUser = mutation({
     address: v.string(),
     role: v.union(v.literal("site_engineer"), v.literal("manager"), v.literal("purchase_officer")),
     assignedSites: v.optional(v.array(v.id("sites"))),
+    profileImage: v.optional(v.string()),
+    profileImageKey: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
@@ -272,6 +274,8 @@ export const createUser = mutation({
       role: args.role,
       assignedSites: args.assignedSites || [],
       isActive: true,
+      profileImage: args.profileImage,
+      profileImageKey: args.profileImageKey,
       createdBy: currentUser._id,
       createdAt: Date.now(),
       updatedAt: Date.now(),
@@ -293,6 +297,8 @@ export const updateUser = mutation({
     role: v.optional(v.union(v.literal("site_engineer"), v.literal("manager"), v.literal("purchase_officer"))),
     assignedSites: v.optional(v.array(v.id("sites"))),
     isActive: v.optional(v.boolean()),
+    profileImage: v.optional(v.string()),
+    profileImageKey: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
@@ -329,6 +335,8 @@ export const updateUser = mutation({
       ...(args.role && { role: args.role }),
       ...(args.assignedSites !== undefined && { assignedSites: args.assignedSites }),
       ...(args.isActive !== undefined && { isActive: args.isActive }),
+      ...(args.profileImage !== undefined && { profileImage: args.profileImage }),
+      ...(args.profileImageKey !== undefined && { profileImageKey: args.profileImageKey }),
       updatedAt: Date.now(),
     });
 
@@ -423,6 +431,8 @@ export const updateProfile = mutation({
     fullName: v.string(),
     phoneNumber: v.string(),
     address: v.string(),
+    profileImage: v.optional(v.string()),
+    profileImageKey: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
@@ -450,6 +460,8 @@ export const updateProfile = mutation({
       fullName: args.fullName,
       phoneNumber: args.phoneNumber,
       address: args.address,
+      ...(args.profileImage !== undefined && { profileImage: args.profileImage }),
+      ...(args.profileImageKey !== undefined && { profileImageKey: args.profileImageKey }),
       updatedAt: Date.now(),
     });
 

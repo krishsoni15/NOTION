@@ -287,7 +287,7 @@ export const getInventoryStatusForItems = query({
 export const createInventoryItem = mutation({
   args: {
     itemName: v.string(),
-    description: v.optional(v.string()),
+    description: v.string(),
     hsnSacCode: v.optional(v.string()),
     unit: v.optional(v.string()),
     centralStock: v.optional(v.number()),
@@ -315,10 +315,27 @@ export const createInventoryItem = mutation({
       }
     }
 
+    // Check for duplicates (Same Name + Same Description)
+    const existingItems = await ctx.db
+      .query("inventory")
+      .withIndex("by_item_name", (q) => q.eq("itemName", args.itemName))
+      .filter((q) => q.eq(q.field("isActive"), true))
+      .collect();
+
+    const isDuplicate = existingItems.some(
+      (item) => (item.description || "").trim() === args.description.trim()
+    );
+
+    if (isDuplicate) {
+      throw new Error(
+        "An item with this name and description already exists. Please modify the description or use the existing item."
+      );
+    }
+
     const now = Date.now();
     const itemId = await ctx.db.insert("inventory", {
       itemName: args.itemName,
-      description: args.description || "",
+      description: args.description,
       hsnSacCode: args.hsnSacCode || "",
       unit: args.unit || "",
       centralStock: args.centralStock || 0,

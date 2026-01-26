@@ -21,11 +21,13 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Plus, Search, LayoutGrid, Table2, RefreshCw } from "lucide-react";
+import { PaginationControls } from "@/components/ui/pagination-controls";
 import { VendorFormDialog } from "./vendor-form-dialog";
 import { VendorTable } from "./vendor-table";
 import { useUserRole } from "@/hooks/use-user-role";
 import { ROLES } from "@/lib/auth/roles";
 import { useViewMode } from "@/hooks/use-view-mode";
+import { cn } from "@/lib/utils";
 
 type ViewMode = "table" | "card";
 type SortOption = "newest" | "oldest" | "name_asc" | "name_desc";
@@ -54,13 +56,28 @@ export function VendorManagement({ showTableOnly = false }: VendorManagementProp
     isLoaded && isSignedIn ? {} : "skip"
   );
 
-  const handleRefresh = () => {
-    setIsRefreshing(true);
-    setRefreshKey((prev) => prev + 1);
-    setTimeout(() => {
-      setIsRefreshing(false);
-    }, 1000);
-  };
+  // Pagination State
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(() => {
+    // Load from localStorage on mount
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('vendorPageSize');
+      return saved ? Number(saved) : 10;
+    }
+    return 10;
+  });
+
+  // Save page size to localStorage when it changes
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('vendorPageSize', pageSize.toString());
+    }
+  }, [pageSize]);
+
+  // Reset page when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, sortBy]);
 
   // Filter and sort vendors
   const filteredAndSortedVendors = useMemo(() => {
@@ -111,89 +128,115 @@ export function VendorManagement({ showTableOnly = false }: VendorManagementProp
 
   return (
     <div className="space-y-4">
-      {/* Action bar */}
-      <div className="flex flex-col sm:flex-row gap-3 justify-between items-start sm:items-center">
-        <div className="flex items-center gap-2">
-          <p className="text-sm text-muted-foreground">
-            <span className="font-medium text-foreground">{vendors?.length || 0}</span> vendors
-            {filteredAndSortedVendors && filteredAndSortedVendors.length !== vendors?.length && (
-              <span className="ml-1">
-                ({filteredAndSortedVendors.length} shown)
-              </span>
-            )}
-          </p>
+      {/* Search and Filters Toolbar */}
+      <div className="flex flex-col gap-3 bg-card p-3 rounded-xl border border-border shadow-sm">
+        {/* Row 1: Search and View Toggle */}
+        <div className="flex items-center gap-3">
+          {/* Search bar */}
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              type="text"
+              placeholder="Search by company, email, phone, GST, or address..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-9 h-10 bg-muted/30 border-muted-foreground/20 focus-visible:ring-primary/20 transition-all font-medium w-full"
+            />
+          </div>
+
+          {/* View mode toggle */}
           <Button
             variant="outline"
             size="icon"
-            onClick={handleRefresh}
-            className="h-8 w-8"
-            title="Refresh"
-            disabled={isRefreshing}
+            onClick={toggleViewMode}
+            className="h-10 w-10 flex-shrink-0 bg-muted/30 border-muted-foreground/20 hover:bg-primary/10 hover:border-primary/30 hover:text-primary transition-all"
+            title={viewMode === "card" ? "Switch to Table View" : "Switch to Card View"}
           >
-            <RefreshCw className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+            {viewMode === "card" ? (
+              <Table2 className="h-5 w-5" />
+            ) : (
+              <LayoutGrid className="h-5 w-5" />
+            )}
           </Button>
         </div>
-        {canCreate && (
-          <Button onClick={() => setIsCreateDialogOpen(true)} className="w-full sm:w-auto h-9" size="sm">
-            <Plus className="h-4 w-4 mr-2" />
-            Add Vendor
-          </Button>
-        )}
-      </div>
 
-      {/* Search and Filters */}
-      <div className="flex flex-col gap-2.5">
-        {/* Search bar */}
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            type="text"
-            placeholder="Search by company, email, phone, GST, or address..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-9 h-9"
-          />
-        </div>
-
-        {/* Filters row */}
-        <div className="flex flex-col sm:flex-row gap-2">
+        {/* Row 2: Filters and Actions */}
+        <div className="flex items-center justify-between gap-3 pt-2 border-t border-border/50">
+          {/* Sort Filter */}
           <Select value={sortBy} onValueChange={(value) => setSortBy(value as SortOption)}>
-            <SelectTrigger className="w-full sm:w-[140px] h-9 text-sm">
-              <SelectValue placeholder="Sort" />
+            <SelectTrigger className="w-[180px] h-10 text-sm bg-muted/30 border-muted-foreground/20 font-medium">
+              <SelectValue placeholder="Sort Vendors" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="newest">Newest</SelectItem>
-              <SelectItem value="oldest">Oldest</SelectItem>
-              <SelectItem value="name_asc">Name A-Z</SelectItem>
-              <SelectItem value="name_desc">Name Z-A</SelectItem>
+              <SelectItem value="newest">Newest First</SelectItem>
+              <SelectItem value="oldest">Oldest First</SelectItem>
+              <SelectItem value="name_asc">Name (A-Z)</SelectItem>
+              <SelectItem value="name_desc">Name (Z-A)</SelectItem>
             </SelectContent>
           </Select>
 
-          {/* View mode toggle */}
-          <div className="flex gap-1 ml-auto">
+          {/* Add Vendor Button */}
+          {canCreate && (
             <Button
-              variant="outline"
-              size="icon"
-              onClick={toggleViewMode}
-              className="h-9 w-9 flex-shrink-0"
-              title={viewMode === "card" ? "Show Table" : "Show Cards"}
+              onClick={() => setIsCreateDialogOpen(true)}
+              className="h-10 px-6 shadow-sm hover:shadow-md transition-all font-semibold"
             >
-              {viewMode === "card" ? (
-                <Table2 className="h-4 w-4" />
-              ) : (
-                <LayoutGrid className="h-4 w-4" />
-              )}
+              <Plus className="h-5 w-5 mr-1.5" />
+              Add New Vendor
             </Button>
-          </div>
+          )}
         </div>
       </div>
 
-      {/* Vendor table/cards */}
-      <VendorTable
-        key={refreshKey}
-        vendors={filteredAndSortedVendors ?? undefined}
-        viewMode={viewMode}
-      />
+      {/* Pagination Logic */}
+      {(() => {
+        const totalItems = filteredAndSortedVendors?.length || 0;
+        const totalPages = Math.ceil(totalItems / pageSize);
+        const paginatedVendors = filteredAndSortedVendors?.slice(
+          (currentPage - 1) * pageSize,
+          currentPage * pageSize
+        );
+
+        return (
+          <>
+            {/* Top Pagination */}
+            <div className="mb-4 bg-card p-2 rounded-xl border border-border shadow-sm">
+              <PaginationControls
+                currentPage={currentPage}
+                totalPages={totalPages}
+                onPageChange={setCurrentPage}
+                pageSize={pageSize}
+                onPageSizeChange={setPageSize}
+                totalItems={totalItems}
+                pageSizeOptions={[10, 25, 50, 100]}
+                itemCount={paginatedVendors?.length || 0}
+                className="py-0"
+              />
+            </div>
+
+            <VendorTable
+              key={refreshKey}
+              vendors={paginatedVendors}
+              viewMode={viewMode}
+            />
+
+            {/* Bottom Pagination */}
+            <div className="mt-4 bg-card p-2 rounded-xl border border-border shadow-sm">
+              <PaginationControls
+                currentPage={currentPage}
+                totalPages={totalPages}
+                onPageChange={setCurrentPage}
+                pageSize={pageSize}
+                onPageSizeChange={setPageSize}
+                totalItems={totalItems}
+                pageSizeOptions={[10, 25, 50, 100]}
+                itemCount={paginatedVendors?.length || 0}
+                className="py-0"
+              />
+            </div>
+          </>
+        );
+      })()}
 
       {/* Create vendor dialog */}
       {canCreate && (

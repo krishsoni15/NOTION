@@ -51,9 +51,15 @@ export function EditUserDialog({ open, onOpenChange, user }: EditUserDialogProps
   const [showPassword, setShowPassword] = useState(false);
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  
+
   // Check if editing yourself
   const isEditingSelf = user?.clerkUserId === clerkUser?.id;
+
+  // Image upload state
+  const [selectedImage, setSelectedImage] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [shouldRemoveImage, setShouldRemoveImage] = useState(false);
 
   // Form state
   const [formData, setFormData] = useState({
@@ -80,8 +86,62 @@ export function EditUserDialog({ open, onOpenChange, user }: EditUserDialogProps
         currentPassword: "",
         confirmPassword: "",
       });
+      // Set initial image preview
+      setImagePreview(user.profileImage || null);
+      setSelectedImage(null);
+      setShouldRemoveImage(false);
     }
   }, [user, open]);
+
+  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      if (!file.type.startsWith("image/")) {
+        toast.error("Please select an image file");
+        return;
+      }
+      setSelectedImage(file);
+      setShouldRemoveImage(false);
+
+      // Create preview
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        setImagePreview(e.target?.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleRemoveImage = () => {
+    setSelectedImage(null);
+    setImagePreview(null);
+    setShouldRemoveImage(true);
+  };
+
+  const uploadImage = async (file: File) => {
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      // We don't have itemId, let's use userId or just generic upload
+      // Ideally backend handles key generation if no ID provided, or we pass userId
+      formData.append("userId", user!._id);
+
+      const response = await fetch("/api/upload/image", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to upload image");
+      }
+
+      const data = await response.json();
+      return { imageUrl: data.imageUrl, imageKey: data.imageKey };
+    } catch (error) {
+      console.error("Error uploading image:", error);
+      throw error;
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -109,6 +169,28 @@ export function EditUserDialog({ open, onOpenChange, user }: EditUserDialogProps
         }
       }
 
+      // Handle Image Upload
+      let profileImage = user.profileImage;
+      let profileImageKey = user.profileImageKey;
+
+      if (shouldRemoveImage) {
+        profileImage = undefined;
+        profileImageKey = undefined;
+        // Ideally verify deletion from storage too, but Convex handles cleanup or we leave it (orphaned)
+      } else if (selectedImage) {
+        setIsUploading(true);
+        try {
+          const imageData = await uploadImage(selectedImage);
+          profileImage = imageData.imageUrl;
+          profileImageKey = imageData.imageKey;
+        } catch (uploadError) {
+          toast.error("Failed to upload profile image");
+          setIsLoading(false);
+          setIsUploading(false);
+          return;
+        }
+      }
+
       // Update user in Convex
       await updateUser({
         userId: user._id,
@@ -117,6 +199,8 @@ export function EditUserDialog({ open, onOpenChange, user }: EditUserDialogProps
         address: formData.address,
         role: formData.role as Role,
         assignedSites: formData.assignedSites,
+        profileImage,
+        profileImageKey,
       });
 
       // If password is provided, update it
@@ -192,7 +276,7 @@ export function EditUserDialog({ open, onOpenChange, user }: EditUserDialogProps
         <DialogHeader>
           <DialogTitle>{isEditingSelf ? "Edit Your Profile" : "Edit User"}</DialogTitle>
           <DialogDescription>
-            {isEditingSelf 
+            {isEditingSelf
               ? "Update your profile information. Your role cannot be changed for security."
               : "Update user information and permissions. Leave password empty to keep unchanged."
             }
@@ -208,6 +292,53 @@ export function EditUserDialog({ open, onOpenChange, user }: EditUserDialogProps
               value={user.username}
               disabled
               className="bg-muted h-9"
+            />
+          </div>
+
+          {/* Profile Image */}
+          <div className="flex flex-col items-center gap-4 py-2">
+            <div className="relative group">
+              <div className="h-24 w-24 rounded-full overflow-hidden border-2 border-border relative bg-muted flex items-center justify-center">
+                {imagePreview ? (
+                  <img
+                    src={imagePreview}
+                    alt="Profile"
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <span className="text-3xl font-bold text-muted-foreground/50">
+                    {user.fullName?.[0]?.toUpperCase() || "U"}
+                  </span>
+                )}
+
+                {/* Overlay for edit */}
+                <label
+                  htmlFor="profile-image-upload"
+                  className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer text-white text-xs font-medium"
+                >
+                  Change
+                </label>
+              </div>
+
+              {imagePreview && (
+                <button
+                  type="button"
+                  onClick={handleRemoveImage}
+                  className="absolute -top-1 -right-1 bg-destructive text-destructive-foreground rounded-full p-1 shadow-sm hover:bg-destructive/90 transition-colors"
+                  title="Remove photo"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              )}
+            </div>
+
+            <input
+              id="profile-image-upload"
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handleImageSelect}
+              disabled={isLoading || isUploading}
             />
           </div>
 
@@ -396,6 +527,7 @@ export function EditUserDialog({ open, onOpenChange, user }: EditUserDialogProps
             label="Address"
             placeholder="Search address or type manually..."
             id="address"
+            showMapLink={true}
           />
 
           {/* Role */}
@@ -448,17 +580,17 @@ export function EditUserDialog({ open, onOpenChange, user }: EditUserDialogProps
               type="button"
               variant="outline"
               onClick={() => handleOpenChange(false)}
-              disabled={isLoading}
+              disabled={isLoading || isUploading}
               className="gap-2"
             >
               <X className="h-4 w-4" />
               Cancel
             </Button>
-            <Button type="submit" disabled={isLoading} className="gap-2">
-              {isLoading ? (
+            <Button type="submit" disabled={isLoading || isUploading} className="gap-2">
+              {isLoading || isUploading ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin" />
-                  Updating...
+                  {isUploading ? "Uploading..." : "Updating..."}
                 </>
               ) : (
                 <>

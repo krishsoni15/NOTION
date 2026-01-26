@@ -66,6 +66,12 @@ export function LocationTable({ locations, viewMode = "table" }: LocationTablePr
   const deleteLocation = useMutation(api.sites.deleteSite);
   const toggleLocationStatus = useMutation(api.sites.toggleSiteStatus);
 
+  const handleOpenInMap = (address: string) => {
+    const encodedAddress = encodeURIComponent(address);
+    const mapUrl = `https://www.google.com/maps/search/?api=1&query=${encodedAddress}`;
+    window.open(mapUrl, '_blank');
+  };
+
   // Check location usage when delete dialog opens
   const locationUsage = useQuery(
     api.sites.checkSiteUsage,
@@ -145,31 +151,38 @@ export function LocationTable({ locations, viewMode = "table" }: LocationTablePr
 
   const LocationCard = ({ location }: { location: Doc<"sites"> }) => {
     return (
-      <Card className="hover:shadow-lg transition-all border-border/50">
-        <CardHeader className="pb-4 border-b border-border/50">
+      <Card className="h-full flex flex-col hover:shadow-md transition-all duration-200 border border-border bg-card group rounded-xl overflow-hidden hover:border-primary/20">
+        <CardHeader className="p-4 pb-3 border-b border-border/40 bg-gradient-to-br from-primary/5 to-transparent">
           <div className="flex items-start justify-between gap-3">
             <div className="flex-1 min-w-0">
-              <CardTitle className="text-base font-semibold flex items-center gap-2 mb-1">
-                <Building2 className="h-4 w-4 text-primary shrink-0" />
-                <button
-                  onClick={() => setSelectedLocationId(location._id)}
-                  className="truncate text-foreground hover:text-primary hover:bg-muted/50 rounded-full px-3 py-1.5 -mx-2 -my-1 transition-colors cursor-pointer text-left border border-transparent hover:border-primary/20"
-                >
-                  {location.name}
-                </button>
-              </CardTitle>
+              <div className="flex items-center gap-2 mb-1.5">
+                <div className="h-9 w-9 rounded-lg bg-background/60 backdrop-blur-sm flex items-center justify-center shrink-0 border border-primary/10 overflow-hidden shadow-sm">
+                  <Building2 className="h-4.5 w-4.5 text-primary" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <button
+                    onClick={() => setSelectedLocationId(location._id)}
+                    className="text-base font-bold truncate pr-2 leading-tight hover:underline decoration-primary/30 underline-offset-4 transition-all text-left w-full"
+                  >
+                    {location.name}
+                  </button>
+                </div>
+              </div>
+              <div className="pl-11 flex flex-wrap items-center gap-2 mt-1">
+                {location.code && (
+                  <Badge variant="secondary" className="text-[10px] h-5 px-1.5 font-mono bg-background/50 border border-primary/10 text-muted-foreground">
+                    {location.code}
+                  </Badge>
+                )}
+                <Badge variant="outline" className="text-[10px] h-5 px-1.5 capitalize text-muted-foreground border-border/50 bg-background/30 backdrop-blur-sm">
+                  {location.type || "site"}
+                </Badge>
+              </div>
             </div>
-            <div className="flex items-center gap-2">
-              <Badge variant="outline" className="text-xs capitalize">
-                {location.type || "site"}
-              </Badge>
-              <Badge variant={location.isActive ? "default" : "secondary"} className="text-xs">
-                {location.isActive ? "Active" : "Inactive"}
-              </Badge>
-            </div>
+
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="h-8 w-8">
+                <Button variant="ghost" size="icon" className="h-8 w-8 -mr-2 text-muted-foreground hover:text-foreground">
                   <MoreHorizontal className="h-4 w-4" />
                   <span className="sr-only">Actions</span>
                 </Button>
@@ -208,28 +221,56 @@ export function LocationTable({ locations, viewMode = "table" }: LocationTablePr
             </DropdownMenu>
           </div>
         </CardHeader>
-        <CardContent className="pt-4 space-y-3">
-          {location.address && (
-            <div className="flex items-start gap-2 text-sm">
-              <MapPin className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
-              <div className="flex-1 min-w-0">
-                <p className="text-muted-foreground text-xs">Address</p>
-                <p className="line-clamp-2">{location.address}</p>
-              </div>
+        <CardContent className="p-4 pt-4 space-y-4 flex-1 flex flex-col text-sm">
+          <div className="space-y-1">
+            <div className="flex items-center gap-2 text-muted-foreground mb-1">
+              <span className="text-[10px] uppercase font-bold tracking-wider opacity-70">Status</span>
+            </div>
+            <Badge variant={location.isActive ? "default" : "secondary"} className="h-5 text-[10px] px-2 font-bold tracking-wide w-fit border-0">
+              {location.isActive ? "ACTIVE" : "INACTIVE"}
+            </Badge>
+          </div>
+
+          {(location.address || location.description) && (
+            <div className="space-y-3 pt-1 border-t border-border/40">
+              {location.address && (
+                <div className="space-y-1 pt-2">
+                  <div className="flex items-center gap-2 text-muted-foreground">
+                    <MapPin className="h-3 w-3" />
+                    <span className="text-[10px] uppercase font-bold tracking-wider opacity-70">Address</span>
+                  </div>
+                  <div className="pl-5 flex items-start gap-2">
+                    <p className="text-balance text-muted-foreground leading-relaxed line-clamp-2 text-xs">{location.address}</p>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleOpenInMap(location.address!);
+                      }}
+                      className="text-primary hover:text-primary/80 hover:bg-primary/5 p-1 rounded-md transition-colors shrink-0"
+                      title="Open in Maps"
+                    >
+                      <MapPin className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                </div>
+              )}
+              {location.description && (
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2 text-muted-foreground">
+                    <Info className="h-3 w-3" />
+                    <span className="text-[10px] uppercase font-bold tracking-wider opacity-70">Description</span>
+                  </div>
+                  <p className="pl-5 text-balance text-muted-foreground leading-relaxed line-clamp-2 text-xs italic">{location.description}</p>
+                </div>
+              )}
             </div>
           )}
-          {location.description && (
-            <div className="flex items-start gap-2 text-sm">
-              <Info className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
-              <div className="flex-1 min-w-0">
-                <p className="text-muted-foreground text-xs">Description</p>
-                <p className="line-clamp-2">{location.description}</p>
-              </div>
+
+          <div className="mt-auto pt-4 border-t border-border/50 flex items-center justify-between text-xs text-muted-foreground/60">
+            <div className="flex items-center gap-2">
+              <Calendar className="h-3.5 w-3.5" />
+              <span>Created {new Date(location.createdAt).toLocaleDateString()}</span>
             </div>
-          )}
-          <div className="flex items-center gap-2 text-xs text-muted-foreground pt-2 border-t">
-            <Calendar className="h-3.5 w-3.5" />
-            <span>Created {new Date(location.createdAt).toLocaleDateString()}</span>
           </div>
         </CardContent>
       </Card>
@@ -240,54 +281,89 @@ export function LocationTable({ locations, viewMode = "table" }: LocationTablePr
     <>
       {/* Table View */}
       {viewMode === "table" && (
-        <div className="border rounded-lg overflow-hidden">
+        <div className="border rounded-xl overflow-hidden shadow-sm bg-background">
           <div className="overflow-x-auto">
             <Table>
-              <TableHeader>
+              <TableHeader className="bg-muted/40">
                 <TableRow>
-                  <TableHead>Location Name</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead>Address</TableHead>
-                  <TableHead>Description</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Created</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
+                  <TableHead className="w-[200px] font-semibold text-xs uppercase tracking-wider text-muted-foreground/80">Location Name</TableHead>
+                  <TableHead className="w-[100px] font-semibold text-xs uppercase tracking-wider text-muted-foreground/80">Code</TableHead>
+                  <TableHead className="w-[100px] font-semibold text-xs uppercase tracking-wider text-muted-foreground/80">Type</TableHead>
+                  <TableHead className="min-w-[200px] font-semibold text-xs uppercase tracking-wider text-muted-foreground/80">Address</TableHead>
+                  <TableHead className="w-[120px] font-semibold text-xs uppercase tracking-wider text-muted-foreground/80">Description</TableHead>
+                  <TableHead className="w-[100px] font-semibold text-xs uppercase tracking-wider text-muted-foreground/80">Status</TableHead>
+                  <TableHead className="w-[100px] font-semibold text-xs uppercase tracking-wider text-muted-foreground/80">Created</TableHead>
+                  <TableHead className="w-[60px] text-right font-semibold text-xs uppercase tracking-wider text-muted-foreground/80">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {locations.map((location) => (
-                  <TableRow key={location._id}>
-                    <TableCell className="font-medium">
-                      <button
-                        onClick={() => setSelectedLocationId(location._id)}
-                        className="text-foreground hover:text-primary hover:bg-muted/50 rounded-full px-3 py-1.5 -mx-2 -my-1 transition-colors cursor-pointer text-left border border-transparent hover:border-primary/20"
-                      >
-                        {location.name}
-                      </button>
+                {locations.map((location, index) => (
+                  <TableRow
+                    key={location._id}
+                    className={`
+                        group transition-all duration-300 border-b last:border-0 hover:bg-primary/5 hover:shadow-sm hover:z-10 hover:relative
+                        ${index % 2 === 0 ? "bg-background" : "bg-muted/20"}
+                        animate-in fade-in slide-in-from-bottom-3
+                     `}
+                    style={{ animationDelay: `${index * 50}ms`, animationFillMode: 'both' }}
+                  >
+                    <TableCell className="align-top py-4 pl-4 font-medium">
+                      <div className="flex items-center gap-2.5">
+                        <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0 border border-primary/10 text-primary">
+                          <Building2 className="h-4 w-4" />
+                        </div>
+                        <button
+                          onClick={() => setSelectedLocationId(location._id)}
+                          className="text-sm font-bold text-foreground hover:text-primary transition-colors cursor-pointer text-left hover:underline decoration-primary/30 underline-offset-4"
+                        >
+                          {location.name}
+                        </button>
+                      </div>
                     </TableCell>
-                    <TableCell>
-                      <Badge variant="outline" className="capitalize">
+                    <TableCell className="align-top py-4">
+                      <span className="font-mono text-xs text-muted-foreground bg-muted/50 px-1.5 py-0.5 rounded border border-border/50">
+                        {location.code || "-"}
+                      </span>
+                    </TableCell>
+                    <TableCell className="align-top py-4">
+                      <Badge variant="outline" className="text-[10px] bg-background/50 h-5 px-2 capitalize">
                         {location.type || "site"}
                       </Badge>
                     </TableCell>
-                    <TableCell className="max-w-xs truncate">
-                      {location.address || "—"}
+                    <TableCell className="align-top py-4 max-w-xs text-sm text-muted-foreground leading-relaxed">
+                      {location.address ? (
+                        <div className="flex items-start gap-2 group/addr">
+                          <span className="line-clamp-2">{location.address}</span>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleOpenInMap(location.address!);
+                            }}
+                            className="text-primary p-1 hover:bg-primary/10 rounded shrink-0"
+                            title="Open in Maps"
+                          >
+                            <MapPin className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      ) : (
+                        <span className="text-muted-foreground/30">—</span>
+                      )}
                     </TableCell>
-                    <TableCell className="max-w-xs truncate">
-                      {location.description || "—"}
+                    <TableCell className="align-top py-4 max-w-xs text-sm text-muted-foreground italic leading-relaxed">
+                      {location.description || <span className="text-muted-foreground/30">—</span>}
                     </TableCell>
-                    <TableCell>
-                      <Badge variant={location.isActive ? "default" : "secondary"}>
+                    <TableCell className="align-top py-4">
+                      <Badge variant={location.isActive ? "default" : "secondary"} className="h-5 text-[10px] px-2 uppercase tracking-wider font-bold">
                         {location.isActive ? "Active" : "Inactive"}
                       </Badge>
                     </TableCell>
-                    <TableCell className="text-muted-foreground text-sm">
+                    <TableCell className="align-top py-4 text-xs text-muted-foreground/70">
                       {new Date(location.createdAt).toLocaleDateString()}
                     </TableCell>
-                    <TableCell className="text-right">
+                    <TableCell className="align-top py-4 text-right pr-4">
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon" className="h-8 w-8">
+                          <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground">
                             <MoreHorizontal className="h-4 w-4" />
                             <span className="sr-only">Actions</span>
                           </Button>
@@ -335,9 +411,15 @@ export function LocationTable({ locations, viewMode = "table" }: LocationTablePr
 
       {/* Card View */}
       {viewMode === "card" && (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4">
-          {locations.map((location) => (
-            <LocationCard key={location._id} location={location} />
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4 sm:gap-6 pt-2 pb-10">
+          {locations.map((location, index) => (
+            <div
+              key={location._id}
+              className="animate-in fade-in slide-in-from-bottom-5 h-full"
+              style={{ animationDelay: `${index * 50}ms`, animationFillMode: 'both' }}
+            >
+              <LocationCard location={location} />
+            </div>
           ))}
         </div>
       )}

@@ -61,27 +61,29 @@ export function VendorFormDialog({
 
   // Load initial data when editing
   useEffect(() => {
-    if (initialData) {
-      setFormData({
-        companyName: initialData.companyName,
-        contactName: initialData.contactName || "",
-        email: initialData.email,
-        phone: initialData.phone || "",
-        gstNumber: initialData.gstNumber,
-        address: initialData.address,
-      });
-    } else {
-      setFormData({
-        companyName: "",
-        contactName: "",
-        email: "",
-        phone: "",
-        gstNumber: "",
-        address: "",
-      });
+    if (open) {
+      if (initialData) {
+        setFormData({
+          companyName: initialData.companyName,
+          contactName: initialData.contactName || "",
+          email: initialData.email,
+          phone: initialData.phone || "",
+          gstNumber: initialData.gstNumber,
+          address: initialData.address,
+        });
+      } else {
+        setFormData({
+          companyName: "",
+          contactName: "",
+          email: "",
+          phone: "",
+          gstNumber: "",
+          address: "",
+        });
+      }
+      setError("");
     }
-    setError("");
-  }, [initialData, open]);
+  }, [open]); // Only run when dialog opens, ignore initialData updates to prevent overriding user input
 
   const handleOpenChange = (newOpen: boolean) => {
     if (!newOpen) {
@@ -144,11 +146,7 @@ export function VendorFormDialog({
       <DialogContent className="sm:max-w-[550px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{vendorId ? "Edit Vendor" : "Add New Vendor"}</DialogTitle>
-          <DialogDescription>
-            {vendorId
-              ? "Update vendor information. Required fields are marked with *."
-              : "Create a new vendor. Required fields are marked with *."}
-          </DialogDescription>
+
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4 py-2">

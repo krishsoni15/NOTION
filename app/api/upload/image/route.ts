@@ -19,13 +19,17 @@ export async function POST(request: NextRequest) {
     const formData = await request.formData();
     const file = formData.get("file") as File;
     const itemId = formData.get("itemId") as string;
+    const userIdParam = formData.get("userId") as string;
+
+    // Use either itemId or userId as the identifier
+    const identifier = itemId || userIdParam;
 
     if (!file) {
       return NextResponse.json({ error: "No file provided" }, { status: 400 });
     }
 
-    if (!itemId) {
-      return NextResponse.json({ error: "No itemId provided" }, { status: 400 });
+    if (!identifier) {
+      return NextResponse.json({ error: "No itemId or userId provided" }, { status: 400 });
     }
 
     // Validate file type
@@ -50,7 +54,7 @@ export async function POST(request: NextRequest) {
     const buffer = Buffer.from(arrayBuffer);
 
     // Generate unique public ID
-    const publicId = generateImageKey(itemId, file.name);
+    const publicId = generateImageKey(identifier, file.name);
 
     // Upload to Cloudinary
     try {

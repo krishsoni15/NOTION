@@ -60,6 +60,7 @@ import { ImageGallery } from "@/components/ui/image-gallery";
 import { toast } from "sonner";
 import { normalizeSearchQuery, matchesSearchQuery, matchesAnySearchQuery } from "@/lib/utils";
 import { Separator } from "@/components/ui/separator";
+import { ItemInfoDialog } from "@/components/requests/item-info-dialog";
 import {
   Popover,
   PopoverContent,
@@ -140,6 +141,9 @@ export function MaterialRequestForm({
   const [selectedQuantityIndex, setSelectedQuantityIndex] = useState<{ [itemId: string]: number }>({});
   // Item suggestion keyboard navigation state (per item)
   const [selectedItemIndex, setSelectedItemIndex] = useState<{ [itemId: string]: number }>({});
+
+  // State for Item Info Dialog
+  const [expandedItemName, setExpandedItemName] = useState<string | null>(null);
 
   // Shared form data
   const [sharedFormData, setSharedFormData] = useState({
@@ -1012,7 +1016,9 @@ export function MaterialRequestForm({
     // Double-check validation
     if (!isFormValid()) {
       const validationError = getValidationError();
-      setError(validationError || "Please fill in all required fields correctly");
+      const errorMsg = validationError || "Please fill in all required fields correctly";
+      setError(errorMsg);
+      toast.error(errorMsg);
       return;
     }
 
@@ -1749,23 +1755,38 @@ export function MaterialRequestForm({
                                           className="absolute z-50 w-full mt-1 rounded-md border bg-popover text-popover-foreground shadow-md max-h-60 overflow-y-auto"
                                         >
                                           {suggestions.map((invItem, index) => (
-                                            <button
+                                            <div
                                               key={invItem._id}
-                                              type="button"
-                                              onClick={() => handleItemSelect(item.id, invItem)}
-                                              className={`w-full text-left px-3 py-2 text-sm rounded-md font-medium transition-all duration-200 focus:outline-none ${index === currentSelectedIndex
+                                              className={`w-full text-left px-3 py-2 text-sm rounded-md font-medium transition-all duration-200 focus:outline-none flex items-center justify-between group ${index === currentSelectedIndex
                                                 ? "bg-primary text-primary-foreground"
                                                 : "hover:bg-primary/10 hover:text-primary"
                                                 }`}
                                             >
-                                              {invItem.itemName}
-                                              {invItem.unit && (
-                                                <span className={`ml-2 ${index === currentSelectedIndex ? "text-primary-foreground/80" : "text-muted-foreground"
-                                                  }`}>
-                                                  ({invItem.unit})
-                                                </span>
-                                              )}
-                                            </button>
+                                              <button
+                                                type="button"
+                                                onClick={() => handleItemSelect(item.id, invItem)}
+                                                className="flex-1 text-left flex items-center"
+                                              >
+                                                {invItem.itemName}
+                                                {invItem.unit && (
+                                                  <span className={`ml-2 ${index === currentSelectedIndex ? "text-primary-foreground/80" : "text-muted-foreground"
+                                                    }`}>
+                                                    ({invItem.unit})
+                                                  </span>
+                                                )}
+                                              </button>
+                                              <button
+                                                type="button"
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  setExpandedItemName(invItem.itemName);
+                                                }}
+                                                className={`p-1 rounded-full hover:bg-background/20 transition-colors ${index === currentSelectedIndex ? "text-primary-foreground" : "text-muted-foreground hover:text-primary"}`}
+                                                title="View Item Details"
+                                              >
+                                                <Info className="h-4 w-4" />
+                                              </button>
+                                            </div>
                                           ))}
                                         </div>
                                       )}
@@ -1795,13 +1816,19 @@ export function MaterialRequestForm({
                             {/* In Inventory Indicator - shown when item is selected from inventory */}
                             {item.selectedItemFromInventory && (
                               <div className="flex items-center gap-2 mt-2">
-                                <span className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-300">
+                                <button
+                                  type="button"
+                                  onClick={() => item.selectedItemFromInventory && setExpandedItemName(item.selectedItemFromInventory.itemName)}
+                                  className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-full bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-300 hover:bg-green-200 dark:hover:bg-green-900 transition-colors cursor-pointer group"
+                                  title="View Item Details"
+                                >
                                   <Package className="h-3 w-3" />
-                                  In Inventory
+                                  Item In Inventory
                                   {item.selectedItemFromInventory.centralStock !== undefined && (
                                     <span className="ml-1">• {item.selectedItemFromInventory.centralStock} {item.selectedItemFromInventory.unit || 'units'}</span>
                                   )}
-                                </span>
+                                  <Info className="h-3 w-3 ml-1 opacity-0 group-hover:opacity-100 transition-opacity" />
+                                </button>
                               </div>
                             )}
                           </div>
@@ -2173,9 +2200,12 @@ export function MaterialRequestForm({
                 </Button>
                 <Button
                   type="submit"
-                  disabled={isLoading || isUploading || !isFormValid()}
-                  className="w-full sm:w-auto order-1 sm:order-3 h-10 sm:h-11 text-sm font-bold bg-gradient-to-r from-primary to-primary/90 hover:from-primary/90 hover:to-primary shadow-lg hover:shadow-2xl hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none disabled:hover:scale-100 focus:ring-4 focus:ring-primary/30 transition-all duration-200"
-                  title={!isFormValid() ? "Please fill in all required fields" : "Send request"}
+                  disabled={isLoading || isUploading}
+                  className={`w-full sm:w-auto order-1 sm:order-3 h-10 sm:h-11 text-sm font-bold shadow-lg hover:shadow-2xl hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none disabled:hover:scale-100 focus:ring-4 focus:ring-primary/30 transition-all duration-200 ${isFormValid()
+                      ? "bg-gradient-to-r from-primary to-primary/90 hover:from-primary/90 hover:to-primary"
+                      : "bg-destructive text-destructive-foreground hover:bg-destructive/90 ring-destructive/20"
+                    }`}
+                  title="Send request"
                 >
                   {isLoading || isUploading ? (
                     <span className="flex items-center gap-2">
@@ -2286,6 +2316,12 @@ export function MaterialRequestForm({
         onOpenChange={(open) => setCameraOpen({ itemId: "", open })}
         onCapture={handleCameraCapture}
         multiple={true}
+      />
+
+      <ItemInfoDialog
+        open={!!expandedItemName}
+        onOpenChange={(open) => !open && setExpandedItemName(null)}
+        itemName={expandedItemName}
       />
     </>
   );

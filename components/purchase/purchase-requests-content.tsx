@@ -6,7 +6,7 @@
  * Client component for purchase officer to view and manage requests.
  */
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useQuery, useMutation, useConvex } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -34,6 +34,8 @@ import { CheckDialog } from "./check-dialog";
 import { useViewMode } from "@/hooks/use-view-mode";
 import { RequestsTable } from "@/components/requests/requests-table";
 import { PDFPreviewDialog } from "./pdf-preview-dialog";
+import { PaginationControls } from "@/components/ui/pagination-controls";
+import { Table2, X } from "lucide-react";
 
 // Enhanced status configuration with better visual hierarchy
 const statusConfig: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline"; icon: any; color: string }> = {
@@ -55,7 +57,23 @@ const statusConfig: Record<string, { label: string; variant: "default" | "second
   delivered: { label: "Delivered", variant: "secondary", icon: CheckCircle, color: "green" },
 };
 
+
+
+// Color mapping for filter items
+const colorMap: Record<string, { checkboxActive: string; checkboxBorder: string; text: string; bgHover: string }> = {
+  gray: { checkboxActive: "bg-slate-500 border-slate-500 text-white", checkboxBorder: "border-slate-400", text: "text-slate-700 dark:text-slate-300", bgHover: "data-[selected=true]:bg-slate-100 dark:data-[selected=true]:bg-slate-800" },
+  yellow: { checkboxActive: "bg-yellow-500 border-yellow-500 text-white", checkboxBorder: "border-yellow-500", text: "text-yellow-700 dark:text-yellow-400", bgHover: "data-[selected=true]:bg-yellow-50 dark:data-[selected=true]:bg-yellow-900/20" },
+  red: { checkboxActive: "bg-red-600 border-red-600 text-white", checkboxBorder: "border-red-500", text: "text-red-700 dark:text-red-400", bgHover: "data-[selected=true]:bg-red-50 dark:data-[selected=true]:bg-red-900/20" },
+  orange: { checkboxActive: "bg-orange-500 border-orange-500 text-white", checkboxBorder: "border-orange-500", text: "text-orange-700 dark:text-orange-400", bgHover: "data-[selected=true]:bg-orange-50 dark:data-[selected=true]:bg-orange-900/20" },
+  blue: { checkboxActive: "bg-blue-500 border-blue-500 text-white", checkboxBorder: "border-blue-500", text: "text-blue-700 dark:text-blue-400", bgHover: "data-[selected=true]:bg-blue-50 dark:data-[selected=true]:bg-blue-900/20" },
+  amber: { checkboxActive: "bg-amber-500 border-amber-500 text-white", checkboxBorder: "border-amber-500", text: "text-amber-700 dark:text-amber-400", bgHover: "data-[selected=true]:bg-amber-50 dark:data-[selected=true]:bg-amber-900/20" },
+  emerald: { checkboxActive: "bg-emerald-500 border-emerald-500 text-white", checkboxBorder: "border-emerald-500", text: "text-emerald-700 dark:text-emerald-400", bgHover: "data-[selected=true]:bg-emerald-50 dark:data-[selected=true]:bg-emerald-900/20" },
+  indigo: { checkboxActive: "bg-indigo-500 border-indigo-500 text-white", checkboxBorder: "border-indigo-500", text: "text-indigo-700 dark:text-indigo-400", bgHover: "data-[selected=true]:bg-indigo-50 dark:data-[selected=true]:bg-indigo-900/20" },
+  green: { checkboxActive: "bg-green-600 border-green-600 text-white", checkboxBorder: "border-green-600", text: "text-green-700 dark:text-green-400", bgHover: "data-[selected=true]:bg-green-50 dark:data-[selected=true]:bg-green-900/20" },
+};
+
 export function PurchaseRequestsContent() {
+
   const [selectedRequestId, setSelectedRequestId] = useState<Id<"requests"> | null>(null);
   const [ccRequestId, setCCRequestId] = useState<Id<"requests"> | null>(null);
   const [checkRequestId, setCheckRequestId] = useState<Id<"requests"> | null>(null);
@@ -67,6 +85,35 @@ export function PurchaseRequestsContent() {
   const [showDirectPODialog, setShowDirectPODialog] = useState(false);
   const [directPOInitialData, setDirectPOInitialData] = useState<DirectPOInitialData | null>(null);
   const [pdfPreviewPoNumber, setPdfPreviewPoNumber] = useState<string | null>(null);
+
+  // Pagination State
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('purchaseRequestsPageSize');
+      return saved ? Number(saved) : 10;
+    }
+    return 10;
+  });
+
+  // Save page size
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('purchaseRequestsPageSize', pageSize.toString());
+    }
+  }, [pageSize]);
+
+  // Reset page on filter change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, filterStatus.length, viewMode]);
+
+  // Debounced search (optional but good for consistency)
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState(searchQuery);
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearchQuery(searchQuery), 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
 
   const allRequests = useQuery(api.requests.getPurchaseRequestsByStatus, {});
   const vendors = useQuery(api.vendors.getAllVendors);
@@ -133,7 +180,18 @@ export function PurchaseRequestsContent() {
       });
 
     return groupedRequestsArray;
-  }, [allRequests, filterStatus, searchQuery]);
+  }, [allRequests, filterStatus, debouncedSearchQuery]);
+
+  // Pagination Logic
+  const totalItems = filteredRequestGroups.length;
+  const totalPages = Math.ceil(totalItems / pageSize);
+
+  const paginatedGroups = filteredRequestGroups.slice(
+    (currentPage - 1) * pageSize,
+    currentPage * pageSize
+  );
+
+  const paginatedRequests = paginatedGroups.flatMap(group => group.items);
 
   const directToPO = useMutation(api.requests.directToPO);
   const updatePurchaseStatus = useMutation(api.requests.updatePurchaseRequestStatus);
@@ -355,174 +413,182 @@ export function PurchaseRequestsContent() {
     setShowDirectPODialog(true);
   };
 
-
   return (
     <>
       <div className="space-y-6">
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div>
-            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">Purchase Requests</h1>
-            <p className="text-sm text-muted-foreground mt-1">
-              Manage and process material purchase requests
-            </p>
+
+
+        {/* Controls: Search, View, Filter, Actions */}
+        <div className="space-y-3 sm:space-y-4 mb-4 sm:mb-6">
+          {/* Row 1: Search and View Toggle */}
+          <div className="flex gap-2">
+            <div className="relative flex-1 min-w-0">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search by request number, item, site, or requester..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className={`pl-9 pr-9 h-9 sm:h-10 text-base w-full ${searchQuery.trim() ? 'ring-2 ring-blue-500/50 border-blue-500' : ''}`}
+              />
+              {searchQuery && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setSearchQuery("")}
+                  className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 p-0 hover:bg-muted"
+                  title="Clear search"
+                >
+                  <X className="h-3 w-3" />
+                </Button>
+              )}
+            </div>
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={toggleViewMode}
+              className="h-9 sm:h-10 w-9 sm:w-10 flex-shrink-0"
+              title={`Switch to ${viewMode === "card" ? "table" : "card"} view`}
+            >
+              {viewMode === "card" ? (
+                <Table2 className="h-4 w-4" />
+              ) : (
+                <LayoutGrid className="h-4 w-4" />
+              )}
+            </Button>
           </div>
-          <Button
-            onClick={() => setShowDirectPODialog(true)}
-            className="bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white shadow-lg hover:shadow-xl transition-all duration-200"
-          >
-            <Zap className="h-4 w-4 mr-2" />
-            Create Direct PO
-          </Button>
-        </div>
 
-        {/* Search and Controls */}
-        <Card>
-          <CardContent className="pt-6">
-            <div className="flex flex-col gap-4">
-              <div className="flex flex-col sm:flex-row gap-4">
-                <div className="flex-1 relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
-                  <Input
-                    placeholder="Search by request number, item, site, or requester..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="pl-10"
-                  />
-                </div>
-
-                {/* Status Filter */}
-                <div className="w-full sm:w-[250px]">
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant="outline"
-                        role="combobox"
-                        className="w-full justify-between"
-                      >
-                        {filterStatus.length > 0
-                          ? `${filterStatus.length} selected`
-                          : "Filter by status"}
-                        <Filter className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-[400px] p-0" align="start">
-                      <Command>
-                        <CommandInput placeholder="Search status..." />
-                        <CommandList className="max-h-[600px] overflow-y-auto">
-                          <CommandEmpty>No status found.</CommandEmpty>
+          {/* Row 2: Status Filter and Action Buttons */}
+          <div className="flex gap-2 items-center">
+            {/* Status Filter */}
+            <div className="flex-1 sm:flex-none sm:w-[250px]">
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    className="w-full justify-between h-9 sm:h-10"
+                  >
+                    {filterStatus.length > 0
+                      ? `${filterStatus.length} selected`
+                      : "Filter by status"}
+                    <Filter className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[400px] p-0" align="start">
+                  <Command>
+                    <CommandInput placeholder="Search status..." />
+                    <CommandList className="max-h-[600px] overflow-y-auto">
+                      <CommandEmpty>No status found.</CommandEmpty>
+                      <CommandGroup>
+                        <CommandItem
+                          onSelect={() => setFilterStatus([])}
+                          className="font-medium h-auto py-3 items-start"
+                        >
+                          <div
+                            className={cn(
+                              "mr-2 flex h-4 w-4 shrink-0 items-center justify-center rounded-sm border border-primary mt-0.5",
+                              filterStatus.length === 0
+                                ? "bg-primary text-primary-foreground"
+                                : "opacity-50 [&_svg]:invisible"
+                            )}
+                          >
+                            <Check className={cn("h-4 w-4")} />
+                          </div>
+                          <span className="flex-1 whitespace-normal break-words leading-tight">All Statuses</span>
+                        </CommandItem>
+                        {/* Draft (My Drafts) Special Case */}
+                        <CommandItem
+                          onSelect={() => {
+                            setFilterStatus((prev) =>
+                              prev.includes("draft")
+                                ? prev.filter((s) => s !== "draft")
+                                : [...prev, "draft"]
+                            );
+                          }}
+                          className={cn("h-auto py-3 items-start", colorMap.gray.bgHover)}
+                        >
+                          <div
+                            className={cn(
+                              "mr-2 flex h-4 w-4 shrink-0 items-center justify-center rounded-sm border mt-0.5",
+                              filterStatus.includes("draft")
+                                ? colorMap.gray.checkboxActive
+                                : cn(colorMap.gray.checkboxBorder, "opacity-50 [&_svg]:invisible")
+                            )}
+                          >
+                            <Check className={cn("h-4 w-4")} />
+                          </div>
+                          <span className={cn("flex-1 whitespace-normal break-words leading-tight", colorMap.gray.text)}>Draft (My Drafts)</span>
+                        </CommandItem>
+                        {Object.entries(statusConfig)
+                          .filter(([key]) => key !== "draft" && key !== "delivery_stage")
+                          .map(([key, config]) => (
+                            <CommandItem
+                              key={key}
+                              onSelect={() => {
+                                setFilterStatus((prev) =>
+                                  prev.includes(key)
+                                    ? prev.filter((s) => s !== key)
+                                    : [...prev, key]
+                                );
+                              }}
+                              className={cn("h-auto py-3 items-start", (colorMap[config.color] || colorMap.gray).bgHover)}
+                            >
+                              <div
+                                className={cn(
+                                  "mr-2 flex h-4 w-4 shrink-0 items-center justify-center rounded-sm border mt-0.5",
+                                  filterStatus.includes(key)
+                                    ? (colorMap[config.color] || colorMap.gray).checkboxActive
+                                    : cn((colorMap[config.color] || colorMap.gray).checkboxBorder, "opacity-50 [&_svg]:invisible")
+                                )}
+                              >
+                                <Check className={cn("h-4 w-4")} />
+                              </div>
+                              <span className={cn("flex-1 whitespace-normal break-words leading-tight", (colorMap[config.color] || colorMap.gray).text)}>{config.label}</span>
+                            </CommandItem>
+                          ))}
+                      </CommandGroup>
+                      {filterStatus.length > 0 && (
+                        <>
+                          <CommandSeparator />
                           <CommandGroup>
                             <CommandItem
                               onSelect={() => setFilterStatus([])}
-                              className="font-medium h-auto py-3 items-start"
+                              className="justify-center text-center"
                             >
-                              <div
-                                className={cn(
-                                  "mr-2 flex h-4 w-4 shrink-0 items-center justify-center rounded-sm border border-primary mt-0.5",
-                                  filterStatus.length === 0
-                                    ? "bg-primary text-primary-foreground"
-                                    : "opacity-50 [&_svg]:invisible"
-                                )}
-                              >
-                                <Check className={cn("h-4 w-4")} />
-                              </div>
-                              <span className="flex-1 whitespace-normal break-words leading-tight">All Statuses</span>
+                              Clear filters
                             </CommandItem>
-                            {/* Draft (My Drafts) Special Case */}
-                            <CommandItem
-                              onSelect={() => {
-                                setFilterStatus((prev) =>
-                                  prev.includes("draft")
-                                    ? prev.filter((s) => s !== "draft")
-                                    : [...prev, "draft"]
-                                );
-                              }}
-                              className="h-auto py-3 items-start"
-                            >
-                              <div
-                                className={cn(
-                                  "mr-2 flex h-4 w-4 shrink-0 items-center justify-center rounded-sm border border-primary mt-0.5",
-                                  filterStatus.includes("draft")
-                                    ? "bg-primary text-primary-foreground"
-                                    : "opacity-50 [&_svg]:invisible"
-                                )}
-                              >
-                                <Check className={cn("h-4 w-4")} />
-                              </div>
-                              <span className="flex-1 whitespace-normal break-words leading-tight">Draft (My Drafts)</span>
-                            </CommandItem>
-                            {Object.entries(statusConfig)
-                              .filter(([key]) => key !== "draft" && key !== "delivery_stage") // Already handled above
-                              .map(([key, config]) => (
-                                <CommandItem
-                                  key={key}
-                                  onSelect={() => {
-                                    setFilterStatus((prev) =>
-                                      prev.includes(key)
-                                        ? prev.filter((s) => s !== key)
-                                        : [...prev, key]
-                                    );
-                                  }}
-                                  className="h-auto py-3 items-start"
-                                >
-                                  <div
-                                    className={cn(
-                                      "mr-2 flex h-4 w-4 shrink-0 items-center justify-center rounded-sm border border-primary mt-0.5",
-                                      filterStatus.includes(key)
-                                        ? "bg-primary text-primary-foreground"
-                                        : "opacity-50 [&_svg]:invisible"
-                                    )}
-                                  >
-                                    <Check className={cn("h-4 w-4")} />
-                                  </div>
-                                  <span className="flex-1 whitespace-normal break-words leading-tight">{config.label}</span>
-                                </CommandItem>
-                              ))}
                           </CommandGroup>
-                          {filterStatus.length > 0 && (
-                            <>
-                              <CommandSeparator />
-                              <CommandGroup>
-                                <CommandItem
-                                  onSelect={() => setFilterStatus([])}
-                                  className="justify-center text-center"
-                                >
-                                  Clear filters
-                                </CommandItem>
-                              </CommandGroup>
-                            </>
-                          )}
-                        </CommandList>
-                      </Command>
-                    </PopoverContent>
-                  </Popover>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium text-muted-foreground hidden sm:inline mr-2">View:</span>
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={toggleViewMode}
-                    className="h-8 w-8"
-                    title={viewMode === "card" ? "Show Table" : "Show Cards"}
-                  >
-                    {viewMode === "card" ? (
-                      <TableIcon className="h-4 w-4" />
-                    ) : (
-                      <LayoutGrid className="h-4 w-4" />
-                    )}
-                  </Button>
-                </div>
-              </div>
-              <div className="flex items-center justify-between">
-                <div className="text-sm text-muted-foreground">
-                  {filteredRequestGroups.length} {filteredRequestGroups.length === 1 ? 'request' : 'requests'} found
-                </div>
-              </div>
+                        </>
+                      )}
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
             </div>
-          </CardContent>
-        </Card>
+
+            <Button
+              onClick={() => setShowDirectPODialog(true)}
+              className="bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white shadow-lg hover:shadow-xl transition-all duration-200 h-9 sm:h-10 ml-auto"
+            >
+              <Zap className="h-4 w-4 mr-2" />
+              Create Direct PO
+            </Button>
+          </div>
+        </div>
+
+        {/* Pagination - Top */}
+        <div className="mb-3">
+          <PaginationControls
+            currentPage={currentPage}
+            totalPages={totalPages}
+            onPageChange={setCurrentPage}
+            pageSize={pageSize}
+            onPageSizeChange={setPageSize}
+            totalItems={totalItems}
+            pageSizeOptions={[10, 25, 50, 100]}
+            itemCount={paginatedRequests.length}
+          />
+        </div>
 
         {/* Requests Display */}
         {filteredRequestGroups.length === 0 ? (
@@ -546,17 +612,20 @@ export function PurchaseRequestsContent() {
           </Card>
         ) : viewMode === "table" ? (
           <RequestsTable
-            requests={filteredRequestGroups.flatMap(group => group.items) as any}
+            requests={paginatedRequests as any}
             viewMode="table"
             onViewDetails={setSelectedRequestId}
             onOpenCC={(requestId, requestIds) => setCCRequestId(requestId)}
             onDirectPO={handleDirectPO}
             onDirectDelivery={handleDirectDelivery}
+            onCheck={handleCheck}
+            onCreatePO={handleCreatePO}
+            onMoveToCC={handleMoveToCC}
             showCreator={true}
           />
         ) : (
-          <div className="space-y-4">
-            {filteredRequestGroups.map((group) => {
+          <div className="space-y-8">
+            {paginatedGroups.map((group) => {
               const { requestNumber, items, firstItem } = group;
               const hasMultipleItems = items.length > 1;
 
@@ -597,6 +666,20 @@ export function PurchaseRequestsContent() {
             })}
           </div>
         )}
+
+        {/* Pagination - Bottom */}
+        <div className="mt-4 border-t pt-4">
+          <PaginationControls
+            currentPage={currentPage}
+            totalPages={totalPages}
+            onPageChange={setCurrentPage}
+            pageSize={pageSize}
+            onPageSizeChange={setPageSize}
+            totalItems={totalItems}
+            pageSizeOptions={[10, 25, 50, 100]}
+            itemCount={paginatedRequests.length}
+          />
+        </div>
       </div>
 
       {/* Dialogs */}
@@ -663,4 +746,5 @@ export function PurchaseRequestsContent() {
     </>
   );
 }
+
 

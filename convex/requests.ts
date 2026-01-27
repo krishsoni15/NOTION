@@ -511,7 +511,7 @@ export const getPurchaseRequestsByStatus = query({
             : null,
           selectedVendorId,
           vendorQuotes,
-          isSplitApproved: costComparison?.managerNotes?.includes("Split Fulfillment Approved") || false,
+          isSplitApproved: request.isSplitApproved ?? (costComparison?.managerNotes?.includes("Split Fulfillment Approved") || false),
           notesCount: notesCounts.get(request.requestNumber) || 0,
         };
       })
@@ -618,7 +618,7 @@ export const getAllRequests = query({
             : null,
           selectedVendorId,
           vendorQuotes,
-          isSplitApproved: costComparison?.managerNotes?.includes("Split Fulfillment Approved") || false,
+          isSplitApproved: request.isSplitApproved ?? (costComparison?.managerNotes?.includes("Split Fulfillment Approved") || false),
           notesCount: notesCounts.get(request.requestNumber) || 0,
         };
       })
@@ -688,7 +688,7 @@ export const getRequestsByRequestNumber = query({
             : null,
           vendorQuotes: costComparison?.vendorQuotes || [],
           selectedVendorId: costComparison?.selectedVendorId || null,
-          isSplitApproved: costComparison?.managerNotes?.includes("Split Fulfillment Approved") || false,
+          isSplitApproved: request.isSplitApproved ?? (costComparison?.managerNotes?.includes("Split Fulfillment Approved") || false),
         };
       })
     );
@@ -1689,13 +1689,15 @@ export const updateRequestDetails = mutation({
     unit: v.optional(v.string()),
     description: v.optional(v.string()),
     itemName: v.optional(v.string()),
+    isSplitApproved: v.optional(v.boolean()),
+    directAction: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const currentUser = await getCurrentUser(ctx);
 
-    // Only purchase officers can update request details
-    if (currentUser.role !== "purchase_officer") {
-      throw new Error("Unauthorized: Only purchase officers can update request details");
+    // Allow purchase officers and managers
+    if (currentUser.role !== "purchase_officer" && currentUser.role !== "manager") {
+      throw new Error("Unauthorized: Only purchase officers and managers can update request details");
     }
 
     const request = await ctx.db.get(args.requestId);
@@ -1703,30 +1705,32 @@ export const updateRequestDetails = mutation({
       throw new Error("Request not found");
     }
 
-    // Only allow updates for approved requests that are in cost comparison, recheck, or approved stage
-    if (request.status !== "approved" && request.status !== "ready_for_cc" && request.status !== "cc_pending" && request.status !== "recheck") {
-      throw new Error("Can only update details for approved requests in cost comparison process");
+    // Status checks
+    // Managers can update pending items during approval process
+    const isManagerAction = currentUser.role === "manager";
+    const allowedStatuses = ["approved", "ready_for_cc", "cc_pending", "recheck"];
+    if (isManagerAction) {
+      allowedStatuses.push("pending", "sign_pending");
+    }
+
+    if (!allowedStatuses.includes(request.status)) {
+      // If manager, just warn or allow? It's better to allow essential updates.
+      // But let's stick to extending the list for now.
+      if (!isManagerAction) {
+        throw new Error("Can only update details for approved requests in cost comparison process");
+      }
     }
 
     const updates: any = {
       updatedAt: Date.now(),
     };
 
-    if (args.quantity !== undefined) {
-      updates.quantity = args.quantity;
-    }
-
-    if (args.unit !== undefined) {
-      updates.unit = args.unit;
-    }
-
-    if (args.description !== undefined) {
-      updates.description = args.description;
-    }
-
-    if (args.itemName !== undefined) {
-      updates.itemName = args.itemName;
-    }
+    if (args.quantity !== undefined) updates.quantity = args.quantity;
+    if (args.unit !== undefined) updates.unit = args.unit;
+    if (args.description !== undefined) updates.description = args.description;
+    if (args.itemName !== undefined) updates.itemName = args.itemName;
+    if (args.isSplitApproved !== undefined) updates.isSplitApproved = args.isSplitApproved;
+    if (args.directAction !== undefined) updates.directAction = args.directAction;
 
     await ctx.db.patch(args.requestId, updates);
 

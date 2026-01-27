@@ -1038,7 +1038,7 @@ export function CheckDialog({
                                         </div>
                                         <Button
                                             onClick={() => setShowDirectDeliveryConfirm(true)}
-                                            className="bg-green-600 hover:bg-green-700 text-white"
+                                            className="bg-green-600 hover:bg-green-700 text-white shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200"
                                             size="sm"
                                             disabled={isEditingItem}
                                         >
@@ -1160,7 +1160,7 @@ export function CheckDialog({
                                                                 }}
                                                                 size="sm"
                                                                 disabled={isEditingItem}
-                                                                className="w-full h-7 bg-emerald-600 hover:bg-emerald-700 text-white text-xs"
+                                                                className="w-full h-7 bg-emerald-600 hover:bg-emerald-700 text-white text-xs shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200"
                                                                 title="Create Direct PO for this quantity"
                                                             >
                                                                 <ShoppingCart className="h-3 w-3 mr-1.5" />
@@ -1174,7 +1174,7 @@ export function CheckDialog({
                                                                 }}
                                                                 size="sm"
                                                                 disabled={isEditingItem}
-                                                                className="w-full h-7 bg-blue-600 hover:bg-blue-700 text-white text-xs"
+                                                                className="w-full h-7 bg-blue-600 hover:bg-blue-700 text-white text-xs shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200"
                                                                 title="Send this quantity for Cost Comparison"
                                                             >
                                                                 <FileText className="h-3 w-3 mr-1.5" />
@@ -1190,7 +1190,7 @@ export function CheckDialog({
                                                             }}
                                                             size="sm"
                                                             disabled={isEditingItem}
-                                                            className="w-full h-7 bg-blue-600 hover:bg-blue-700 text-white text-xs"
+                                                            className="w-full h-7 bg-blue-600 hover:bg-blue-700 text-white text-xs shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200"
                                                             title="Send this quantity for Cost Comparison"
                                                         >
                                                             <FileText className="h-3 w-3 mr-1.5" />
@@ -1208,7 +1208,7 @@ export function CheckDialog({
 
                                             <Button
                                                 onClick={() => setShowSplitApproveConfirm(true)}
-                                                className="w-full h-10 bg-blue-600 hover:bg-blue-700 text-white shadow-sm transition-all"
+                                                className="w-full h-10 bg-blue-600 hover:bg-blue-700 text-white shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200"
                                             >
                                                 <CheckCircle className="h-4 w-4 mr-2" />
                                                 Confirm Split & Approve
@@ -1409,12 +1409,12 @@ export function CheckDialog({
                                             Save
                                         </Button>
 
-                                        {request?.directAction === "po" && (
+                                        {(request?.directAction === "po" || request?.directAction === "all") && (
                                             <Button
                                                 onClick={() => setShowDirectPOConfirm(true)}
                                                 disabled={isSaving || isSubmitting || (quantityFromInventory > 0 && quantityToBuy > 0)}
                                                 size="sm"
-                                                className="bg-emerald-600 hover:bg-emerald-700 text-white"
+                                                className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200"
                                             >
                                                 <ShoppingCart className="h-3.5 w-3.5 mr-1.5" />
                                                 Direct PO
@@ -1422,9 +1422,9 @@ export function CheckDialog({
                                         )}
                                         <Button
                                             onClick={() => setShowSaveConfirm(true)}
-                                            disabled={isSaving || isSubmitting || !!hasSufficientInventory}
+                                            disabled={isSaving || isSubmitting}
                                             size="sm"
-                                            className="bg-blue-600 hover:bg-blue-700 text-white"
+                                            className="bg-blue-600 hover:bg-blue-700 text-white shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200"
                                         >
                                             <CheckCircle className="h-3.5 w-3.5 mr-1.5" />
                                             Ready for CC

@@ -119,6 +119,7 @@ export function RequestDetailsDialog({
   };
   const updateStatus = useMutation(api.requests.updateRequestStatus);
   const bulkUpdateStatus = useMutation(api.requests.bulkUpdateRequestStatus);
+  const updateRequestDetails = useMutation(api.requests.updateRequestDetails);
   const markDelivery = useMutation(api.requests.markDelivery);
   const upsertCC = useMutation(api.costComparisons.upsertCostComparison);
   const approveSplit = useMutation(api.costComparisons.approveSplitFulfillment);
@@ -153,6 +154,7 @@ export function RequestDetailsDialog({
   const [editQuantityItem, setEditQuantityItem] = useState<{ id: Id<"requests">; quantity: number; name: string; unit: string } | null>(null);
   const [viewMode, setViewMode] = useState<"table" | "card">("table");
   const hasRefreshedRef = useRef(false);
+  const [isExpanded, setIsExpanded] = useState(false);
 
   // PO Creation
   const [showDirectPODialog, setShowDirectPODialog] = useState(false);
@@ -680,7 +682,7 @@ export function RequestDetailsDialog({
       setItemRejectionReasons({});
       setSelectedItemsForAction(new Set());
       setShowBatchProcessDialog(false);
-      closeAndRefresh();
+      // Keep dialog open as requested
     } catch (error: any) {
       toast.error(error.message || "Failed to process items");
     } finally {
@@ -698,7 +700,7 @@ export function RequestDetailsDialog({
         status: "approved",
       });
       toast.success("Request approved successfully");
-      closeAndRefresh();
+      // Keep dialog open
     } catch (error: any) {
       toast.error(error.message || "Failed to approve request");
     } finally {
@@ -740,9 +742,9 @@ export function RequestDetailsDialog({
         rejectionReason: rejectionReason.trim(),
       });
       toast.success("Request rejected");
-      onOpenChange(false);
       setRejectionReason("");
       setShowRejectionInput(false);
+      // Keep dialog open
     } catch (error: any) {
       toast.error(error.message || "Failed to reject request");
     } finally {
@@ -786,11 +788,10 @@ export function RequestDetailsDialog({
       const promises = [];
 
       // Group items by their INTENT
-      const directPOIds: Id<"requests">[] = [];
-      const directDeliveryIds: Id<"requests">[] = [];
       const standardApproveIds: Id<"requests">[] = [];
       const signApproveIds: Id<"requests">[] = [];
-      const splitIds: Id<"requests">[] = [];
+      const specialHandlingIds: Id<"requests">[] = [];
+      const specialHandlingUpdates: Promise<any>[] = [];
 
       itemsToProcess.forEach(id => {
         const item = allRequests?.find(r => r._id === id);
@@ -805,12 +806,26 @@ export function RequestDetailsDialog({
         // For pending items, check the USER INTENT
         const intents = itemIntents[id] || [];
 
-        if (intents.includes("split") || (intents.includes("direct_po") && intents.includes("direct_delivery"))) {
-          splitIds.push(id);
-        } else if (intents.includes("direct_po")) {
-          directPOIds.push(id);
-        } else if (intents.includes("direct_delivery")) {
-          directDeliveryIds.push(id);
+        if (intents.length > 0) {
+          specialHandlingIds.push(id);
+
+          // Prepare detail updates
+          const isSplit = intents.includes("split");
+          let directAction: string | undefined = undefined;
+
+          if (intents.includes("direct_delivery") && intents.includes("direct_po")) {
+            directAction = "all";
+          } else if (intents.includes("direct_delivery")) {
+            directAction = "delivery";
+          } else if (intents.includes("direct_po")) {
+            directAction = "po";
+          }
+
+          specialHandlingUpdates.push(updateRequestDetails({
+            requestId: id,
+            isSplitApproved: isSplit ? true : undefined,
+            directAction: directAction
+          }));
         } else {
           // Default/Null intent -> Standard Approval (Ready for CC)
           standardApproveIds.push(id);
@@ -822,19 +837,16 @@ export function RequestDetailsDialog({
         promises.push(Promise.all(signApproveIds.map(id => approveDirectPO({ requestId: id as Id<"requests"> }))));
       }
 
-      if (directPOIds.length > 0) {
-        promises.push(bulkUpdateStatus({
-          requestIds: directPOIds,
-          status: "direct_po",
-        }));
-      }
+      // Handle Special Intents (Update Details + Move to Recheck)
+      if (specialHandlingIds.length > 0) {
+        // First update the details (flags)
+        await Promise.all(specialHandlingUpdates);
 
-      if (directDeliveryIds.length > 0) {
-        // Direct Delivery usually maps to 'delivery_stage' or 'ready_for_delivery'
-        // Assuming 'delivery_stage' as per previous logic in direct delivery handler
+        // Then move to approved status. Use approved so it doesn't look like a rejection/recheck logic.
+        // The PurchaseRequestGroupCard has been updated to show action buttons for 'approved' status items too.
         promises.push(bulkUpdateStatus({
-          requestIds: directDeliveryIds,
-          status: "delivery_stage",
+          requestIds: specialHandlingIds,
+          status: "approved",
         }));
       }
 
@@ -845,24 +857,11 @@ export function RequestDetailsDialog({
         }));
       }
 
-      // Handle Split?
-      if (splitIds.length > 0) {
-        // For now, maybe just mark them for Recheck so user can process them? 
-        // Or leave them as pending? 
-        // User requested selection based logic. If split is selected, we likely can't "Approve" in bulk 
-        // without parameters. Marking them as 'recheck' seems safest to flag for manual intervention.
-        promises.push(bulkUpdateStatus({
-          requestIds: splitIds,
-          status: "recheck",
-        }));
-        toast.info(`${splitIds.length} items marked for Recheck/Split processing.`);
-      }
-
       await Promise.all(promises);
       toast.success(`${itemsToProcess.length} items processed based on selection`);
       setSelectedItemsForAction(new Set());
-      setItemIntents({}); // Reset intents
-      closeAndRefresh();
+      setItemIntents({}); // Reset intents // Keep dialog open
+      setShowSignPendingApproveConfirm(null); // Close the confirmation modal
     } catch (error: any) {
       toast.error(error.message || "Failed to approve items");
     } finally {
@@ -1010,7 +1009,7 @@ export function RequestDetailsDialog({
 
     return (
       <div className={cn("flex w-full items-center", !isCard && "max-w-[420px] ml-auto gap-3")}>
-        {!isCard && <span className="text-[10px] font-black uppercase text-muted-foreground tracking-widest min-w-fit">Fulfillment:</span>}
+
         <div className={cn(
           "flex items-center border rounded-xl bg-background dark:bg-slate-950 transition-all h-10 divide-x divide-border/20 overflow-hidden w-full",
           getSegmentBorder(),
@@ -1545,239 +1544,254 @@ export function RequestDetailsDialog({
                             </TableRow>
                           </TableHeader>
                           <TableBody>
-                            {(allRequests || [])
-                              .sort((a, b) => {
+                            {(() => {
+                              const sortedItems = (allRequests || []).sort((a, b) => {
                                 const orderA = a.itemOrder ?? a.createdAt;
                                 const orderB = b.itemOrder ?? b.createdAt;
                                 return orderA - orderB;
-                              })
-                              .map((item, idx) => {
-                                const isPending = item.status === "pending";
-                                const displayNumber = item.itemOrder ?? idx + 1;
-                                const isSelected = selectedItemsForAction.has(item._id);
-                                const itemPhotos = getItemPhotos(item);
+                              });
 
-                                return (
-                                  <Fragment key={item._id}>
-                                    <TableRow
-                                      className={cn(
-                                        "cursor-pointer transition-all relative h-[80px]",
-                                        getStatusBgTint(item.status),
-                                        "hover:brightness-[0.98] dark:hover:brightness-110",
-                                        getStatusBorderClass(item.status),
-                                        // Left Border Only - Color Inherited
-                                        "[&>td:first-child]:border-l-[6px] [&>td:first-child]:border-l-[color:inherit]",
-                                        // Top/Bottom/Right - Neutral/Transparent
-                                        "[&>td]:border-y [&>td]:border-r-0 [&>td]:border-border/30",
-                                        "[&>td:last-child]:border-r",
-                                        "rounded-lg border-separate",
-                                        "hover:shadow-md shadow-sm",
-                                        isSelected && "ring-4 ring-primary/20 bg-primary/5"
-                                      )}
-                                      onClick={(e) => e.stopPropagation()}
-                                    >
-                                      {/* Selection Checkbox */}
-                                      <TableCell className="p-2 text-center w-[45px] relative rounded-l-lg overflow-hidden">
-                                        <div className="flex items-center justify-center h-full w-full">
-                                          {isManager && isPending && (
-                                            <Checkbox
-                                              checked={isSelected}
-                                              onCheckedChange={() => toggleItemSelection(item._id)}
-                                              className="h-4 w-4 relative z-10"
-                                            />
+                              const visibleItems = sortedItems;
+                              const remainingCount = sortedItems.length - 1;
+
+                              return (
+                                <>
+                                  {visibleItems.map((item, idx) => {
+                                    const isPending = item.status === "pending";
+                                    const displayNumber = item.itemOrder ?? idx + 1;
+                                    const isSelected = selectedItemsForAction.has(item._id);
+                                    const itemPhotos = getItemPhotos(item);
+
+                                    return (
+                                      <Fragment key={item._id}>
+                                        <TableRow
+                                          className={cn(
+                                            "cursor-pointer transition-all relative h-[80px]",
+                                            getStatusBgTint(item.status),
+                                            "hover:brightness-[0.98] dark:hover:brightness-110",
+                                            getStatusBorderClass(item.status),
+                                            // Left Border Only - Color Inherited
+                                            "[&>td:first-child]:border-l-[6px] [&>td:first-child]:border-l-[color:inherit]",
+                                            // Top/Bottom/Right - Neutral/Transparent
+                                            "[&>td]:border-y [&>td]:border-r-0 [&>td]:border-border/30",
+                                            "[&>td:last-child]:border-r",
+                                            "rounded-lg border-separate",
+                                            "hover:shadow-md shadow-sm",
+                                            isSelected && "ring-4 ring-primary/20 bg-primary/5"
                                           )}
-                                        </div>
-                                      </TableCell>
+                                          onClick={(e) => e.stopPropagation()}
+                                        >
+                                          {/* Selection Checkbox */}
+                                          <TableCell className="p-2 text-center w-[45px] relative rounded-l-lg overflow-hidden">
+                                            <div className="flex items-center justify-center h-full w-full">
+                                              {isManager && isPending && (
+                                                <Checkbox
+                                                  checked={isSelected}
+                                                  onCheckedChange={() => toggleItemSelection(item._id)}
+                                                  className="h-4 w-4 relative z-10"
+                                                />
+                                              )}
+                                            </div>
+                                          </TableCell>
 
-                                      <TableCell className="py-3">
-                                        <div className="flex items-start gap-4">
-                                          <div className="flex-shrink-0 mt-0.5" onClick={(e) => e.stopPropagation()}>
-                                            {itemPhotos.length > 0 ? (
-                                              <CompactImageGallery
-                                                images={itemPhotos}
-                                                maxDisplay={1}
-                                                size="sm"
-                                              />
-                                            ) : (
-                                              <div className="w-10 h-10 rounded-md bg-muted/30 border border-dashed border-border/60 flex items-center justify-center">
-                                                <span className="text-[8px] font-medium text-muted-foreground/60 italic">No Img</span>
-                                              </div>
-                                            )}
-                                          </div>
-                                          <div className="space-y-1.5 min-w-0">
-                                            <div className="flex items-start gap-2">
-                                              <span className="bg-primary/10 text-primary text-[10px] font-black font-mono px-1.5 py-0.5 rounded border border-primary/20 shadow-sm shrink-0 mt-0.5">
+                                          <TableCell className="py-3">
+                                            <div className="flex items-start gap-3">
+                                              <span className="bg-primary/10 text-primary text-[10px] font-black font-mono px-1.5 py-0.5 rounded border border-primary/20 shadow-sm shrink-0 mt-2">
                                                 #{idx + 1}
                                               </span>
-                                              <button
-                                                onClick={(e) => {
-                                                  e.stopPropagation();
-                                                  setSelectedItemName(item.itemName);
-                                                }}
-                                                className="font-semibold text-base text-left hover:text-primary dark:hover:text-primary transition-colors focus:outline-none leading-tight"
-                                              >
-                                                {item.itemName}
-                                              </button>
-                                            </div>
-                                            {item.description ? (
-                                              <div className="w-full text-sm text-muted-foreground mt-0.5">
-                                                <ExpandableText text={item.description} className="text-sm text-muted-foreground" limit={60} />
-                                              </div>
-                                            ) : (
-                                              <p className="text-xs text-muted-foreground/50 italic">No description</p>
-                                            )}
-                                            {item.specsBrand && (
-                                              <div className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-300">
-                                                {item.specsBrand}
-                                              </div>
-                                            )}
-                                          </div>
-                                        </div>
-                                      </TableCell>
-                                      <TableCell className="py-3 align-top">
-                                        <div className="flex flex-col gap-1.5 items-start">
-                                          <Badge variant="secondary" className="text-sm font-semibold">
-                                            {item.quantity} <span className="text-xs font-normal ml-1 opacity-70">{item.unit}</span>
-                                          </Badge>
-                                          <div onClick={(e) => e.stopPropagation()} className="scale-90 origin-left">
-                                            {getInventoryStatusBadge(item.itemName, item.quantity, item.unit)}
-                                          </div>
-                                        </div>
-                                      </TableCell>
-                                      <TableCell className="py-3 align-top rounded-r-lg overflow-hidden">
-                                        <div className="flex flex-col gap-1.5 items-start">
-                                          {item.isUrgent && (
-                                            <Badge variant="destructive" className="px-2 py-0.5 h-6 text-[10px] font-bold shadow-[0_0_15px_rgba(239,68,68,0.6)] animate-pulse mb-1.5 uppercase tracking-wider border-red-400 ring-1 ring-red-500/50">
-                                              Urgent
-                                            </Badge>
-                                          )}
-                                          {getStatusBadge(item.status)}
-                                        </div>
-                                      </TableCell>
-                                      {(isManager && (isPending || item.status === "sign_pending" || item.status === "cc_pending" || canManagerModifyStatus(item.status))) || (isPurchaseOfficer && ["pending_po", "direct_po", "ready_for_po"].includes(item.status)) ? (
-                                        <TableCell className="text-right p-4 align-middle rounded-r-lg overflow-hidden">
-                                          <div className="flex items-center justify-end gap-3 min-w-[300px]">
-                                            {item.status === "sign_pending" || item.status === "sign_rejected" ? (
-                                              <div className="flex items-center gap-2">
-                                                <Button
-                                                  variant="outline"
-                                                  size="sm"
-                                                  className="h-9 border-emerald-200 text-emerald-700 hover:bg-emerald-50"
-                                                  onClick={(e) => { e.stopPropagation(); setShowSignPendingApproveConfirm(item._id); }}
-                                                  disabled={isLoading}
-                                                >
-                                                  <CheckCircle className="h-4 w-4 mr-1.5" /> Approve
-                                                </Button>
-                                                {item.status === "sign_pending" && (
-                                                  <Button
-                                                    variant="outline"
+
+                                              <div className="flex-shrink-0 mt-0.5" onClick={(e) => e.stopPropagation()}>
+                                                {itemPhotos.length > 0 ? (
+                                                  <CompactImageGallery
+                                                    images={itemPhotos}
+                                                    maxDisplay={1}
                                                     size="sm"
-                                                    className="h-9 border-red-200 text-red-600 hover:bg-red-50"
-                                                    onClick={(e) => { e.stopPropagation(); setShowItemRejectionInput(item._id); }}
-                                                    disabled={isLoading}
-                                                  >
-                                                    <XCircle className="h-4 w-4 mr-1.5" /> Reject
-                                                  </Button>
-                                                )}
-                                              </div>
-                                            ) : item.status === "cc_pending" ? (
-                                              onOpenCC && (
-                                                <Button
-                                                  variant="outline"
-                                                  size="sm"
-                                                  onClick={(e) => { e.stopPropagation(); onOpenCC(item._id); }}
-                                                  className="h-9 border-blue-200 text-blue-700 hover:bg-blue-50"
-                                                >
-                                                  <FileText className="h-4 w-4 mr-1.5" /> View CC
-                                                </Button>
-                                              )
-                                            ) : (
-                                              <div className="flex items-center gap-3">
-                                                <RenderActionSegments item={item} />
-                                                {isPurchaseOfficer && ["pending_po", "direct_po", "ready_for_po"].includes(item.status) && (
-                                                  <div className="flex items-center gap-2 border-l pl-3 border-border/60">
-                                                    <Button
-                                                      variant="outline"
-                                                      size="sm"
-                                                      className="h-9 border-blue-200 text-blue-700 hover:bg-blue-50"
-                                                      onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        setEditQuantityItem({ id: item._id, quantity: item.quantity, name: item.itemName, unit: item.unit });
-                                                      }}
-                                                    >
-                                                      <Edit className="h-4 w-4" />
-                                                    </Button>
-                                                    <Button
-                                                      variant="default"
-                                                      size="sm"
-                                                      className="h-9"
-                                                      onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        setDirectPOInitialData({
-                                                          requestNumber: request?.requestNumber,
-                                                          deliverySiteId: request?.site?._id,
-                                                          deliverySiteName: request?.site?.name,
-                                                          items: [{ requestId: item._id, itemDescription: item.itemName, description: item.description, quantity: item.quantity, unit: item.unit, unitPrice: 0 }]
-                                                        });
-                                                        setShowDirectPODialog(true);
-                                                      }}
-                                                    >
-                                                      <ShoppingCart className="h-4 w-4 mr-1.5" /> Order
-                                                    </Button>
+                                                  />
+                                                ) : (
+                                                  <div className="w-10 h-10 rounded-md bg-muted/30 border border-dashed border-border/60 flex items-center justify-center">
+                                                    <span className="text-[8px] font-medium text-muted-foreground/60 italic">No Img</span>
                                                   </div>
                                                 )}
                                               </div>
-                                            )}
-                                          </div>
-                                        </TableCell>
-                                      ) : (
-                                        <TableCell className="hidden"></TableCell>
-                                      )}
-                                    </TableRow>
-                                    {
-                                      showItemRejectionInput === item._id && (
-                                        <TableRow className="bg-muted/10 hover:bg-muted/10">
-                                          <TableCell colSpan={6} className="p-3">
-                                            <div className="flex flex-col gap-2 max-w-md ml-auto bg-card border rounded-md p-3 shadow-sm" onClick={(e) => e.stopPropagation()}>
-                                              <Label className="text-xs font-semibold">Rejection Reason</Label>
-                                              <Textarea
-                                                value={itemRejectionReasons[item._id] || ""}
-                                                onChange={(e) =>
-                                                  setItemRejectionReasons((prev) => ({
-                                                    ...prev,
-                                                    [item._id]: e.target.value,
-                                                  }))
-                                                }
-                                                placeholder="Enter rejection reason..."
-                                                className="text-xs min-h-[60px]"
-                                              />
-                                              <div className="flex justify-end gap-2">
-                                                <Button
-                                                  variant="ghost"
-                                                  size="sm"
-                                                  onClick={() => setShowItemRejectionInput(null)}
-                                                  className="h-7 text-xs"
-                                                >
-                                                  Cancel
-                                                </Button>
-                                                <Button
-                                                  variant="destructive"
-                                                  size="sm"
-                                                  onClick={() => handleItemReject(item._id)}
-                                                  disabled={isLoading || !itemRejectionReasons[item._id]?.trim()}
-                                                  className="h-7 text-xs"
-                                                >
-                                                  Confirm Reject
-                                                </Button>
+
+                                              <div className="space-y-1.5 min-w-0 flex-1">
+                                                <div className="flex flex-col">
+                                                  <button
+                                                    onClick={(e) => {
+                                                      e.stopPropagation();
+                                                      setSelectedItemName(item.itemName);
+                                                    }}
+                                                    className="font-semibold text-sm text-left hover:text-primary dark:hover:text-primary transition-colors focus:outline-none leading-tight pt-1"
+                                                  >
+                                                    {item.itemName}
+                                                  </button>
+                                                  <div onClick={(e) => e.stopPropagation()} className="scale-90 origin-left mt-0.5">
+                                                    {getInventoryStatusBadge(item.itemName, item.quantity, item.unit)}
+                                                  </div>
+                                                </div>
+                                                {item.description ? (
+                                                  <div className="w-full text-sm text-muted-foreground mt-0.5">
+                                                    <p className="line-clamp-2 text-xs leading-snug opacity-90">
+                                                      {item.description}
+                                                    </p>
+                                                  </div>
+                                                ) : (
+                                                  <p className="text-xs text-muted-foreground/50 italic">No description</p>
+                                                )}
+                                                {item.specsBrand && (
+                                                  <div className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-300">
+                                                    {item.specsBrand}
+                                                  </div>
+                                                )}
                                               </div>
                                             </div>
                                           </TableCell>
+                                          <TableCell className="py-3 align-top">
+                                            <div className="flex flex-col gap-1.5 items-start">
+                                              <Badge variant="secondary" className="text-sm font-semibold">
+                                                {item.quantity} <span className="text-xs font-normal ml-1 opacity-70">{item.unit}</span>
+                                              </Badge>
+                                            </div>
+                                          </TableCell>
+                                          <TableCell className="py-3 align-top rounded-r-lg overflow-hidden">
+                                            <div className="flex flex-col gap-1.5 items-start">
+                                              {item.isUrgent && (
+                                                <Badge variant="destructive" className="px-2 py-0.5 h-6 text-[10px] font-bold shadow-[0_0_15px_rgba(239,68,68,0.6)] animate-pulse mb-1.5 uppercase tracking-wider border-red-400 ring-1 ring-red-500/50">
+                                                  Urgent
+                                                </Badge>
+                                              )}
+                                              {getStatusBadge(item.status)}
+                                            </div>
+                                          </TableCell>
+                                          {(isManager && (isPending || item.status === "sign_pending" || item.status === "cc_pending" || canManagerModifyStatus(item.status))) || (isPurchaseOfficer && ["pending_po", "direct_po", "ready_for_po"].includes(item.status)) ? (
+                                            <TableCell className="text-right p-4 align-middle rounded-r-lg overflow-hidden">
+                                              <div className="flex items-center justify-end gap-3 min-w-[300px]">
+                                                {item.status === "sign_pending" || item.status === "sign_rejected" ? (
+                                                  <div className="flex items-center gap-2">
+                                                    <Button
+                                                      variant="outline"
+                                                      size="sm"
+                                                      className="h-9 border-emerald-200 text-emerald-700 hover:bg-emerald-50"
+                                                      onClick={(e) => { e.stopPropagation(); setShowSignPendingApproveConfirm(item._id); }}
+                                                      disabled={isLoading}
+                                                    >
+                                                      <CheckCircle className="h-4 w-4 mr-1.5" /> Approve
+                                                    </Button>
+                                                    {item.status === "sign_pending" && (
+                                                      <Button
+                                                        variant="outline"
+                                                        size="sm"
+                                                        className="h-9 border-red-200 text-red-600 hover:bg-red-50"
+                                                        onClick={(e) => { e.stopPropagation(); setShowItemRejectionInput(item._id); }}
+                                                        disabled={isLoading}
+                                                      >
+                                                        <XCircle className="h-4 w-4 mr-1.5" /> Reject
+                                                      </Button>
+                                                    )}
+                                                  </div>
+                                                ) : item.status === "cc_pending" ? (
+                                                  onOpenCC && (
+                                                    <Button
+                                                      variant="outline"
+                                                      size="sm"
+                                                      onClick={(e) => { e.stopPropagation(); onOpenCC(item._id); }}
+                                                      className="h-9 border-blue-200 text-blue-700 hover:bg-blue-50"
+                                                    >
+                                                      <FileText className="h-4 w-4 mr-1.5" /> View CC
+                                                    </Button>
+                                                  )
+                                                ) : (
+                                                  <div className="flex items-center gap-3">
+                                                    <RenderActionSegments item={item} />
+                                                    {isPurchaseOfficer && ["pending_po", "direct_po", "ready_for_po"].includes(item.status) && (
+                                                      <div className="flex items-center gap-2 border-l pl-3 border-border/60">
+                                                        <Button
+                                                          variant="outline"
+                                                          size="sm"
+                                                          className="h-9 border-blue-200 text-blue-700 hover:bg-blue-50"
+                                                          onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            setEditQuantityItem({ id: item._id, quantity: item.quantity, name: item.itemName, unit: item.unit });
+                                                          }}
+                                                        >
+                                                          <Edit className="h-4 w-4" />
+                                                        </Button>
+                                                        <Button
+                                                          variant="default"
+                                                          size="sm"
+                                                          className="h-9"
+                                                          onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            setDirectPOInitialData({
+                                                              requestNumber: request?.requestNumber,
+                                                              deliverySiteId: request?.site?._id,
+                                                              deliverySiteName: request?.site?.name,
+                                                              items: [{ requestId: item._id, itemDescription: item.itemName, description: item.description, quantity: item.quantity, unit: item.unit, unitPrice: 0 }]
+                                                            });
+                                                            setShowDirectPODialog(true);
+                                                          }}
+                                                        >
+                                                          <ShoppingCart className="h-4 w-4 mr-1.5" /> Order
+                                                        </Button>
+                                                      </div>
+                                                    )}
+                                                  </div>
+                                                )}
+                                              </div>
+                                            </TableCell>
+                                          ) : (
+                                            <TableCell className="hidden"></TableCell>
+                                          )}
                                         </TableRow>
-                                      )
-                                    }
-                                  </Fragment>
-                                );
-                              })}
+                                        {
+                                          showItemRejectionInput === item._id && (
+                                            <TableRow className="bg-muted/10 hover:bg-muted/10">
+                                              <TableCell colSpan={6} className="p-3">
+                                                <div className="flex flex-col gap-2 max-w-md ml-auto bg-card border rounded-md p-3 shadow-sm" onClick={(e) => e.stopPropagation()}>
+                                                  <Label className="text-xs font-semibold">Rejection Reason</Label>
+                                                  <Textarea
+                                                    value={itemRejectionReasons[item._id] || ""}
+                                                    onChange={(e) =>
+                                                      setItemRejectionReasons((prev) => ({
+                                                        ...prev,
+                                                        [item._id]: e.target.value,
+                                                      }))
+                                                    }
+                                                    placeholder="Enter rejection reason..."
+                                                    className="text-xs min-h-[60px]"
+                                                  />
+                                                  <div className="flex justify-end gap-2">
+                                                    <Button
+                                                      variant="ghost"
+                                                      size="sm"
+                                                      onClick={() => setShowItemRejectionInput(null)}
+                                                      className="h-7 text-xs"
+                                                    >
+                                                      Cancel
+                                                    </Button>
+                                                    <Button
+                                                      variant="destructive"
+                                                      size="sm"
+                                                      onClick={() => handleItemReject(item._id)}
+                                                      disabled={isLoading || !itemRejectionReasons[item._id]?.trim()}
+                                                      className="h-7 text-xs"
+                                                    >
+                                                      Confirm Reject
+                                                    </Button>
+                                                  </div>
+                                                </div>
+                                              </TableCell>
+                                            </TableRow>
+                                          )
+                                        }
+                                      </Fragment >
+                                    );
+                                  })
+                                  }
+
+                                </>
+                              )
+                            })()}
                           </TableBody>
                         </Table>
                       </div>

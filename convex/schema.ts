@@ -87,7 +87,8 @@ export default defineSchema({
     deliveryMarkedAt: v.optional(v.number()),
     deliveryId: v.optional(v.id("deliveries")), // Linked delivery record
     notes: v.optional(v.string()),
-    directAction: v.optional(v.union(v.literal("delivery"), v.literal("po"))), // Flag for direct delivery/PO without CC
+    directAction: v.optional(v.union(v.literal("delivery"), v.literal("po"), v.literal("all"))), // Flag for direct delivery/PO without CC
+    isSplitApproved: v.optional(v.boolean()),
 
     // Delivery Confirmation Details
     deliveryNotes: v.optional(v.string()), // Notes added by site engineer upon receipt

@@ -68,42 +68,45 @@ type RequestStatus =
 
 // Helper to get card border/bg styles based on status
 const getCardStyles = (status: RequestStatus | "mixed") => {
-  const baseClasses = "group border-l-[6px] border-y-0 border-r-0 rounded-2xl p-4 sm:p-5 shadow-sm hover:shadow-xl transition-all duration-300 bg-card max-w-full overflow-hidden relative";
+  const baseClasses = "group border-l-[6px] border rounded-2xl p-4 sm:p-5 shadow-lg hover:shadow-xl dark:shadow-black/40 transition-all duration-300 bg-card max-w-full overflow-hidden relative";
 
   if (status === "mixed") return `${baseClasses} border-slate-200 dark:border-slate-800`;
 
   switch (status) {
     case "draft":
-      return `${baseClasses} border-slate-400 dark:border-slate-600 bg-slate-50/10`;
+      return `${baseClasses} border-slate-400 dark:border-slate-600 bg-slate-50/50 dark:bg-slate-950`;
     case "pending":
     case "sign_pending":
-      return `${baseClasses} border-amber-500 dark:border-amber-600 bg-amber-50/10`;
+      return `${baseClasses} border-amber-500 dark:border-amber-600 bg-amber-50/50 dark:bg-slate-950`;
+    case "approved":
+      return `${baseClasses} border-emerald-500 dark:border-emerald-600 bg-emerald-50/50 dark:bg-slate-950`;
     case "rejected":
     case "cc_rejected":
     case "rejected_po":
     case "sign_rejected":
-      return `${baseClasses} border-rose-500 dark:border-rose-600 bg-rose-50/10`;
+      return `${baseClasses} border-rose-500 dark:border-rose-600 bg-rose-50/50 dark:bg-slate-950`;
     case "recheck":
-      return `${baseClasses} border-indigo-500 dark:border-indigo-600 bg-indigo-50/10`;
+      return `${baseClasses} border-indigo-500 dark:border-indigo-600 bg-indigo-50/50 dark:bg-slate-950`;
     case "ready_for_cc":
-      return `${baseClasses} border-blue-500 dark:border-blue-600 bg-blue-50/10`;
+      return `${baseClasses} border-blue-500 dark:border-blue-600 bg-blue-50/50 dark:bg-slate-950`;
     case "cc_pending":
-      return `${baseClasses} border-purple-500 dark:border-purple-600 bg-purple-50/10`;
+      return `${baseClasses} border-purple-500 dark:border-purple-600 bg-purple-50/50 dark:bg-slate-950`;
+    case "cc_approved":
     case "ready_for_po":
-      return `${baseClasses} border-teal-500 dark:border-teal-600 bg-teal-50/10`;
+      return `${baseClasses} border-teal-500 dark:border-teal-600 bg-teal-50/50 dark:bg-slate-950`;
     case "pending_po":
     case "direct_po":
-      return `${baseClasses} border-orange-500 dark:border-orange-600 bg-orange-50/10`;
+      return `${baseClasses} border-orange-500 dark:border-orange-600 bg-orange-50/50 dark:bg-slate-950`;
     case "ready_for_delivery":
-      return `${baseClasses} border-emerald-500 dark:border-emerald-600 bg-emerald-50/10`;
+      return `${baseClasses} border-emerald-500 dark:border-emerald-600 bg-emerald-50/50 dark:bg-slate-950`;
     case "delivered":
-      return `${baseClasses} border-green-600 dark:border-green-600 bg-emerald-50/10`;
+      return `${baseClasses} border-green-600 dark:border-green-600 bg-green-50/50 dark:bg-slate-950`;
     case "out_for_delivery":
     case "delivery_processing":
     case "delivery_stage":
-      return `${baseClasses} border-sky-500 dark:border-sky-600 bg-sky-50/10`;
+      return `${baseClasses} border-sky-500 dark:border-sky-600 bg-sky-50/50 dark:bg-slate-950`;
     default:
-      return `${baseClasses} border-border`;
+      return `${baseClasses} border-border bg-card dark:bg-slate-950`;
   }
 };
 
@@ -174,7 +177,7 @@ interface Request {
   notes?: string;
   createdAt: number;
   updatedAt: number;
-  directAction?: "po" | "delivery"; // Flag for direct action
+  directAction?: "po" | "delivery" | "all"; // Flag for direct action
   site?: {
     _id: Id<"sites">;
     name: string;
@@ -216,6 +219,9 @@ interface RequestsTableProps {
   hideStatusOnCard?: boolean; // Hide status badge on card view
   hideItemCountOnCard?: boolean; // Hide item count badge on card view
   minimalDashboardView?: boolean; // Hide detailed info (Required By, Location, Items) for dashboard
+  onCheck?: (requestId: Id<"requests">) => void; // Check request history
+  onCreatePO?: (requestId: Id<"requests">) => void; // Create PO
+  onMoveToCC?: (requestId: Id<"requests">) => void; // Move to CC
 }
 
 export function RequestsTable({
@@ -238,6 +244,9 @@ export function RequestsTable({
   hideStatusOnCard = false,
   hideItemCountOnCard = false,
   minimalDashboardView = false,
+  onCheck,
+  onCreatePO,
+  onMoveToCC,
 }: RequestsTableProps) {
   const userRole = useUserRole();
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
@@ -272,7 +281,7 @@ export function RequestsTable({
     // Handler for New Item - Redirect to Inventory
     const handleNewItemClick = (e: React.MouseEvent) => {
       e.stopPropagation();
-      window.location.href = `/dashboard/inventory?search=${encodedItemName}`;
+      setSelectedItemName(itemName);
     };
 
     // Handler for Existing Item - Open Info Dialog
@@ -682,35 +691,78 @@ export function RequestsTable({
           };
 
           const overallStatus = getOverallStatus();
+          const hasMixedStatuses = !allItemsHaveSameStatus;
+
+          // Helper to get status color hex code for gradient (Same as Table View)
+          const getStatusColorHex = (status: string) => {
+            if (status === "draft") return "#94a3b8"; // slate-400
+            if (["pending", "sign_pending"].includes(status)) return "#f59e0b"; // amber-500
+            if (status === "approved" || status === "ready_for_delivery") return "#10b981"; // emerald-500
+            if (status === "delivered") return "#16a34a"; // green-600
+            if (status === "recheck") return "#6366f1"; // indigo-500
+            if (status === "ready_for_cc") return "#3b82f6"; // blue-500
+            if (status === "cc_pending") return "#a855f7"; // purple-500
+            if (status === "ready_for_po") return "#14b8a6"; // teal-500
+            if (["pending_po", "direct_po"].includes(status)) return "#f97316"; // orange-500
+            if (["out_for_delivery", "delivery_processing", "delivery_stage"].includes(status)) return "#0ea5e9"; // sky-500
+            if (["rejected", "sign_rejected", "cc_rejected", "rejected_po"].includes(status)) return "#f43f5e"; // rose-500
+            return "#e2e8f0"; // slate-200 (muted)
+          };
+
+          // Helper to generate gradient for mixed statuses (Sequence based)
+          const getLeftBorderGradient = (items: Request[]) => {
+            if (items.length === 0) return null;
+
+            const total = items.length;
+            const segmentSize = 100 / total;
+            const gradientStops: string[] = [];
+
+            // Items are already sorted by Order (4, 3, 2, 1) or CreatedAt
+            // We map them top-to-bottom
+            items.forEach((item, index) => {
+              const color = getStatusColorHex(item.status);
+              const start = index * segmentSize;
+              const end = (index + 1) * segmentSize;
+
+              gradientStops.push(`${color} ${start}%`);
+              gradientStops.push(`${color} ${end}%`);
+            });
+
+            return `linear-gradient(to bottom, ${gradientStops.join(", ")})`;
+          };
+
+          const borderGradient = hasMixedStatuses ? getLeftBorderGradient(items) : null;
 
           // Helper to get item-specific background color based on status - LIGHTER & SUBTLE
           const getItemStatusBgColor = (status: string) => {
             if (status === "draft") return "bg-slate-50 dark:bg-slate-900/30 border-slate-200 dark:border-slate-800";
             if (["pending", "sign_pending"].includes(status)) return "bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800";
-            if (status === "approved" || status === "ready_for_delivery") return "bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800";
-            if (status === "delivered") return "bg-green-100/50 dark:bg-green-900/30 border-green-300 dark:border-green-800";
+            if (status === "approved") return "bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800";
             if (status === "recheck") return "bg-indigo-50 dark:bg-indigo-950/30 border-indigo-200 dark:border-indigo-800";
             if (status === "ready_for_cc") return "bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-800";
             if (status === "cc_pending") return "bg-purple-50 dark:bg-purple-950/30 border-purple-200 dark:border-purple-800";
-            if (status === "ready_for_po") return "bg-teal-50 dark:bg-teal-950/30 border-teal-200 dark:border-teal-800";
+            if (["cc_approved", "ready_for_po"].includes(status)) return "bg-teal-50 dark:bg-teal-950/30 border-teal-200 dark:border-teal-800";
             if (["pending_po", "direct_po"].includes(status)) return "bg-orange-50 dark:bg-orange-950/30 border-orange-200 dark:border-orange-800";
-            if (["out_for_delivery", "delivery_processing", "delivery_stage"].includes(status)) return "bg-sky-50 dark:bg-sky-950/30 border-sky-200 dark:border-sky-800";
+            if (["ready_for_delivery", "out_for_delivery", "delivery_processing", "delivery_stage"].includes(status)) return "bg-sky-50 dark:bg-sky-950/30 border-sky-200 dark:border-sky-800"; // Delivery Stage
+            if (status === "delivered") return "bg-green-100/50 dark:bg-green-900/30 border-green-300 dark:border-green-800";
             if (["rejected", "sign_rejected", "cc_rejected", "rejected_po"].includes(status)) return "bg-rose-50 dark:bg-rose-950/30 border-rose-200 dark:border-rose-800";
+            if (hasMixedStatuses) return "bg-slate-50 dark:bg-slate-900/30 border-slate-200 dark:border-slate-800"; // Neutral for mixed
             return "bg-card border-border";
           };
 
           // Helper to get item-specific left border color based on status
+          // Helper to get item-specific left border color based on status
           const getItemStatusBorderColor = (status: string) => {
             if (status === "draft") return "bg-slate-400";
             if (["pending", "sign_pending"].includes(status)) return "bg-amber-500 shadow-[0_0_10px_rgba(245,158,11,0.3)]";
-            if (status === "approved" || status === "ready_for_delivery") return "bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.3)]";
-            if (status === "delivered") return "bg-green-600 shadow-[0_0_10px_rgba(22,163,74,0.3)]";
+            if (status === "approved") return "bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.3)]";
             if (status === "recheck") return "bg-indigo-500";
             if (status === "ready_for_cc") return "bg-blue-500 shadow-[0_0_10px_rgba(59,130,246,0.3)]";
             if (status === "cc_pending") return "bg-purple-500 shadow-[0_0_10px_rgba(168,85,247,0.3)]";
-            if (status === "ready_for_po") return "bg-teal-500 shadow-[0_0_10px_rgba(20,184,166,0.3)]";
+            if (["cc_approved", "ready_for_po"].includes(status)) return "bg-teal-500 shadow-[0_0_10px_rgba(20,184,166,0.3)]";
             if (["pending_po", "direct_po"].includes(status)) return "bg-orange-500 shadow-[0_0_10px_rgba(249,115,22,0.3)]";
-            if (["out_for_delivery", "delivery_processing", "delivery_stage"].includes(status)) return "bg-sky-500 shadow-[0_0_10px_rgba(14,165,233,0.3)]";
+            if (["ready_for_delivery", "out_for_delivery", "delivery_processing", "delivery_stage"].includes(status)) return "bg-sky-500 shadow-[0_0_10px_rgba(14,165,233,0.3)]";
+            if (status === "delivered") return "bg-green-600 shadow-[0_0_10px_rgba(22,163,74,0.3)]";
             if (["rejected", "sign_rejected", "cc_rejected", "rejected_po"].includes(status)) return "bg-rose-500 shadow-[0_0_10px_rgba(244,63,94,0.3)]";
             return "bg-primary/20";
           };
@@ -780,8 +832,16 @@ export function RequestsTable({
               key={requestNumber}
               className={cn(
                 getCardStyles(overallStatus || firstItem.status),
-                isNewlySent && "ring-2 ring-primary ring-offset-2"
+                isNewlySent && "ring-2 ring-primary ring-offset-2",
+                "!border-l-transparent" // Always transparent to use gradient
               )}
+              style={{
+                backgroundImage: getLeftBorderGradient(items) || undefined,
+                backgroundSize: "6px 100%",
+                backgroundRepeat: "no-repeat",
+                backgroundPosition: "left top",
+                backgroundOrigin: "border-box"
+              }}
             >
               {/* Card Header with Labels */}
               <div className="flex items-start justify-between mb-3 sm:mb-4 pb-2 sm:pb-3 border-b border-border/50 gap-2 sm:gap-3">
@@ -1014,12 +1074,12 @@ export function RequestsTable({
                       className={cn(
                         "h-8 px-4 text-xs font-semibold ml-1 shadow-sm transition-all",
                         showCreator && reviewableItemsCount > 0
-                          ? "bg-orange-600 text-white hover:bg-orange-700 shadow-orange-200 dark:shadow-none"
+                          ? "bg-primary hover:bg-primary/90 text-primary-foreground shadow-md hover:-translate-y-0.5"
                           : "bg-white dark:bg-card hover:bg-slate-50 hover:text-black dark:hover:bg-slate-800 dark:hover:text-white border-slate-200 hover:border-slate-300 dark:border-slate-700"
                       )}
                     >
                       <Eye className="h-3.5 w-3.5 mr-1.5" />
-                      {showCreator && reviewableItemsCount > 0 ? "Review Request" : "View"}
+                      {showCreator && reviewableItemsCount > 0 ? "Review" : "View"}
                     </Button>
                   )}
                 </div>
@@ -1070,30 +1130,72 @@ export function RequestsTable({
                   const getStatusBorderColor = (status: string) => {
                     if (status === "draft") return "border-l-slate-400";
                     if (["pending", "sign_pending"].includes(status)) return "border-l-amber-500";
-                    if (status === "approved" || status === "ready_for_delivery") return "border-l-emerald-500";
-                    if (status === "delivered") return "border-l-green-600";
+                    if (status === "approved") return "border-l-emerald-500";
                     if (status === "recheck") return "border-l-indigo-500";
                     if (status === "ready_for_cc") return "border-l-blue-500";
                     if (status === "cc_pending") return "border-l-purple-500";
-                    if (status === "ready_for_po") return "border-l-teal-500";
+                    if (["cc_approved", "ready_for_po"].includes(status)) return "border-l-teal-500";
                     if (["pending_po", "direct_po"].includes(status)) return "border-l-orange-500";
-                    if (["out_for_delivery", "delivery_processing", "delivery_stage"].includes(status)) return "border-l-sky-500";
+                    if (["ready_for_delivery", "out_for_delivery", "delivery_processing", "delivery_stage"].includes(status)) return "border-l-sky-500";
+                    if (status === "delivered") return "border-l-green-600";
                     if (["rejected", "sign_rejected", "cc_rejected", "rejected_po"].includes(status)) return "border-l-rose-500";
                     return "border-l-muted";
                   };
 
+                  // Helper to get status color hex code for gradient
+                  const getStatusColorHex = (status: string) => {
+                    if (status === "draft") return "#94a3b8"; // slate-400
+                    if (["pending", "sign_pending"].includes(status)) return "#f59e0b"; // amber-500
+                    if (status === "approved" || status === "ready_for_delivery") return "#10b981"; // emerald-500
+                    if (status === "delivered") return "#16a34a"; // green-600
+                    if (status === "recheck") return "#6366f1"; // indigo-500
+                    if (status === "ready_for_cc") return "#3b82f6"; // blue-500
+                    if (status === "cc_pending") return "#a855f7"; // purple-500
+                    if (status === "ready_for_po") return "#14b8a6"; // teal-500
+                    if (["pending_po", "direct_po"].includes(status)) return "#f97316"; // orange-500
+                    if (["out_for_delivery", "delivery_processing", "delivery_stage"].includes(status)) return "#0ea5e9"; // sky-500
+                    if (["rejected", "sign_rejected", "cc_rejected", "rejected_po"].includes(status)) return "#f43f5e"; // rose-500
+                    return "#e2e8f0"; // slate-200 (muted)
+                  };
+
+                  // Helper to generate gradient for mixed statuses (Sequence based)
+                  const getLeftBorderGradient = (items: Request[]) => {
+                    if (items.length === 0) return null;
+
+                    const total = items.length;
+                    const segmentSize = 100 / total;
+                    const gradientStops: string[] = [];
+
+                    // Items are already sorted by Order (4, 3, 2, 1) or CreatedAt
+                    // We map them top-to-bottom
+                    items.forEach((item, index) => {
+                      const color = getStatusColorHex(item.status);
+                      const start = index * segmentSize;
+                      const end = (index + 1) * segmentSize;
+
+                      gradientStops.push(`${color} ${start}%`);
+                      gradientStops.push(`${color} ${end}%`);
+                    });
+
+                    return `linear-gradient(to bottom, ${gradientStops.join(", ")})`;
+                  };
+
+                  const hasMixedStatuses = !allItemsHaveSameStatus;
+                  const borderGradient = hasMixedStatuses ? getLeftBorderGradient(items) : null;
+
                   // Get status background color for table row - VISIBLE & PREMIUM
                   const getStatusBgColor = (status: string) => {
+                    if (hasMixedStatuses) return "bg-slate-50/50 dark:bg-slate-900/20"; // Neutral for mixed
                     if (status === "draft") return "bg-slate-50/80 dark:bg-slate-950/20 hover:bg-slate-100/50 dark:hover:bg-slate-900/40";
                     if (["pending", "sign_pending"].includes(status)) return "bg-amber-50/80 dark:bg-amber-950/20 hover:bg-amber-100/50 dark:hover:bg-amber-950/40";
-                    if (status === "approved" || status === "ready_for_delivery") return "bg-emerald-50/80 dark:bg-emerald-950/20 hover:bg-emerald-100/50 dark:hover:bg-emerald-950/40";
-                    if (status === "delivered") return "bg-green-50/80 dark:bg-green-950/20 hover:bg-green-100/50 dark:hover:bg-green-950/40";
+                    if (status === "approved") return "bg-emerald-50/80 dark:bg-emerald-950/20 hover:bg-emerald-100/50 dark:hover:bg-emerald-950/40";
                     if (status === "recheck") return "bg-indigo-50/80 dark:bg-indigo-950/20 hover:bg-indigo-100/50 dark:hover:bg-indigo-950/40";
                     if (status === "ready_for_cc") return "bg-blue-50/80 dark:bg-blue-950/20 hover:bg-blue-100/50 dark:hover:bg-blue-950/40";
                     if (status === "cc_pending") return "bg-purple-50/80 dark:bg-purple-950/20 hover:bg-purple-100/50 dark:hover:bg-purple-950/40";
-                    if (status === "ready_for_po") return "bg-teal-50/80 dark:bg-teal-950/20 hover:bg-teal-100/50 dark:hover:bg-teal-950/40";
+                    if (["cc_approved", "ready_for_po"].includes(status)) return "bg-teal-50/80 dark:bg-teal-950/20 hover:bg-teal-100/50 dark:hover:bg-teal-950/40";
                     if (["pending_po", "direct_po"].includes(status)) return "bg-orange-50/80 dark:bg-orange-950/20 hover:bg-orange-100/50 dark:hover:bg-orange-950/40";
-                    if (["out_for_delivery", "delivery_processing", "delivery_stage"].includes(status)) return "bg-sky-50/80 dark:bg-sky-950/20 hover:bg-sky-100/50 dark:hover:bg-sky-950/40";
+                    if (["ready_for_delivery", "out_for_delivery", "delivery_processing", "delivery_stage"].includes(status)) return "bg-sky-50/80 dark:bg-sky-950/20 hover:bg-sky-100/50 dark:hover:bg-sky-950/40";
+                    if (status === "delivered") return "bg-green-50/80 dark:bg-green-950/20 hover:bg-green-100/50 dark:hover:bg-green-950/40";
                     if (["rejected", "sign_rejected", "cc_rejected", "rejected_po"].includes(status)) return "bg-rose-50/80 dark:bg-rose-950/20 hover:bg-rose-100/50 dark:hover:bg-rose-950/40";
                     return "bg-card hover:bg-accent/30";
                   };
@@ -1119,11 +1221,18 @@ export function RequestsTable({
                       <TableRow
                         className={cn(
                           "transition-all duration-200 cursor-pointer !border-l-[6px] border-b-8 border-b-transparent rounded-lg my-2 relative",
-                          getStatusBorderColor(overallStatus || firstItem.status),
+                          "!border-l-transparent", // Always transparent to use gradient
                           getStatusBgColor(overallStatus || firstItem.status),
                           isNewlySent && "ring-2 ring-primary/20",
                           hasMultipleItems && isExpanded ? "border-b-0 shadow-none" : "shadow-sm hover:shadow-md"
                         )}
+                        style={{
+                          backgroundImage: getLeftBorderGradient(items) || undefined,
+                          backgroundSize: "6px 100%",
+                          backgroundRepeat: "no-repeat",
+                          backgroundPosition: "left top",
+                          backgroundOrigin: "border-box"
+                        }}
                         onClick={() => hasMultipleItems ? toggleGroup(requestNumber) : null}
                       >
                         {/* Expand/Collapse Header */}
@@ -1258,20 +1367,64 @@ export function RequestsTable({
                                     size="sm"
                                     className="h-7 px-3 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm animate-pulse mr-1"
                                     onClick={(e) => { e.stopPropagation(); onConfirmDelivery(firstItem._id); }}
+                                    title="Confirm Delivery"
                                   >
                                     <CheckCircle2 className="h-3 w-3 mr-1" />
                                     Confirm
                                   </Button>
                                 )}
-                                {onViewDetails && (
+                                {onCheck && (
                                   <Button
                                     variant="outline"
                                     size="sm"
-                                    className="h-7 px-3 text-xs font-bold border-slate-200 bg-white hover:bg-slate-50 text-slate-700 hover:text-slate-900 shadow-sm transition-all rounded-md dark:bg-slate-900 dark:border-slate-800 dark:text-slate-200"
-                                    onClick={(e) => { e.stopPropagation(); onViewDetails(firstItem._id); }}
-                                    title="View Details"
+                                    className="h-7 w-7 p-0 rounded-full border-indigo-200 text-indigo-700 hover:bg-indigo-50 dark:border-indigo-800 dark:text-indigo-400 dark:hover:bg-indigo-950 mr-1"
+                                    onClick={(e) => { e.stopPropagation(); onCheck(firstItem._id); }}
+                                    title="Check History"
                                   >
-                                    View
+                                    <RefreshCw className="h-3.5 w-3.5" />
+                                  </Button>
+                                )}
+                                {onOpenCC && firstItem.status === "ready_for_cc" && (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-7 px-2.5 text-xs font-bold border-blue-200 text-blue-700 hover:bg-blue-50 dark:border-blue-800 dark:text-blue-400 dark:hover:bg-blue-950 mr-1"
+                                    onClick={(e) => { e.stopPropagation(); onOpenCC(firstItem._id); }}
+                                    title="Open Cost Comparison"
+                                  >
+                                    <FileText className="h-3 w-3 mr-1" />
+                                    CC
+                                  </Button>
+                                )}
+                                {onCreatePO && (firstItem.status === "ready_for_po" || (firstItem.status as string) === "sign_rejected") && (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className={cn(
+                                      "h-7 px-2.5 text-xs font-bold border-emerald-200 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-800 dark:text-emerald-400 dark:hover:bg-emerald-950 mr-1",
+                                      (firstItem.status as string) === "sign_rejected" && "border-rose-200 text-rose-700 hover:bg-rose-50 dark:border-rose-800 dark:text-rose-400 dark:hover:bg-rose-950"
+                                    )}
+                                    onClick={(e) => { e.stopPropagation(); onCreatePO(firstItem._id); }}
+                                    title={(firstItem.status as string) === "sign_rejected" ? "Resubmit PO" : "Create PO"}
+                                  >
+                                    <ShoppingCart className="h-3 w-3 mr-1" />
+                                    {(firstItem.status as string) === "sign_rejected" ? "Resubmit" : "PO"}
+                                  </Button>
+                                )}
+                                {onViewDetails && (
+                                  <Button
+                                    variant={userRole === ROLES.MANAGER && items.some(i => ["pending", "sign_pending"].includes(i.status)) ? "default" : "outline"}
+                                    size="sm"
+                                    className={cn(
+                                      "h-7 px-3 text-xs font-bold shadow-sm transition-all rounded-md",
+                                      userRole === ROLES.MANAGER && items.some(i => ["pending", "sign_pending"].includes(i.status))
+                                        ? "bg-primary hover:bg-primary/90 text-primary-foreground shadow-md hover:-translate-y-0.5"
+                                        : "border-slate-200 bg-white hover:bg-slate-50 text-slate-700 hover:text-slate-900 dark:bg-slate-900 dark:border-slate-800 dark:text-slate-200"
+                                    )}
+                                    onClick={(e) => { e.stopPropagation(); onViewDetails(firstItem._id); }}
+                                    title={userRole === ROLES.MANAGER && items.some(i => ["pending", "sign_pending"].includes(i.status)) ? "Review Request" : "View Details"}
+                                  >
+                                    {userRole === ROLES.MANAGER && items.some(i => ["pending", "sign_pending"].includes(i.status)) ? "Review" : "View"}
                                   </Button>
                                 )}
                               </>
@@ -1366,16 +1519,8 @@ export function RequestsTable({
                                         Confirm
                                       </Button>
                                     )}
-                                    {onViewDetails && (
-                                      <Button
-                                        variant="outline"
-                                        size="sm"
-                                        className="h-8 px-4 text-xs font-bold border-primary/30 text-primary hover:bg-primary hover:text-primary-foreground transition-all shadow-sm"
-                                        onClick={(e) => { e.stopPropagation(); onViewDetails(item._id); }}
-                                      >
-                                        View
-                                      </Button>
-                                    )}
+                                    {/* View Button Removed as per request */}
+
                                   </div>
                                 </div>
                               ))}

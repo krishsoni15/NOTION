@@ -24,6 +24,7 @@ import { NotesTimelineDialog } from "@/components/requests/notes-timeline-dialog
 import { CreateDeliveryDialog } from "@/components/purchase/create-delivery-dialog";
 import { EditPOQuantityDialog } from "@/components/purchase/edit-po-quantity-dialog";
 import { ViewDCDialog } from "@/components/purchase/view-dc-dialog";
+import { format } from "date-fns";
 import type { Id } from "@/convex/_generated/dataModel";
 
 import { useUserRole } from "@/hooks/use-user-role";
@@ -38,6 +39,7 @@ interface RequestItem {
   description?: string;
   specsBrand?: string;
   isUrgent: boolean;
+  requiredBy?: number;
   status: string;
   photo?: {
     imageUrl: string;
@@ -66,7 +68,7 @@ interface RequestItem {
   }>;
   notesCount?: number;
   isSplitApproved?: boolean;
-  directAction?: "po" | "delivery";
+  directAction?: "po" | "delivery" | "all";
   rejectionReason?: string;
   poId?: Id<"purchaseOrders">;
   deliveryId?: Id<"deliveries">;
@@ -403,6 +405,35 @@ const generateQuantitySuggestions = (input: string, itemUnit?: string): string[]
   return [];
 };
 
+// Expandable Text Component
+const ExpandableText = ({ text, className, limit = 100 }: { text: string, className?: string, limit?: number }) => {
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  if (!text) return null;
+
+  // Simple check for "long" text
+  const isLong = text.length > limit;
+
+  return (
+    <div className={cn("relative", className)}>
+      <div className={cn(
+        "text-sm text-foreground/80 leading-relaxed font-medium",
+        !isExpanded && isLong && "line-clamp-1"
+      )}>
+        {text}
+      </div>
+      {isLong && (
+        <button
+          onClick={(e) => { e.stopPropagation(); setIsExpanded(!isExpanded); }}
+          className="text-[10px] font-bold text-primary hover:underline mt-0.5 inline-flex items-center gap-0.5"
+        >
+          {isExpanded ? "Show Less" : "Read More"}
+        </button>
+      )}
+    </div>
+  );
+};
+
 // Parse quantity input
 const parseQuantityInput = (input: string): { quantity: number; unit: string } => {
   const trimmedInput = input.trim();
@@ -661,633 +692,648 @@ export function PurchaseRequestGroupCard({
     return vendors?.find(v => v._id === vendorId)?.companyName || "";
   };
 
-  return (
-    <div className="border rounded-lg p-3 sm:p-4 bg-card shadow-sm grouped-card-hover touch-manipulation transition-all duration-200 hover:shadow-md">
-      {/* Card Header */}
-      <div className="flex items-start justify-between mb-3 gap-4">
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-1 flex-wrap">
-            <span className="font-mono text-xl font-black text-blue-600 dark:text-white flex-shrink-0 tracking-tighter">
-              #{requestNumber}
-            </span>
-            <Badge variant={statusInfo.variant} className="text-[10px] sm:text-xs flex-shrink-0 font-medium">
-              <StatusIcon className="h-3 w-3 mr-1" />
-              {statusInfo.label}
-            </Badge>
+  // Helper to get item-specific background color based on status - LIGHTER & SUBTLE
+  // Helper to get item-specific background color based on status - LIGHTER & SUBTLE
+  const getItemStatusBgColor = (status: string) => {
+    if (status === "draft") return "bg-slate-50/50 dark:bg-slate-900/10 border-slate-200 dark:border-slate-800";
+    if (["pending", "sign_pending"].includes(status)) return "bg-amber-50/50 dark:bg-amber-950/10 border-amber-200 dark:border-amber-800";
+    if (status === "approved") return "bg-emerald-50/50 dark:bg-emerald-950/10 border-emerald-200 dark:border-emerald-800";
+    if (status === "recheck") return "bg-indigo-50/50 dark:bg-indigo-950/10 border-indigo-200 dark:border-indigo-800";
+    if (status === "ready_for_cc") return "bg-blue-50/50 dark:bg-blue-950/10 border-blue-200 dark:border-blue-800";
+    if (status === "cc_pending") return "bg-purple-50/50 dark:bg-purple-950/10 border-purple-200 dark:border-purple-800";
+    if (["cc_approved", "ready_for_po"].includes(status)) return "bg-teal-50/50 dark:bg-teal-950/10 border-teal-200 dark:border-teal-800";
+    if (["pending_po", "direct_po"].includes(status)) return "bg-orange-50/50 dark:bg-orange-950/10 border-orange-200 dark:border-orange-800";
+    if (["ready_for_delivery", "out_for_delivery", "delivery_processing", "delivery_stage"].includes(status)) return "bg-sky-50/50 dark:bg-sky-950/10 border-sky-200 dark:border-sky-800";
+    if (status === "delivered") return "bg-green-50/30 dark:bg-green-900/10 border-green-200 dark:border-green-800";
+    if (["rejected", "sign_rejected", "cc_rejected", "rejected_po"].includes(status)) return "bg-rose-50/50 dark:bg-rose-950/10 border-rose-200 dark:border-rose-800";
+    return "bg-card border-border";
+  };
 
-          </div>
-          <div className="flex items-center gap-2 mt-1">
-            {validItemsCount > 0 && onCreateBulkPO && (
-              <div className="flex items-center gap-2 mr-2">
-                <Checkbox
-                  checked={isAllSelected}
-                  onCheckedChange={toggleSelectAll}
-                  id={`select-all-${requestNumber}`}
-                />
-                <label htmlFor={`select-all-${requestNumber}`} className="text-xs text-muted-foreground cursor-pointer select-none">
-                  Select All
-                </label>
-              </div>
-            )}
-          </div>
-          <div className="space-y-1">
-            <div className="flex items-center gap-2">
-              {firstItem.site?.address && (
-                <button
-                  onClick={() => handleOpenInMap(firstItem.site?.address || '')}
-                  className="text-primary hover:text-primary/80 hover:bg-primary/10 rounded-full p-2 transition-colors shrink-0 border border-primary/20 hover:border-primary/40"
-                  title="Open in Maps"
-                >
-                  <MapPin className="h-3.5 w-3.5" />
-                </button>
-              )}
-              {firstItem.site ? (
-                onSiteClick && firstItem.site._id ? (
-                  <button
-                    onClick={() => onSiteClick(firstItem.site!._id)}
-                    className="font-semibold text-sm text-foreground hover:text-primary bg-transparent rounded-sm px-1 -mx-1 transition-colors cursor-pointer text-left truncate flex-1 border border-transparent hover:border-border"
-                  >
-                    {firstItem.site.name}
-                    {firstItem.site.code && <span className="text-muted-foreground ml-1">({firstItem.site.code})</span>}
-                  </button>
-                ) : (
-                  <span className="font-semibold text-sm truncate flex-1">
-                    {firstItem.site.name}
-                    {firstItem.site.code && <span className="text-muted-foreground ml-1">({firstItem.site.code})</span>}
+  // Helper to get status color hex code for gradient
+  const getStatusColorHex = (status: string) => {
+    if (status === "draft") return "#94a3b8"; // slate-400
+    if (["pending", "sign_pending"].includes(status)) return "#f59e0b"; // amber-500
+    if (status === "approved") return "#10b981"; // emerald-500
+    if (status === "delivered") return "#16a34a"; // green-600
+    if (status === "recheck") return "#6366f1"; // indigo-500
+    if (status === "ready_for_cc") return "#3b82f6"; // blue-500
+    if (status === "cc_pending") return "#a855f7"; // purple-500
+    if (status === "ready_for_po") return "#14b8a6"; // teal-500
+    if (["pending_po", "direct_po"].includes(status)) return "#f97316"; // orange-500
+    if (["out_for_delivery", "delivery_processing", "delivery_stage"].includes(status)) return "#0ea5e9"; // sky-500
+    if (["rejected", "sign_rejected", "cc_rejected", "rejected_po"].includes(status)) return "#f43f5e"; // rose-500
+    return "#e2e8f0"; // slate-200 (muted)
+  };
+
+  // Helper to generate gradient for mixed statuses (Sequence based)
+  const getLeftBorderGradient = (items: RequestItem[]) => {
+    if (items.length === 0) return null;
+
+    const total = items.length;
+    const segmentSize = 100 / total;
+    const gradientStops: string[] = [];
+
+    // Items are already sorted by Order (4, 3, 2, 1) or CreatedAt
+    // We map them top-to-bottom
+    items.forEach((item, index) => {
+      const color = getStatusColorHex(item.status);
+      const start = index * segmentSize;
+      const end = (index + 1) * segmentSize;
+
+      gradientStops.push(`${color} ${start}%`);
+      gradientStops.push(`${color} ${end}%`);
+    });
+
+    return `linear-gradient(to bottom, ${gradientStops.join(", ")})`;
+  };
+
+  // Determine Overall Status for Card Background
+  const allItemsHaveSameStatus = items.length > 0
+    ? items.every((item) => item.status === items[0].status)
+    : true;
+  const overallStatus = allItemsHaveSameStatus ? items[0].status : "mixed";
+
+  // Get status background color for the Card Header/Container
+  // Get status background color for the Card Header/Container
+  const getCardStatusBgColor = (status: string) => {
+    // Revised to provide "Status Big Theme Color" - using subtle tints of the status color in dark mode
+    if (status === "draft") return "bg-slate-50/50 dark:bg-slate-900/50";
+    if (["pending", "sign_pending"].includes(status)) return "bg-amber-50/50 dark:bg-amber-950/20";
+    if (status === "approved") return "bg-emerald-50/50 dark:bg-emerald-950/20";
+    if (status === "recheck") return "bg-indigo-50/50 dark:bg-indigo-950/20";
+    if (status === "ready_for_cc") return "bg-blue-50/50 dark:bg-blue-950/20";
+    if (status === "cc_pending") return "bg-purple-50/50 dark:bg-purple-950/20";
+    if (["cc_approved", "ready_for_po"].includes(status)) return "bg-teal-50/50 dark:bg-teal-950/20";
+    if (["pending_po", "direct_po"].includes(status)) return "bg-orange-50/50 dark:bg-orange-950/20";
+    if (["ready_for_delivery", "out_for_delivery", "delivery_processing", "delivery_stage"].includes(status)) return "bg-sky-50/50 dark:bg-sky-950/20";
+    if (status === "delivered") return "bg-green-50/50 dark:bg-green-950/20";
+    if (["rejected", "sign_rejected", "cc_rejected", "rejected_po"].includes(status)) return "bg-rose-50/50 dark:bg-rose-950/20";
+    return "bg-card dark:bg-slate-900 hover:bg-zinc-50 dark:hover:bg-slate-800/50";
+  };
+
+  // Get status border color for single status
+  const getCardStatusBorderColor = (status: string) => {
+    if (status === "draft") return "border-slate-400 dark:border-slate-600";
+    if (["pending", "sign_pending"].includes(status)) return "border-amber-500 dark:border-amber-600";
+    if (status === "approved") return "border-emerald-500 dark:border-emerald-600";
+    if (status === "recheck") return "border-indigo-500 dark:border-indigo-600";
+    if (status === "ready_for_cc") return "border-blue-500 dark:border-blue-600";
+    if (status === "cc_pending") return "border-purple-500 dark:border-purple-600";
+    if (["cc_approved", "ready_for_po"].includes(status)) return "border-teal-500 dark:border-teal-600";
+    if (["pending_po", "direct_po"].includes(status)) return "border-orange-500 dark:border-orange-600";
+    if (["ready_for_delivery", "out_for_delivery", "delivery_processing", "delivery_stage"].includes(status)) return "border-sky-500 dark:border-sky-600";
+    if (status === "delivered") return "border-green-600 dark:border-green-600";
+    if (["rejected", "sign_rejected", "cc_rejected", "rejected_po"].includes(status)) return "border-rose-500 dark:border-rose-600";
+    return "border-muted";
+  };
+
+  const leftBorderGradient = !allItemsHaveSameStatus ? getLeftBorderGradient(items) : null;
+  const singleStatusBorderClass = allItemsHaveSameStatus ? getCardStatusBorderColor(overallStatus) : "border-slate-200 dark:border-slate-800";
+
+  return (
+    <div
+      className={cn(
+        "border rounded-xl shadow-lg hover:shadow-xl dark:shadow-black/40 transition-all duration-300 overflow-hidden",
+        "!border-l-[6px]", // Force thicker left border
+        !leftBorderGradient && singleStatusBorderClass, // Apply solid class if no gradient
+        leftBorderGradient && "!border-l-transparent border-slate-200 dark:border-slate-800", // Only set transparent if using gradient
+        getCardStatusBgColor(overallStatus)
+      )}
+      style={{
+        backgroundImage: leftBorderGradient || undefined,
+        backgroundSize: "6px 100%",
+        backgroundRepeat: "no-repeat",
+        backgroundPosition: "left top",
+        backgroundOrigin: "border-box"
+      }}
+    >
+      <div className="p-3 sm:p-4">
+        {/* Card Header */}
+        <div className="flex items-start justify-between mb-3 gap-4">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 mb-1 flex-wrap">
+              <span className="font-mono text-xl font-black text-blue-600 dark:text-white flex-shrink-0 tracking-tighter">
+                #{requestNumber}
+              </span>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setIsNotesOpen(true)}
+                className="relative h-6 w-6 p-0 rounded-full hover:bg-muted ml-2"
+                title="View Notes"
+              >
+                <NotebookPen className="h-3.5 w-3.5 text-muted-foreground" />
+                {firstItem.notesCount !== undefined && firstItem.notesCount > 0 && (
+                  <span className="absolute -top-1 -right-1 flex h-3 w-3 items-center justify-center rounded-full bg-destructive text-[8px] text-destructive-foreground ring-1 ring-background">
+                    {firstItem.notesCount}
                   </span>
-                )
-              ) : (
-                "—"
+                )}
+              </Button>
+              {/* Status Badge Hidden as per request to rely on border colors */}
+            </div>
+            <div className="flex items-center gap-3 mt-1">
+              <div className="flex flex-col">
+                <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-wide leading-none mb-0.5">Required</span>
+                <span className={cn("text-xs font-bold leading-none", firstItem.requiredBy && new Date(firstItem.requiredBy) < new Date() ? "text-red-600" : "text-foreground")}>
+                  {firstItem.requiredBy ? format(new Date(firstItem.requiredBy), "dd MMM") : "N/A"}
+                </span>
+              </div>
+              {validItemsCount > 0 && onCreateBulkPO && (
+                <div className="flex items-center gap-2 mr-2 pl-3 border-l border-border/50">
+                  <Checkbox
+                    checked={isAllSelected}
+                    onCheckedChange={toggleSelectAll}
+                    id={`select-all-${requestNumber}`}
+                  />
+                  <label htmlFor={`select-all-${requestNumber}`} className="text-xs text-muted-foreground cursor-pointer select-none">
+                    Select All
+                  </label>
+                </div>
               )}
             </div>
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                {firstItem.site?.address && (
+                  <button
+                    onClick={() => handleOpenInMap(firstItem.site?.address || '')}
+                    className="text-primary hover:text-primary/80 hover:bg-primary/10 rounded-full p-2 transition-colors shrink-0 border border-primary/20 hover:border-primary/40"
+                    title="Open in Maps"
+                  >
+                    <MapPin className="h-3.5 w-3.5" />
+                  </button>
+                )}
+                {firstItem.site ? (
+                  onSiteClick && firstItem.site._id ? (
+                    <button
+                      onClick={() => onSiteClick(firstItem.site!._id)}
+                      className="font-semibold text-sm text-foreground hover:text-primary bg-transparent rounded-sm px-1 -mx-1 transition-colors cursor-pointer text-left truncate flex-1 border border-transparent hover:border-border"
+                    >
+                      {firstItem.site.name}
+                      {firstItem.site.code && <span className="text-muted-foreground ml-1">({firstItem.site.code})</span>}
+                    </button>
+                  ) : (
+                    <span className="font-semibold text-sm truncate flex-1">
+                      {firstItem.site.name}
+                      {firstItem.site.code && <span className="text-muted-foreground ml-1">({firstItem.site.code})</span>}
+                    </span>
+                  )
+                ) : (
+                  "—"
+                )}
+              </div>
+            </div>
           </div>
-        </div>
-        <div className="flex items-center gap-1">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setIsNotesOpen(true)}
-            className="relative h-7 w-7 p-0 rounded-full hover:bg-muted"
-            title="View Notes"
-          >
-            <NotebookPen className="h-4 w-4 text-muted-foreground" />
-            {firstItem.notesCount !== undefined && firstItem.notesCount > 0 && (
-              <span className="absolute top-0 right-0 flex h-3 w-3 items-center justify-center rounded-full bg-destructive text-[8px] text-destructive-foreground">
-                {firstItem.notesCount}
-              </span>
-            )}
-          </Button>
-          {hasMultipleItems && (
+          <div className="flex items-center gap-1">
             <Button
               variant="outline"
               size="sm"
-              className="shrink-0 text-xs touch-manipulation min-h-[32px] ml-1"
-              onClick={() => setIsExpanded(!isExpanded)}
+              className="shrink-0 text-xs h-8 px-3"
+              onClick={() => onViewDetails(firstItem._id)}
             >
-              {isExpanded ? (
-                <ChevronDown className="h-4 w-4" />
-              ) : (
-                <>
-                  <ChevronRight className="h-4 w-4 mr-1" />
-                  <span className="font-semibold">({items.length})</span>
-                </>
-              )}
+              <Eye className="h-3.5 w-3.5 mr-1.5" />
+              View
+            </Button>
+            {hasMultipleItems && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="shrink-0 text-xs touch-manipulation min-h-[32px] ml-1"
+                onClick={() => setIsExpanded(!isExpanded)}
+              >
+                {isExpanded ? (
+                  <ChevronDown className="h-4 w-4" />
+                ) : (
+                  <>
+                    <ChevronRight className="h-4 w-4 mr-1" />
+                    <span className="font-semibold">({items.length})</span>
+                  </>
+                )}
+              </Button>
+            )}
+          </div>
+
+          {/* Bulk Action Header Button */}
+          {selectedItems.size > 0 && onCreateBulkPO && (
+            <Button
+              size="sm"
+              className="h-7 text-xs bg-emerald-600 hover:bg-emerald-700 text-white animate-in zoom-in-95 duration-200"
+              onClick={() => onCreateBulkPO(Array.from(selectedItems) as Id<"requests">[])}
+            >
+              <ShoppingCart className="h-3.5 w-3.5 mr-1.5" />
+              Create PO ({selectedItems.size})
             </Button>
           )}
         </div>
 
-        {/* Bulk Action Header Button */}
-        {selectedItems.size > 0 && onCreateBulkPO && (
-          <Button
-            size="sm"
-            className="h-7 text-xs bg-emerald-600 hover:bg-emerald-700 text-white animate-in zoom-in-95 duration-200"
-            onClick={() => onCreateBulkPO(Array.from(selectedItems) as Id<"requests">[])}
-          >
-            <ShoppingCart className="h-3.5 w-3.5 mr-1.5" />
-            Create PO ({selectedItems.size})
-          </Button>
-        )}
-      </div>
+        {/* Items List */}
+        <div className="space-y-3 mb-3">
+          {(isExpanded ? itemsWithVendor : itemsWithVendor.slice(0, 1)).map((item, idx) => {
+            const displayNumber = item.itemOrder ?? (items.length - idx);
+            const itemPhotos = getItemPhotos(item);
+            const isEditing = editingItemId === item._id;
 
-      {/* Items List */}
-      <div className="space-y-3 mb-3">
-        {(isExpanded ? itemsWithVendor : itemsWithVendor.slice(0, 1)).map((item, idx) => {
-          const displayNumber = item.itemOrder ?? (items.length - idx);
-          const itemPhotos = getItemPhotos(item);
-          const isEditing = editingItemId === item._id;
+            // Check if item has partial stock (some but not enough)
+            const itemInventory = inventoryStatus && inventoryStatus[item.itemName];
+            const hasPartialStock = !!(
+              itemInventory &&
+              itemInventory.centralStock > 0 &&
+              itemInventory.centralStock < item.quantity
+            );
+            const hasFullStock = !!(
+              itemInventory &&
+              itemInventory.centralStock >= item.quantity
+            );
+            const disableDirectActions = hasPartialStock;
+            const directActionDisabledReason = hasPartialStock ? "Partial stock available - please manage via CC" : undefined;
 
-          // Check if item has partial stock (some but not enough)
-          const itemInventory = inventoryStatus && inventoryStatus[item.itemName];
-          const hasPartialStock = !!(
-            itemInventory &&
-            itemInventory.centralStock > 0 &&
-            itemInventory.centralStock < item.quantity
-          );
-          const hasFullStock = !!(
-            itemInventory &&
-            itemInventory.centralStock >= item.quantity
-          );
-          const disableDirectActions = hasPartialStock;
-          const directActionDisabledReason = hasPartialStock ? "Partial stock available - please manage via CC" : undefined;
-
-          return (
-            <div
-              key={item._id}
-              className={cn(
-                "p-3 rounded-lg border shadow-sm",
-                (item.status === "approved" || item.status === "cc_approved" || item.status === "delivered") && "bg-green-50 border-green-200 dark:bg-green-950/20 dark:border-green-800",
-                (item.status === "rejected" || item.status === "cc_rejected" || item.status === "rejected_po") && "bg-red-50 border-red-200 dark:bg-red-950/20 dark:border-red-800",
-                !["approved", "cc_approved", "delivered", "rejected", "cc_rejected", "rejected_po"].includes(item.status) && "bg-card/50"
-              )}
-            >
-              <div className="flex items-start justify-between gap-2 mb-2">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1">
-                    <Badge variant="outline" className="text-xs px-1.5 py-0.5 h-5 min-w-[24px] flex items-center justify-center flex-shrink-0">
-                      {displayNumber}
-                    </Badge>
-                    {item.status === "ready_for_po" && onCreateBulkPO && (
-                      <div className="flex items-center justify-center h-5 w-5 mr-1">
-                        <Checkbox
-                          checked={selectedItems.has(item._id)}
-                          onCheckedChange={() => toggleSelection(item._id)}
-                          className="h-4 w-4"
+            return (
+              <div
+                key={item._id}
+                className={cn(
+                  "p-3 rounded-lg border shadow-sm relative overflow-hidden bg-card hover:shadow-md transition-shadow",
+                  "border-l-[6px]", // Force thick left border
+                  getCardStatusBorderColor(item.status)
+                )}
+              >
+                <div>
+                  <div className="flex gap-3 relative">
+                    {/* Image - Moved to Left */}
+                    <div className="shrink-0 pt-1">
+                      {itemPhotos.length > 0 && (
+                        <CompactImageGallery
+                          images={itemPhotos}
+                          maxDisplay={1}
+                          size="sm"
                         />
-                      </div>
-                    )}
-                    <div className="space-y-1 text-sm flex-1 min-w-0">
-                      <div className="break-words">
-                        <span className="font-medium text-muted-foreground">Item:</span>{" "}
-                        {onItemClick ? (
-                          <button
-                            onClick={() => onItemClick(item.itemName)}
-                            className="font-semibold text-sm text-foreground hover:text-primary bg-transparent rounded-sm px-1 -mx-1 transition-colors cursor-pointer text-left border border-transparent hover:border-border whitespace-normal"
-                          >
-                            {item.itemName}
-                          </button>
-                        ) : (
-                          <span className="font-semibold text-sm">{item.itemName}</span>
-                        )}
-                      </div>
-                      {item.description && (
-                        <div className="text-xs text-muted-foreground break-words whitespace-normal">
-                          <span className="font-medium">Dis:</span> {item.description}
-                        </div>
                       )}
-                      <div className="text-xs text-muted-foreground flex flex-wrap items-center gap-2">
-                        <span><span className="font-medium">Quantity:</span> {item.quantity} {item.unit}</span>
-                        {item.specsBrand && (
-                          <span className="text-primary">• {item.specsBrand}</span>
-                        )}
-                        {getInventoryStatusBadge(item.itemName, item.quantity, item.unit)}
-                      </div>
                     </div>
-                  </div>
-                </div>
-                <div className="flex items-center gap-1 flex-shrink-0">
-                  {itemPhotos.length > 0 && (
-                    <CompactImageGallery
-                      images={itemPhotos}
-                      maxDisplay={itemPhotos.length > 1 ? 2 : 1}
-                      size="md"
-                    />
-                  )}
-                </div>
-              </div>
 
-              {/* Rejection Reason Display */}
-              {((item.status === 'rejected' || item.status === 'cc_rejected' || item.status === 'rejected_po') && item.rejectionReason) && (
-                <div className="mt-3 p-3 bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-800 rounded-md">
-                  <div className="flex items-start gap-2">
-                    <AlertCircle className="h-4 w-4 text-red-600 dark:text-red-400 mt-0.5" />
-                    <div className="flex-1">
-                      <h4 className="text-xs font-semibold text-red-700 dark:text-red-300 mb-1">
-                        Reason for Rejection:
-                      </h4>
-                      <p className="text-xs text-red-600 dark:text-red-400 leading-relaxed">
-                        {item.rejectionReason}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Vendor Details Section */}
-              {canEditVendor && (item.selectedVendorId || (item.vendorQuotes && item.vendorQuotes.length > 0) || isEditing) && (
-                <div className="mt-3 pt-3 border-t border-border/50">
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-2">
-                      <Building className="h-3.5 w-3.5 text-muted-foreground" />
-                      <span className="text-xs font-medium text-muted-foreground">Vendor Details</span>
-                    </div>
-                    {isEditing && (
-                      <div className="flex items-center gap-1">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setEditingItemId(null)}
-                          className="h-6 text-xs px-2"
-                        >
-                          <X className="h-3 w-3 mr-1" />
-                          Cancel
-                        </Button>
-                        <Button
-                          size="sm"
-                          onClick={() => handleSaveVendorDetails(item._id)}
-                          className="h-6 text-xs px-2"
-                        >
-                          <Save className="h-3 w-3 mr-1" />
-                          Save
-                        </Button>
-                      </div>
-                    )}
-                  </div>
-
-                  {isEditing ? (
-                    <div className="space-y-3">
-                      {/* Vendor Selection */}
-                      <div className="space-y-2">
-                        <Label className="text-xs font-medium flex items-center gap-1.5">
-                          <Building className="h-3.5 w-3.5" />
-                          Select Vendor
-                        </Label>
-                        <div className="relative">
-                          <Select
-                            value={item.selectedVendorId || ""}
-                            onValueChange={(value) => updateItemWithVendor(item._id, { selectedVendorId: value as Id<"vendors"> || null })}
-                          >
-                            <SelectTrigger className="h-8 text-xs">
-                              <SelectValue placeholder="Choose vendor..." />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <div className="p-2 border-b">
-                                <div className="relative">
-                                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-3 w-3 text-muted-foreground" />
-                                  <Input
-                                    placeholder="Search vendors..."
-                                    value={vendorSearchQuery}
-                                    onChange={(e) => setVendorSearchQuery(e.target.value)}
-                                    className="pl-8 h-7 text-xs"
-                                    onClick={(e) => e.stopPropagation()}
-                                  />
-                                </div>
+                    <div className="flex-1 min-w-0 space-y-1">
+                      {/* Top Row: Index + Item Name + Quantity */}
+                      <div className="flex justify-between items-start gap-3">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2 mb-1">
+                            <Badge variant="outline" className="text-xs px-1.5 py-0.5 h-5 min-w-[24px] flex items-center justify-center flex-shrink-0 bg-primary/5 text-primary border-primary/20">
+                              #{displayNumber}
+                            </Badge>
+                            {/* Checkbox for Ready for PO */}
+                            {item.status === "ready_for_po" && onCreateBulkPO && (
+                              <div className="flex items-center justify-center h-5 w-5">
+                                <Checkbox
+                                  checked={selectedItems.has(item._id)}
+                                  onCheckedChange={() => toggleSelection(item._id)}
+                                  className="h-4 w-4"
+                                />
                               </div>
-                              {filteredVendors.map((vendor) => (
-                                <SelectItem key={vendor._id} value={vendor._id} className="text-xs">
-                                  <div className="flex items-center gap-2">
-                                    <span>{vendor.companyName}</span>
-                                    <span className="text-muted-foreground">• {vendor.email}</span>
+                            )}
+                            <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Item Name</span>
+                          </div>
+
+                          <div className="break-words pr-2">
+                            {onItemClick ? (
+                              <button
+                                onClick={() => onItemClick(item.itemName)}
+                                className="font-extrabold text-xl text-foreground hover:text-primary transition-colors text-left leading-tight tracking-tight"
+                              >
+                                {item.itemName}
+                              </button>
+                            ) : (
+                              <span className="font-extrabold text-xl text-foreground leading-tight tracking-tight">{item.itemName}</span>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Right Side: Quantity */}
+                        <div className="flex flex-col items-end shrink-0">
+                          <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider mb-0.5">Quantity</span>
+                          <div className="flex items-baseline gap-1 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-2 py-0.5 rounded shadow-sm">
+                            <span className="text-base font-black text-slate-900 dark:text-slate-100">{item.quantity}</span>
+                            <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase">{item.unit}</span>
+                          </div>
+                          <div className="mt-1 flex justify-end">
+                            <div
+                              onClick={(e) => { e.stopPropagation(); onItemClick?.(item.itemName); }}
+                              className={cn("transition-all", onItemClick && "cursor-pointer hover:opacity-80 active:scale-95")}
+                              title="Click to view item details"
+                            >
+                              {getInventoryStatusBadge(item.itemName, item.quantity, item.unit)}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Description & Details */}
+                      <div className="space-y-1 pt-2">
+                        {item.description && (
+                          <div className="bg-muted/10 rounded-md p-0">
+                            <span className="text-[10px] uppercase font-bold text-muted-foreground/70 tracking-wider block mb-0.5">Description</span>
+                            <ExpandableText text={item.description} limit={60} />
+                          </div>
+                        )}
+                        <div className="flex flex-wrap items-center gap-2 pt-1">
+                          {item.specsBrand && (
+                            <span className="text-xs font-medium text-primary bg-primary/5 px-1.5 py-0.5 rounded">
+                              {item.specsBrand}
+                            </span>
+                          )}
+                          {/* Stock status moved to Right side */}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Rejection Reason Display */}
+                  {((item.status === 'rejected' || item.status === 'cc_rejected' || item.status === 'rejected_po') && item.rejectionReason) && (
+                    <div className="mt-3 p-3 bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-800 rounded-md">
+                      <div className="flex items-start gap-2">
+                        <AlertCircle className="h-4 w-4 text-red-600 dark:text-red-400 mt-0.5" />
+                        <div className="flex-1">
+                          <h4 className="text-xs font-semibold text-red-700 dark:text-red-300 mb-1">
+                            Reason for Rejection:
+                          </h4>
+                          <p className="text-xs text-red-600 dark:text-red-400 leading-relaxed">
+                            {item.rejectionReason}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Vendor Details Section */}
+                  {canEditVendor && (item.selectedVendorId || (item.vendorQuotes && item.vendorQuotes.length > 0) || isEditing) && (
+                    <div className="mt-3 pt-3 border-t border-border/50">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          <Building className="h-3.5 w-3.5 text-muted-foreground" />
+                          <span className="text-xs font-medium text-muted-foreground">Vendor Details</span>
+                        </div>
+                        {isEditing && (
+                          <div className="flex items-center gap-1">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setEditingItemId(null)}
+                              className="h-6 text-xs px-2"
+                            >
+                              <X className="h-3 w-3 mr-1" />
+                              Cancel
+                            </Button>
+                            <Button
+                              size="sm"
+                              onClick={() => handleSaveVendorDetails(item._id)}
+                              className="h-6 text-xs px-2"
+                            >
+                              <Save className="h-3 w-3 mr-1" />
+                              Save
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+
+                      {isEditing ? (
+                        <div className="space-y-3">
+                          {/* Vendor Selection */}
+                          <div className="space-y-2">
+                            <Label className="text-xs font-medium flex items-center gap-1.5">
+                              <Building className="h-3.5 w-3.5" />
+                              Select Vendor
+                            </Label>
+                            <div className="relative">
+                              <Select
+                                value={item.selectedVendorId || ""}
+                                onValueChange={(value) => updateItemWithVendor(item._id, { selectedVendorId: value as Id<"vendors"> || null })}
+                              >
+                                <SelectTrigger className="h-8 text-xs">
+                                  <SelectValue placeholder="Choose vendor..." />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <div className="p-2 border-b">
+                                    <div className="relative">
+                                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-3 w-3 text-muted-foreground" />
+                                      <Input
+                                        placeholder="Search vendors..."
+                                        value={vendorSearchQuery}
+                                        onChange={(e) => setVendorSearchQuery(e.target.value)}
+                                        className="pl-8 h-7 text-xs"
+                                        onClick={(e) => e.stopPropagation()}
+                                      />
+                                    </div>
                                   </div>
-                                </SelectItem>
-                              ))}
-                              {filteredVendors.length === 0 && vendorSearchQuery && (
-                                <div className="px-2 py-4 text-center text-xs text-muted-foreground">
-                                  No vendors found
+                                  {filteredVendors.map((vendor) => (
+                                    <SelectItem key={vendor._id} value={vendor._id} className="text-xs">
+                                      <div className="flex items-center gap-2">
+                                        <span>{vendor.companyName}</span>
+                                        <span className="text-muted-foreground">• {vendor.email}</span>
+                                      </div>
+                                    </SelectItem>
+                                  ))}
+                                  {filteredVendors.length === 0 && vendorSearchQuery && (
+                                    <div className="px-2 py-4 text-center text-xs text-muted-foreground">
+                                      No vendors found
+                                    </div>
+                                  )}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          </div>
+
+                          {/* Quantity & Unit with Suggestions */}
+                          <div className="space-y-2">
+                            <Label className="text-xs font-medium flex items-center gap-1.5">
+                              <Sparkles className="h-3.5 w-3.5" />
+                              Quantity & Unit
+                            </Label>
+                            <div className="relative">
+                              <Input
+                                type="text"
+                                value={item.vendorQuantityInput || ""}
+                                onChange={(e) => handleVendorQuantityInputChange(item._id, e.target.value)}
+                                onFocus={() => updateItemWithVendor(item._id, { showVendorQuantitySuggestions: true })}
+                                placeholder="e.g., 10 bags, 5 kg, 20 nos"
+                                className="h-8 text-xs pr-8"
+                              />
+                              {item.vendorQuantityInput && (
+                                <button
+                                  onClick={() => updateItemWithVendor(item._id, {
+                                    vendorQuantityInput: "",
+                                    vendorQuantity: "",
+                                    vendorUnit: "",
+                                    showVendorQuantitySuggestions: false
+                                  })}
+                                  className="absolute right-2 top-1/2 transform -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                                >
+                                  <X className="h-3 w-3" />
+                                </button>
+                              )}
+
+                              {/* Quantity Suggestions Dropdown */}
+                              {item.showVendorQuantitySuggestions && item.vendorQuantityInput && (
+                                <div
+                                  className="absolute top-full left-0 right-0 z-50 bg-popover border border-border rounded-md shadow-md max-h-48 overflow-y-auto"
+                                  style={{ marginTop: '2px' }}
+                                >
+                                  {generateQuantitySuggestions(item.vendorQuantityInput, item.unit).map((suggestion, index) => (
+                                    <button
+                                      key={index}
+                                      onClick={() => handleVendorQuantitySelect(item._id, suggestion)}
+                                      className="w-full text-left px-3 py-2 text-xs hover:bg-accent hover:text-accent-foreground first:rounded-t-md last:rounded-b-md"
+                                    >
+                                      {suggestion}
+                                    </button>
+                                  ))}
                                 </div>
                               )}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                      </div>
-
-                      {/* Quantity & Unit with Suggestions */}
-                      <div className="space-y-2">
-                        <Label className="text-xs font-medium flex items-center gap-1.5">
-                          <Sparkles className="h-3.5 w-3.5" />
-                          Quantity & Unit
-                        </Label>
-                        <div className="relative">
-                          <Input
-                            type="text"
-                            value={item.vendorQuantityInput || ""}
-                            onChange={(e) => handleVendorQuantityInputChange(item._id, e.target.value)}
-                            onFocus={() => updateItemWithVendor(item._id, { showVendorQuantitySuggestions: true })}
-                            placeholder="e.g., 10 bags, 5 kg, 20 nos"
-                            className="h-8 text-xs pr-8"
-                          />
-                          {item.vendorQuantityInput && (
-                            <button
-                              onClick={() => updateItemWithVendor(item._id, {
-                                vendorQuantityInput: "",
-                                vendorQuantity: "",
-                                vendorUnit: "",
-                                showVendorQuantitySuggestions: false
-                              })}
-                              className="absolute right-2 top-1/2 transform -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                            >
-                              <X className="h-3 w-3" />
-                            </button>
-                          )}
-
-                          {/* Quantity Suggestions Dropdown */}
-                          {item.showVendorQuantitySuggestions && item.vendorQuantityInput && (
-                            <div
-                              className="absolute top-full left-0 right-0 z-50 bg-popover border border-border rounded-md shadow-md max-h-48 overflow-y-auto"
-                              style={{ marginTop: '2px' }}
-                            >
-                              {generateQuantitySuggestions(item.vendorQuantityInput, item.unit).map((suggestion, index) => (
-                                <button
-                                  key={index}
-                                  onClick={() => handleVendorQuantitySelect(item._id, suggestion)}
-                                  className="w-full text-left px-3 py-2 text-xs hover:bg-accent hover:text-accent-foreground first:rounded-t-md last:rounded-b-md"
-                                >
-                                  {suggestion}
-                                </button>
-                              ))}
                             </div>
-                          )}
-                        </div>
-                      </div>
+                          </div>
 
-                      {/* Vendor Notes */}
-                      <div className="space-y-2">
-                        <Label className="text-xs font-medium flex items-center gap-1.5">
-                          <FileText className="h-3.5 w-3.5" />
-                          Vendor Notes <span className="text-muted-foreground font-normal">(Optional)</span>
-                        </Label>
-                        <Textarea
-                          value={item.vendorNotes || ""}
-                          onChange={(e) => updateItemWithVendor(item._id, { vendorNotes: e.target.value })}
-                          placeholder="Additional notes for vendor..."
-                          className="min-h-[60px] text-xs"
-                          rows={2}
-                        />
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="text-xs text-muted-foreground space-y-1">
-                      {item.selectedVendorId ? (
-                        <>
-                          <div className="flex items-center gap-2">
-                            <span className="font-medium">Vendor:</span>
-                            <span>{getVendorName(item.selectedVendorId as Id<"vendors">)}</span>
+                          {/* Vendor Notes */}
+                          <div className="space-y-2">
+                            <Label className="text-xs font-medium flex items-center gap-1.5">
+                              <FileText className="h-3.5 w-3.5" />
+                              Vendor Notes <span className="text-muted-foreground font-normal">(Optional)</span>
+                            </Label>
+                            <Textarea
+                              value={item.vendorNotes || ""}
+                              onChange={(e) => updateItemWithVendor(item._id, { vendorNotes: e.target.value })}
+                              placeholder="Additional notes for vendor..."
+                              className="min-h-[60px] text-xs"
+                              rows={2}
+                            />
                           </div>
-                          {(item.vendorQuantityInput || item.vendorNotes) && (
-                            <div className="flex items-center gap-2">
-                              {item.vendorQuantityInput && (
-                                <span className="font-medium">Qty:</span>
+                        </div>
+                      ) : (
+                        <div className="text-xs text-muted-foreground space-y-1">
+                          {item.selectedVendorId ? (
+                            <>
+                              <div className="flex items-center gap-2">
+                                <span className="font-medium">Vendor:</span>
+                                <span>{getVendorName(item.selectedVendorId as Id<"vendors">)}</span>
+                              </div>
+                              {(item.vendorQuantityInput || item.vendorNotes) && (
+                                <div className="flex items-center gap-2">
+                                  {item.vendorQuantityInput && (
+                                    <span className="font-medium">Qty:</span>
+                                  )}
+                                  {item.vendorQuantityInput && (
+                                    <span>{item.vendorQuantityInput}</span>
+                                  )}
+                                  {item.vendorNotes && (
+                                    <>
+                                      {item.vendorQuantityInput && <span>•</span>}
+                                      <span className="font-medium">Notes:</span>
+                                      <span className="truncate">{item.vendorNotes}</span>
+                                    </>
+                                  )}
+                                </div>
                               )}
-                              {item.vendorQuantityInput && (
-                                <span>{item.vendorQuantityInput}</span>
-                              )}
-                              {item.vendorNotes && (
-                                <>
-                                  {item.vendorQuantityInput && <span>•</span>}
-                                  <span className="font-medium">Notes:</span>
-                                  <span className="truncate">{item.vendorNotes}</span>
-                                </>
-                              )}
-                            </div>
-                          )}
-                        </>
-                      ) : item.vendorQuotes && item.vendorQuotes.length > 0 ? (
-                        <>
-                          <div className="flex items-center gap-2">
-                            <span className="font-medium">Vendors Quoted:</span>
-                            <span>{item.vendorQuotes.length} vendor{item.vendorQuotes.length !== 1 ? 's' : ''}</span>
-                          </div>
-                          <div className="text-xs text-muted-foreground mt-1">
-                            {item.vendorQuotes.slice(0, 2).map((quote, index) => (
-                              <span key={quote.vendorId}>
-                                {getVendorName(quote.vendorId)}
-                                {index < Math.min(item.vendorQuotes!.length - 1, 1) && ', '}
-                              </span>
-                            ))}
-                            {item.vendorQuotes.length > 2 && ` +${item.vendorQuotes.length - 2} more`}
-                          </div>
-                        </>
-                      ) : null}
+                            </>
+                          ) : item.vendorQuotes && item.vendorQuotes.length > 0 ? (
+                            <>
+                              <div className="flex items-center gap-2">
+                                <span className="font-medium">Vendors Quoted:</span>
+                                <span>{item.vendorQuotes.length} vendor{item.vendorQuotes.length !== 1 ? 's' : ''}</span>
+                              </div>
+                              <div className="text-xs text-muted-foreground mt-1">
+                                {item.vendorQuotes.slice(0, 2).map((quote, index) => (
+                                  <span key={quote.vendorId}>
+                                    {getVendorName(quote.vendorId)}
+                                    {index < Math.min(item.vendorQuotes!.length - 1, 1) && ', '}
+                                  </span>
+                                ))}
+                                {item.vendorQuotes.length > 2 && ` +${item.vendorQuotes.length - 2} more`}
+                              </div>
+                            </>
+                          ) : null}
+                        </div>
+                      )}
                     </div>
                   )}
-                </div>
-              )}
 
-              {/* Status badges on new line */}
-              <div className="flex items-center justify-between pt-2 border-t mt-2">
-                <div className="flex items-center gap-2">
-                  {item.isUrgent && (
-                    <Badge variant="destructive" className="text-xs flex-shrink-0">
-                      <AlertCircle className="h-3 w-3 mr-1" />
-                      Urgent
-                    </Badge>
-                  )}
-                  {(item.status === 'approved' || item.status === 'cc_approved') && (
-                    <Badge variant="default" className="bg-green-600 hover:bg-green-700 text-white text-xs flex-shrink-0">
-                      ✓ Approved
-                    </Badge>
-                  )}
-                  {(item.status === 'rejected' || item.status === 'cc_rejected') && (
-                    <Badge variant="destructive" className="text-xs flex-shrink-0">
-                      ✗ Rejected
-                    </Badge>
-                  )}
-                  {item.status !== 'approved' && item.status !== 'rejected' && item.status !== 'cc_approved' && item.status !== 'cc_rejected' && getStatusBadge(item.status)}
-                  {/* Approved Split Badge */}
-                  {item.isSplitApproved && (
-                    <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200 text-xs flex-shrink-0 flex items-center gap-1">
-                      <CheckCircle className="h-3 w-3" />
-                      Split Approved
-                    </Badge>
-                  )}
-                </div>
-                <div className="flex items-center gap-2">
-                  {/* Per-item action button */}
-                  {(["recheck", "pending"].includes(item.status)) && (
-                    <>
-                      {/* Strict conditional: Show Delivery only if authorized */}
-                      {/* Show Ready for Delivery ONLY if authorized "delivery" */}
-                      {item.directAction === "delivery" && onDirectDelivery && (
-                        <Button
-                          size="sm"
-                          onClick={() => setShowReadyForDeliveryConfirm(item._id)}
-                          disabled={!hasFullStock}
-                          title={!hasFullStock ? "Insufficient stock for direct delivery." : ""}
-                          className="text-xs h-7 px-3 bg-orange-50 text-orange-700 border-orange-200 hover:bg-orange-600 hover:text-white hover:border-orange-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed font-medium shadow-sm dark:bg-orange-900/20 dark:text-orange-300 dark:border-orange-800 dark:hover:bg-orange-600"
-                          variant="outline"
-                        >
-                          <Truck className="h-3.5 w-3.5 mr-1.5" />
-                          Ready for Delivery
+                  {/* Actions Footer - Manager Style */}
+                  <div className="flex items-center justify-between pt-3 mt-3 border-t border-border/50">
+                    <div className="flex items-center gap-2">
+                      {item.isUrgent && (
+                        <Badge variant="destructive" className="text-[10px] px-2 py-0.5h-5 gap-1 shadow-sm">
+                          <AlertCircle className="h-3 w-3" />
+                          URGENT
+                        </Badge>
+                      )}
+                      {(item.status === 'approved' || item.status === 'cc_approved') && (
+                        <Badge className="bg-emerald-600/10 text-emerald-600 border-emerald-200 dark:border-emerald-800 dark:text-emerald-400 text-[10px] px-2 py-0.5 h-5 shadow-sm hover:bg-emerald-600/20" variant="outline">
+                          Approved
+                        </Badge>
+                      )}
+                      {(item.status === 'rejected' || item.status === 'cc_rejected') && (
+                        <Badge variant="destructive" className="text-[10px] px-2 py-0.5 h-5 shadow-sm">
+                          Rejected
+                        </Badge>
+                      )}
+                      {item.isSplitApproved && (
+                        <Badge variant="outline" className="bg-purple-50 text-purple-700 border-purple-200 text-[10px] px-2 py-0.5 h-5 gap-1 shadow-sm">
+                          <CheckCircle className="h-3 w-3" />
+                          Split Approved
+                        </Badge>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      {/* Primary Action Buttons based on Status */}
+
+                      {/* Ready for Delivery / PO Actions */}
+                      {["recheck", "pending", "approved"].includes(item.status) && (
+                        <>
+                          {(item.directAction === "delivery" || item.directAction === "all") && onDirectDelivery && (
+                            <Button size="sm" onClick={() => setShowReadyForDeliveryConfirm(item._id)} disabled={!hasFullStock} className="h-7 text-xs bg-orange-50 text-orange-700 border-orange-200 hover:bg-orange-100 hover:text-orange-800 dark:bg-orange-950/30 dark:text-orange-400 dark:border-orange-800" variant="outline">
+                              <Truck className="h-3.5 w-3.5 mr-1.5" /> You can Deliver
+                            </Button>
+                          )}
+                          {(item.directAction === "po" || item.directAction === "all") && onDirectPO && (
+                            <Button size="sm" onClick={() => setShowReadyForPOConfirm(item._id)} className="h-7 text-xs bg-teal-50 text-teal-700 border-teal-200 hover:bg-teal-100 hover:text-teal-800 dark:bg-teal-950/30 dark:text-teal-400 dark:border-teal-800" variant="outline">
+                              <ShoppingCart className="h-3.5 w-3.5 mr-1.5" /> Ready for PO
+                            </Button>
+                          )}
+                        </>
+                      )}
+
+                      {/* Manager Actions: Ready for CC / Check */}
+                      {["approved", "recheck"].includes(item.status) && (
+                        <>
+                          {onMoveToCC && (
+                            <Button size="sm" onClick={() => setShowReadyForCCConfirm(item._id)} className="h-7 text-xs bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100 hover:text-blue-800 dark:bg-blue-950/30 dark:text-blue-400 dark:border-blue-800" variant="outline">
+                              <FileText className="h-3.5 w-3.5 mr-1.5" /> Ready for CC
+                            </Button>
+                          )}
+                          {onCheck && (
+                            <Button size="sm" onClick={() => onCheck(item._id)} className="h-7 text-xs bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100 hover:text-purple-800 dark:bg-purple-950/30 dark:text-purple-400 dark:border-purple-800" variant="outline">
+                              <PieChart className="h-3.5 w-3.5 mr-1.5" /> Check/Split
+                            </Button>
+                          )}
+                        </>
+                      )}
+
+                      {/* Next Stage Actions */}
+                      {item.status === "ready_for_cc" && (
+                        <Button size="sm" onClick={() => (onOpenCC || onCheck)?.(item._id)} className="h-7 text-xs bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100 hover:text-blue-800 dark:bg-blue-950/30 dark:text-blue-400 dark:border-blue-800" variant="outline">
+                          <FileText className="h-3.5 w-3.5 mr-1.5" /> CC
                         </Button>
                       )}
 
-                      {/* Show Ready for PO ONLY if authorized "po" */}
-                      {item.directAction === "po" && onDirectPO && (
-                        <Button
-                          size="sm"
-                          onClick={() => setShowReadyForPOConfirm(item._id)}
-                          title="Ready for PO"
-                          className="text-xs h-7 px-3 bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-600 hover:text-white hover:border-emerald-600 transition-all font-medium shadow-sm dark:bg-emerald-900/20 dark:text-emerald-300 dark:border-emerald-800 dark:hover:bg-emerald-600"
-                          variant="outline"
-                        >
-                          <ShoppingCart className="h-3.5 w-3.5 mr-1.5" />
-                          Ready for PO
-                        </Button>
-                      )}
-                    </>
-                  )}
-                  {/* End of restricted action buttons */}
-
-
-
-                  {/* Approved/Recheck Items Actions */}
-                  {["approved", "recheck"].includes(item.status) && (
-                    <>
-                      {/* Ready for CC Button */}
-                      {onMoveToCC && (
-                        <Button
-                          size="sm"
-                          onClick={() => setShowReadyForCCConfirm(item._id)}
-                          disabled={hasFullStock}
-                          title={hasFullStock ? "Full stock available. Use Direct Delivery." : ""}
-                          className="text-xs h-7 px-3 bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-600 hover:text-white hover:border-blue-600 transition-all shadow-sm font-medium dark:bg-blue-900/20 dark:text-blue-300 dark:border-blue-800 dark:hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed"
-                          variant="outline"
-                        >
-                          <FileText className="h-3.5 w-3.5 mr-1.5" />
-                          Ready for CC
+                      {item.status === "ready_for_po" && onCreatePO && (
+                        <Button size="sm" onClick={() => onCreatePO(item._id)} className="h-7 text-xs bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100 hover:text-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-400 dark:border-emerald-800" variant="outline">
+                          <ShoppingCart className="h-3.5 w-3.5 mr-1.5" /> Create PO
                         </Button>
                       )}
 
-                      {/* Check/Split Button */}
-                      {onCheck && (
-                        <Button
-                          size="sm"
-                          onClick={() => onCheck(item._id)}
-                          className="text-xs h-7 px-3 bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-600 hover:text-white hover:border-purple-600 transition-all shadow-sm font-medium dark:bg-purple-900/20 dark:text-purple-300 dark:border-purple-800 dark:hover:bg-purple-600"
-                          variant="outline"
-                        >
-                          <PieChart className="h-3.5 w-3.5 mr-1.5" />
-                          Check/Split
-                        </Button>
-                      )}
-                    </>
-                  )}
+                      {/* Universal View Button Removed as per request */}
 
-                  {/* Ready for CC Status - View CC */}
-                  {item.status === "ready_for_cc" && (
-                    <Button
-                      size="sm"
-                      onClick={() => (onOpenCC || onCheck)?.(item._id)}
-                      className="text-xs h-7 px-3 bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-600 hover:text-white hover:border-blue-600 transition-all shadow-sm font-medium dark:bg-blue-900/20 dark:text-blue-300 dark:border-blue-800 dark:hover:bg-blue-600"
-                      variant="outline"
-                    >
-                      <FileText className="h-3.5 w-3.5 mr-1.5" />
-                      CC
-                    </Button>
-                  )}
-
-                  {item.status === "cc_rejected" && (
-                    <Button
-                      size="sm"
-                      onClick={() => (onOpenCC || onCheck)?.(item._id)}
-                      className="text-xs h-7 px-3 bg-orange-50 text-orange-700 border-orange-200 hover:bg-orange-600 hover:text-white hover:border-orange-600 transition-all shadow-sm font-medium dark:bg-orange-900/20 dark:text-orange-300 dark:border-orange-800 dark:hover:bg-orange-600"
-                      variant="outline"
-                    >
-                      <AlertCircle className="h-3.5 w-3.5 mr-1.5" />
-                      Recheck CC
-                    </Button>
-                  )}
-                  {/* View PDF Button for Specific Statuses */}
-                  {onViewPDF && ["sign_pending", "sign_rejected", "ordered", "pending_po", "ready_for_delivery", "delivery_processing", "delivered"].includes(item.status) && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => onViewPDF(requestNumber)}
-                      className="text-xs h-7 px-3 bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-600 hover:text-white hover:border-blue-600 transition-all shadow-sm font-medium dark:bg-blue-900/20 dark:text-blue-300 dark:border-blue-800 dark:hover:bg-blue-600"
-                    >
-                      <FileText className="h-3.5 w-3.5 mr-1.5" />
-                      View PDF
-                    </Button>
-                  )}
-                  {/* View DC Button for items with delivery challan */}
-                  {item.deliveryId && ["delivery_processing", "delivered"].includes(item.status) && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setViewDCId(item.deliveryId!)}
-                      className="text-xs h-7 px-3 bg-green-50 text-green-700 border-green-200 hover:bg-green-600 hover:text-white hover:border-green-600 transition-all shadow-sm font-medium dark:bg-green-900/20 dark:text-green-300 dark:border-green-800 dark:hover:bg-green-600"
-                    >
-                      <Truck className="h-3.5 w-3.5 mr-1.5" />
-                      View DC
-                    </Button>
-                  )}
-                  {/* Confirm Delivery Button - Site Engineer & Purchase only, requires DC to exist */}
-                  {item.deliveryId && ["delivery_processing"].includes(item.status) && (userRole === ROLES.SITE_ENGINEER || userRole === ROLES.PURCHASE_OFFICER) && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setShowConfirmDelivery(item._id)}
-                      className="text-xs h-7 px-3 bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-600 hover:text-white hover:border-emerald-600 transition-all shadow-sm font-medium dark:bg-emerald-900/20 dark:text-emerald-300 dark:border-emerald-800 dark:hover:bg-emerald-600"
-                    >
-                      <CheckCircle className="h-3.5 w-3.5 mr-1.5" />
-                      Confirm Delivery
-                    </Button>
-                  )}
-                  {item.status === "ready_for_po" && onCreatePO && (
-                    <Button
-                      size="sm"
-                      onClick={() => onCreatePO(item._id)}
-                      className="text-xs h-7 px-3 bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-600 hover:text-white hover:border-emerald-600 transition-all shadow-sm font-medium dark:bg-emerald-900/20 dark:text-emerald-300 dark:border-emerald-800 dark:hover:bg-emerald-600"
-                      variant="outline"
-                    >
-                      <ShoppingCart className="h-3.5 w-3.5 mr-1.5" />
-                      Create PO
-                    </Button>
-                  )}
-                  {item.status === "sign_rejected" && onCreatePO && (
-                    <Button
-                      size="sm"
-                      onClick={() => onCreatePO(item._id)}
-                      className="text-xs h-7 px-3 bg-red-50 text-red-700 border-red-200 hover:bg-red-600 hover:text-white hover:border-red-600 transition-all shadow-sm font-medium dark:bg-red-900/20 dark:text-red-300 dark:border-red-800 dark:hover:bg-red-600"
-                      variant="outline"
-                    >
-                      <RotateCw className="h-3.5 w-3.5 mr-1.5" />
-                      Resubmit PO
-                    </Button>
-                  )}
-                  {["ready_for_delivery"].includes(item.status) && (
-                    <Button
-                      size="sm"
-                      onClick={() => {
-                        // For pending_po: Show edit quantity dialog first
-                        if (item.status === "pending_po") {
-                          setEditQuantityItem({
-                            id: item._id,
-                            quantity: item.quantity,
-                            name: item.itemName,
-                            unit: item.unit
-                          });
-                        } else {
-                          // For ready_for_delivery: Directly open Create DC
-                          setMarkDeliveryItem({
-                            id: item._id,
-                            poId: item.poId,
-                            quantity: item.quantity,
-                            name: item.itemName,
-                            unit: item.unit
-                          });
-                        }
-                      }}
-                      className="text-xs h-7 px-3 bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-600 hover:text-white hover:border-indigo-600 transition-all shadow-sm font-medium dark:bg-indigo-900/20 dark:text-indigo-300 dark:border-indigo-800 dark:hover:bg-indigo-600"
-                      variant="outline"
-                    >
-                      <Truck className="h-3.5 w-3.5 mr-1.5" />
-                      {item.status === "ready_for_delivery" ? "Create DC" : "Ready for Delivery"}
-                    </Button>
-                  )}
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => onViewDetails(item._id)}
-                    className="text-xs h-7 px-3 bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-800 hover:text-white hover:border-slate-800 transition-all shadow-sm font-medium dark:bg-slate-800/50 dark:text-slate-300 dark:border-slate-700 dark:hover:bg-slate-700"
-                  >
-                    {item.status === "sign_pending" && isManager ? <Edit className="h-3.5 w-3.5 mr-1.5" /> : <Eye className="h-3.5 w-3.5 mr-1.5" />}
-                    {item.status === "sign_pending" && isManager ? "Sign" : "View"}
-                  </Button>
+                    </div>
+                  </div>
                 </div>
               </div>
-            </div>
-          );
-        })}
+
+            );
+          })}
+        </div>
       </div>
       {/* Notes Timeline Dialog */}
       <NotesTimelineDialog

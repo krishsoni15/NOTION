@@ -18,6 +18,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { AlertCircle, Eye, FileText, MapPin, Search, X, Sparkles, Building, Plus, Save, Edit, Check, Truck, Package, PackageX, NotebookPen, ShoppingCart, ChevronDown, ChevronRight, CheckCircle, PieChart, RotateCw, CheckSquare, Square } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { CompactImageGallery } from "@/components/ui/image-gallery";
+import { UserProfile } from "@/components/chat/user-profile";
+import { LazyImage } from "@/components/ui/lazy-image";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { OnlineIndicator } from "@/components/chat/online-indicator";
+import { useUserPresence } from "@/hooks/use-presence";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { NotesTimelineDialog } from "@/components/requests/notes-timeline-dialog";
@@ -32,6 +37,7 @@ import { ROLES } from "@/lib/auth/roles";
 
 interface RequestItem {
   _id: Id<"requests">;
+  _creationTime: number;
   requestNumber: string;
   itemName: string;
   quantity: number;
@@ -57,7 +63,13 @@ interface RequestItem {
     address?: string;
   } | null;
   creator?: {
+    _id: Id<"users">;
     fullName: string;
+    username: string;
+    role: string;
+    profileImage?: string;
+    phoneNumber?: string;
+    address?: string;
   } | null;
   selectedVendorId?: Id<"vendors"> | null;
   vendorQuotes?: Array<{
@@ -102,7 +114,7 @@ interface PurchaseRequestGroupCardProps {
   hasMultipleItems: boolean;
   urgentCount: number;
   onViewDetails: (requestId: Id<"requests">) => void;
-  onOpenCC?: (requestId: Id<"requests">) => void;
+  onOpenCC?: (requestId: Id<"requests">, allIds?: Id<"requests">[]) => void;
   onSiteClick?: (siteId: Id<"sites">) => void;
   onItemClick?: (itemName: string) => void;
   canEditVendor?: boolean;
@@ -430,6 +442,7 @@ const ExpandableText = ({ text, className, limit = 100 }: { text: string, classN
           {isExpanded ? "Show Less" : "Read More"}
         </button>
       )}
+
     </div>
   );
 };
@@ -575,6 +588,20 @@ export function PurchaseRequestGroupCard({
   const [viewDCId, setViewDCId] = useState<Id<"deliveries"> | null>(null);
   const [showConfirmDelivery, setShowConfirmDelivery] = useState<Id<"requests"> | null>(null);
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
+  const [showUserProfile, setShowUserProfile] = useState(false);
+
+  // Helper to ensure creator object matches UserProfile props
+  const creatorForProfile = firstItem.creator ? {
+    _id: firstItem.creator._id,
+    fullName: firstItem.creator.fullName,
+    username: firstItem.creator.username || "", // Handle missing defaults if query doesn't match perfectly
+    role: firstItem.creator.role || "site_engineer",
+    profileImage: firstItem.creator.profileImage,
+  } : null;
+
+
+  const creatorPresence = useUserPresence(firstItem.creator?._id ?? null);
+  const isCreatorOnline = creatorPresence?.isOnline ?? false;
 
   // Handle individual selection
   const toggleSelection = (requestId: string) => {
@@ -790,6 +817,10 @@ export function PurchaseRequestGroupCard({
   const leftBorderGradient = !allItemsHaveSameStatus ? getLeftBorderGradient(items) : null;
   const singleStatusBorderClass = allItemsHaveSameStatus ? getCardStatusBorderColor(overallStatus) : "border-slate-200 dark:border-slate-800";
 
+  // Calculate CC pending items for manager
+  const ccPendingItems = items.filter(item => item.status === "cc_pending");
+  const hasCCPending = ccPendingItems.length > 0;
+
   return (
     <div
       className={cn(
@@ -815,20 +846,7 @@ export function PurchaseRequestGroupCard({
               <span className="font-mono text-xl font-black text-blue-600 dark:text-white flex-shrink-0 tracking-tighter">
                 #{requestNumber}
               </span>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setIsNotesOpen(true)}
-                className="relative h-6 w-6 p-0 rounded-full hover:bg-muted ml-2"
-                title="View Notes"
-              >
-                <NotebookPen className="h-3.5 w-3.5 text-muted-foreground" />
-                {firstItem.notesCount !== undefined && firstItem.notesCount > 0 && (
-                  <span className="absolute -top-1 -right-1 flex h-3 w-3 items-center justify-center rounded-full bg-destructive text-[8px] text-destructive-foreground ring-1 ring-background">
-                    {firstItem.notesCount}
-                  </span>
-                )}
-              </Button>
+
               {/* Status Badge Hidden as per request to rely on border colors */}
             </div>
             <div className="flex items-center gap-3 mt-1">
@@ -838,6 +856,7 @@ export function PurchaseRequestGroupCard({
                   {firstItem.requiredBy ? format(new Date(firstItem.requiredBy), "dd MMM") : "N/A"}
                 </span>
               </div>
+
               {validItemsCount > 0 && onCreateBulkPO && (
                 <div className="flex items-center gap-2 mr-2 pl-3 border-l border-border/50">
                   <Checkbox
@@ -883,34 +902,33 @@ export function PurchaseRequestGroupCard({
               </div>
             </div>
           </div>
-          <div className="flex items-center gap-1">
-            <Button
-              variant="outline"
-              size="sm"
-              className="shrink-0 text-xs h-8 px-3"
-              onClick={() => onViewDetails(firstItem._id)}
-            >
-              <Eye className="h-3.5 w-3.5 mr-1.5" />
-              View
-            </Button>
-            {hasMultipleItems && (
-              <Button
-                variant="outline"
-                size="sm"
-                className="shrink-0 text-xs touch-manipulation min-h-[32px] ml-1"
-                onClick={() => setIsExpanded(!isExpanded)}
-              >
-                {isExpanded ? (
-                  <ChevronDown className="h-4 w-4" />
-                ) : (
-                  <>
-                    <ChevronRight className="h-4 w-4 mr-1" />
-                    <span className="font-semibold">({items.length})</span>
-                  </>
-                )}
-              </Button>
+
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setIsNotesOpen(true)}
+            className="relative h-8 w-8 p-0 rounded-md hover:bg-muted ml-2 border border-transparent hover:border-border"
+            title="View Notes"
+          >
+            <NotebookPen className="h-4 w-4 text-muted-foreground" />
+            {firstItem.notesCount !== undefined && firstItem.notesCount > 0 && (
+              <span className="absolute -top-1 -right-1 flex h-3 w-3 items-center justify-center rounded-full bg-destructive text-[8px] text-destructive-foreground ring-1 ring-background">
+                {firstItem.notesCount}
+              </span>
             )}
-          </div>
+          </Button>
+
+
+
+          <Button
+            size="sm"
+            className="shrink-0 text-xs h-8 px-4 ml-2 bg-blue-600 hover:bg-blue-700 text-white shadow-sm hover:shadow-md transition-all font-semibold tracking-wide border border-blue-600 hover:border-blue-700"
+            onClick={() => onViewDetails(firstItem._id)}
+          >
+            <Eye className="h-3.5 w-3.5 mr-1.5" />
+            View Request
+          </Button>
+
 
           {/* Bulk Action Header Button */}
           {selectedItems.size > 0 && onCreateBulkPO && (
@@ -1044,7 +1062,7 @@ export function PurchaseRequestGroupCard({
 
                   {/* Rejection Reason Display */}
                   {((item.status === 'rejected' || item.status === 'cc_rejected' || item.status === 'rejected_po') && item.rejectionReason) && (
-                    <div className="mt-3 p-3 bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-800 rounded-md">
+                    <div className="mt-3 p-3 bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-800 rounded-md">
                       <div className="flex items-start gap-2">
                         <AlertCircle className="h-4 w-4 text-red-600 dark:text-red-400 mt-0.5" />
                         <div className="flex-1">
@@ -1250,10 +1268,10 @@ export function PurchaseRequestGroupCard({
                   )}
 
                   {/* Actions Footer - Manager Style */}
-                  <div className="flex items-center justify-between pt-3 mt-3 border-t border-border/50">
-                    <div className="flex items-center gap-2">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between pt-3 mt-3 border-t border-border/50 gap-3 sm:gap-0">
+                    <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
                       {item.isUrgent && (
-                        <Badge variant="destructive" className="text-[10px] px-2 py-0.5h-5 gap-1 shadow-sm">
+                        <Badge variant="destructive" className="text-[10px] px-2 py-0.5 h-5 gap-1 shadow-sm">
                           <AlertCircle className="h-3 w-3" />
                           URGENT
                         </Badge>
@@ -1276,19 +1294,19 @@ export function PurchaseRequestGroupCard({
                       )}
                     </div>
 
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto sm:justify-end">
                       {/* Primary Action Buttons based on Status */}
 
                       {/* Ready for Delivery / PO Actions */}
                       {["recheck", "pending", "approved"].includes(item.status) && (
                         <>
                           {(item.directAction === "delivery" || item.directAction === "all") && onDirectDelivery && (
-                            <Button size="sm" onClick={() => setShowReadyForDeliveryConfirm(item._id)} disabled={!hasFullStock} className="h-7 text-xs bg-orange-50 text-orange-700 border-orange-200 hover:bg-orange-100 hover:text-orange-800 dark:bg-orange-950/30 dark:text-orange-400 dark:border-orange-800" variant="outline">
-                              <Truck className="h-3.5 w-3.5 mr-1.5" /> You can Deliver
+                            <Button size="sm" onClick={() => setShowReadyForDeliveryConfirm(item._id)} disabled={!hasFullStock} className="h-7 text-xs bg-orange-50 text-orange-700 border-orange-200 hover:bg-orange-100 hover:text-orange-800 dark:bg-orange-950/30 dark:text-orange-400 dark:border-orange-800 flex-1 sm:flex-none" variant="outline">
+                              <Truck className="h-3.5 w-3.5 mr-1.5" /> Ready for Delivery
                             </Button>
                           )}
                           {(item.directAction === "po" || item.directAction === "all") && onDirectPO && (
-                            <Button size="sm" onClick={() => setShowReadyForPOConfirm(item._id)} className="h-7 text-xs bg-teal-50 text-teal-700 border-teal-200 hover:bg-teal-100 hover:text-teal-800 dark:bg-teal-950/30 dark:text-teal-400 dark:border-teal-800" variant="outline">
+                            <Button size="sm" onClick={() => setShowReadyForPOConfirm(item._id)} className="h-7 text-xs bg-teal-50 text-teal-700 border-teal-200 hover:bg-teal-100 hover:text-teal-800 dark:bg-teal-950/30 dark:text-teal-400 dark:border-teal-800 flex-1 sm:flex-none" variant="outline">
                               <ShoppingCart className="h-3.5 w-3.5 mr-1.5" /> Ready for PO
                             </Button>
                           )}
@@ -1299,12 +1317,12 @@ export function PurchaseRequestGroupCard({
                       {["approved", "recheck"].includes(item.status) && (
                         <>
                           {onMoveToCC && (
-                            <Button size="sm" onClick={() => setShowReadyForCCConfirm(item._id)} className="h-7 text-xs bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100 hover:text-blue-800 dark:bg-blue-950/30 dark:text-blue-400 dark:border-blue-800" variant="outline">
+                            <Button size="sm" onClick={() => setShowReadyForCCConfirm(item._id)} className="h-7 text-xs bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100 hover:text-blue-800 dark:bg-blue-950/30 dark:text-blue-400 dark:border-blue-800 flex-1 sm:flex-none" variant="outline">
                               <FileText className="h-3.5 w-3.5 mr-1.5" /> Ready for CC
                             </Button>
                           )}
                           {onCheck && (
-                            <Button size="sm" onClick={() => onCheck(item._id)} className="h-7 text-xs bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100 hover:text-purple-800 dark:bg-purple-950/30 dark:text-purple-400 dark:border-purple-800" variant="outline">
+                            <Button size="sm" onClick={() => onCheck(item._id)} className="h-7 text-xs bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100 hover:text-purple-800 dark:bg-purple-950/30 dark:text-purple-400 dark:border-purple-800 flex-1 sm:flex-none" variant="outline">
                               <PieChart className="h-3.5 w-3.5 mr-1.5" /> Check/Split
                             </Button>
                           )}
@@ -1313,13 +1331,20 @@ export function PurchaseRequestGroupCard({
 
                       {/* Next Stage Actions */}
                       {item.status === "ready_for_cc" && (
-                        <Button size="sm" onClick={() => (onOpenCC || onCheck)?.(item._id)} className="h-7 text-xs bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100 hover:text-blue-800 dark:bg-blue-950/30 dark:text-blue-400 dark:border-blue-800" variant="outline">
+                        <Button size="sm" onClick={() => (onOpenCC || onCheck)?.(item._id)} className="h-7 text-xs bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100 hover:text-blue-800 dark:bg-blue-950/30 dark:text-blue-400 dark:border-blue-800 flex-1 sm:flex-none" variant="outline">
                           <FileText className="h-3.5 w-3.5 mr-1.5" /> CC
                         </Button>
                       )}
 
+                      {/* Manager Review CC Button */}
+                      {isManager && item.status === "cc_pending" && (
+                        <Button size="sm" onClick={() => onOpenCC?.(item._id, ccPendingItems.map(i => i._id))} className="h-7 text-xs bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100 hover:text-purple-800 dark:bg-purple-950/30 dark:text-purple-400 dark:border-purple-800 flex-1 sm:flex-none" variant="outline">
+                          <CheckCircle className="h-3.5 w-3.5 mr-1.5" /> Review CC
+                        </Button>
+                      )}
+
                       {item.status === "ready_for_po" && onCreatePO && (
-                        <Button size="sm" onClick={() => onCreatePO(item._id)} className="h-7 text-xs bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100 hover:text-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-400 dark:border-emerald-800" variant="outline">
+                        <Button size="sm" onClick={() => onCreatePO(item._id)} className="h-7 text-xs bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100 hover:text-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-400 dark:border-emerald-800 flex-1 sm:flex-none" variant="outline">
                           <ShoppingCart className="h-3.5 w-3.5 mr-1.5" /> Create PO
                         </Button>
                       )}
@@ -1335,6 +1360,93 @@ export function PurchaseRequestGroupCard({
           })}
         </div>
       </div>
+
+      {/* Card Footer with Creator Info */}
+      <div className="bg-muted/30 border-t border-border/50 px-3 py-2 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="flex flex-col">
+            <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-wide leading-none mb-0.5">Created</span>
+            <span className="text-xs font-bold leading-none text-foreground">
+              {firstItem._creationTime ? format(new Date(firstItem._creationTime), "dd MMM") : "-"}
+            </span>
+          </div>
+
+          <div className="h-6 w-px bg-border/50" />
+
+          {firstItem.creator && (
+            <button
+              onClick={() => setShowUserProfile(true)}
+              className="flex items-center gap-2 group hover:bg-muted p-1 -m-1 rounded-md transition-colors text-left"
+            >
+              <div className="relative">
+                <Avatar className={cn(
+                  "h-6 w-6 shrink-0 ring-offset-1 overflow-hidden bg-background transition-all",
+                  isCreatorOnline ? "ring-2 ring-emerald-500" : "ring-1 ring-border"
+                )}>
+                  {firstItem.creator.profileImage ? (
+                    <LazyImage
+                      src={firstItem.creator.profileImage}
+                      alt={firstItem.creator.fullName}
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <AvatarFallback className="text-[9px] bg-primary/10 text-primary">
+                      {firstItem.creator.fullName.slice(0, 2).toUpperCase()}
+                    </AvatarFallback>
+                  )}
+                </Avatar>
+
+              </div>
+              <div className="flex flex-col min-w-0">
+                <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-wide leading-none mb-0.5">Created By</span>
+                <span className="text-xs font-bold leading-none text-foreground truncate max-w-[150px] group-hover:text-primary transition-colors" title={firstItem.creator.fullName}>
+                  {firstItem.creator.fullName}
+                </span>
+              </div>
+            </button>
+          )}
+        </div>
+
+        {/* View & Expand Actions */}
+        <div className="flex items-center gap-2">
+          {/* Manager CC Review Button (Footer) */}
+          {isManager && hasCCPending && (
+            <Button
+              size="sm"
+              onClick={(e) => {
+                e.stopPropagation();
+                onOpenCC?.(ccPendingItems[0]._id, ccPendingItems.map(i => i._id));
+              }}
+              className="h-7 text-xs bg-purple-600 hover:bg-purple-700 text-white shadow-sm ring-1 ring-purple-500/20 px-3"
+            >
+              <CheckCircle className="h-3.5 w-3.5 mr-1.5" />
+              Review CC {ccPendingItems.length > 1 ? `(${ccPendingItems.length})` : ''}
+            </Button>
+          )}
+
+          {hasMultipleItems && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="shrink-0 text-xs h-7 px-2 bg-background/50"
+              onClick={() => setIsExpanded(!isExpanded)}
+            >
+              {isExpanded ? (
+                <>
+                  <ChevronDown className="h-3.5 w-3.5 mr-1" />
+                  <span className="font-semibold">Collapse</span>
+                </>
+              ) : (
+                <>
+                  <ChevronRight className="h-3.5 w-3.5 mr-1" />
+                  <span className="font-semibold">Expand ({items.length})</span>
+                </>
+              )}
+            </Button>
+          )}
+        </div>
+      </div>
+
       {/* Notes Timeline Dialog */}
       <NotesTimelineDialog
         requestNumber={requestNumber}
@@ -1544,6 +1656,17 @@ export function PurchaseRequestGroupCard({
           setEditQuantityItem(null);
         }}
       />
+
+      {/* User Profile Dialog */}
+      {
+        showUserProfile && creatorForProfile && (
+          <UserProfile
+            user={creatorForProfile}
+            isOnline={false} // We don't track presence here but could add if needed
+            onClose={() => setShowUserProfile(false)}
+          />
+        )
+      }
     </div >
   );
 }

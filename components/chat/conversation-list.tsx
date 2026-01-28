@@ -13,6 +13,7 @@ import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { useChat } from "@/hooks/use-chat";
+import { LazyImage } from "@/components/ui/lazy-image";
 import { useChattableUsers } from "@/hooks/use-chat";
 import { useUserPresence } from "@/hooks/use-presence";
 import { OnlineIndicator } from "./online-indicator";
@@ -38,7 +39,7 @@ function getInitials(name: string): string {
 
 function formatLastMessageTime(timestamp: number): string {
   const date = new Date(timestamp);
-  
+
   if (isToday(date)) {
     return format(date, "h:mm a");
   } else if (isYesterday(date)) {
@@ -53,7 +54,9 @@ interface UserItemProps {
     _id: Id<"users">;
     fullName: string;
     username: string;
+
     role: string;
+    profileImage?: string;
   };
   conversation?: {
     lastMessage?: string;
@@ -73,16 +76,25 @@ function UserItem({ user, conversation, isSelected, onSelect }: UserItemProps) {
       className={cn(
         "w-full flex items-start gap-3 p-4 sm:p-4 rounded-xl transition-all text-left backdrop-blur-sm touch-manipulation",
         "active:scale-[0.98] active:opacity-80",
-        isSelected 
-          ? "bg-primary/10 border border-primary/20 shadow-md" 
+        isSelected
+          ? "bg-primary/10 border border-primary/20 shadow-md"
           : "hover:bg-muted/60 border border-transparent hover:border-border/50 hover:shadow-sm bg-background/50"
       )}
     >
       <div className="relative shrink-0">
-        <Avatar className="h-12 w-12 sm:h-13 sm:w-13 ring-2 ring-background shadow-sm">
-          <AvatarFallback className="bg-gradient-to-br from-primary/20 to-primary/10 text-primary font-semibold">
-            {getInitials(user.fullName)}
-          </AvatarFallback>
+
+        <Avatar className="h-12 w-12 sm:h-13 sm:w-13 ring-2 ring-background shadow-sm overflow-hidden bg-background">
+          {user.profileImage ? (
+            <LazyImage
+              src={user.profileImage}
+              alt={user.fullName}
+              className="h-full w-full object-cover"
+            />
+          ) : (
+            <AvatarFallback className="bg-gradient-to-br from-primary/20 to-primary/10 text-primary font-semibold">
+              {getInitials(user.fullName)}
+            </AvatarFallback>
+          )}
         </Avatar>
         <div className="absolute -bottom-0.5 -right-0.5">
           <OnlineIndicator isOnline={presence?.isOnline ?? false} />

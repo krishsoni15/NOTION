@@ -18,6 +18,7 @@ import { cn } from "@/lib/utils";
 import { ImageGallery } from "@/components/ui/image-gallery";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { LazyImage } from "@/components/ui/lazy-image";
 
 interface Message {
   _id: string;
@@ -44,7 +45,9 @@ interface Message {
     _id: string;
     fullName: string;
     username: string;
+
     role: string;
+    profileImage?: string;
   } | null;
 }
 
@@ -272,12 +275,20 @@ export function MessageList({ messages, currentUserId, otherUserId, className }:
                 {/* Avatar */}
                 {!isOwnMessage && (
                   <Avatar className={cn(
-                    "h-9 w-9 shrink-0 transition-opacity shadow-sm",
+                    "h-9 w-9 shrink-0 transition-opacity shadow-sm overflow-hidden bg-background",
                     isConsecutive ? "opacity-0" : "opacity-100"
                   )}>
-                    <AvatarFallback className="text-xs bg-gradient-to-br from-primary/20 to-primary/10 text-primary font-medium">
-                      {firstMessage.sender ? getInitials(firstMessage.sender.fullName) : "?"}
-                    </AvatarFallback>
+                    {firstMessage.sender?.profileImage ? (
+                      <LazyImage
+                        src={firstMessage.sender.profileImage}
+                        alt={firstMessage.sender.fullName}
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <AvatarFallback className="text-xs bg-gradient-to-br from-primary/20 to-primary/10 text-primary font-medium">
+                        {firstMessage.sender ? getInitials(firstMessage.sender.fullName) : "?"}
+                      </AvatarFallback>
+                    )}
                   </Avatar>
                 )}
 

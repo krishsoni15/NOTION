@@ -15,6 +15,7 @@ import { OnlineIndicator } from "./online-indicator";
 import { getRoleLabel } from "@/lib/auth/roles";
 import { cn } from "@/lib/utils";
 import type { Id } from "@/convex/_generated/dataModel";
+import { LazyImage } from "@/components/ui/lazy-image";
 
 interface UserProfileProps {
   user: {
@@ -23,7 +24,9 @@ interface UserProfileProps {
     username: string;
     role: string;
     phoneNumber?: string;
+
     address?: string;
+    profileImage?: string;
   };
   isOnline?: boolean;
   onClose: () => void;
@@ -59,7 +62,7 @@ export function UserProfile({ user, isOnline = false, onClose, className }: User
   }, [onClose]);
 
   return (
-    <div 
+    <div
       className={cn(
         "fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4 animate-in fade-in duration-200",
         className
@@ -73,7 +76,7 @@ export function UserProfile({ user, isOnline = false, onClose, className }: User
       aria-modal="true"
       aria-labelledby="profile-title"
     >
-      <div 
+      <div
         className="bg-background rounded-xl max-w-md w-full shadow-2xl border border-border/50 animate-in zoom-in-95 duration-200 max-h-[90vh] overflow-hidden flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
@@ -96,10 +99,18 @@ export function UserProfile({ user, isOnline = false, onClose, className }: User
           {/* Avatar and Name */}
           <div className="flex flex-col items-center text-center pb-2">
             <div className="relative mb-4">
-              <Avatar className="h-20 w-20 sm:h-24 sm:w-24 ring-4 ring-primary/10">
-                <AvatarFallback className="text-xl sm:text-2xl bg-gradient-to-br from-primary/20 to-primary/10">
-                  {getInitials(user.fullName)}
-                </AvatarFallback>
+              <Avatar className="h-20 w-20 sm:h-24 sm:w-24 ring-4 ring-primary/10 overflow-hidden bg-background">
+                {user.profileImage ? (
+                  <LazyImage
+                    src={user.profileImage}
+                    alt={user.fullName}
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <AvatarFallback className="text-xl sm:text-2xl bg-gradient-to-br from-primary/20 to-primary/10">
+                    {getInitials(user.fullName)}
+                  </AvatarFallback>
+                )}
               </Avatar>
               <div className="absolute -bottom-0.5 -right-0.5">
                 <OnlineIndicator isOnline={isOnline} className="scale-150" />
@@ -141,7 +152,7 @@ export function UserProfile({ user, isOnline = false, onClose, className }: User
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-xs text-muted-foreground mb-1 font-medium uppercase tracking-wide">Phone</p>
-                  <a 
+                  <a
                     href={`tel:${user.phoneNumber}`}
                     className="font-semibold text-foreground hover:text-primary transition-colors break-all"
                   >
@@ -181,8 +192,8 @@ export function UserProfile({ user, isOnline = false, onClose, className }: User
 
         {/* Footer with close button */}
         <div className="p-4 sm:p-5 border-t bg-gradient-to-r from-muted/30 to-muted/50 shrink-0">
-          <Button 
-            onClick={onClose} 
+          <Button
+            onClick={onClose}
             variant="outline"
             className="w-full font-medium hover:bg-primary hover:text-primary-foreground transition-colors"
           >

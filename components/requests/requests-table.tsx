@@ -29,7 +29,7 @@ import {
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { ExpandableText } from "@/components/ui/expandable-text";
-import { Eye, AlertCircle, FileText, Edit, Trash2, Send, ChevronDown, ChevronUp, ChevronRight, MapPin, Package, PackageX, Sparkles, NotebookPen, LayoutGrid, Table as TableIcon, ShoppingCart, Truck, Clock, CheckCircle2, XCircle, Loader2, Pencil, RefreshCw } from "lucide-react";
+import { Eye, AlertCircle, FileText, Edit, Trash2, Send, ChevronDown, ChevronUp, ChevronRight, MapPin, Package, PackageX, Sparkles, NotebookPen, LayoutGrid, Table as TableIcon, ShoppingCart, Truck, Clock, CheckCircle2, XCircle, Loader2, Pencil, RefreshCw, PieChart } from "lucide-react";
 import { CompactImageGallery } from "@/components/ui/image-gallery";
 import { LazyImage } from "@/components/ui/lazy-image";
 import { cn, normalizeSearchQuery, matchesAnySearchQuery } from "@/lib/utils";
@@ -256,6 +256,11 @@ export function RequestsTable({
 
   const [selectedRequestNumberForNotes, setSelectedRequestNumberForNotes] = useState<string | null>(null);
   const [pdfPreviewPoNumber, setPdfPreviewPoNumber] = useState<string | null>(null);
+
+  // Confirmation Dialog States
+  const [showReadyForCCConfirm, setShowReadyForCCConfirm] = useState<Id<"requests"> | null>(null);
+  const [showReadyForPOConfirm, setShowReadyForPOConfirm] = useState<Id<"requests"> | null>(null);
+  const [showReadyForDeliveryConfirm, setShowReadyForDeliveryConfirm] = useState<Id<"requests"> | null>(null);
 
   // Collect all unique item names from requests
   const uniqueItemNames = useMemo(() => {
@@ -1373,17 +1378,7 @@ export function RequestsTable({
                                     Confirm
                                   </Button>
                                 )}
-                                {onCheck && (
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    className="h-7 w-7 p-0 rounded-full border-indigo-200 text-indigo-700 hover:bg-indigo-50 dark:border-indigo-800 dark:text-indigo-400 dark:hover:bg-indigo-950 mr-1"
-                                    onClick={(e) => { e.stopPropagation(); onCheck(firstItem._id); }}
-                                    title="Check History"
-                                  >
-                                    <RefreshCw className="h-3.5 w-3.5" />
-                                  </Button>
-                                )}
+
                                 {onOpenCC && firstItem.status === "ready_for_cc" && (
                                   <Button
                                     variant="outline"
@@ -1507,18 +1502,78 @@ export function RequestsTable({
                                   </div>
 
                                   {/* Actions */}
-                                  <div className="text-right flex justify-end items-center">
-                                    {onConfirmDelivery && ["ready_for_delivery", "delivery_processing", "delivery_stage"].includes(item.status) && (
-                                      <Button
-                                        variant="default"
-                                        size="sm"
-                                        className="h-7 px-3 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm animate-pulse mr-2"
-                                        onClick={(e) => { e.stopPropagation(); onConfirmDelivery(item._id); }}
-                                      >
-                                        <CheckCircle2 className="h-3 w-3 mr-1" />
-                                        Confirm
-                                      </Button>
-                                    )}
+                                  {/* Actions */}
+                                  <div className="text-right flex flex-wrap justify-end items-center gap-1">
+                                    {/* Calculated Inventory Status for Logic */}
+                                    {(() => {
+                                      const itemInventory = inventoryStatus && inventoryStatus[item.itemName];
+                                      const hasFullStock = !!(
+                                        itemInventory &&
+                                        itemInventory.centralStock >= item.quantity
+                                      );
+                                      // Render Buttons
+                                      return (
+                                        <div className="flex flex-wrap items-center justify-end gap-2 w-full sm:w-auto">
+                                          {/* Ready for Delivery / PO Actions */}
+                                          {["recheck", "pending", "approved"].includes(item.status) && (
+                                            <>
+                                              {(item.directAction === "delivery" || item.directAction === "all") && onDirectDelivery && (
+                                                <Button size="sm" onClick={() => setShowReadyForDeliveryConfirm(item._id)} disabled={!hasFullStock} className="h-8 text-xs font-semibold bg-orange-50 text-orange-700 border-orange-200 hover:bg-orange-100 hover:text-orange-800 dark:bg-orange-950/30 dark:text-orange-400 dark:border-orange-800 flex-1 sm:flex-none px-4" variant="outline">
+                                                  <Truck className="h-3.5 w-3.5 mr-2" /> Ready for Delivery
+                                                </Button>
+                                              )}
+                                              {(item.directAction === "po" || item.directAction === "all") && onDirectPO && (
+                                                <Button size="sm" onClick={() => setShowReadyForPOConfirm(item._id)} className="h-8 text-xs font-semibold bg-teal-50 text-teal-700 border-teal-200 hover:bg-teal-100 hover:text-teal-800 dark:bg-teal-950/30 dark:text-teal-400 dark:border-teal-800 flex-1 sm:flex-none px-4" variant="outline">
+                                                  <ShoppingCart className="h-3.5 w-3.5 mr-2" /> Ready for PO
+                                                </Button>
+                                              )}
+                                            </>
+                                          )}
+
+                                          {/* Manager Actions: Ready for CC / Check */}
+                                          {["approved", "recheck"].includes(item.status) && (
+                                            <>
+                                              {onMoveToCC && (
+                                                <Button size="sm" onClick={() => setShowReadyForCCConfirm(item._id)} className="h-8 text-xs font-semibold bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100 hover:text-blue-800 dark:bg-blue-950/30 dark:text-blue-400 dark:border-blue-800 flex-1 sm:flex-none px-4" variant="outline">
+                                                  <FileText className="h-3.5 w-3.5 mr-2" /> Ready for CC
+                                                </Button>
+                                              )}
+                                              {onCheck && (
+                                                <Button size="sm" onClick={() => onCheck(item._id)} className="h-8 text-xs font-semibold bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100 hover:text-purple-800 dark:bg-purple-950/30 dark:text-purple-400 dark:border-purple-800 flex-1 sm:flex-none px-4" variant="outline">
+                                                  <PieChart className="h-3.5 w-3.5 mr-2" /> Check/Split
+                                                </Button>
+                                              )}
+                                            </>
+                                          )}
+
+                                          {/* Next Stage Actions */}
+                                          {item.status === "ready_for_cc" && (
+                                            <Button size="sm" onClick={() => (onOpenCC || onCheck)?.(item._id)} className="h-8 text-xs font-semibold bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100 hover:text-blue-800 dark:bg-blue-950/30 dark:text-blue-400 dark:border-blue-800 flex-1 sm:flex-none px-4" variant="outline">
+                                              <FileText className="h-3.5 w-3.5 mr-2" /> CC
+                                            </Button>
+                                          )}
+
+                                          {item.status === "ready_for_po" && onCreatePO && (
+                                            <Button size="sm" onClick={() => onCreatePO(item._id)} className="h-8 text-xs font-semibold bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100 hover:text-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-400 dark:border-emerald-800 flex-1 sm:flex-none px-4" variant="outline">
+                                              <ShoppingCart className="h-3.5 w-3.5 mr-2" /> Create PO
+                                            </Button>
+                                          )}
+
+                                          {onConfirmDelivery && ["ready_for_delivery", "delivery_processing", "delivery_stage"].includes(item.status) && (
+                                            <Button
+                                              variant="default"
+                                              size="sm"
+                                              className="h-8 px-4 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm animate-pulse flex-1 sm:flex-none"
+                                              onClick={(e) => { e.stopPropagation(); onConfirmDelivery(item._id); }}
+                                            >
+                                              <CheckCircle2 className="h-3.5 w-3.5 mr-2" />
+                                              Confirm
+                                            </Button>
+                                          )}
+                                        </div>
+                                      );
+                                    })()}
+
                                     {/* View Button Removed as per request */}
 
                                   </div>
@@ -1581,6 +1636,135 @@ export function RequestsTable({
         onOpenChange={(open) => !open && setPdfPreviewPoNumber(null)}
         poNumber={pdfPreviewPoNumber}
       />
+
+      {/* Ready for CC Confirmation Dialog */}
+      {
+        showReadyForCCConfirm && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-200" onClick={(e) => e.stopPropagation()}>
+            <div className="w-full max-w-sm mx-4 bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 shadow-2xl p-6 transform transition-all scale-100">
+              <div className="flex flex-col items-center text-center gap-4 mb-6">
+                <div className="w-16 h-16 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center ring-8 ring-blue-50 dark:ring-blue-900/10">
+                  <FileText className="h-8 w-8 text-blue-600 dark:text-blue-400" />
+                </div>
+                <div className="space-y-2">
+                  <h3 className="text-xl font-bold text-gray-900 dark:text-white tracking-tight">
+                    Ready for Cost Comparison
+                  </h3>
+                  <p className="text-sm text-gray-500 dark:text-gray-400 max-w-[260px] mx-auto leading-relaxed">
+                    Are you sure you want to mark this item as ready for cost comparison?
+                  </p>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <Button
+                  variant="outline"
+                  onClick={() => setShowReadyForCCConfirm(null)}
+                  className="w-full h-11 font-medium border-gray-200 hover:bg-gray-50 hover:text-gray-900 dark:border-gray-700 dark:hover:bg-gray-800 dark:hover:text-white transition-colors"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={() => {
+                    if (onMoveToCC && showReadyForCCConfirm) {
+                      onMoveToCC(showReadyForCCConfirm);
+                      setShowReadyForCCConfirm(null);
+                    }
+                  }}
+                  className="w-full h-11 font-medium bg-blue-600 hover:bg-blue-700 text-white shadow-lg shadow-blue-500/20 transition-all hover:scale-[1.02]"
+                >
+                  Confirm
+                </Button>
+              </div>
+            </div>
+          </div>
+        )
+      }
+
+      {/* Ready for PO Confirmation Dialog */}
+      {
+        showReadyForPOConfirm && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-200" onClick={(e) => e.stopPropagation()}>
+            <div className="w-full max-w-sm mx-4 bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 shadow-2xl p-6 transform transition-all scale-100">
+              <div className="flex flex-col items-center text-center gap-4 mb-6">
+                <div className="w-16 h-16 bg-emerald-100 dark:bg-emerald-900/30 rounded-full flex items-center justify-center ring-8 ring-emerald-50 dark:ring-emerald-900/10">
+                  <ShoppingCart className="h-8 w-8 text-emerald-600 dark:text-emerald-400" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-bold text-gray-900 dark:text-white tracking-tight">
+                    Confirm Direct PO
+                  </h3>
+                  <p className="text-sm text-gray-500 dark:text-gray-400 max-w-[260px] mx-auto leading-relaxed mt-2">
+                    This item will be marked for <span className="font-semibold text-emerald-600 dark:text-emerald-400">Direct Purchase Order</span>.
+                  </p>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <Button
+                  variant="outline"
+                  onClick={() => setShowReadyForPOConfirm(null)}
+                  className="w-full h-11 font-medium border-gray-200 hover:bg-gray-50 hover:text-gray-900 dark:border-gray-700 dark:hover:bg-gray-800 dark:hover:text-white transition-colors"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={() => {
+                    if (onDirectPO && showReadyForPOConfirm) {
+                      onDirectPO(showReadyForPOConfirm);
+                      setShowReadyForPOConfirm(null);
+                    }
+                  }}
+                  className="w-full h-11 font-medium bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg shadow-emerald-500/20 transition-all hover:scale-[1.02]"
+                >
+                  Confirm PO
+                </Button>
+              </div>
+            </div>
+          </div>
+        )
+      }
+
+      {/* Ready for Delivery Confirmation Dialog */}
+      {
+        showReadyForDeliveryConfirm && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-200" onClick={(e) => e.stopPropagation()}>
+            <div className="w-full max-w-sm mx-4 bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 shadow-2xl p-6 transform transition-all scale-100">
+              <div className="flex flex-col items-center text-center gap-4 mb-6">
+                <div className="w-16 h-16 bg-orange-100 dark:bg-orange-900/30 rounded-full flex items-center justify-center ring-8 ring-orange-50 dark:ring-orange-900/10">
+                  <Truck className="h-8 w-8 text-orange-600 dark:text-orange-400" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-bold text-gray-900 dark:text-white tracking-tight">
+                    Confirm Direct Delivery
+                  </h3>
+                  <p className="text-sm text-gray-500 dark:text-gray-400 max-w-[260px] mx-auto leading-relaxed mt-2">
+                    This item will be marked for <span className="font-semibold text-orange-600 dark:text-orange-400">Direct Delivery</span> from inventory.
+                  </p>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <Button
+                  variant="outline"
+                  onClick={() => setShowReadyForDeliveryConfirm(null)}
+                  className="w-full h-11 font-medium border-gray-200 hover:bg-gray-50 hover:text-gray-900 dark:border-gray-700 dark:hover:bg-gray-800 dark:hover:text-white transition-colors"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={() => {
+                    if (onDirectDelivery && showReadyForDeliveryConfirm) {
+                      onDirectDelivery(showReadyForDeliveryConfirm);
+                      setShowReadyForDeliveryConfirm(null);
+                    }
+                  }}
+                  className="w-full h-11 font-medium bg-orange-600 hover:bg-orange-700 text-white shadow-lg shadow-orange-500/20 transition-all hover:scale-[1.02]"
+                >
+                  Confirm Delivery
+                </Button>
+              </div>
+            </div>
+          </div>
+        )
+      }
     </>
   );
 }

@@ -16,7 +16,7 @@ export async function getUserRole(): Promise<Role | null> {
   try {
     // Try to read the role directly from the session claims first to
     // avoid an extra Clerk API request (and potential API errors)
-    const { sessionClaims } = await auth();
+    const { sessionClaims, userId } = await auth();
     const claimsRole =
       (sessionClaims?.metadata as Record<string, unknown> | undefined)?.role ??
       (sessionClaims?.publicMetadata as Record<string, unknown> | undefined)
@@ -27,6 +27,10 @@ export async function getUserRole(): Promise<Role | null> {
     }
 
     // Fallback to fetching the full user from Clerk
+    if (!userId) {
+      return null;
+    }
+
     const user = await currentUser();
     if (!user) {
       return null;

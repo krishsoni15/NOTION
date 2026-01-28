@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { ConversationList } from "./conversation-list";
+import { LazyImage } from "@/components/ui/lazy-image";
 import { MessageList } from "./message-list";
 import { MessageInput } from "./message-input";
 import { OnlineIndicator } from "./online-indicator";
@@ -151,10 +152,18 @@ export function ChatWindow({ currentUserId, onClose, className }: ChatWindowProp
               onClick={() => setShowProfile(true)}
               className="flex items-center gap-3 hover:bg-muted/60 rounded-xl p-2.5 -m-2.5 transition-all text-left w-full group"
             >
-              <Avatar className="h-11 w-11 ring-2 ring-background shadow-sm">
-                <AvatarFallback className="text-sm bg-gradient-to-br from-primary/20 to-primary/10 text-primary font-semibold">
-                  {getInitials(conversation.otherUser.fullName)}
-                </AvatarFallback>
+              <Avatar className="h-11 w-11 ring-2 ring-background shadow-sm overflow-hidden bg-background">
+                {conversation.otherUser.profileImage ? (
+                  <LazyImage
+                    src={conversation.otherUser.profileImage}
+                    alt={conversation.otherUser.fullName}
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <AvatarFallback className="text-sm bg-gradient-to-br from-primary/20 to-primary/10 text-primary font-semibold">
+                    {getInitials(conversation.otherUser.fullName)}
+                  </AvatarFallback>
+                )}
               </Avatar>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 mb-1.5">

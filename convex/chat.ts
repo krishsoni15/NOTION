@@ -134,6 +134,7 @@ export const getConversations = query({
               fullName: otherUser.fullName,
               role: otherUser.role,
               username: otherUser.username,
+              profileImage: otherUser.profileImage,
             }
             : null,
           unreadCount,
@@ -194,6 +195,7 @@ export const getConversation = query({
           username: otherUser.username,
           phoneNumber: otherUser.phoneNumber,
           address: otherUser.address,
+          profileImage: otherUser.profileImage,
         }
         : null,
     };
@@ -255,6 +257,7 @@ export const getMessages = query({
               fullName: sender.fullName,
               role: sender.role,
               username: sender.username,
+              profileImage: sender.profileImage,
             }
             : null,
           isRead: message.readBy.includes(currentUser._id),
@@ -510,6 +513,7 @@ export const getChattableUsers = query({
       role: user.role,
       phoneNumber: user.phoneNumber,
       address: user.address,
+      profileImage: user.profileImage,
     }));
   },
 });
@@ -566,6 +570,7 @@ export const searchConversations = query({
             fullName: otherUser.fullName,
             role: otherUser.role,
             username: otherUser.username,
+            profileImage: otherUser.profileImage,
           },
           unreadCount,
         };

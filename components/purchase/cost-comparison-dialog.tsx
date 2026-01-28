@@ -130,8 +130,10 @@ export function CostComparisonDialog({
   const [quoteAmount, setQuoteAmount] = useState("1");
   const [quoteUnit, setQuoteUnit] = useState("");
   const [quoteDiscount, setQuoteDiscount] = useState("");  // Discount percentage
-  const [quoteGst, setQuoteGst] = useState("");            // GST percentage
-  const [perUnitBasis, setPerUnitBasis] = useState("1");   // Per unit basis for price (e.g. price per 1 unit, or per 50 units)
+  // const [quoteGst, setQuoteGst] = useState("");            // GST percentage - Replaced by CGST/SGST
+  const [quoteCgst, setQuoteCgst] = useState("9");       // CGST percentage (default 9)
+  const [quoteSgst, setQuoteSgst] = useState("9");       // SGST percentage (default 9)
+  const [perUnitBasis, setPerUnitBasis] = useState("1");   // Per unit basis for price (e.g. price per 1 unit, or per 50 units) - Hidden in UI now
   const [showVendorDetails, setShowVendorDetails] = useState<string | null>(null);
   const [showDirectDeliveryConfirm, setShowDirectDeliveryConfirm] = useState(false);
   const [showCreateVendorDialog, setShowCreateVendorDialog] = useState(false);
@@ -314,15 +316,18 @@ export function CostComparisonDialog({
     const amount = parseFloat(quoteAmount) || 1;
     const unit = quoteUnit.trim() || request?.unit || itemInInventory?.unit || "units";
     const discount = parseFloat(quoteDiscount) || 0;
-    const gst = parseFloat(quoteGst) || 0;
+    // GST is now sum of CGST and SGST
+    const cgst = parseFloat(quoteCgst) || 0;
+    const sgst = parseFloat(quoteSgst) || 0;
+    const gst = cgst + sgst;
 
     if (discount < 0 || discount > 100) {
       toast.error("Discount must be between 0% and 100%");
       return;
     }
 
-    if (gst < 0 || gst > 100) {
-      toast.error("GST must be between 0% and 100%");
+    if (cgst < 0 || cgst > 100 || sgst < 0 || sgst > 100) {
+      toast.error("Tax percentages must be between 0% and 100%");
       return;
     }
 
@@ -361,7 +366,9 @@ export function CostComparisonDialog({
     setQuoteUnit(defaultUnit);
 
     setQuoteDiscount("");
-    setQuoteGst("");
+    setQuoteCgst("9"); // Reset to 9
+    setQuoteSgst("9"); // Reset to 9
+    // setQuoteGst("");
     setEditingQuoteIndex(-1);
     setVendorSearchTerm("");
     setVendorDialogOpen(false);
@@ -417,7 +424,12 @@ export function CostComparisonDialog({
     setQuoteUnit(quote.unit || "");
 
     setQuoteDiscount(quote.discountPercent?.toString() || "");
-    setQuoteGst(quote.gstPercent?.toString() || "");
+    // Split GST back into CGST/SGST (assuming equal split if persisted as total)
+    // If backend supports separate fields, ideally use them. Here we'll just split existing total.
+    const totalGst = quote.gstPercent || 0;
+    setQuoteCgst((totalGst / 2).toString());
+    setQuoteSgst((totalGst / 2).toString());
+    // setQuoteGst(quote.gstPercent?.toString() || "");
     setVendorDialogOpen(true);
   };
 
@@ -1426,17 +1438,7 @@ export function CostComparisonDialog({
 
                 {vendorQuotes.length > 0 && (
                   <div className="space-y-4">
-                    {vendorQuotes.length === 1 && !isManagerReview && (
-                      <div className="flex items-start gap-3 p-3 bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 rounded-lg">
-                        <AlertCircle className="h-5 w-5 text-amber-600 mt-0.5 shrink-0" />
-                        <div>
-                          <p className="font-medium text-amber-800 dark:text-amber-300 text-sm">One more quote needed</p>
-                          <p className="text-xs text-amber-600 dark:text-amber-400 mt-0.5">
-                            Add at least 1 more vendor quote to enable submission for cost comparison.
-                          </p>
-                        </div>
-                      </div>
-                    )}
+
 
                     {/* Quotes Grid */}
                     <div className="grid grid-cols-1 gap-3">
@@ -1581,19 +1583,11 @@ export function CostComparisonDialog({
                           }
 
                           return (
-                            <div className="space-y-1">
-                              <div className="flex items-center gap-2 mb-1">
-                                <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                                <span className="text-sm font-semibold text-green-700 dark:text-green-300">Recommendation</span>
-                              </div>
-                              <div className="text-sm text-green-600 dark:text-green-400 pl-4">
-                                <p>
-                                  <span className="font-medium">{bestVendor}</span> offers the best price.
-                                </p>
-                                <p className="font-semibold mt-1">
-                                  💰 Save ₹{totalSavings.toFixed(2)} by choosing this vendor.
-                                </p>
-                              </div>
+                            <div className="flex items-center gap-2 text-sm text-green-700 dark:text-green-300">
+                              <span className="shrink-0 text-lg">💡</span>
+                              <span>
+                                <span className="font-bold">{bestVendor}</span> is best. Save <span className="font-bold">₹{totalSavings.toFixed(2)}</span>.
+                              </span>
                             </div>
                           );
                         })()}
@@ -1755,9 +1749,7 @@ export function CostComparisonDialog({
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>{editingQuoteIndex >= 0 ? 'Edit Vendor Quote' : 'Add Vendor Quote'}</DialogTitle>
-            <DialogDescription>
-              {editingQuoteIndex >= 0 ? 'Update the quote details.' : 'Select vendor and enter quote details.'}
-            </DialogDescription>
+
           </DialogHeader>
 
           {/* Auto-fill quote amount from quantityToBuy when adding new quote */}
@@ -1770,9 +1762,9 @@ export function CostComparisonDialog({
             }
           }, [vendorDialogOpen, editingQuoteIndex, quantityToBuy, itemInInventory, request]) as unknown as React.ReactNode}
 
-          <div className="space-y-4">
+          <div className="space-y-3">
             {/* Vendor Selection Row */}
-            <div className="space-y-2">
+            <div className="space-y-1">
               <Label className="text-sm font-medium">Vendor<span className="text-red-500">*</span></Label>
               <div className="flex items-center gap-2">
                 <div className="flex-1 relative">
@@ -1896,38 +1888,23 @@ export function CostComparisonDialog({
             </div>
           </div>
 
-          {/* Total Quantity Row */}
-          <div className="space-y-2">
-            <Label className="text-sm font-medium">Total Quantity <span className="text-red-500">*</span></Label>
-            <Input
-              type="number"
-              min="0"
-              step="any"
-              value={quoteAmount}
-              onChange={(e) => setQuoteAmount(e.target.value)}
-              placeholder="Total quantity to buy"
-              className="text-sm border-2 hover:border-primary/30 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all duration-200"
-              required
-            />
-          </div>
-
-          {/* Unit Price Configuration Row */}
-          <div className="grid grid-cols-3 gap-3">
-            <div className="space-y-2">
-              <Label className="text-sm font-medium">Per <span className="text-red-500">*</span></Label>
+          {/* Total Quantity and Unit Row */}
+          <div className="grid grid-cols-2 gap-3 mt-3">
+            <div className="space-y-1">
+              <Label className="text-sm font-medium">Total Quantity <span className="text-red-500">*</span></Label>
               <Input
                 type="number"
-                min="1"
+                min="0"
                 step="any"
-                value={perUnitBasis}
-                onChange={(e) => setPerUnitBasis(e.target.value)}
-                placeholder="1"
+                value={quoteAmount}
+                onChange={(e) => setQuoteAmount(e.target.value)}
+                placeholder="Qty"
                 className="text-sm border-2 hover:border-primary/30 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all duration-200"
                 required
               />
             </div>
 
-            <div className="space-y-2">
+            <div className="space-y-1">
               <Label className="text-sm font-medium">Unit <span className="text-red-500">*</span></Label>
               <div className="relative">
                 <Input
@@ -1939,7 +1916,8 @@ export function CostComparisonDialog({
                   onBlur={handleQuoteUnitBlur}
                   placeholder="e.g. kg"
                   autoComplete="off"
-                  className={`text-sm border-2 hover:border-primary/30 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all duration-200 ${!quoteUnit.trim() ? "border-red-300 focus-visible:ring-red-500" : ""}`}
+                  className="text-sm border-2 hover:border-primary/30 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all duration-200"
+                  required
                 />
                 {showUnitSuggestions && (
                   <div className="absolute top-full left-0 right-0 z-[100] mt-1 bg-popover text-popover-foreground shadow-xl rounded-md border ring-1 ring-border/50 max-h-[200px] overflow-y-auto overflow-x-hidden animate-in fade-in-0 zoom-in-95 duration-100">
@@ -1973,8 +1951,11 @@ export function CostComparisonDialog({
                 )}
               </div>
             </div>
+          </div>
 
-            <div className="space-y-2">
+          {/* Price and Discount Row */}
+          <div className="grid grid-cols-2 gap-3 mt-3">
+            <div className="space-y-1">
               <Label className="text-sm font-medium">Price (₹) <span className="text-red-500">*</span></Label>
               <Input
                 type="number"
@@ -1988,11 +1969,8 @@ export function CostComparisonDialog({
                 autoFocus={editingQuoteIndex >= 0}
               />
             </div>
-          </div>
 
-          {/* Discount and GST Row (Optional) */}
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-2">
+            <div className="space-y-1">
               <Label className="text-sm font-medium">Discount %</Label>
               <Input
                 type="number"
@@ -2004,27 +1982,39 @@ export function CostComparisonDialog({
                 placeholder="0"
                 className="text-sm"
               />
-              <p className="text-xs text-muted-foreground">Optional discount percentage</p>
             </div>
-            <div className="space-y-2">
-              <Label className="text-sm font-medium">GST %</Label>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3 mt-3">
+            <div className="space-y-1">
+              <Label className="text-sm font-medium">CGST %</Label>
               <Input
                 type="number"
                 step="0.01"
                 min="0"
-                value={quoteGst}
-                onChange={(e) => setQuoteGst(e.target.value)}
-                placeholder="0"
+                value={quoteCgst}
+                onChange={(e) => setQuoteCgst(e.target.value)}
+                placeholder="9"
                 className="text-sm"
               />
-              <p className="text-xs text-muted-foreground">Optional GST percentage</p>
+            </div>
+            <div className="space-y-1">
+              <Label className="text-sm font-medium">SGST %</Label>
+              <Input
+                type="number"
+                step="0.01"
+                min="0"
+                value={quoteSgst}
+                onChange={(e) => setQuoteSgst(e.target.value)}
+                placeholder="9"
+                className="text-sm"
+              />
             </div>
           </div>
 
-
           {/* Price Calculation Preview */}
           {unitPrice && (
-            <div className="p-3 bg-muted/50 rounded-lg space-y-2">
+            <div className="p-3 bg-muted/50 rounded-lg space-y-2 mt-4">
               <p className="text-xs font-medium text-muted-foreground">Price Calculation Preview</p>
               <div className="grid grid-cols-2 gap-2 text-sm">
                 <div className="flex justify-between">
@@ -2043,17 +2033,17 @@ export function CostComparisonDialog({
                     <span className="font-medium">₹{calculatePriceAfterDiscount((parseFloat(unitPrice || "0") / (parseFloat(perUnitBasis || "1"))), parseFloat(quoteDiscount || "0")).toFixed(2)}</span>
                   </div>
                 )}
-                {parseFloat(quoteGst || "0") > 0 && (
+                {(parseFloat(quoteCgst || "0") + parseFloat(quoteSgst || "0")) > 0 && (
                   <div className="flex justify-between text-amber-600">
-                    <span>GST ({quoteGst}%):</span>
-                    <span>+₹{calculateGstAmount(calculatePriceAfterDiscount((parseFloat(unitPrice || "0") / (parseFloat(perUnitBasis || "1"))), parseFloat(quoteDiscount || "0")), parseFloat(quoteGst || "0")).toFixed(2)}</span>
+                    <span>Tax ({(parseFloat(quoteCgst || "0") + parseFloat(quoteSgst || "0"))}%):</span>
+                    <span>+₹{calculateGstAmount(calculatePriceAfterDiscount((parseFloat(unitPrice || "0") / (parseFloat(perUnitBasis || "1"))), parseFloat(quoteDiscount || "0")), (parseFloat(quoteCgst || "0") + parseFloat(quoteSgst || "0"))).toFixed(2)}</span>
                   </div>
                 )}
               </div>
               <div className="flex justify-between pt-2 border-t border-muted-foreground/20">
                 <span className="font-semibold">Final Price per {quoteUnit || 'unit'}:</span>
                 <span className="font-bold text-primary">
-                  ₹{calculateFinalPrice((parseFloat(unitPrice || "0") / (parseFloat(perUnitBasis || "1"))), parseFloat(quoteDiscount || "0"), parseFloat(quoteGst || "0")).toFixed(2)}
+                  ₹{calculateFinalPrice((parseFloat(unitPrice || "0") / (parseFloat(perUnitBasis || "1"))), parseFloat(quoteDiscount || "0"), (parseFloat(quoteCgst || "0") + parseFloat(quoteSgst || "0"))).toFixed(2)}
                 </span>
               </div>
 
@@ -2061,14 +2051,14 @@ export function CostComparisonDialog({
               <div className="flex justify-between pt-2 border-t-2 border-dashed border-muted-foreground/20 mt-1">
                 <span className="font-bold text-lg">Total Amount ({quoteAmount || 0} {quoteUnit || 'units'}):</span>
                 <span className="font-bold text-xl text-primary">
-                  ₹{(calculateFinalPrice((parseFloat(unitPrice || "0") / (parseFloat(perUnitBasis || "1"))), parseFloat(quoteDiscount || "0"), parseFloat(quoteGst || "0")) * (parseFloat(quoteAmount) || 0)).toFixed(2)}
+                  ₹{(calculateFinalPrice((parseFloat(unitPrice || "0") / (parseFloat(perUnitBasis || "1"))), parseFloat(quoteDiscount || "0"), (parseFloat(quoteCgst || "0") + parseFloat(quoteSgst || "0"))) * (parseFloat(quoteAmount) || 0)).toFixed(2)}
                 </span>
               </div>
             </div>
           )}
 
           {/* Action buttons */}
-          <div className="flex justify-end gap-2 pt-4 border-t">
+          <div className="flex justify-end gap-2 pt-4 border-t mt-4">
             <Button variant="outline" onClick={() => {
               setVendorDialogOpen(false);
               setEditingQuoteIndex(-1);
@@ -2078,7 +2068,8 @@ export function CostComparisonDialog({
               setQuoteUnit("");
 
               setQuoteDiscount("");
-              setQuoteGst("");
+              setQuoteCgst("9");
+              setQuoteSgst("9");
               setVendorSearchTerm("");
             }}>
               Cancel
@@ -2272,12 +2263,12 @@ export function CostComparisonDialog({
             </Button>
           </DialogFooter>
         </DialogContent>
-      </Dialog>
+      </Dialog >
 
 
 
       {/* Image Slider */}
-      <ImageSlider
+      < ImageSlider
         images={imageSliderImages}
         initialIndex={imageSliderInitialIndex}
         open={imageSliderOpen}
@@ -2286,7 +2277,7 @@ export function CostComparisonDialog({
       />
 
       {/* Direct Delivery Confirmation Dialog */}
-      <AlertDialog open={showDirectDeliveryConfirm} onOpenChange={setShowDirectDeliveryConfirm}>
+      < AlertDialog open={showDirectDeliveryConfirm} onOpenChange={setShowDirectDeliveryConfirm} >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2">
@@ -2357,10 +2348,11 @@ export function CostComparisonDialog({
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
-      </AlertDialog>
+      </AlertDialog >
 
       {/* Vendor Details Dialog */}
-      <Dialog open={!!showVendorDetails} onOpenChange={() => setShowVendorDetails(null)}>
+      < Dialog open={!!showVendorDetails
+      } onOpenChange={() => setShowVendorDetails(null)}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -2426,7 +2418,7 @@ export function CostComparisonDialog({
             </Button>
           </DialogFooter>
         </DialogContent>
-      </Dialog>
+      </Dialog >
     </>
   );
 }

@@ -499,6 +499,7 @@ export const getPurchaseRequestsByStatus = query({
               fullName: creator.fullName,
               role: creator.role,
               profileImage: creator.profileImage,
+              username: creator.username,
             }
             : null,
           approver: approver
@@ -607,6 +608,7 @@ export const getAllRequests = query({
               fullName: creator.fullName,
               role: creator.role,
               profileImage: creator.profileImage,
+              username: creator.username,
             }
             : null,
           approver: approver

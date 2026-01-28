@@ -1047,7 +1047,7 @@ export function CheckDialog({
                                         </Button>
                                     </div>
                                     <p className="text-xs text-green-600 dark:text-green-400 mt-3 pl-14">
-                                        No vendor comparison needed. Click "Direct Delivery" to move directly to delivery stage.
+                                        Item in stock. No purchase needed.
                                     </p>
                                 </div>
                             )}

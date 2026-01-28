@@ -222,6 +222,7 @@ interface RequestsTableProps {
   onCheck?: (requestId: Id<"requests">) => void; // Check request history
   onCreatePO?: (requestId: Id<"requests">) => void; // Create PO
   onMoveToCC?: (requestId: Id<"requests">) => void; // Move to CC
+  onViewPDF?: (poNumber: string) => void; // View PDF
 }
 
 export function RequestsTable({
@@ -247,6 +248,7 @@ export function RequestsTable({
   onCheck,
   onCreatePO,
   onMoveToCC,
+  onViewPDF,
 }: RequestsTableProps) {
   const userRole = useUserRole();
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
@@ -826,6 +828,43 @@ export function RequestsTable({
                         URGENT
                       </Badge>
                     )}
+                    {userRole === "manager" && item.status === "cc_pending" && onOpenCC && (
+                      <Button
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          // Pass just this item ID, or maybe we still want the group context?
+                          // Usually on item level, we open just that item if possible.
+                          // But the dialog takes (requestId, allRequestIds).
+                          // We should probably pass the group context if we can access it, 
+                          // but renderItemRow is isolated from the group 'items' array unless we pass it.
+                          // However, we can just pass the single item ID and let the parent handle it or pass a simplified list.
+                          // Given renderItemRow scope, we assume passing just the ID is safer unless we change signature.
+                          // BUT, 'onOpenCC' signature is (id, allIds).
+                          // To keep it simple in this isolated function, we pass [item._id] as the second arg if we can't access siblings.
+                          // Actually, we are inside 'CardView' scope closure, but 'renderItemRow' is defined inside CardView?
+                          // Yes, line 776 is inside CardView (line 674). 
+                          // Wait, CardView maps groups. 'renderItemRow' is defined inside the map? 
+                          // No, 'renderItemRow' definition (line 776) appears to be inside CardView which starts at 674.
+                          // BUT it is defined before the map loop?
+                          // Let's check where 'groupedRequestsArray.map' starts. It starts at 682.
+                          // So 'renderItemRow' is defined inside the map loop?
+                          // No, looking at lines 739-775, it's defined inside the map loop (based on context view).
+                          // If so, it has access to 'items' from the closure! (line 683).
+                          // Let's verify indentation or closure.
+                          // Line 682: {groupedRequestsArray.map((group) => {
+                          // Line 776: const renderItemRow = ...
+                          // YES. It captures 'items' from line 683.
+                          // So we can pass the full pending list.
+                          const pendingItems = items.filter(i => i.status === "cc_pending");
+                          onOpenCC(item._id, pendingItems.map(i => i._id));
+                        }}
+                        className="h-6 px-2.5 text-[10px] font-bold bg-purple-600 hover:bg-purple-700 text-white shadow-sm border border-purple-500"
+                      >
+                        <CheckCircle2 className="h-3 w-3 mr-1" />
+                        CC
+                      </Button>
+                    )}
                   </div>
                 )}
               </div>
@@ -1070,21 +1109,58 @@ export function RequestsTable({
                     </Button>
                   )}
 
+                  {/* CC Review Button - Batch Action */}
+                  {onOpenCC && items.some(i => i.status === "cc_pending") && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        // Open CC for this specific item, but pass context of all pending
+                        const pendingItems = items.filter(i => i.status === "cc_pending");
+                        if (pendingItems.length > 0) {
+                          onOpenCC(pendingItems[0]._id, pendingItems.map(i => i._id));
+                        }
+                      }}
+                      className="h-8 px-2.5 text-[10px] font-bold border-purple-200 text-purple-700 hover:bg-purple-50 dark:border-purple-800 dark:text-purple-400 dark:hover:bg-purple-950 ml-1 shadow-sm"
+                      title="Review Cost Comparison"
+                    >
+                      <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
+                      CC {items.filter(i => i.status === "cc_pending").length > 1 ? `(${items.filter(i => i.status === "cc_pending").length})` : ''}
+                    </Button>
+                  )}
+
+                  {/* View PDF Button */}
+                  {onViewPDF && ["sign_pending", "sign_rejected", "ordered", "pending_po", "direct_po"].includes(firstItem.status as string) && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={(e) => { e.stopPropagation(); onViewPDF(firstItem.requestNumber); }}
+                      className="h-8 px-3 text-xs font-bold border-slate-200 text-slate-700 hover:bg-slate-50 dark:border-slate-800 dark:text-slate-400 dark:hover:bg-slate-950 ml-1 shadow-sm"
+                      title="View PDF"
+                    >
+                      <FileText className="h-3.5 w-3.5 mr-1.5" />
+                      View PDF
+                    </Button>
+                  )}
+
                   {/* Main Action Button */}
                   {onViewDetails && (
                     <Button
-                      variant={showCreator && reviewableItemsCount > 0 ? "default" : "outline"}
+                      variant={items.every(i => i.status === "sign_pending") ? "default" : (showCreator && reviewableItemsCount > 0 ? "default" : "outline")}
                       size="sm"
                       onClick={(e) => { e.stopPropagation(); onViewDetails(firstItem._id); }}
                       className={cn(
                         "h-8 px-4 text-xs font-semibold ml-1 shadow-sm transition-all",
-                        showCreator && reviewableItemsCount > 0
-                          ? "bg-primary hover:bg-primary/90 text-primary-foreground shadow-md hover:-translate-y-0.5"
-                          : "bg-white dark:bg-card hover:bg-slate-50 hover:text-black dark:hover:bg-slate-800 dark:hover:text-white border-slate-200 hover:border-slate-300 dark:border-slate-700"
+                        items.every(i => i.status === "sign_pending")
+                          ? "bg-orange-600 hover:bg-orange-700 text-white shadow-md hover:-translate-y-0.5"
+                          : (showCreator && reviewableItemsCount > 0
+                            ? "bg-primary hover:bg-primary/90 text-primary-foreground shadow-md hover:-translate-y-0.5"
+                            : "bg-white dark:bg-card hover:bg-slate-50 hover:text-black dark:hover:bg-slate-800 dark:hover:text-white border-slate-200 hover:border-slate-300 dark:border-slate-700")
                       )}
                     >
-                      <Eye className="h-3.5 w-3.5 mr-1.5" />
-                      {showCreator && reviewableItemsCount > 0 ? "Review" : "View"}
+                      {items.every(i => i.status === "sign_pending") ? <Pencil className="h-3.5 w-3.5 mr-1.5" /> : <Eye className="h-3.5 w-3.5 mr-1.5" />}
+                      {items.every(i => i.status === "sign_pending") ? "Sign Review" : (showCreator && reviewableItemsCount > 0 ? "Review" : "View")}
                     </Button>
                   )}
                 </div>
@@ -1406,6 +1482,18 @@ export function RequestsTable({
                                     {(firstItem.status as string) === "sign_rejected" ? "Resubmit" : "PO"}
                                   </Button>
                                 )}
+                                {onViewPDF && ["sign_pending", "sign_rejected", "ordered", "pending_po", "direct_po"].includes(firstItem.status as string) && (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-7 px-2.5 text-xs font-bold border-slate-200 text-slate-700 hover:bg-slate-50 dark:border-slate-800 dark:text-slate-400 dark:hover:bg-slate-950 mr-1"
+                                    onClick={(e) => { e.stopPropagation(); onViewPDF(firstItem.requestNumber); }}
+                                    title="View PDF"
+                                  >
+                                    <FileText className="h-3 w-3 mr-1" />
+                                    PDF
+                                  </Button>
+                                )}
                                 {onViewDetails && (
                                   <Button
                                     variant={userRole === ROLES.MANAGER && items.some(i => ["pending", "sign_pending"].includes(i.status)) ? "default" : "outline"}
@@ -1544,6 +1632,23 @@ export function RequestsTable({
                                                 </Button>
                                               )}
                                             </>
+                                          )}
+
+                                          {/* Manager Review CC Button */}
+                                          {userRole === "manager" && item.status === "cc_pending" && (
+                                            <Button
+                                              size="sm"
+                                              onClick={() =>
+                                                onOpenCC?.(
+                                                  item._id,
+                                                  items.filter((i) => i.status === "cc_pending").map((i) => i._id)
+                                                )
+                                              }
+                                              className="h-8 text-xs font-semibold bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100 hover:text-purple-800 dark:bg-purple-950/30 dark:text-purple-400 dark:border-purple-800 flex-1 sm:flex-none px-4"
+                                              variant="outline"
+                                            >
+                                              <CheckCircle2 className="h-3.5 w-3.5 mr-2" /> CC
+                                            </Button>
                                           )}
 
                                           {/* Next Stage Actions */}

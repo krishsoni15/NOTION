@@ -732,7 +732,7 @@ export function PurchaseRequestGroupCard({
     if (["pending_po", "direct_po"].includes(status)) return "bg-orange-50/50 dark:bg-orange-950/10 border-orange-200 dark:border-orange-800";
     if (["ready_for_delivery", "out_for_delivery", "delivery_processing", "delivery_stage"].includes(status)) return "bg-sky-50/50 dark:bg-sky-950/10 border-sky-200 dark:border-sky-800";
     if (status === "delivered") return "bg-green-50/30 dark:bg-green-900/10 border-green-200 dark:border-green-800";
-    if (["rejected", "sign_rejected", "cc_rejected", "rejected_po"].includes(status)) return "bg-rose-50/50 dark:bg-rose-950/10 border-rose-200 dark:border-rose-800";
+    if (["rejected", "sign_rejected", "cc_rejected", "rejected_po"].includes(status)) return "bg-card dark:bg-slate-900 hover:bg-zinc-50 dark:hover:bg-slate-800/50 border-rose-200 dark:border-rose-800";
     return "bg-card border-border";
   };
 
@@ -794,7 +794,7 @@ export function PurchaseRequestGroupCard({
     if (["pending_po", "direct_po"].includes(status)) return "bg-orange-50/50 dark:bg-orange-950/20";
     if (["ready_for_delivery", "out_for_delivery", "delivery_processing", "delivery_stage"].includes(status)) return "bg-sky-50/50 dark:bg-sky-950/20";
     if (status === "delivered") return "bg-green-50/50 dark:bg-green-950/20";
-    if (["rejected", "sign_rejected", "cc_rejected", "rejected_po"].includes(status)) return "bg-rose-50/50 dark:bg-rose-950/20";
+    if (["rejected", "sign_rejected", "cc_rejected", "rejected_po"].includes(status)) return "bg-card dark:bg-slate-900 hover:bg-zinc-50 dark:hover:bg-slate-800/50";
     return "bg-card dark:bg-slate-900 hover:bg-zinc-50 dark:hover:bg-slate-800/50";
   };
 
@@ -994,13 +994,13 @@ export function PurchaseRequestGroupCard({
                             <Badge variant="outline" className="text-xs px-1.5 py-0.5 h-5 min-w-[24px] flex items-center justify-center flex-shrink-0 bg-primary/5 text-primary border-primary/20">
                               #{displayNumber}
                             </Badge>
-                            {/* Checkbox for Ready for PO */}
-                            {item.status === "ready_for_po" && onCreateBulkPO && (
-                              <div className="flex items-center justify-center h-5 w-5">
+                            {/* Selection Checkbox */}
+                            {((isManager && item.status === "pending") || (!isManager && item.status === "ready_for_po")) && (
+                              <div className="absolute top-2 right-2 z-10">
                                 <Checkbox
                                   checked={selectedItems.has(item._id)}
                                   onCheckedChange={() => toggleSelection(item._id)}
-                                  className="h-4 w-4"
+                                  className="h-5 w-5 bg-background shadow-sm border-2 data-[state=checked]:border-primary"
                                 />
                               </div>
                             )}
@@ -1062,7 +1062,7 @@ export function PurchaseRequestGroupCard({
 
                   {/* Rejection Reason Display */}
                   {((item.status === 'rejected' || item.status === 'cc_rejected' || item.status === 'rejected_po') && item.rejectionReason) && (
-                    <div className="mt-3 p-3 bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-800 rounded-md">
+                    <div className="mt-3 p-3 bg-background/50 border border-red-200 dark:border-red-900/50 rounded-md shadow-sm">
                       <div className="flex items-start gap-2">
                         <AlertCircle className="h-4 w-4 text-red-600 dark:text-red-400 mt-0.5" />
                         <div className="flex-1">
@@ -1329,10 +1329,34 @@ export function PurchaseRequestGroupCard({
                         </>
                       )}
 
+                      {/* Sign Review Actions */}
+                      {item.status === "sign_pending" && onViewDetails && (
+                        <Button
+                          size="sm"
+                          onClick={() => onViewDetails(item._id)}
+                          className="h-7 text-xs bg-orange-50 text-orange-700 border-orange-200 hover:bg-orange-100 hover:text-orange-800 dark:bg-orange-950/30 dark:text-orange-400 dark:border-orange-800 flex-1 sm:flex-none"
+                          variant="outline"
+                        >
+                          <NotebookPen className="h-3.5 w-3.5 mr-1.5" /> Sign Review
+                        </Button>
+                      )}
+
                       {/* Next Stage Actions */}
                       {item.status === "ready_for_cc" && (
                         <Button size="sm" onClick={() => (onOpenCC || onCheck)?.(item._id)} className="h-7 text-xs bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100 hover:text-blue-800 dark:bg-blue-950/30 dark:text-blue-400 dark:border-blue-800 flex-1 sm:flex-none" variant="outline">
                           <FileText className="h-3.5 w-3.5 mr-1.5" /> CC
+                        </Button>
+                      )}
+
+                      {/* Resubmit CC Action */}
+                      {item.status === "cc_rejected" && (
+                        <Button
+                          size="sm"
+                          onClick={() => onOpenCC?.(item._id)}
+                          className="h-7 text-xs bg-orange-50 text-orange-700 border-orange-200 hover:bg-orange-100 hover:text-orange-800 dark:bg-orange-950/30 dark:text-orange-400 dark:border-orange-800 flex-1 sm:flex-none"
+                          variant="outline"
+                        >
+                          <RotateCw className="h-3.5 w-3.5 mr-1.5" /> Resubmit CC
                         </Button>
                       )}
 
@@ -1349,8 +1373,29 @@ export function PurchaseRequestGroupCard({
                         </Button>
                       )}
 
-                      {/* Universal View Button Removed as per request */}
+                      {/* Resubmit PO Action */}
+                      {item.status === "sign_rejected" && onCreatePO && (
+                        <Button
+                          size="sm"
+                          onClick={() => onCreatePO(item._id)}
+                          className="h-7 text-xs bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100 hover:text-rose-800 dark:bg-rose-950/30 dark:text-rose-400 dark:border-rose-800 flex-1 sm:flex-none"
+                          variant="outline"
+                        >
+                          <ShoppingCart className="h-3.5 w-3.5 mr-1.5" /> Resubmit PO
+                        </Button>
+                      )}
 
+                      {/* View PDF Button */}
+                      {onViewPDF && ["sign_pending", "sign_rejected", "ordered", "pending_po", "direct_po"].includes(item.status) && (
+                        <Button
+                          size="sm"
+                          onClick={() => onViewPDF(item.requestNumber)}
+                          className="h-7 text-xs flex-1 sm:flex-none"
+                          variant="outline"
+                        >
+                          <FileText className="h-3.5 w-3.5 mr-1.5" /> View PDF
+                        </Button>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -1409,6 +1454,45 @@ export function PurchaseRequestGroupCard({
 
         {/* View & Expand Actions */}
         <div className="flex items-center gap-2">
+          {/* Purchase Officer Bulk Actions */}
+          {!isManager && onCreateBulkPO && items.some(i => i.status === "ready_for_po") && (
+            <div className="flex items-center gap-2 mr-2">
+              {selectedItems.size > 1 && (
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    // Check for vendor consistency
+                    const selectedRequests = items.filter(i => selectedItems.has(i._id));
+                    const firstVendor = selectedRequests[0]?.selectedVendorId;
+                    const hasDifferentVendors = selectedRequests.some(i => i.selectedVendorId !== firstVendor);
+
+                    if (hasDifferentVendors) {
+                      toast.warning("Selected items have different vendors. Using primary vendor.");
+                    }
+                    onCreateBulkPO(Array.from(selectedItems) as Id<"requests">[]);
+                    setSelectedItems(new Set());
+                  }}
+                  className="h-7 text-xs bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm ring-1 ring-emerald-500/20 px-3"
+                >
+                  <ShoppingCart className="h-3.5 w-3.5 mr-1.5" />
+                  Create PO ({selectedItems.size})
+                </Button>
+              )}
+              {validItemsCount > 1 && (
+                <div className="flex items-center gap-2 border-r border-border/50 pr-3 h-5">
+                  <Checkbox
+                    checked={isAllSelected}
+                    onCheckedChange={toggleSelectAll}
+                    className="h-4 w-4"
+                  />
+                  <span className="text-xs font-medium text-muted-foreground whitespace-nowrap">
+                    Select Ready ({validItemsCount})
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Manager CC Review Button (Footer) */}
           {isManager && hasCCPending && (
             <Button

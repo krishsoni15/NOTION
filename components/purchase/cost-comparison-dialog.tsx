@@ -1094,9 +1094,7 @@ export function CostComparisonDialog({
                     Direct Delivery
                   </Button>
                 </div>
-                <p className="text-xs text-green-600 dark:text-green-400 mt-3 pl-14">
-                  No vendor comparison needed. Click "Direct Delivery" to move directly to delivery stage.
-                </p>
+
               </div>
             )}
 
@@ -1381,9 +1379,9 @@ export function CostComparisonDialog({
               </div>
             )}
 
-            {/* Vendor Quotes - Only show when there's NOT sufficient inventory (need to purchase from vendors) */}
-            {(!hasSufficientInventory || isManagerReview) && (
-              <div className="space-y-4 pt-2">
+            {/* Vendor Quotes - Show always to allow comparison even if stock exists */}
+            {(canEdit || isManagerReview) && (
+              <div className="space-y-4 pt-2 border-t mt-4">
                 <div className="flex items-center justify-between">
                   <h3 className="text-sm font-semibold flex items-center gap-2">
                     <Building className="h-4 w-4 text-primary" />
@@ -1395,7 +1393,7 @@ export function CostComparisonDialog({
                       variant="outline"
                       size="sm"
                       onClick={() => {
-                        setQuoteAmount((quantityToBuy || 0).toString());
+                        setQuoteAmount((request?.quantity || 0).toString());
                         const bestUnit = itemInInventory?.unit || request?.unit || "";
                         if (bestUnit) setQuoteUnit(bestUnit);
                         setVendorDialogOpen(true);
@@ -1412,7 +1410,7 @@ export function CostComparisonDialog({
                 {vendorQuotes.length === 0 && canEdit && !isManagerReview && (
                   <button
                     onClick={() => {
-                      setQuoteAmount((quantityToBuy || 0).toString());
+                      setQuoteAmount((request?.quantity || 0).toString());
                       const bestUnit = itemInInventory?.unit || request?.unit || "";
                       if (bestUnit) setQuoteUnit(bestUnit);
                       setVendorDialogOpen(true);
@@ -1681,7 +1679,7 @@ export function CostComparisonDialog({
 
           {/* Purchase Officer Actions - Only show vendor workflow when insufficient inventory */}
           {
-            canEdit && !isSubmitted && !isManager && !hasSufficientInventory && (
+            canEdit && !isSubmitted && !isManager && (
               <div className="space-y-2 pt-4 border-t mt-2">
                 {/* Auto-save indicator */}
                 {isSaving && (
@@ -1985,30 +1983,51 @@ export function CostComparisonDialog({
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3 mt-3">
-            <div className="space-y-1">
-              <Label className="text-sm font-medium">CGST %</Label>
-              <Input
-                type="number"
-                step="0.01"
-                min="0"
-                value={quoteCgst}
-                onChange={(e) => setQuoteCgst(e.target.value)}
-                placeholder="9"
-                className="text-sm"
+          <div className="space-y-3 mt-3">
+            <div className="flex items-center gap-2 p-1">
+              <Checkbox
+                id="gst-toggle"
+                checked={parseFloat(quoteCgst || "0") === 9 && parseFloat(quoteSgst || "0") === 9}
+                onCheckedChange={(checked) => {
+                  if (checked) {
+                    setQuoteCgst("9");
+                    setQuoteSgst("9");
+                  } else {
+                    setQuoteCgst("0");
+                    setQuoteSgst("0");
+                  }
+                }}
               />
+              <Label htmlFor="gst-toggle" className="text-sm font-medium cursor-pointer">
+                Auto Apply 18% GST
+              </Label>
             </div>
-            <div className="space-y-1">
-              <Label className="text-sm font-medium">SGST %</Label>
-              <Input
-                type="number"
-                step="0.01"
-                min="0"
-                value={quoteSgst}
-                onChange={(e) => setQuoteSgst(e.target.value)}
-                placeholder="9"
-                className="text-sm"
-              />
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label className="text-sm font-medium">CGST %</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={quoteCgst}
+                  onChange={(e) => setQuoteCgst(e.target.value)}
+                  placeholder="0"
+                  className="text-sm"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-sm font-medium">SGST %</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={quoteSgst}
+                  onChange={(e) => setQuoteSgst(e.target.value)}
+                  placeholder="0"
+                  className="text-sm"
+                />
+              </div>
             </div>
           </div>
 

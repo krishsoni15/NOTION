@@ -288,6 +288,9 @@ export function PurchaseRequestsContent() {
     const request = allRequests?.find(r => r._id === requestId);
     if (request) {
       let unitPrice = 0;
+      let discountPercent = 0;
+      let sgst = 0;
+      let cgst = 0;
       let vendorId = request.selectedVendorId;
 
       // Try to find price from selected vendor quote
@@ -295,6 +298,10 @@ export function PurchaseRequestsContent() {
         const quote = request.vendorQuotes.find(q => q.vendorId === vendorId);
         if (quote) {
           unitPrice = quote.unitPrice || 0;
+          discountPercent = (quote as any).discountPercent || 0;
+          const gst = (quote as any).gstPercent || 0;
+          sgst = gst ? gst / 2 : 0;
+          cgst = gst ? gst / 2 : 0;
         }
       }
 
@@ -310,6 +317,9 @@ export function PurchaseRequestsContent() {
           quantity: request.quantity,
           unit: request.unit,
           unitPrice: unitPrice,
+          discountPercent: discountPercent,
+          sgst: sgst,
+          cgst: cgst,
         }],
         vendorDetails: (vendorId && vendors) ? (() => {
           const v = vendors.find(v => v._id === vendorId);
@@ -365,9 +375,18 @@ export function PurchaseRequestsContent() {
     // Map items
     const items = requests.map(req => {
       let unitPrice = 0;
+      let discountPercent = 0;
+      let sgst = 0;
+      let cgst = 0;
       if (req.selectedVendorId && req.vendorQuotes) {
         const quote = req.vendorQuotes.find(q => q.vendorId === req.selectedVendorId);
-        if (quote) unitPrice = quote.unitPrice || 0;
+        if (quote) {
+          unitPrice = quote.unitPrice || 0;
+          discountPercent = (quote as any).discountPercent || 0;
+          const gst = (quote as any).gstPercent || 0;
+          sgst = gst ? gst / 2 : 0;
+          cgst = gst ? gst / 2 : 0;
+        }
       }
       return {
         requestId: req._id,
@@ -376,6 +395,9 @@ export function PurchaseRequestsContent() {
         quantity: req.quantity,
         unit: req.unit,
         unitPrice: unitPrice,
+        discountPercent: discountPercent,
+        sgst: sgst,
+        cgst: cgst,
       };
     });
 
@@ -621,6 +643,7 @@ export function PurchaseRequestsContent() {
             onCheck={handleCheck}
             onCreatePO={handleCreatePO}
             onMoveToCC={handleMoveToCC}
+            onViewPDF={setPdfPreviewPoNumber}
             showCreator={true}
           />
         ) : (

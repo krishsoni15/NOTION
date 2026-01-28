@@ -59,6 +59,9 @@ export interface DirectPOInitialData {
         quantity: number;
         unit: string;
         unitPrice: number;
+        discountPercent?: number; // Add discountPercent
+        sgst?: number;            // Add SGST
+        cgst?: number;            // Add CGST
         hsnCode?: string;
     }[];
     vendorDetails?: {
@@ -110,6 +113,7 @@ export function DirectPODialog({ open, onOpenChange, initialData }: DirectPODial
     const inventoryItems = useQuery(api.inventory.getAllInventoryItems);
     const vendors = useQuery(api.vendors.getAllVendors);
     const sites = useQuery(api.sites.getAllSites, {});
+    const allReadyRequests = useQuery(api.requests.getPurchaseRequestsByStatus, {});
 
     const [isLoading, setIsLoading] = useState(false);
     const [showVendorDialog, setShowVendorDialog] = useState(false);
@@ -304,9 +308,9 @@ export function DirectPODialog({ open, onOpenChange, initialData }: DirectPODial
                         unitPrice: item.unitPrice,
                         perUnitBasis: 1, // Default to 1
                         perUnitBasisUnit: item.unit || matchingInvItem?.unit || "pcs",
-                        discountPercent: "0",
-                        sgst: "0",
-                        cgst: "0",
+                        discountPercent: item.discountPercent?.toString() || "0", // Auto-fill discount
+                        sgst: item.sgst?.toString() || "0",                       // Auto-fill SGST
+                        cgst: item.cgst?.toString() || "0",                       // Auto-fill CGST
                     };
                 }));
             }
@@ -755,43 +759,111 @@ export function DirectPODialog({ open, onOpenChange, initialData }: DirectPODial
 
                         {/* 3. Items Section */}
                         <div className="space-y-4">
-                            <div className="flex items-center justify-between border-b pb-2">
-                                <h3 className="text-sm font-semibold text-foreground">Order Items</h3>
-                                {items.length > 1 && (
-                                    <div className="flex items-center gap-1">
-                                        <span className="text-xs text-muted-foreground mr-2">{items.length} items</span>
-                                        <TooltipProvider>
-                                            <Tooltip>
-                                                <TooltipTrigger asChild>
-                                                    <Button
-                                                        type="button"
-                                                        variant="outline"
-                                                        size="icon"
-                                                        className="h-7 w-7"
-                                                        onClick={() => scrollToItem(0)}
-                                                    >
-                                                        <ChevronUp className="h-4 w-4" />
-                                                    </Button>
-                                                </TooltipTrigger>
-                                                <TooltipContent>Scroll to first item</TooltipContent>
-                                            </Tooltip>
-                                        </TooltipProvider>
-                                        <TooltipProvider>
-                                            <Tooltip>
-                                                <TooltipTrigger asChild>
-                                                    <Button
-                                                        type="button"
-                                                        variant="outline"
-                                                        size="icon"
-                                                        className="h-7 w-7"
-                                                        onClick={() => scrollToItem(items.length - 1)}
-                                                    >
-                                                        <ChevronDown className="h-4 w-4" />
-                                                    </Button>
-                                                </TooltipTrigger>
-                                                <TooltipContent>Scroll to last item</TooltipContent>
-                                            </Tooltip>
-                                        </TooltipProvider>
+                            <div className="flex flex-col gap-2 border-b pb-2">
+                                <div className="flex items-center justify-between">
+                                    <h3 className="text-sm font-semibold text-foreground">Order Items</h3>
+                                    {items.length > 1 && (
+                                        <div className="flex items-center gap-1">
+                                            <span className="text-xs text-muted-foreground mr-2">{items.length} items</span>
+                                            <TooltipProvider>
+                                                <Tooltip>
+                                                    <TooltipTrigger asChild>
+                                                        <Button
+                                                            type="button"
+                                                            variant="outline"
+                                                            size="icon"
+                                                            className="h-7 w-7"
+                                                            onClick={() => scrollToItem(0)}
+                                                        >
+                                                            <ChevronUp className="h-4 w-4" />
+                                                        </Button>
+                                                    </TooltipTrigger>
+                                                    <TooltipContent>Scroll to first item</TooltipContent>
+                                                </Tooltip>
+                                            </TooltipProvider>
+                                            <TooltipProvider>
+                                                <Tooltip>
+                                                    <TooltipTrigger asChild>
+                                                        <Button
+                                                            type="button"
+                                                            variant="outline"
+                                                            size="icon"
+                                                            className="h-7 w-7"
+                                                            onClick={() => scrollToItem(items.length - 1)}
+                                                        >
+                                                            <ChevronDown className="h-4 w-4" />
+                                                        </Button>
+                                                    </TooltipTrigger>
+                                                    <TooltipContent>Scroll to last item</TooltipContent>
+                                                </Tooltip>
+                                            </TooltipProvider>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Quick Add Related Items */}
+                                {commonData.vendorId && (
+                                    <div className="flex items-center gap-2">
+                                        <Select
+                                            onValueChange={(value) => {
+                                                const req = allReadyRequests?.find(r => r._id === value);
+                                                if (req) {
+                                                    const quote = req.vendorQuotes?.find(q => q.vendorId === commonData.vendorId);
+                                                    const gstPercent = (quote as any)?.gstPercent || 0;
+
+                                                    // Add this request as a new item
+                                                    setItems(prev => [
+                                                        ...prev,
+                                                        {
+                                                            id: Date.now().toString(),
+                                                            requestId: req._id,
+                                                            itemDescription: req.itemName,
+                                                            description: req.description || "",
+                                                            itemSearchQuery: req.itemName,
+                                                            hsnCode: "",
+                                                            quantity: req.quantity,
+                                                            unit: req.unit,
+                                                            unitPrice: quote?.unitPrice || 0,
+                                                            perUnitBasis: 1,
+                                                            perUnitBasisUnit: req.unit,
+                                                            discountPercent: "0",
+                                                            sgst: gstPercent ? (gstPercent / 2).toString() : "0",
+                                                            cgst: gstPercent ? (gstPercent / 2).toString() : "0",
+                                                        }
+                                                    ]);
+                                                    toast.success(`Added ${req.itemName}`);
+                                                }
+                                            }}
+                                        >
+                                            <SelectTrigger className="h-8 text-xs bg-muted/50 w-full sm:w-[300px]">
+                                                <Plus className="h-3 w-3 mr-2" />
+                                                <SelectValue placeholder="Add other pending items for this vendor..." />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {(() => {
+                                                    // Filter requests:
+                                                    // 1. Must be ready_for_po
+                                                    // 2. Must match current vendor (if assigned)
+                                                    // 3. Must NOT be already in the list
+                                                    const availableRequests = allReadyRequests?.filter(r =>
+                                                        r.status === "ready_for_po" &&
+                                                        (r.selectedVendorId === commonData.vendorId) &&
+                                                        !items.some(i => i.requestId === r._id)
+                                                    ) || [];
+
+                                                    if (availableRequests.length === 0) {
+                                                        return <div className="p-2 text-xs text-muted-foreground text-center">No matching items found</div>;
+                                                    }
+
+                                                    return availableRequests.map(req => (
+                                                        <SelectItem key={req._id} value={req._id} className="text-xs">
+                                                            <span className="font-bold mr-2">#{req.requestNumber}</span>
+                                                            {req.itemName} ({req.quantity} {req.unit})
+                                                        </SelectItem>
+                                                    ));
+                                                })()}
+                                            </SelectContent>
+                                        </Select>
                                     </div>
                                 )}
                             </div>
@@ -1025,13 +1097,26 @@ export function DirectPODialog({ open, onOpenChange, initialData }: DirectPODial
                                     </div>
 
                                     {/* Row 3: Taxes */}
-                                    <div className="grid grid-cols-3 gap-4">
+                                    <div className="grid grid-cols-3 gap-4 relative">
                                         <div className="space-y-1.5">
                                             <Label className="text-sm">Discount (%)</Label>
                                             <Input type="number" min="0" max="100" step="0.1" value={item.discountPercent} onChange={(e) => handleItemChange(index, 'discountPercent', e.target.value)} className="h-9" />
                                         </div>
-                                        <div className="space-y-1.5">
-                                            <Label className="text-sm">SGST (%)</Label>
+                                        <div className="space-y-1.5 relative">
+                                            <div className="flex items-center justify-between">
+                                                <Label className="text-sm">SGST (%)</Label>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        handleItemChange(index, 'sgst', '9');
+                                                        handleItemChange(index, 'cgst', '9');
+                                                    }}
+                                                    className="text-[10px] text-blue-600 hover:text-blue-700 font-medium hover:underline"
+                                                    title="Set standard 18% GST (9% SGST + 9% CGST)"
+                                                >
+                                                    Apply 18%
+                                                </button>
+                                            </div>
                                             <Input type="number" min="0" max="100" step="0.1" value={item.sgst} onChange={(e) => handleItemChange(index, 'sgst', e.target.value)} className="h-9" />
                                         </div>
                                         <div className="space-y-1.5">

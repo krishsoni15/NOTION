@@ -30,7 +30,8 @@ import {
   ChevronDown,
   Shield,
   Mail,
-  Phone
+  Phone,
+  Maximize
 } from "lucide-react";
 import { ROLE_LABELS } from "@/lib/auth/roles";
 
@@ -180,6 +181,25 @@ export function UserMenu() {
         <DropdownMenuItem onClick={() => router.push("/dashboard/settings")}>
           <Settings className="mr-2 h-4 w-4" />
           <span>Settings</span>
+        </DropdownMenuItem>
+
+        {/* Full Screen Action */}
+        <DropdownMenuItem
+          onClick={() => {
+            if (!document.fullscreenElement) {
+              document.documentElement.requestFullscreen().catch((e) => {
+                console.error(`Error attempting to enable fullscreen mode: ${e.message} (${e.name})`);
+              });
+            } else {
+              if (document.exitFullscreen) {
+                document.exitFullscreen();
+              }
+            }
+          }}
+        >
+          <Settings className="mr-2 h-4 w-4 hidden" /> {/* Hidden spacer or use a real icon */}
+          <Maximize className="mr-2 h-4 w-4" />
+          <span>Full Screen</span>
         </DropdownMenuItem>
 
         <DropdownMenuSeparator />

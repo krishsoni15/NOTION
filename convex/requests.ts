@@ -170,10 +170,13 @@ export const getUserRequests = query({
           if (costComparison.status === "cc_approved" && costComparison.selectedVendorId) {
             selectedVendorId = costComparison.selectedVendorId;
           }
-          // If draft or pending, show first vendor from quotes
-          else if (costComparison.vendorQuotes && costComparison.vendorQuotes.length > 0) {
-            selectedVendorId = costComparison.vendorQuotes[0].vendorId;
+          // Always populate vendorQuotes if they exist
+          if (costComparison.vendorQuotes && costComparison.vendorQuotes.length > 0) {
             vendorQuotes = costComparison.vendorQuotes;
+            // If checking for draft/pending default selection (only if not already approved)
+            if (!selectedVendorId) {
+              selectedVendorId = costComparison.vendorQuotes[0].vendorId;
+            }
           }
         }
 
@@ -277,10 +280,13 @@ export const getRequestsReadyForCC = query({
           if (costComparison.status === "cc_approved" && costComparison.selectedVendorId) {
             selectedVendorId = costComparison.selectedVendorId;
           }
-          // If draft or pending, show first vendor from quotes
-          else if (costComparison.vendorQuotes && costComparison.vendorQuotes.length > 0) {
-            selectedVendorId = costComparison.vendorQuotes[0].vendorId;
+          // Always populate vendorQuotes if they exist
+          if (costComparison.vendorQuotes && costComparison.vendorQuotes.length > 0) {
             vendorQuotes = costComparison.vendorQuotes;
+            // If checking for draft/pending default selection (only if not already approved)
+            if (!selectedVendorId) {
+              selectedVendorId = costComparison.vendorQuotes[0].vendorId;
+            }
           }
         }
 
@@ -463,10 +469,13 @@ export const getPurchaseRequestsByStatus = query({
           if (costComparison.status === "cc_approved" && costComparison.selectedVendorId) {
             selectedVendorId = costComparison.selectedVendorId;
           }
-          // If draft or pending, show first vendor from quotes
-          else if (costComparison.vendorQuotes && costComparison.vendorQuotes.length > 0) {
-            selectedVendorId = costComparison.vendorQuotes[0].vendorId;
+          // Always populate vendorQuotes if they exist
+          if (costComparison.vendorQuotes && costComparison.vendorQuotes.length > 0) {
             vendorQuotes = costComparison.vendorQuotes;
+            // If checking for draft/pending default selection (only if not already approved)
+            if (!selectedVendorId) {
+              selectedVendorId = costComparison.vendorQuotes[0].vendorId;
+            }
           }
         }
 
@@ -585,10 +594,13 @@ export const getAllRequests = query({
           if (costComparison.status === "cc_approved" && costComparison.selectedVendorId) {
             selectedVendorId = costComparison.selectedVendorId;
           }
-          // If draft or pending, show first vendor from quotes
-          else if (costComparison.vendorQuotes && costComparison.vendorQuotes.length > 0) {
-            selectedVendorId = costComparison.vendorQuotes[0].vendorId;
+          // Always populate vendorQuotes if they exist
+          if (costComparison.vendorQuotes && costComparison.vendorQuotes.length > 0) {
             vendorQuotes = costComparison.vendorQuotes;
+            // If checking for draft/pending default selection (only if not already approved)
+            if (!selectedVendorId) {
+              selectedVendorId = costComparison.vendorQuotes[0].vendorId;
+            }
           }
         }
 

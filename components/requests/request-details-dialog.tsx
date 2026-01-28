@@ -344,8 +344,8 @@ export function RequestDetailsDialog({
   const hasMultiplePendingItems = pendingItems.length > 1;
 
   // Manager permissions based on pending items
-  const canApprove = isManager && (pendingItems.length > 0 || selectedItemsForAction.size > 0);
-  const canReject = isManager && (pendingItems.length > 0 || selectedItemsForAction.size > 0);
+  const canApprove = isManager && (pendingItems.length > 0 || signPendingItems.length > 0 || selectedItemsForAction.size > 0);
+  const canReject = isManager && (pendingItems.length > 0 || signPendingItems.length > 0 || selectedItemsForAction.size > 0);
 
   // Check if all items in the request have the same status
   const allItemsHaveSameStatus = allRequests && allRequests.length > 0
@@ -418,9 +418,9 @@ export function RequestDetailsDialog({
     }
   }, [open]);
 
-  // Close dialog and refresh data after successful action
+  // Refresh data after successful action (Convex does this automatically)
   const closeAndRefresh = () => {
-    onOpenChange(false);
+    // onOpenChange(false); // User requested to keep dialog open
     // Data will refresh automatically through Convex queries
   };
 
@@ -1666,7 +1666,7 @@ export function RequestDetailsDialog({
                                           {(isManager && (isPending || item.status === "sign_pending" || item.status === "cc_pending" || canManagerModifyStatus(item.status))) || (isPurchaseOfficer && ["pending_po", "direct_po", "ready_for_po"].includes(item.status)) ? (
                                             <TableCell className="text-right p-4 align-middle rounded-r-lg overflow-hidden">
                                               <div className="flex items-center justify-end gap-3 min-w-[300px]">
-                                                {item.status === "sign_pending" || item.status === "sign_rejected" ? (
+                                                {item.status === "sign_pending" ? (
                                                   <div className="flex items-center gap-2">
                                                     <Button
                                                       variant="outline"
@@ -1677,18 +1677,18 @@ export function RequestDetailsDialog({
                                                     >
                                                       <CheckCircle className="h-4 w-4 mr-1.5" /> Approve
                                                     </Button>
-                                                    {item.status === "sign_pending" && (
-                                                      <Button
-                                                        variant="outline"
-                                                        size="sm"
-                                                        className="h-9 border-red-200 text-red-600 hover:bg-red-50"
-                                                        onClick={(e) => { e.stopPropagation(); setShowItemRejectionInput(item._id); }}
-                                                        disabled={isLoading}
-                                                      >
-                                                        <XCircle className="h-4 w-4 mr-1.5" /> Reject
-                                                      </Button>
-                                                    )}
+                                                    <Button
+                                                      variant="outline"
+                                                      size="sm"
+                                                      className="h-9 border-red-200 text-red-600 hover:bg-red-50"
+                                                      onClick={(e) => { e.stopPropagation(); setShowItemRejectionInput(item._id); }}
+                                                      disabled={isLoading}
+                                                    >
+                                                      <XCircle className="h-4 w-4 mr-1.5" /> Reject
+                                                    </Button>
                                                   </div>
+                                                ) : item.status === "sign_rejected" ? (
+                                                  null
                                                 ) : item.status === "cc_pending" ? (
                                                   onOpenCC && (
                                                     <Button
@@ -1921,30 +1921,32 @@ export function RequestDetailsDialog({
                                     "p-3 border-t bg-muted/5 w-full",
                                     (item.status === "sign_pending" || item.status === "sign_rejected") ? "grid grid-cols-2 gap-3" : "flex"
                                   )}>
-                                    {item.status === "sign_pending" || item.status === "sign_rejected" ? (
+                                    {item.status === "sign_pending" ? (
                                       <>
                                         <Button
-                                          variant="outline"
+                                          variant="default"
                                           size="sm"
-                                          className="h-9 border-emerald-200 text-emerald-700 hover:bg-emerald-50"
+                                          className="h-9 bg-amber-600 hover:bg-amber-700 text-white shadow-sm"
                                           onClick={(e) => { e.stopPropagation(); setShowSignPendingApproveConfirm(item._id); }}
                                           disabled={isLoading}
                                         >
-                                          <CheckCircle className="h-4 w-4 mr-1.5" /> Approve
+                                          <Pencil className="h-4 w-4 mr-1.5" /> Sign PO
                                         </Button>
-                                        {item.status === "sign_pending" && (
-                                          <Button
-                                            variant="outline"
-                                            size="sm"
-                                            className="h-9 border-red-200 text-red-600 hover:bg-red-50"
-                                            onClick={(e) => { e.stopPropagation(); setShowItemRejectionInput(item._id); }}
-                                            disabled={isLoading}
-                                          >
-                                            <XCircle className="h-4 w-4 mr-1.5" /> Reject
-                                          </Button>
-                                        )}
+                                        <Button
+                                          variant="outline"
+                                          size="sm"
+                                          className="h-9 border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300 dark:border-red-900/30 dark:text-red-400 dark:hover:bg-red-950/20"
+                                          onClick={(e) => { e.stopPropagation(); setShowItemRejectionInput(item._id); }}
+                                          disabled={isLoading}
+                                        >
+                                          <XCircle className="h-4 w-4 mr-1.5" /> Reject
+                                        </Button>
                                       </>
+                                    ) : (item.status === "pending") ? (
+                                      /* Standard Approve/Reject */
+                                      <RenderActionSegments item={item} isCard />
                                     ) : item.status === "cc_pending" ? (
+
                                       onOpenCC ? (
                                         <Button
                                           variant="outline"
@@ -1961,19 +1963,41 @@ export function RequestDetailsDialog({
                                   </div>
                                 )}
 
-                                {/* Rejection Input Overlay */}
+                                {/* Rejection Input Overlay - In-place Card Style */}
                                 {showItemRejectionInput === item._id && (
-                                  <div className="absolute inset-0 z-20 bg-background/95 p-4 flex flex-col justify-center rounded-xl animate-in fade-in zoom-in-95">
-                                    <Label className="mb-2 font-semibold">Rejection Reason</Label>
-                                    <Textarea
-                                      value={itemRejectionReasons[item._id] || ""}
-                                      onChange={(e) => setItemRejectionReasons((prev) => ({ ...prev, [item._id]: e.target.value }))}
-                                      placeholder="Reason..."
-                                      className="mb-2 flex-1 min-h-[80px]"
-                                    />
-                                    <div className="flex gap-2">
-                                      <Button size="sm" variant="outline" onClick={() => setShowItemRejectionInput(null)} className="flex-1">Cancel</Button>
-                                      <Button size="sm" variant="destructive" onClick={() => handleItemReject(item._id)} className="flex-1">Reject</Button>
+                                  <div className="absolute inset-x-2 bottom-2 z-20 bg-background/95 p-3 rounded-lg border shadow-lg animate-in slide-in-from-bottom-2">
+                                    <div className="flex flex-col gap-2">
+                                      <div className="flex items-center justify-between">
+                                        <Label className="text-xs font-bold text-destructive flex items-center gap-1.5">
+                                          <AlertCircle className="h-3 w-3" /> Rejection Note
+                                        </Label>
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          className="h-6 w-6 p-0 rounded-full hover:bg-muted"
+                                          onClick={() => setShowItemRejectionInput(null)}
+                                          title="Cancel"
+                                        >
+                                          <XCircle className="h-4 w-4 text-muted-foreground" />
+                                        </Button>
+                                      </div>
+                                      <Textarea
+                                        value={itemRejectionReasons[item._id] || ""}
+                                        onChange={(e) => setItemRejectionReasons((prev) => ({ ...prev, [item._id]: e.target.value }))}
+                                        placeholder="Reason for rejection..."
+                                        className="min-h-[60px] text-xs resize-none bg-background focus-visible:ring-destructive/20"
+                                        autoFocus
+                                      />
+                                      <div className="flex justify-end gap-2">
+                                        <Button
+                                          size="sm"
+                                          variant="destructive"
+                                          onClick={() => handleItemReject(item._id)}
+                                          className="h-7 text-xs px-3 shadow-sm w-full"
+                                        >
+                                          Confirm Reject
+                                        </Button>
+                                      </div>
                                     </div>
                                   </div>
                                 )}
@@ -2739,18 +2763,23 @@ export function RequestDetailsDialog({
                       <XCircle className="h-4 w-4 mr-2" />
                       {selectedItemsForAction.size > 0
                         ? `Reject (${selectedItemsForAction.size})`
-                        : "Reject All"}
+                        : signPendingItems.length > 0 ? "Reject PO" : "Reject All"}
                     </Button>
                   )}
                   {canApprove && (
                     <Button
-                      className="flex-1 sm:flex-none bg-emerald-600 hover:bg-emerald-700 text-white font-bold h-10 px-6"
+                      className={cn(
+                        "flex-1 sm:flex-none font-bold h-10 px-6 text-white",
+                        signPendingItems.length > 0
+                          ? "bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 shadow-orange-500/20"
+                          : "bg-emerald-600 hover:bg-emerald-700"
+                      )}
                       onClick={() => setShowSignPendingApproveConfirm(true)}
                     >
                       <CheckCircle className="h-4 w-4 mr-2" />
                       {selectedItemsForAction.size > 0
                         ? `Approve (${selectedItemsForAction.size})`
-                        : "Approve"}
+                        : signPendingItems.length > 0 ? "Sign PO" : "Approve All"}
                     </Button>
                   )}
                 </div>

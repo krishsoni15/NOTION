@@ -45,7 +45,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Separator } from "@/components/ui/separator";
-import { AlertCircle, CheckCircle, XCircle, Package, ShoppingCart, MapPin, PackageX, Sparkles, FileText, PieChart, LayoutGrid, List, Edit, Image as ImageIcon, Calendar, Clock, Check, Send, NotebookPen, Loader2, Truck, Pencil, GitFork } from "lucide-react";
+import { AlertCircle, CheckCircle, XCircle, Package, ShoppingCart, MapPin, PackageX, Sparkles, FileText, PieChart, LayoutGrid, List, Edit, Image as ImageIcon, Calendar, Clock, Check, Send, NotebookPen, Loader2, Truck, Pencil, GitFork, Building2, User } from "lucide-react";
 import { useUserRole } from "@/hooks/use-user-role";
 import { ROLES } from "@/lib/auth/roles";
 import { CompactImageGallery } from "@/components/ui/image-gallery";
@@ -125,6 +125,15 @@ export function RequestDetailsDialog({
   const approveSplit = useMutation(api.costComparisons.approveSplitFulfillment);
   const approveDirectPO = useMutation(api.purchaseOrders.approveDirectPOByRequest);
   const rejectDirectPO = useMutation(api.purchaseOrders.rejectDirectPOByRequest);
+  const approveDirectPOById = useMutation(api.purchaseOrders.approveDirectPO);
+  const rejectDirectPOById = useMutation(api.purchaseOrders.rejectDirectPO);
+
+  // Fetch pending POs for grouping
+  const pendingPOs = useQuery(
+    api.purchaseOrders.getPOsForRequestNumber,
+    request?.requestNumber ? { requestNumber: request.requestNumber } : "skip"
+  );
+
   // Fetch latest note for this request
   const notes = useQuery(api.notes.getNotes, request?.requestNumber ? { requestNumber: request.requestNumber } : "skip");
   const latestNote = notes && notes.length > 0 ? notes[0] : null;
@@ -523,10 +532,9 @@ export function RequestDetailsDialog({
   };
 
   const selectAllPending = () => {
-    const allProcessableIds = [
-      ...pendingItems.map(item => item._id),
-      ...signPendingItems.map(item => item._id)
-    ];
+    const allProcessableIds = pendingItems.length > 0
+      ? pendingItems.map(item => item._id)
+      : signPendingItems.map(item => item._id);
     setSelectedItemsForAction(new Set(allProcessableIds));
   };
 
@@ -779,7 +787,7 @@ export function RequestDetailsDialog({
     // Otherwise, select ALL pending/sign_pending items visible.
     const itemsToProcess = selectedItemsForAction.size > 0
       ? Array.from(selectedItemsForAction)
-      : [...signPendingItems.map(i => i._id), ...pendingItems.map(i => i._id)];
+      : (pendingItems.length > 0 ? pendingItems.map(i => i._id) : signPendingItems.map(i => i._id));
 
     if (itemsToProcess.length === 0) return;
 
@@ -1252,14 +1260,13 @@ export function RequestDetailsDialog({
                   <XCircle className="h-6 w-6" />
                 </Button>
               </div>
+
             </div>
           </div>
 
           {/* Toolbar / Actions Bar */}
           <div className="px-6 py-2 flex items-center justify-between border-t bg-muted/20">
             <div className="flex items-center gap-2">
-              {/* View toggle moved to Materials List header */}
-
               {/* Batch Selection Counter */}
               {selectedItemsForAction.size > 0 && (
                 <div className="flex items-center gap-2 ml-4 animate-in fade-in slide-in-from-left-2">
@@ -1267,44 +1274,13 @@ export function RequestDetailsDialog({
                     {selectedItemsForAction.size} Selected
                   </span>
                   <Button variant="ghost" size="sm" onClick={deselectAll} className="h-7 text-xs hover:bg-destructive/10 hover:text-destructive">
-                    Clear
+                    Unselect All
                   </Button>
                 </div>
               )}
             </div>
-
             {/* Right Side Actions */}
             <div className="flex items-center gap-2">
-              {/* Select All Checkbox for Manager */}
-              {isManager && (hasMultiplePendingItems || signPendingItems.length > 0) && (
-                <div className="flex items-center gap-2 mr-4 border-r pr-4 h-5">
-                  <Checkbox
-                    id="select-all"
-                    checked={
-                      (pendingItems.length > 0 || signPendingItems.length > 0) &&
-                      selectedItemsForAction.size === (pendingItems.length + signPendingItems.length)
-                    }
-                    onCheckedChange={(checked) => {
-                      if (checked) selectAllPending();
-                      else deselectAll();
-                    }}
-                  />
-                  <Label htmlFor="select-all" className="text-xs cursor-pointer font-medium">
-                    Select All Pending
-                  </Label>
-                </div>
-              )}
-              {["sign_pending", "sign_rejected", "ordered", "pending_po"].includes(overallStatus || request.status) && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="gap-2 h-7 text-xs"
-                  onClick={() => setPdfPreviewPoNumber(request.requestNumber)}
-                >
-                  <FileText className="h-3.5 w-3.5" />
-                  View PDF
-                </Button>
-              )}
             </div>
           </div>
 
@@ -1544,6 +1520,117 @@ export function RequestDetailsDialog({
                             </TableRow>
                           </TableHeader>
                           <TableBody>
+                            {/* Render Grouped POs First */}
+                            {pendingPOs && Object.values(pendingPOs.filter(p => p.status === "sign_pending").reduce((acc, po) => {
+                              if (!po.vendor) return acc;
+                              const vendorId = po.vendor._id;
+                              if (!acc[vendorId]) {
+                                acc[vendorId] = {
+                                  vendor: po.vendor,
+                                  items: []
+                                };
+                              }
+                              acc[vendorId].items.push(po);
+                              return acc;
+                            }, {} as Record<string, { vendor: any, items: any[] }>)).map((group: any) => (
+                              <TableRow key={`group-${group.vendor._id}`} className="bg-amber-50/50 dark:bg-amber-950/10 hover:bg-amber-50 dark:hover:bg-amber-900/20 shadow-sm border-b border-amber-200/50 dark:border-amber-800/50">
+                                <TableCell colSpan={10} className="p-0">
+                                  <div className="flex flex-col sm:flex-row w-full">
+                                    {/* Left: Vendor & PO Info */}
+                                    <div className="p-4 flex-1 flex flex-col justify-center border-r border-amber-200/30 dark:border-amber-800/30">
+                                      <div className="flex items-center gap-3 mb-2">
+                                        <div className="h-10 w-10 rounded-full bg-amber-100 dark:bg-amber-900/40 flex items-center justify-center border border-amber-200 dark:border-amber-800">
+                                          <Building2 className="h-5 w-5 text-amber-700 dark:text-amber-400" />
+                                        </div>
+                                        <div>
+                                          <div className="font-bold text-base text-amber-950 dark:text-amber-100">{group.vendor.companyName}</div>
+                                          <div className="text-xs text-amber-800/70 dark:text-amber-300/70 flex items-center gap-1.5">
+                                            <span className="font-mono bg-amber-100/50 dark:bg-amber-900/30 px-1 rounded">{group.vendor.gstNumber}</span>
+                                            {group.items[0].poNumber && <span className="font-mono font-semibold">• PO: {group.items[0].poNumber}</span>}
+                                          </div>
+                                        </div>
+                                      </div>
+                                      <div className="mt-2 pl-[52px]">
+                                        <div className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-amber-100 text-amber-700 dark:bg-amber-900/60 dark:text-amber-400 border border-amber-200 dark:border-amber-800">
+                                          <Pencil className="h-3 w-3 mr-1" /> Waiting for Signature
+                                        </div>
+                                      </div>
+                                    </div>
+
+                                    {/* Middle: Items List */}
+                                    <div className="flex-[2] p-4 border-r border-amber-200/30 dark:border-amber-800/30">
+                                      <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2 flex items-center gap-2">
+                                        <List className="h-3 w-3" /> Includes {group.items.length} Item{group.items.length > 1 ? 's' : ''}
+                                      </h4>
+                                      <div className="space-y-2 max-h-[120px] overflow-y-auto pr-2 custom-scrollbar">
+                                        {group.items.map((po: any) => (
+                                          <div key={po._id} className="flex items-center justify-between text-sm p-2 rounded bg-background/50 border border-border/50">
+                                            <div className="flex items-center gap-2">
+                                              <span className="text-[10px] font-black font-mono bg-primary/10 text-primary px-1.5 py-0.5 rounded border border-primary/20 shadow-sm">
+                                                #{allRequests?.find(r => r._id === po.requestId)?.itemOrder ?? "?"}
+                                              </span>
+                                              <Badge variant="outline" className="h-5 px-1.5 text-[10px] bg-muted/50">
+                                                {po.quantity} {po.unit}
+                                              </Badge>
+                                              <span className="font-medium truncate max-w-[200px]" title={po.itemDescription}>{po.itemDescription.split('\n')[0]}</span>
+                                            </div>
+                                            <div className="font-semibold font-mono text-xs">
+                                              ₹{po.totalAmount.toLocaleString()}
+                                            </div>
+                                          </div>
+                                        ))}
+                                      </div>
+                                      <div className="mt-3 pt-2 border-t border-dashed border-amber-200/50 dark:border-amber-800/50 flex justify-between items-center px-1">
+                                        <span className="text-xs font-medium text-amber-800/70 dark:text-amber-400/70">Total PO Value</span>
+                                        <span className="text-sm font-bold text-foreground">
+                                          ₹
+                                          {group.items.reduce((sum: number, i: any) => sum + i.totalAmount, 0).toLocaleString()}
+                                        </span>
+                                      </div>
+                                    </div>
+
+                                    {/* Right: Actions */}
+                                    <div className="p-4 flex flex-col justify-center gap-2 min-w-[160px] bg-amber-100/20 dark:bg-amber-950/20">
+                                      <Button
+                                        size="sm"
+                                        className="w-full bg-amber-600 hover:bg-amber-700 text-white font-semibold shadow-sm"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          const poIds = group.items.map((i: any) => i._id);
+                                          setShowSignPendingApproveConfirm({ type: 'po_batch', ids: poIds } as any);
+                                        }}
+                                      >
+                                        <Pencil className="h-3.5 w-3.5 mr-2" /> Sign PO
+                                      </Button>
+                                      <div className="flex gap-2">
+                                        <Button
+                                          variant="outline"
+                                          size="sm"
+                                          className="flex-1 text-xs h-8 border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300 dark:border-red-900/30 dark:hover:bg-red-950/30"
+                                          onClick={(e) => {
+                                            // Reject Logic
+                                            e.stopPropagation();
+                                            const poIds = group.items.map((i: any) => i._id);
+                                            setShowRejectionInput({ type: 'po_batch', ids: poIds } as any);
+                                          }}
+                                        >
+                                          Reject
+                                        </Button>
+                                        <Button
+                                          variant="outline"
+                                          size="sm"
+                                          className="flex-1 text-xs h-8"
+                                          onClick={() => setPdfPreviewPoNumber(group.items[0].poNumber)}
+                                        >
+                                          PDF
+                                        </Button>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </TableCell>
+                              </TableRow>
+                            ))}
+
                             {(() => {
                               const sortedItems = (allRequests || []).sort((a, b) => {
                                 const orderA = a.itemOrder ?? a.createdAt;
@@ -1561,6 +1648,10 @@ export function RequestDetailsDialog({
                                     const displayNumber = item.itemOrder ?? idx + 1;
                                     const isSelected = selectedItemsForAction.has(item._id);
                                     const itemPhotos = getItemPhotos(item);
+
+                                    // Check if item is part of a pending PO group
+                                    const itemPO = pendingPOs?.find(p => p.requestId === item._id && p.status === "sign_pending");
+                                    if (itemPO && itemPO.vendor) return null; // Rendered in group row
 
                                     return (
                                       <Fragment key={item._id}>
@@ -1668,24 +1759,34 @@ export function RequestDetailsDialog({
                                               <div className="flex items-center justify-end gap-3 min-w-[300px]">
                                                 {item.status === "sign_pending" ? (
                                                   <div className="flex items-center gap-2">
-                                                    <Button
-                                                      variant="outline"
-                                                      size="sm"
-                                                      className="h-9 border-emerald-200 text-emerald-700 hover:bg-emerald-50"
-                                                      onClick={(e) => { e.stopPropagation(); setShowSignPendingApproveConfirm(item._id); }}
-                                                      disabled={isLoading}
-                                                    >
-                                                      <CheckCircle className="h-4 w-4 mr-1.5" /> Approve
-                                                    </Button>
-                                                    <Button
-                                                      variant="outline"
-                                                      size="sm"
-                                                      className="h-9 border-red-200 text-red-600 hover:bg-red-50"
-                                                      onClick={(e) => { e.stopPropagation(); setShowItemRejectionInput(item._id); }}
-                                                      disabled={isLoading}
-                                                    >
-                                                      <XCircle className="h-4 w-4 mr-1.5" /> Reject
-                                                    </Button>
+                                                    {/* Logic to show inline actions ONLY if NOT handled by the grouped section 
+                                                        OR if we just want to point user to bottom */}
+                                                    {pendingPOs && pendingPOs.length > 0 ? (
+                                                      <div className="text-xs text-muted-foreground italic mr-2">
+                                                        See actions below
+                                                      </div>
+                                                    ) : (
+                                                      <>
+                                                        <Button
+                                                          variant="outline"
+                                                          size="sm"
+                                                          className="h-9 border-amber-200 text-amber-700 hover:bg-amber-50"
+                                                          onClick={(e) => { e.stopPropagation(); setShowSignPendingApproveConfirm(item._id); }}
+                                                          disabled={isLoading}
+                                                        >
+                                                          <Pencil className="h-4 w-4 mr-1.5" /> Sign PO
+                                                        </Button>
+                                                        <Button
+                                                          variant="outline"
+                                                          size="sm"
+                                                          className="h-9 border-red-200 text-red-600 hover:bg-red-50"
+                                                          onClick={(e) => { e.stopPropagation(); setShowItemRejectionInput(item._id); }}
+                                                          disabled={isLoading}
+                                                        >
+                                                          <XCircle className="h-4 w-4 mr-1.5" /> Reject
+                                                        </Button>
+                                                      </>
+                                                    )}
                                                   </div>
                                                 ) : item.status === "sign_rejected" ? (
                                                   null
@@ -1796,215 +1897,300 @@ export function RequestDetailsDialog({
                         </Table>
                       </div>
                     ) : (
-                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
-                        {(allRequests || [])
-                          .sort((a, b) => {
-                            const orderA = a.itemOrder ?? a.createdAt;
-                            const orderB = b.itemOrder ?? b.createdAt;
-                            return orderA - orderB;
-                          })
-                          .map((item, idx) => {
-                            const isPending = item.status === "pending";
-                            const displayNumber = item.itemOrder ?? idx + 1;
-                            const isSelected = selectedItemsForAction.has(item._id);
-                            const itemPhotos = getItemPhotos(item);
-
-                            return (
-                              <div
-                                key={item._id}
-                                className={cn(
-                                  "group relative flex flex-col rounded-2xl bg-card text-card-foreground shadow-sm transition-all duration-300 hover:shadow-xl overflow-hidden hover:-translate-y-1",
-                                  getStatusBgTint(item.status),
-                                  // Apply status color class (inherits to Left primarily)
-                                  getStatusBorderClass(item.status),
-                                  // Left thick border inheriting status color
-                                  "border-l-[6px] border-l-[color:inherit]",
-                                  // Other sides neutral/thin (overriding status color)
-                                  "border-t border-r border-b border-t-border/40 border-r-border/40 border-b-border/40",
-
-                                  isSelected && "ring-4 ring-primary/20 bg-primary/5"
-                                )}
-                              >
-                                {/* Selection Checkbox */}
-                                {isPending && isManager && (
-                                  <div className="absolute top-2 right-2 z-10">
-                                    <Checkbox
-                                      checked={isSelected}
-                                      onCheckedChange={() => toggleItemSelection(item._id)}
-                                      className="h-5 w-5 bg-background shadow-sm border-2 data-[state=checked]:border-primary"
-                                    />
+                      <div className="block">
+                        {/* Card View - Grouped POs first */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 mb-4">
+                          {pendingPOs && Object.values(pendingPOs.filter(p => p.status === "sign_pending").reduce((acc, po) => {
+                            if (!po.vendor) return acc;
+                            const vendorId = po.vendor._id;
+                            if (!acc[vendorId]) {
+                              acc[vendorId] = {
+                                vendor: po.vendor,
+                                items: []
+                              };
+                            }
+                            acc[vendorId].items.push(po);
+                            return acc;
+                          }, {} as Record<string, { vendor: any, items: any[] }>)).map((group: any) => (
+                            <div key={`card-group-${group.vendor._id}`} className="flex flex-col border rounded-xl bg-card overflow-hidden shadow-sm hover:shadow-md transition-shadow ring-1 ring-amber-500/20">
+                              <div className="p-4 bg-amber-50 dark:bg-amber-950/20 border-b flex items-center gap-3">
+                                <div className="h-10 w-10 rounded-full bg-white dark:bg-amber-900/40 flex items-center justify-center shadow-sm text-amber-600">
+                                  <Building2 className="h-5 w-5" />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <h3 className="font-bold text-foreground truncate">{group.vendor.companyName}</h3>
+                                  <div className="text-xs text-muted-foreground flex items-center gap-2">
+                                    <span className="flex items-center gap-1"><Pencil className="h-3 w-3" /> Sign Pending</span>
+                                    <span>•</span>
+                                    <span className="font-mono">PO: {group.items[0].poNumber}</span>
                                   </div>
-                                )}
+                                </div>
+                                <div className="text-right">
+                                  <div className="text-sm font-bold">₹{group.items.reduce((sum: number, i: any) => sum + i.totalAmount, 0).toLocaleString()}</div>
+                                </div>
+                              </div>
+                              <div className="p-3 bg-muted/10 space-y-2">
+                                {group.items.map((po: any) => (
+                                  <div key={po._id} className="flex items-center gap-2 text-sm">
+                                    <span className="text-[10px] font-black font-mono bg-primary/10 text-primary px-1.5 py-0.5 rounded border border-primary/20 shadow-sm">
+                                      #{allRequests?.find(r => r._id === po.requestId)?.itemOrder ?? "?"}
+                                    </span>
+                                    <Badge variant="secondary" className="h-5 text-[10px] px-1">{po.quantity} {po.unit}</Badge>
+                                    <span className="truncate flex-1">{po.itemDescription.split('\n')[0]}</span>
+                                  </div>
+                                ))}
+                              </div>
+                              <div className="p-3 mt-auto border-t bg-muted/20 flex items-center gap-2">
+                                <Button
+                                  size="sm"
+                                  className="flex-1 bg-amber-600 hover:bg-amber-700 text-white"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    const poIds = group.items.map((i: any) => i._id);
+                                    setShowSignPendingApproveConfirm({ type: 'po_batch', ids: poIds } as any);
+                                  }}
+                                >
+                                  Sign PO
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="px-2"
+                                  onClick={() => setPdfPreviewPoNumber(group.items[0].poNumber)}
+                                >
+                                  <FileText className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="px-2 border-red-200 text-red-600 hover:bg-red-50"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    const poIds = group.items.map((i: any) => i._id);
+                                    setShowRejectionInput({ type: 'po_batch', ids: poIds } as any);
+                                  }}
+                                >
+                                  <XCircle className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+                          {(allRequests || [])
+                            .sort((a, b) => {
+                              const orderA = a.itemOrder ?? a.createdAt;
+                              const orderB = b.itemOrder ?? b.createdAt;
+                              return orderA - orderB;
+                            })
+                            .map((item, idx) => {
+                              const isPending = item.status === "pending";
+                              const displayNumber = item.itemOrder ?? idx + 1;
+                              const isSelected = selectedItemsForAction.has(item._id);
+                              const itemPhotos = getItemPhotos(item);
 
-                                {/* Top Section: Image & Basic Info */}
-                                <div className="p-5 flex gap-6 border-b border-border/40 bg-muted/10 items-start min-h-[120px]">
-                                  {/* Image Container - Fixed Width */}
-                                  <div className="flex-shrink-0 relative w-[85px]">
-                                    <div className="w-full aspect-square rounded-xl overflow-hidden bg-background ring-1 ring-border/50 flex items-center justify-center group-hover:ring-primary/20 transition-all shadow-sm">
-                                      {itemPhotos.length > 0 ? (
-                                        <CompactImageGallery
-                                          images={itemPhotos}
-                                          maxDisplay={1}
-                                          size="xl"
-                                          className="w-full h-full object-cover"
-                                        />
-                                      ) : (
-                                        <div className="flex flex-col items-center justify-center opacity-30">
-                                          <ImageIcon className="h-6 w-6 mb-1" />
-                                          <span className="text-[7px] font-black uppercase tracking-widest leading-none">EMPTY</span>
+                              // Check if item is part of a pending PO group
+                              const itemPO = pendingPOs?.find(p => p.requestId === item._id && p.status === "sign_pending");
+                              if (itemPO && itemPO.vendor) return null; // Rendered in group card
+
+                              return (
+                                <div
+                                  key={item._id}
+                                  className={cn(
+                                    "group relative flex flex-col rounded-2xl bg-card text-card-foreground shadow-sm transition-all duration-300 hover:shadow-xl overflow-hidden hover:-translate-y-1",
+                                    getStatusBgTint(item.status),
+                                    // Apply status color class (inherits to Left primarily)
+                                    getStatusBorderClass(item.status),
+                                    // Left thick border inheriting status color
+                                    "border-l-[6px] border-l-[color:inherit]",
+                                    // Other sides neutral/thin (overriding status color)
+                                    "border-t border-r border-b border-t-border/40 border-r-border/40 border-b-border/40",
+
+                                    isSelected && "ring-4 ring-primary/20 bg-primary/5"
+                                  )}
+                                >
+                                  {/* Selection Checkbox */}
+                                  {isPending && isManager && (
+                                    <div className="absolute top-2 right-2 z-10">
+                                      <Checkbox
+                                        checked={isSelected}
+                                        onCheckedChange={() => toggleItemSelection(item._id)}
+                                        className="h-5 w-5 bg-background shadow-sm border-2 data-[state=checked]:border-primary"
+                                      />
+                                    </div>
+                                  )}
+
+                                  {/* Top Section: Image & Basic Info */}
+                                  <div className="p-5 flex gap-6 border-b border-border/40 bg-muted/10 items-start min-h-[120px]">
+                                    {/* Image Container - Fixed Width */}
+                                    <div className="flex-shrink-0 relative w-[85px]">
+                                      <div className="w-full aspect-square rounded-xl overflow-hidden bg-background ring-1 ring-border/50 flex items-center justify-center group-hover:ring-primary/20 transition-all shadow-sm">
+                                        {itemPhotos.length > 0 ? (
+                                          <CompactImageGallery
+                                            images={itemPhotos}
+                                            maxDisplay={1}
+                                            size="xl"
+                                            className="w-full h-full object-cover"
+                                          />
+                                        ) : (
+                                          <div className="flex flex-col items-center justify-center opacity-30">
+                                            <ImageIcon className="h-6 w-6 mb-1" />
+                                            <span className="text-[7px] font-black uppercase tracking-widest leading-none">EMPTY</span>
+                                          </div>
+                                        )}
+                                      </div>
+                                    </div>
+
+                                    {/* Content Container */}
+                                    {/* Content Container */}
+                                    <div className="min-w-0 flex-1 flex flex-col justify-between h-full pt-1">
+                                      <div className="flex flex-col gap-1.5">
+                                        <div className="flex items-start gap-2.5">
+                                          <span className="bg-primary/10 text-primary text-[10px] font-black font-mono px-1.5 py-0.5 rounded border border-primary/20 shadow-sm shrink-0 mt-0.5">
+                                            #{idx + 1}
+                                          </span>
+                                          <h4
+                                            className="font-black text-lg leading-tight text-foreground dark:text-white hover:text-primary transition-colors cursor-pointer line-clamp-2 uppercase tracking-tight"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              setSelectedItemName(item.itemName);
+                                            }}
+                                            title={item.itemName}
+                                          >
+                                            {item.itemName}
+                                          </h4>
                                         </div>
+                                        <div className="text-xs text-muted-foreground/90 dark:text-slate-300 leading-relaxed line-clamp-2 pr-2">
+                                          {item.description || "No description provided for this item."}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  {/* Info Table-like Rows */}
+                                  <div className="grid grid-cols-2 divide-x divide-border/40 border-b border-border/40 bg-card/30">
+                                    <div className="p-3 flex flex-col gap-1.5">
+                                      <span className="text-[10px] font-bold uppercase text-muted-foreground tracking-widest leading-none">Quantity</span>
+                                      <div className="flex items-baseline gap-1">
+                                        <span className="text-lg font-black text-foreground">{item.quantity}</span>
+                                        <span className="text-[10px] font-bold text-muted-foreground uppercase">{item.unit}</span>
+                                      </div>
+                                    </div>
+                                    <div className="p-3 flex flex-col gap-1.5 items-end">
+                                      <span className="text-[10px] font-bold uppercase text-muted-foreground tracking-widest leading-none">Current Status</span>
+                                      <div className="flex flex-col items-end gap-1">
+                                        {getStatusBadge(item.status)}
+                                        {item.isUrgent && <Badge variant="destructive" className="h-4 text-[9px] px-1 font-black uppercase tracking-widest animate-pulse border-none">Urgent</Badge>}
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  {/* Inventory Row - Table-like */}
+                                  <div className="px-3 py-2 bg-muted/5 border-b border-border/40 flex items-center justify-between gap-4">
+                                    <span className="text-[10px] font-bold uppercase text-muted-foreground tracking-widest min-w-fit">Inventory</span>
+                                    <div className="flex-1 overflow-hidden">
+                                      {getInventoryStatusBadge(item.itemName, item.quantity, item.unit)}
+                                    </div>
+                                  </div>
+
+
+                                  {/* Item Details Grid */}
+
+
+
+
+
+                                  {/* Actions Footer for Cards */}
+                                  {isManager && (isPending || item.status === "sign_pending" || item.status === "sign_rejected" || item.status === "cc_pending") && (
+                                    <div className={cn(
+                                      "p-3 border-t bg-muted/5 w-full",
+                                      (item.status === "sign_pending" || item.status === "sign_rejected") ? "grid grid-cols-2 gap-3" : "flex"
+                                    )}>
+                                      {item.status === "sign_pending" ? (
+                                        <>
+                                          <Button
+                                            variant="default"
+                                            size="sm"
+                                            className="h-9 bg-amber-600 hover:bg-amber-700 text-white shadow-sm"
+                                            onClick={(e) => { e.stopPropagation(); setShowSignPendingApproveConfirm(item._id); }}
+                                            disabled={isLoading}
+                                          >
+                                            <Pencil className="h-4 w-4 mr-1.5" /> Sign PO
+                                          </Button>
+                                          <Button
+                                            variant="outline"
+                                            size="sm"
+                                            className="h-9 border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300 dark:border-red-900/30 dark:text-red-400 dark:hover:bg-red-950/20"
+                                            onClick={(e) => { e.stopPropagation(); setShowItemRejectionInput(item._id); }}
+                                            disabled={isLoading}
+                                          >
+                                            <XCircle className="h-4 w-4 mr-1.5" /> Reject
+                                          </Button>
+                                        </>
+                                      ) : (item.status === "pending") ? (
+                                        /* Standard Approve/Reject */
+                                        <RenderActionSegments item={item} isCard />
+                                      ) : item.status === "cc_pending" ? (
+
+                                        onOpenCC ? (
+                                          <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={(e) => { e.stopPropagation(); onOpenCC(item._id); }}
+                                            className="h-9 border-blue-200 text-blue-700 hover:bg-blue-50 w-full"
+                                          >
+                                            <FileText className="h-4 w-4 mr-1.5" /> View CC
+                                          </Button>
+                                        ) : null
+                                      ) : (
+                                        <RenderActionSegments item={item} isCard />
                                       )}
                                     </div>
-                                  </div>
+                                  )}
 
-                                  {/* Content Container */}
-                                  <div className="min-w-0 flex-1 flex flex-col justify-between h-full pt-1">
-                                    <div className="flex flex-col gap-1.5">
-                                      <div className="flex items-start gap-2.5">
-                                        <span className="bg-primary/10 text-primary text-[10px] font-black font-mono px-1.5 py-0.5 rounded border border-primary/20 shadow-sm shrink-0 mt-0.5">
-                                          #{idx + 1}
-                                        </span>
-                                        <h4
-                                          className="font-black text-lg leading-tight text-foreground dark:text-white hover:text-primary transition-colors cursor-pointer line-clamp-2 uppercase tracking-tight"
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            setSelectedItemName(item.itemName);
-                                          }}
-                                          title={item.itemName}
-                                        >
-                                          {item.itemName}
-                                        </h4>
-                                      </div>
-                                      <div className="text-xs text-muted-foreground/90 dark:text-slate-300 leading-relaxed line-clamp-2 pr-2">
-                                        {item.description || "No description provided for this item."}
+                                  {/* Rejection Input Overlay - In-place Card Style */}
+                                  {showItemRejectionInput === item._id && (
+                                    <div className="absolute inset-x-2 bottom-2 z-20 bg-background/95 p-3 rounded-lg border shadow-lg animate-in slide-in-from-bottom-2">
+                                      <div className="flex flex-col gap-2">
+                                        <div className="flex items-center justify-between">
+                                          <Label className="text-xs font-bold text-destructive flex items-center gap-1.5">
+                                            <AlertCircle className="h-3 w-3" /> Rejection Note
+                                          </Label>
+                                          <Button
+                                            variant="ghost"
+                                            size="sm"
+                                            className="h-6 w-6 p-0 rounded-full hover:bg-muted"
+                                            onClick={() => setShowItemRejectionInput(null)}
+                                            title="Cancel"
+                                          >
+                                            <XCircle className="h-4 w-4 text-muted-foreground" />
+                                          </Button>
+                                        </div>
+                                        <Textarea
+                                          value={itemRejectionReasons[item._id] || ""}
+                                          onChange={(e) => setItemRejectionReasons((prev) => ({ ...prev, [item._id]: e.target.value }))}
+                                          placeholder="Reason for rejection..."
+                                          className="min-h-[60px] text-xs resize-none bg-background focus-visible:ring-destructive/20"
+                                          autoFocus
+                                        />
+                                        <div className="flex justify-end gap-2">
+                                          <Button
+                                            size="sm"
+                                            variant="destructive"
+                                            onClick={() => handleItemReject(item._id)}
+                                            className="h-7 text-xs px-3 shadow-sm w-full"
+                                          >
+                                            Confirm Reject
+                                          </Button>
+                                        </div>
                                       </div>
                                     </div>
-                                  </div>
+                                  )}
                                 </div>
 
-                                {/* Info Table-like Rows */}
-                                <div className="grid grid-cols-2 divide-x divide-border/40 border-b border-border/40 bg-card/30">
-                                  <div className="p-3 flex flex-col gap-1.5">
-                                    <span className="text-[10px] font-bold uppercase text-muted-foreground tracking-widest leading-none">Quantity</span>
-                                    <div className="flex items-baseline gap-1">
-                                      <span className="text-lg font-black text-foreground">{item.quantity}</span>
-                                      <span className="text-[10px] font-bold text-muted-foreground uppercase">{item.unit}</span>
-                                    </div>
-                                  </div>
-                                  <div className="p-3 flex flex-col gap-1.5 items-end">
-                                    <span className="text-[10px] font-bold uppercase text-muted-foreground tracking-widest leading-none">Current Status</span>
-                                    <div className="flex flex-col items-end gap-1">
-                                      {getStatusBadge(item.status)}
-                                      {item.isUrgent && <Badge variant="destructive" className="h-4 text-[9px] px-1 font-black uppercase tracking-widest animate-pulse border-none">Urgent</Badge>}
-                                    </div>
-                                  </div>
-                                </div>
-
-                                {/* Inventory Row - Table-like */}
-                                <div className="px-3 py-2 bg-muted/5 border-b border-border/40 flex items-center justify-between gap-4">
-                                  <span className="text-[10px] font-bold uppercase text-muted-foreground tracking-widest min-w-fit">Inventory</span>
-                                  <div className="flex-1 overflow-hidden">
-                                    {getInventoryStatusBadge(item.itemName, item.quantity, item.unit)}
-                                  </div>
-                                </div>
-
-
-                                {/* Item Details Grid */}
-
-
-
-
-
-                                {/* Actions Footer for Cards */}
-                                {isManager && (isPending || item.status === "sign_pending" || item.status === "sign_rejected" || item.status === "cc_pending") && (
-                                  <div className={cn(
-                                    "p-3 border-t bg-muted/5 w-full",
-                                    (item.status === "sign_pending" || item.status === "sign_rejected") ? "grid grid-cols-2 gap-3" : "flex"
-                                  )}>
-                                    {item.status === "sign_pending" ? (
-                                      <>
-                                        <Button
-                                          variant="default"
-                                          size="sm"
-                                          className="h-9 bg-amber-600 hover:bg-amber-700 text-white shadow-sm"
-                                          onClick={(e) => { e.stopPropagation(); setShowSignPendingApproveConfirm(item._id); }}
-                                          disabled={isLoading}
-                                        >
-                                          <Pencil className="h-4 w-4 mr-1.5" /> Sign PO
-                                        </Button>
-                                        <Button
-                                          variant="outline"
-                                          size="sm"
-                                          className="h-9 border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300 dark:border-red-900/30 dark:text-red-400 dark:hover:bg-red-950/20"
-                                          onClick={(e) => { e.stopPropagation(); setShowItemRejectionInput(item._id); }}
-                                          disabled={isLoading}
-                                        >
-                                          <XCircle className="h-4 w-4 mr-1.5" /> Reject
-                                        </Button>
-                                      </>
-                                    ) : (item.status === "pending") ? (
-                                      /* Standard Approve/Reject */
-                                      <RenderActionSegments item={item} isCard />
-                                    ) : item.status === "cc_pending" ? (
-
-                                      onOpenCC ? (
-                                        <Button
-                                          variant="outline"
-                                          size="sm"
-                                          onClick={(e) => { e.stopPropagation(); onOpenCC(item._id); }}
-                                          className="h-9 border-blue-200 text-blue-700 hover:bg-blue-50 w-full"
-                                        >
-                                          <FileText className="h-4 w-4 mr-1.5" /> View CC
-                                        </Button>
-                                      ) : null
-                                    ) : (
-                                      <RenderActionSegments item={item} isCard />
-                                    )}
-                                  </div>
-                                )}
-
-                                {/* Rejection Input Overlay - In-place Card Style */}
-                                {showItemRejectionInput === item._id && (
-                                  <div className="absolute inset-x-2 bottom-2 z-20 bg-background/95 p-3 rounded-lg border shadow-lg animate-in slide-in-from-bottom-2">
-                                    <div className="flex flex-col gap-2">
-                                      <div className="flex items-center justify-between">
-                                        <Label className="text-xs font-bold text-destructive flex items-center gap-1.5">
-                                          <AlertCircle className="h-3 w-3" /> Rejection Note
-                                        </Label>
-                                        <Button
-                                          variant="ghost"
-                                          size="sm"
-                                          className="h-6 w-6 p-0 rounded-full hover:bg-muted"
-                                          onClick={() => setShowItemRejectionInput(null)}
-                                          title="Cancel"
-                                        >
-                                          <XCircle className="h-4 w-4 text-muted-foreground" />
-                                        </Button>
-                                      </div>
-                                      <Textarea
-                                        value={itemRejectionReasons[item._id] || ""}
-                                        onChange={(e) => setItemRejectionReasons((prev) => ({ ...prev, [item._id]: e.target.value }))}
-                                        placeholder="Reason for rejection..."
-                                        className="min-h-[60px] text-xs resize-none bg-background focus-visible:ring-destructive/20"
-                                        autoFocus
-                                      />
-                                      <div className="flex justify-end gap-2">
-                                        <Button
-                                          size="sm"
-                                          variant="destructive"
-                                          onClick={() => handleItemReject(item._id)}
-                                          className="h-7 text-xs px-3 shadow-sm w-full"
-                                        >
-                                          Confirm Reject
-                                        </Button>
-                                      </div>
-                                    </div>
-                                  </div>
-                                )}
-                              </div>
-
-                            );
-                          })}
+                              );
+                            })}
+                        </div>
                       </div>
                     )
                   ) : (
@@ -2665,6 +2851,24 @@ export function RequestDetailsDialog({
                             <Button
                               variant="destructive"
                               onClick={async () => {
+                                // 0. Batch PO Reject
+                                if ((showRejectionInput as any)?.type === 'po_batch') {
+                                  const ids = (showRejectionInput as any).ids;
+                                  setIsLoading(true);
+                                  try {
+                                    await Promise.all(ids.map((id: Id<"purchaseOrders">) => rejectDirectPOById({ poId: id, reason: rejectionReason })));
+                                    toast.success("Purchase Order Rejected");
+                                    setShowRejectionInput(false);
+                                    setRejectionReason("");
+                                    closeAndRefresh();
+                                  } catch (err: any) {
+                                    toast.error("Failed to reject PO: " + err.message);
+                                  } finally {
+                                    setIsLoading(false);
+                                  }
+                                  return;
+                                }
+
                                 // 1. Single Item Rejection (passed via ID)
                                 if (typeof showRejectionInput === 'string') {
                                   const requestId = showRejectionInput as Id<"requests">;
@@ -2743,12 +2947,19 @@ export function RequestDetailsDialog({
             </div>
           </div>
 
+
+
           {/* Footer - Sticky */}
           <DialogFooter className="px-3 sm:px-6 py-3 sm:py-4 border-t bg-muted/30">
             <div className="flex flex-col sm:flex-row items-center justify-between w-full gap-3">
               <div className="text-xs text-muted-foreground text-center sm:text-left order-2 sm:order-1">
                 {pendingItems.length > 0 && (
                   <span>{pendingItems.length} item{pendingItems.length > 1 ? 's' : ''} pending review</span>
+                )}
+                {signPendingItems.length > 0 && (
+                  <span className={pendingItems.length > 0 ? "ml-2 pl-2 border-l border-border/50" : ""}>
+                    {signPendingItems.length} item{signPendingItems.length > 1 ? 's' : ''} waiting for signature
+                  </span>
                 )}
               </div>
 
@@ -2763,23 +2974,23 @@ export function RequestDetailsDialog({
                       <XCircle className="h-4 w-4 mr-2" />
                       {selectedItemsForAction.size > 0
                         ? `Reject (${selectedItemsForAction.size})`
-                        : signPendingItems.length > 0 ? "Reject PO" : "Reject All"}
+                        : (pendingItems.length === 0 && signPendingItems.length > 0) ? "Reject PO" : "Reject All"}
                     </Button>
                   )}
                   {canApprove && (
                     <Button
                       className={cn(
                         "flex-1 sm:flex-none font-bold h-10 px-6 text-white",
-                        signPendingItems.length > 0
+                        (pendingItems.length === 0 && signPendingItems.length > 0)
                           ? "bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 shadow-orange-500/20"
                           : "bg-emerald-600 hover:bg-emerald-700"
                       )}
                       onClick={() => setShowSignPendingApproveConfirm(true)}
                     >
-                      <CheckCircle className="h-4 w-4 mr-2" />
+                      {(pendingItems.length === 0 && signPendingItems.length > 0) ? <Pencil className="h-4 w-4 mr-2" /> : <CheckCircle className="h-4 w-4 mr-2" />}
                       {selectedItemsForAction.size > 0
-                        ? `Approve (${selectedItemsForAction.size})`
-                        : signPendingItems.length > 0 ? "Sign PO" : "Approve All"}
+                        ? (pendingItems.length === 0 && signPendingItems.length > 0 ? `Sign PO (${selectedItemsForAction.size})` : `Approve (${selectedItemsForAction.size})`)
+                        : (pendingItems.length === 0 && signPendingItems.length > 0) ? "Sign PO" : "Approve All"}
                     </Button>
                   )}
                 </div>
@@ -2852,14 +3063,71 @@ export function RequestDetailsDialog({
                 </div>
                 <div className="space-y-2">
                   <h3 className="text-xl font-extrabold text-gray-900 dark:text-white tracking-tight">
-                    {typeof showSignPendingApproveConfirm === 'string' ? 'Approve Direct PO' : 'Batch Approval'}
+                    {typeof showSignPendingApproveConfirm === 'string' ? 'Approve Direct PO' :
+                      (showSignPendingApproveConfirm as any)?.type === 'po_batch' ? 'Sign Purchase Order' : 'Batch Approval'}
                   </h3>
-                  <p className="text-base text-gray-500 dark:text-gray-400 max-w-[280px] mx-auto leading-relaxed">
-                    {typeof showSignPendingApproveConfirm === 'string'
-                      ? "Are you sure you want to approve this Direct PO?"
-                      : <>You are about to <span className="font-bold text-emerald-600 dark:text-emerald-400">approve</span> {selectedItemsForAction.size > 0 ? selectedItemsForAction.size : (signPendingItems.length + pendingItems.length)} item(s).</>
-                    }
-                  </p>
+
+                  {(showSignPendingApproveConfirm as any)?.type === 'po_batch' ? (
+                    <div className="w-full text-left mt-2">
+                      {(() => {
+                        const ids = (showSignPendingApproveConfirm as any).ids;
+                        const batchItems = pendingPOs?.filter(p => ids.includes(p._id)) || [];
+                        const firstItem = batchItems[0];
+                        const totalValue = batchItems.reduce((sum, item) => sum + (item.totalAmount || 0), 0);
+
+                        if (batchItems.length === 0) return null;
+
+                        return (
+                          <div className="bg-muted/30 rounded-lg p-3 border border-border/50 space-y-3">
+                            {/* Vendor & PO Header */}
+                            <div className="flex justify-between items-start border-b border-border/40 pb-2">
+                              <div>
+                                <div className="font-bold text-sm text-foreground">{firstItem.vendor?.companyName}</div>
+                                <div className="text-xs text-muted-foreground font-mono mt-0.5">PO: {firstItem.poNumber}</div>
+                              </div>
+                              <Badge variant="outline" className="bg-background font-mono text-xs">
+                                ₹{totalValue.toLocaleString()}
+                              </Badge>
+                            </div>
+
+                            {/* Items List */}
+                            <div className="space-y-2 max-h-[160px] overflow-y-auto pr-1 custom-scrollbar">
+                              {batchItems.map((po) => {
+                                const itemOrder = allRequests?.find(r => r._id === po.requestId)?.itemOrder ?? "?";
+                                return (
+                                  <div key={po._id} className="flex justify-between items-start text-xs bg-background/50 p-1.5 rounded border border-transparent hover:border-border/60 transition-colors">
+                                    <div className="flex gap-2 items-start overflow-hidden">
+                                      <span className="text-[10px] font-black font-mono bg-primary/10 text-primary px-1.5 py-0.5 rounded border border-primary/20 shadow-sm h-fit mt-0.5">#{itemOrder}</span>
+                                      <div className="flex flex-col min-w-0">
+                                        <span className="font-medium truncate leading-tight" title={po.itemDescription}>{po.itemDescription.split('\n')[0]}</span>
+                                        <span className="text-[10px] text-muted-foreground">{po.quantity} {po.unit}</span>
+                                      </div>
+                                    </div>
+                                    <div className="font-mono font-semibold text-right whitespace-nowrap pl-2">
+                                      ₹{po.totalAmount.toLocaleString()}
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+
+                            <div className="text-center pt-1">
+                              <p className="text-[10px] text-muted-foreground italic">
+                                Signing this PO will approve {batchItems.length} item(s).
+                              </p>
+                            </div>
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  ) : (
+                    <p className="text-base text-gray-500 dark:text-gray-400 max-w-[280px] mx-auto leading-relaxed">
+                      {typeof showSignPendingApproveConfirm === 'string'
+                        ? "Are you sure you want to approve this Direct PO?"
+                        : <>You are about to <span className="font-bold text-emerald-600 dark:text-emerald-400">approve</span> {selectedItemsForAction.size > 0 ? selectedItemsForAction.size : (pendingItems.length > 0 ? pendingItems.length : signPendingItems.length)} item(s).</>
+                      }
+                    </p>
+                  )}
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
@@ -2876,19 +3144,33 @@ export function RequestDetailsDialog({
                   Cancel
                 </Button>
                 <Button
-                  onClick={(e) => {
+                  onClick={async (e) => {
                     e.stopPropagation();
                     e.preventDefault();
                     if (typeof showSignPendingApproveConfirm === 'string') {
-                      handleSingleApproveDirectPO(showSignPendingApproveConfirm as Id<"requests">);
+                      await handleSingleApproveDirectPO(showSignPendingApproveConfirm as Id<"requests">);
+                    } else if ((showSignPendingApproveConfirm as any)?.type === 'po_batch') {
+                      // Authenticated batch approve by PO IDs
+                      const ids = (showSignPendingApproveConfirm as any).ids;
+                      setIsLoading(true);
+                      try {
+                        await Promise.all(ids.map((id: Id<"purchaseOrders">) => approveDirectPOById({ poId: id })));
+                        toast.success("Purchase Order Signed Successfully");
+                        setShowSignPendingApproveConfirm(null);
+                        closeAndRefresh();
+                      } catch (err: any) {
+                        toast.error("Failed to sign PO: " + err.message);
+                      } finally {
+                        setIsLoading(false);
+                      }
                     } else {
-                      handleApproveAll();
+                      await handleApproveAll();
                     }
                   }}
                   disabled={isLoading}
                   className={cn(
                     "w-full h-12 font-bold text-white shadow-lg transition-all hover:scale-[1.02] active:scale-[0.98]",
-                    signPendingItems.length > 0
+                    signPendingItems.length > 0 || (showSignPendingApproveConfirm as any)?.type === 'po_batch'
                       ? "bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 shadow-orange-500/20"
                       : "bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 shadow-emerald-500/20"
                   )}

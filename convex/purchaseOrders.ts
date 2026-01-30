@@ -265,6 +265,60 @@ export const getPOsByRequestId = query({
     },
 });
 
+
+/**
+ * Get POs by Request Number (Grouped items logic)
+ */
+export const getPOsForRequestNumber = query({
+    args: { requestNumber: v.string() },
+    handler: async (ctx, args) => {
+        const currentUser = await getCurrentUser(ctx);
+
+        // Permissions check
+        if (
+            currentUser.role !== "purchase_officer" &&
+            currentUser.role !== "manager" &&
+            currentUser.role !== "site_engineer"
+        ) {
+            throw new Error("Unauthorized");
+        }
+
+        // 1. Get all requests with this number
+        const requests = await ctx.db
+            .query("requests")
+            .withIndex("by_request_number", (q) => q.eq("requestNumber", args.requestNumber))
+            .collect();
+
+        if (requests.length === 0) return [];
+
+        // 2. Collect all POs linked to these requests
+        // Note: This matches POs that have a direct linkage to the request items
+        const requestIds = requests.map(r => r._id);
+        const allPos = [];
+
+        for (const reqId of requestIds) {
+            const pos = await ctx.db
+                .query("purchaseOrders")
+                .withIndex("by_request_id", (q) => q.eq("requestId", reqId))
+                .collect();
+            allPos.push(...pos);
+        }
+
+        // 3. Enrich with Vendor details
+        const enrichedPOs = await Promise.all(
+            allPos.map(async (po) => {
+                const vendor = await ctx.db.get(po.vendorId);
+                return {
+                    ...po,
+                    vendor,
+                };
+            })
+        );
+
+        return enrichedPOs;
+    },
+});
+
 // ============================================================================
 // Mutations
 // ============================================================================

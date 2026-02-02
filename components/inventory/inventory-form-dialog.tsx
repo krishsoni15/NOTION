@@ -106,7 +106,7 @@ export function InventoryFormDialog({
     description: "",
     hsnSacCode: "",
     unit: "",
-    centralStock: 0,
+    centralStock: "0",
     vendorIds: [] as Id<"vendors">[],
   });
 
@@ -127,7 +127,7 @@ export function InventoryFormDialog({
           description: initialData.description || "",
           hsnSacCode: initialData.hsnSacCode || "",
           unit: initialData.unit,
-          centralStock: initialData.centralStock,
+          centralStock: initialData.centralStock.toString(),
           vendorIds: initialData.vendorIds || (initialData.vendorId ? [initialData.vendorId] : []),
         });
         formInitializedRef.current = true;
@@ -140,7 +140,7 @@ export function InventoryFormDialog({
           description: currentItem.description || "",
           hsnSacCode: (currentItem as any).hsnSacCode || "",
           unit: currentItem.unit ?? "",
-          centralStock: currentItem.centralStock || 0,
+          centralStock: (currentItem.centralStock || 0).toString(),
           vendorIds: vendorIds,
         });
         formInitializedRef.current = true;
@@ -177,7 +177,7 @@ export function InventoryFormDialog({
         description: "",
         hsnSacCode: "",
         unit: "",
-        centralStock: 0,
+        centralStock: "0",
         vendorIds: [],
       });
       setSelectedImages([]);
@@ -325,8 +325,9 @@ export function InventoryFormDialog({
         setIsLoading(false);
         return;
       }
-      if (formData.centralStock === undefined || formData.centralStock <= 0) {
-        setError("Central stock is required and must be greater than 0");
+      const stockValue = parseFloat(formData.centralStock);
+      if (isNaN(stockValue) || stockValue < 0) {
+        setError("Central stock is required and must be 0 or greater");
         setIsLoading(false);
         return;
       }
@@ -379,7 +380,7 @@ export function InventoryFormDialog({
           description: formData.description,
           hsnSacCode: formData.hsnSacCode,
           unit: formData.unit || undefined,
-          centralStock: formData.centralStock || undefined,
+          centralStock: parseFloat(formData.centralStock),
           vendorIds: formData.vendorIds.length > 0 ? formData.vendorIds : undefined,
         });
 
@@ -411,7 +412,7 @@ export function InventoryFormDialog({
           description: formData.description,
           hsnSacCode: formData.hsnSacCode,
           unit: formData.unit || undefined,
-          centralStock: formData.centralStock || undefined,
+          centralStock: parseFloat(formData.centralStock),
           vendorIds: formData.vendorIds.length > 0 ? formData.vendorIds : undefined,
         });
 
@@ -520,11 +521,11 @@ export function InventoryFormDialog({
                     min="0"
                     step="any"
                     placeholder="33"
-                    value={formData.centralStock || ""}
+                    value={formData.centralStock}
                     onChange={(e) =>
                       setFormData({
                         ...formData,
-                        centralStock: e.target.value ? parseFloat(e.target.value) : 0,
+                        centralStock: e.target.value,
                       })
                     }
                     disabled={isLoading || !canEdit}

@@ -628,7 +628,11 @@ export function PurchaseRequestGroupCard({
 
   // Handle select all
   const toggleSelectAll = () => {
-    const validItems = items.filter(item => item.status === "ready_for_po");
+    const validItems = items.filter(item =>
+      isManager
+        ? item.status === "pending"
+        : ["ready_for_po", "sign_rejected"].includes(item.status)
+    );
     if (selectedItems.size === validItems.length) {
       setSelectedItems(new Set());
     } else {
@@ -636,7 +640,11 @@ export function PurchaseRequestGroupCard({
     }
   };
 
-  const validItemsCount = items.filter(item => item.status === "ready_for_po").length;
+  const validItemsCount = items.filter(item =>
+    isManager
+      ? item.status === "pending"
+      : ["ready_for_po", "sign_rejected"].includes(item.status)
+  ).length;
   const isAllSelected = validItemsCount > 0 && selectedItems.size === validItemsCount;
 
   // Initialize items with vendor data
@@ -931,15 +939,29 @@ export function PurchaseRequestGroupCard({
 
 
           {/* Bulk Action Header Button */}
+          {/* Bulk Action Header Button */}
           {selectedItems.size > 0 && onCreateBulkPO && (
-            <Button
-              size="sm"
-              className="h-7 text-xs bg-emerald-600 hover:bg-emerald-700 text-white animate-in zoom-in-95 duration-200"
-              onClick={() => onCreateBulkPO(Array.from(selectedItems) as Id<"requests">[])}
-            >
-              <ShoppingCart className="h-3.5 w-3.5 mr-1.5" />
-              Create PO ({selectedItems.size})
-            </Button>
+            <>
+              {Array.from(selectedItems).some(id => items.find(i => i._id === id)?.status === "sign_rejected") ? (
+                <Button
+                  size="sm"
+                  className="h-7 text-xs bg-orange-600 hover:bg-orange-700 text-white animate-in zoom-in-95 duration-200"
+                  onClick={() => onCreateBulkPO(Array.from(selectedItems) as Id<"requests">[])}
+                >
+                  <RotateCw className="h-3.5 w-3.5 mr-1.5" />
+                  Resubmit PO ({selectedItems.size})
+                </Button>
+              ) : items.some(i => i.status === "ready_for_po") && selectedItems.size > 0 ? (
+                <Button
+                  size="sm"
+                  className="h-7 text-xs bg-emerald-600 hover:bg-emerald-700 text-white animate-in zoom-in-95 duration-200"
+                  onClick={() => onCreateBulkPO(Array.from(selectedItems) as Id<"requests">[])}
+                >
+                  <ShoppingCart className="h-3.5 w-3.5 mr-1.5" />
+                  Create PO ({selectedItems.size})
+                </Button>
+              ) : null}
+            </>
           )}
         </div>
 
@@ -996,13 +1018,11 @@ export function PurchaseRequestGroupCard({
                             </Badge>
                             {/* Selection Checkbox */}
                             {((isManager && item.status === "pending") || (!isManager && item.status === "ready_for_po")) && (
-                              <div className="absolute top-2 right-2 z-10">
-                                <Checkbox
-                                  checked={selectedItems.has(item._id)}
-                                  onCheckedChange={() => toggleSelection(item._id)}
-                                  className="h-5 w-5 bg-background shadow-sm border-2 data-[state=checked]:border-primary"
-                                />
-                              </div>
+                              <Checkbox
+                                checked={selectedItems.has(item._id)}
+                                onCheckedChange={() => toggleSelection(item._id)}
+                                className="h-5 w-5 bg-background shadow-sm border-2 data-[state=checked]:border-primary mr-1"
+                              />
                             )}
                             <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider">Item Name</span>
                           </div>
@@ -1329,8 +1349,8 @@ export function PurchaseRequestGroupCard({
                         </>
                       )}
 
-                      {/* Sign Review Actions */}
-                      {item.status === "sign_pending" && onViewDetails && (
+                      {/* Sign Review Actions - Managers Only */}
+                      {isManager && item.status === "sign_pending" && onViewDetails && (
                         <Button
                           size="sm"
                           onClick={() => onViewDetails(item._id)}
@@ -1378,10 +1398,10 @@ export function PurchaseRequestGroupCard({
                         <Button
                           size="sm"
                           onClick={() => onCreatePO(item._id)}
-                          className="h-7 text-xs bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100 hover:text-rose-800 dark:bg-rose-950/30 dark:text-rose-400 dark:border-rose-800 flex-1 sm:flex-none"
+                          className="h-7 text-xs bg-orange-50 text-orange-700 border-orange-200 hover:bg-orange-100 hover:text-orange-800 dark:bg-orange-950/30 dark:text-orange-400 dark:border-orange-800 flex-1 sm:flex-none"
                           variant="outline"
                         >
-                          <ShoppingCart className="h-3.5 w-3.5 mr-1.5" /> Resubmit PO
+                          <RotateCw className="h-3.5 w-3.5 mr-1.5" /> Resubmit PO
                         </Button>
                       )}
 
@@ -1455,28 +1475,86 @@ export function PurchaseRequestGroupCard({
         {/* View & Expand Actions */}
         <div className="flex items-center gap-2">
           {/* Purchase Officer Bulk Actions */}
-          {!isManager && onCreateBulkPO && items.some(i => i.status === "ready_for_po") && (
+          {/* Purchase Officer Bulk Actions */}
+          {!isManager && onCreateBulkPO && (
             <div className="flex items-center gap-2 mr-2">
-              {selectedItems.size > 1 && (
-                <Button
-                  size="sm"
-                  onClick={() => {
-                    // Check for vendor consistency
-                    const selectedRequests = items.filter(i => selectedItems.has(i._id));
-                    const firstVendor = selectedRequests[0]?.selectedVendorId;
-                    const hasDifferentVendors = selectedRequests.some(i => i.selectedVendorId !== firstVendor);
+              {/* Resubmit All Pending Rejections Button (No Selection Needed) - Grouped by Vendor */}
+              {items.some(i => i.status === "sign_rejected") && selectedItems.size === 0 && (
+                <>
+                  {(() => {
+                    const rejectedGroups = new Map<string, typeof items>();
+                    items.filter(i => i.status === "sign_rejected").forEach(item => {
+                      const vId = item.selectedVendorId || "unknown";
+                      if (!rejectedGroups.has(vId)) rejectedGroups.set(vId, []);
+                      rejectedGroups.get(vId)!.push(item);
+                    });
 
-                    if (hasDifferentVendors) {
-                      toast.warning("Selected items have different vendors. Using primary vendor.");
-                    }
-                    onCreateBulkPO(Array.from(selectedItems) as Id<"requests">[]);
-                    setSelectedItems(new Set());
-                  }}
-                  className="h-7 text-xs bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm ring-1 ring-emerald-500/20 px-3"
-                >
-                  <ShoppingCart className="h-3.5 w-3.5 mr-1.5" />
-                  Create PO ({selectedItems.size})
-                </Button>
+                    return Array.from(rejectedGroups.entries()).map(([vendorId, groupItems]) => {
+                      // Try to find vendor name from current items' quotes if external query not available here
+                      // optimizing to not add new query if possible, utilizing existing item data structure
+                      const vendorName = groupItems[0].vendorQuotes?.find(q => q.vendorId === vendorId as any)?.vendorId
+                        ? "Vendor" // Fallback since we don't have name in quote object explicitly in interface
+                        : "Vendor";
+
+                      // Actually, let's just use generic "Resubmit Batch" if we can't get name, or rely on the group count
+                      // But wait, the user wants to see "like i created". 
+                      // Let's assume for now we just show separate buttons.
+                      return (
+                        <Button
+                          key={vendorId}
+                          size="sm"
+                          onClick={() => {
+                            onCreateBulkPO(groupItems.map(i => i._id) as Id<"requests">[]);
+                          }}
+                          className="h-7 text-xs bg-orange-600 hover:bg-orange-700 text-white shadow-sm ring-1 ring-orange-500/20 px-3 animate-in slide-in-from-right-2"
+                        >
+                          <RotateCw className="h-3.5 w-3.5 mr-1.5" />
+                          Resubmit PO ({groupItems.length})
+                        </Button>
+                      );
+                    });
+                  })()}
+                </>
+              )}
+
+              {/* Standard Bulk Actions (Requires Selection) */}
+              {/* Standard Bulk Actions (Requires Selection) */}
+              {items.some(i => ["ready_for_po", "sign_rejected"].includes(i.status)) && selectedItems.size > 1 && (
+                <>
+                  {Array.from(selectedItems).some(id => items.find(i => i._id === id)?.status === "sign_rejected") ? (
+                    <Button
+                      size="sm"
+                      onClick={() => {
+                        onCreateBulkPO(Array.from(selectedItems) as Id<"requests">[]);
+                        setSelectedItems(new Set());
+                      }}
+                      className="h-7 text-xs bg-orange-600 hover:bg-orange-700 text-white shadow-sm ring-1 ring-orange-500/20 px-3"
+                    >
+                      <RotateCw className="h-3.5 w-3.5 mr-1.5" />
+                      Resubmit PO ({selectedItems.size})
+                    </Button>
+                  ) : (
+                    <Button
+                      size="sm"
+                      onClick={() => {
+                        // Check for vendor consistency
+                        const selectedRequests = items.filter(i => selectedItems.has(i._id));
+                        const firstVendor = selectedRequests[0]?.selectedVendorId;
+                        const hasDifferentVendors = selectedRequests.some(i => i.selectedVendorId !== firstVendor);
+
+                        if (hasDifferentVendors) {
+                          toast.warning("Selected items have different vendors. Using primary vendor.");
+                        }
+                        onCreateBulkPO(Array.from(selectedItems) as Id<"requests">[]);
+                        setSelectedItems(new Set());
+                      }}
+                      className="h-7 text-xs bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm ring-1 ring-emerald-500/20 px-3"
+                    >
+                      <ShoppingCart className="h-3.5 w-3.5 mr-1.5" />
+                      Create PO ({selectedItems.size})
+                    </Button>
+                  )}
+                </>
               )}
               {validItemsCount > 1 && (
                 <div className="flex items-center gap-2 border-r border-border/50 pr-3 h-5">

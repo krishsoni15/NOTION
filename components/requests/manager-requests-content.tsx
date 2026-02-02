@@ -30,6 +30,7 @@ import { PaginationControls } from "@/components/ui/pagination-controls";
 import type { Id } from "@/convex/_generated/dataModel";
 
 import { PDFPreviewDialog } from "@/components/purchase/pdf-preview-dialog";
+import { POSelectionDialog } from "@/components/purchase/po-selection-dialog";
 
 type SortOption = "newest" | "oldest" | "items_desc" | "items_asc";
 
@@ -63,6 +64,7 @@ export function ManagerRequestsContent() {
     const [checkRequestId, setCheckRequestId] = useState<Id<"requests"> | null>(null);
     const [ccRequestIds, setCCRequestIds] = useState<Id<"requests">[] | undefined>(undefined); // For batch CC viewing
     const [pdfPreviewPoNumber, setPdfPreviewPoNumber] = useState<string | null>(null);
+    const [pdfRequestNumber, setPdfRequestNumber] = useState<string | null>(null);
     const [searchQuery, setSearchQuery] = useState<string>("");
     const [workFilter, setWorkFilter] = useState<string>("all");
     const [categoryFilter, setCategoryFilter] = useState<string>("all");
@@ -530,7 +532,7 @@ export function ManagerRequestsContent() {
                     preciseStatuses={true}
                     hideStatusOnCard={true}
                     hideItemCountOnCard={true}
-                    onViewPDF={setPdfPreviewPoNumber}
+                    onViewPDF={setPdfRequestNumber}
                 />
 
                 {/* Pagination Controls - Bottom */}
@@ -585,6 +587,15 @@ export function ManagerRequestsContent() {
                     requestId={checkRequestId}
                 />
             )}
+
+            <POSelectionDialog
+                requestNumber={pdfRequestNumber}
+                onOpenChange={(open) => !open && setPdfRequestNumber(null)}
+                onSelectPO={(poNumber) => {
+                    setPdfRequestNumber(null);
+                    setPdfPreviewPoNumber(poNumber);
+                }}
+            />
 
             <PDFPreviewDialog
                 open={!!pdfPreviewPoNumber}

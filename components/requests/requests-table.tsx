@@ -1075,8 +1075,8 @@ export function RequestsTable({
                   </Button>
 
                   {/* Draft Actions */}
-                  {/* Show edit buttons only when ALL items are draft, rejected, or sign_rejected */}
-                  {items.every(item => ["draft", "rejected", "sign_rejected"].includes(item.status)) && (
+                  {/* Show edit buttons only when ALL items are draft (Site Engineer Request) */}
+                  {items.every(item => item.status === "draft") && (
                     <>
                       {onEditDraft && (
                         <Button variant="ghost" size="sm" onClick={() => onEditDraft(requestNumber)} className="h-8 w-8 p-0 rounded-full text-blue-600 hover:bg-blue-50 hover:text-blue-700" title="Edit">
@@ -1417,7 +1417,7 @@ export function RequestsTable({
                         {/* Actions */}
                         <TableCell className="text-right py-4">
                           <div className="flex justify-end gap-1">
-                            {(firstItem.status === "draft" || firstItem.status === "rejected" || firstItem.status === "sign_rejected") ? (
+                            {firstItem.status === "draft" ? (
                               <>
                                 {onViewDetails && (
                                   <Button variant="ghost" size="sm" onClick={(e) => { e.stopPropagation(); onViewDetails(firstItem._id); }} className="h-8 w-8 p-0 rounded-full text-muted-foreground hover:text-foreground hover:bg-slate-100 dark:hover:bg-slate-800" title="View Details">

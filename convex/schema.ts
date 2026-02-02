@@ -87,7 +87,14 @@ export default defineSchema({
     deliveryMarkedAt: v.optional(v.number()),
     deliveryId: v.optional(v.id("deliveries")), // Linked delivery record
     notes: v.optional(v.string()),
-    directAction: v.optional(v.union(v.literal("delivery"), v.literal("po"), v.literal("all"))), // Flag for direct delivery/PO without CC
+    directAction: v.optional(v.union(
+      v.literal("delivery"),
+      v.literal("po"),
+      v.literal("all"),
+      v.literal("split_po"),
+      v.literal("split_delivery"),
+      v.literal("split_po_delivery")
+    )), // Flag for direct delivery/PO/split combinations
     isSplitApproved: v.optional(v.boolean()),
 
     // Delivery Confirmation Details
@@ -304,7 +311,7 @@ export default defineSchema({
     code: v.optional(v.string()), // Site code/identifier
     address: v.optional(v.string()), // Site address
     description: v.optional(v.string()), // Site description
-    type: v.optional(v.union(v.literal("site"), v.literal("inventory"))), // Location type
+    type: v.optional(v.union(v.literal("site"), v.literal("inventory"), v.literal("other"))), // Location type
     isActive: v.boolean(),
     createdBy: v.id("users"), // Manager who created this site
     createdAt: v.number(),

@@ -165,6 +165,14 @@ export function RequestDetailsDialog({
   const hasRefreshedRef = useRef(false);
   const [isExpanded, setIsExpanded] = useState(false);
 
+  // Permission Grant Confirmation (for recheck items)
+  const [showPermissionConfirm, setShowPermissionConfirm] = useState<{
+    itemId: Id<"requests">;
+    itemName: string;
+    permission: "delivery" | "po" | "split";
+    permissionLabel: string;
+  } | null>(null);
+
   // PO Creation
   const [showDirectPODialog, setShowDirectPODialog] = useState(false);
   const [directPOInitialData, setDirectPOInitialData] = useState<DirectPOInitialData | null>(null);
@@ -349,7 +357,7 @@ export function RequestDetailsDialog({
 
   // Get pending items for manager actions
   const pendingItems = allRequests?.filter((item) => item.status === "pending") || [];
-  const signPendingItems = allRequests?.filter((item) => item.status === "sign_pending" || item.status === "sign_rejected") || [];
+  const signPendingItems = allRequests?.filter((item) => item.status === "sign_pending") || [];
   const hasMultiplePendingItems = pendingItems.length > 1;
 
   // Manager permissions based on pending items
@@ -439,13 +447,7 @@ export function RequestDetailsDialog({
     const intents = itemIntents[itemId] || [];
 
     try {
-      if (intents.includes("split") || (intents.includes("direct_po") && intents.includes("direct_delivery"))) {
-        await updateStatus({
-          requestId: itemId,
-          status: "recheck", // Start recheck/split flow
-        });
-        toast.info("Item marked for Recheck/Split");
-      } else if (intents.includes("direct_po")) {
+      if (intents.includes("direct_po")) {
         await updateStatus({
           requestId: itemId,
           status: "direct_po",
@@ -457,6 +459,12 @@ export function RequestDetailsDialog({
           status: "delivery_stage",
         });
         toast.success("Item sent to Delivery Stage");
+      } else if (intents.includes("split") || (intents.includes("direct_po") && intents.includes("direct_delivery"))) {
+        await updateStatus({
+          requestId: itemId,
+          status: "recheck", // Start recheck/split flow
+        });
+        toast.info("Item marked for Recheck/Split");
       } else {
         await updateStatus({
           requestId: itemId,
@@ -550,21 +558,42 @@ export function RequestDetailsDialog({
     }));
   };
 
-  const toggleIntent = (itemId: Id<"requests">, intent: string) => {
+  const toggleIntent = (itemId: Id<"requests">, intent: string, defaultIntents: string[] = []) => {
     setItemIntents(prev => {
-      const current = prev[itemId] || [];
+      // If no previous intent exists, start from defaults
+      // If previous intent exists (even empty array), use that
+      const hasExistingIntent = prev[itemId] !== undefined;
+      const current = hasExistingIntent ? prev[itemId] : [...defaultIntents];
       const isSelected = current.includes(intent);
-      const updated = isSelected
-        ? current.filter(i => i !== intent)
-        : [...current, intent];
 
-      // Auto-select the item if any intent is activated
-      if (updated.length > 0) {
-        setSelectedItemsForAction(prevSelected => {
-          const newSet = new Set(prevSelected);
+      let updated: string[];
+
+      if (isSelected) {
+        // If unselecting, remove it
+        updated = current.filter(i => i !== intent);
+      } else {
+        // If selecting, add it (allow any combination)
+        updated = [...current, intent];
+      }
+
+      // Sync with selection state
+      setSelectedItemsForAction(prevSelected => {
+        const newSet = new Set(prevSelected);
+        if (updated.length > 0) {
           newSet.add(itemId);
-          return newSet;
-        });
+        } else if (defaultIntents.length === 0) {
+          // Only remove from selection if there were no defaults
+          // (meaning the item has no pre-existing permissions)
+          newSet.delete(itemId);
+        }
+        return newSet;
+      });
+
+      // If the updated array matches defaults exactly, remove from state
+      // to rely on defaults for rendering (cleaner state)
+      if (updated.length === 0 && defaultIntents.length === 0) {
+        const { [itemId]: _, ...rest } = prev;
+        return rest;
       }
 
       return {
@@ -572,6 +601,196 @@ export function RequestDetailsDialog({
         [itemId]: updated
       };
     });
+  };
+
+  const wrapHandler = (handler: () => Promise<void>) => async () => {
+    try {
+      await handler();
+    } catch (error: any) {
+      console.error(error);
+    }
+  };
+
+  // Grant permission to a recheck item (called after user confirms)
+  const handleGrantPermission = async () => {
+    if (!showPermissionConfirm) return;
+
+    const { itemId, permission } = showPermissionConfirm;
+    const item = allRequests?.find(r => r._id === itemId);
+    if (!item) return;
+
+    setIsLoading(true);
+    try {
+      // Determine the new directAction based on current + new permission
+      const currentAction = item.directAction || "";
+      let newDirectAction: string | undefined = undefined;
+      let newIsSplitApproved = item.isSplitApproved || false;
+
+      if (permission === "split") {
+        newIsSplitApproved = true;
+        // If already has PO or Delivery, combine with split
+        if (currentAction === "po") {
+          newDirectAction = "split_po";
+        } else if (currentAction === "delivery") {
+          newDirectAction = "split_delivery";
+        } else if (currentAction === "all") {
+          newDirectAction = "split_po_delivery";
+        }
+      } else if (permission === "po") {
+        if (newIsSplitApproved && (currentAction === "delivery" || currentAction === "all")) {
+          newDirectAction = "split_po_delivery";
+        } else if (newIsSplitApproved) {
+          newDirectAction = "split_po";
+        } else if (currentAction === "delivery") {
+          newDirectAction = "all";
+        } else {
+          newDirectAction = "po";
+        }
+      } else if (permission === "delivery") {
+        if (newIsSplitApproved && (currentAction === "po" || currentAction === "all")) {
+          newDirectAction = "split_po_delivery";
+        } else if (newIsSplitApproved) {
+          newDirectAction = "split_delivery";
+        } else if (currentAction === "po") {
+          newDirectAction = "all";
+        } else {
+          newDirectAction = "delivery";
+        }
+      }
+
+      await updateRequestDetails({
+        requestId: itemId,
+        isSplitApproved: newIsSplitApproved,
+        directAction: newDirectAction
+      });
+
+      toast.success(`${showPermissionConfirm.permissionLabel} permission granted!`);
+      setShowPermissionConfirm(null);
+    } catch (error: any) {
+      toast.error("Failed to grant permission: " + error.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // ... (keeping other helpers) ...
+
+  const handleApproveAll = async () => {
+    // 1. Determine items to process
+    const itemsToProcess = selectedItemsForAction.size > 0
+      ? Array.from(selectedItemsForAction)
+      : (pendingItems.length > 0 ? pendingItems.map(i => i._id) : signPendingItems.map(i => i._id));
+
+    if (itemsToProcess.length === 0) return;
+
+    setIsLoading(true);
+    try {
+      const promises = [];
+
+      // Group items by their INTENT
+      const simpleDirectPOIds: Id<"requests">[] = [];
+      const simpleDirectDeliveryIds: Id<"requests">[] = [];
+      const complexHandlingIds: Id<"requests">[] = [];
+      const complexUpdates: Promise<any>[] = [];
+      const signApproveIds: Id<"requests">[] = [];
+
+      itemsToProcess.forEach(id => {
+        const item = allRequests?.find(r => r._id === id);
+        if (!item) return;
+
+        if (item.status === "sign_pending" || item.status === "sign_rejected") {
+          signApproveIds.push(id);
+          return;
+        }
+
+        const userIntents = itemIntents[id];
+        let intents: string[] = [];
+        if (userIntents !== undefined) {
+          intents = userIntents;
+        } else {
+          if (item.status === "direct_po" || item.directAction === "po" || item.directAction === "all") intents.push("direct_po");
+          if (item.status === "delivery_stage" || item.directAction === "delivery" || item.directAction === "all") intents.push("direct_delivery");
+          if (item.isSplitApproved) intents.push("split");
+        }
+
+        // Classification: Handle ALL permission combinations
+        const isPO = intents.includes("direct_po");
+        const isDelivery = intents.includes("direct_delivery");
+        const isSplit = intents.includes("split");
+
+        // Build directAction based on selected permissions
+        let directAction: "all" | "po" | "delivery" | "po_delivery" | "split_po" | "split_delivery" | "split_po_delivery" | undefined = undefined;
+
+        if (isSplit && isPO && isDelivery) {
+          directAction = "split_po_delivery" as any; // All three
+        } else if (isSplit && isPO) {
+          directAction = "split_po" as any;
+        } else if (isSplit && isDelivery) {
+          directAction = "split_delivery" as any;
+        } else if (isPO && isDelivery) {
+          directAction = "all"; // PO + Delivery
+        } else if (isSplit) {
+          directAction = undefined; // Split only uses isSplitApproved
+        } else if (isPO) {
+          directAction = "po";
+        } else if (isDelivery) {
+          directAction = "delivery";
+        }
+
+        complexUpdates.push(updateRequestDetails({
+          requestId: id,
+          isSplitApproved: isSplit,
+          directAction: directAction
+        }));
+        complexHandlingIds.push(id);
+      });
+
+      // Execute Mutations
+
+      // 1. Sign Pending
+      if (signApproveIds.length > 0) {
+        promises.push(Promise.all(signApproveIds.map(id => approveDirectPO({ requestId: id as Id<"requests"> }))));
+      }
+
+      // 2. Simple Direct PO
+      if (simpleDirectPOIds.length > 0) {
+        promises.push(bulkUpdateStatus({
+          requestIds: simpleDirectPOIds,
+          status: "direct_po",
+        }));
+      }
+
+      // 3. Simple Direct Delivery
+      if (simpleDirectDeliveryIds.length > 0) {
+        promises.push(bulkUpdateStatus({
+          requestIds: simpleDirectDeliveryIds,
+          status: "delivery_stage",
+        }));
+      }
+
+      // 4. Complex (Split/Mixed)
+      // 4. Complex (Split/Mixed)
+      if (complexUpdates.length > 0) {
+        await Promise.all(complexUpdates);
+      }
+
+      if (complexHandlingIds.length > 0) {
+        promises.push(bulkUpdateStatus({
+          requestIds: complexHandlingIds,
+          status: "recheck", // Move to recheck for split processing
+        }));
+      }
+
+      await Promise.all(promises);
+      toast.success(`${itemsToProcess.length} items processed`);
+      setSelectedItemsForAction(new Set());
+      setItemIntents({});
+      setShowSignPendingApproveConfirm(null);
+    } catch (error: any) {
+      toast.error(error.message || "Failed to approve items");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const getItemAction = (itemId: Id<"requests">) => {
@@ -781,101 +1000,7 @@ export function RequestDetailsDialog({
     window.open(mapUrl, '_blank');
   };
 
-  const handleApproveAll = async () => {
-    // 1. Determine items to process
-    // If specific items are selected via checkboxes (if utilizing selection mode), use those.
-    // Otherwise, select ALL pending/sign_pending items visible.
-    const itemsToProcess = selectedItemsForAction.size > 0
-      ? Array.from(selectedItemsForAction)
-      : (pendingItems.length > 0 ? pendingItems.map(i => i._id) : signPendingItems.map(i => i._id));
 
-    if (itemsToProcess.length === 0) return;
-
-    setIsLoading(true);
-    try {
-      const promises = [];
-
-      // Group items by their INTENT
-      const standardApproveIds: Id<"requests">[] = [];
-      const signApproveIds: Id<"requests">[] = [];
-      const specialHandlingIds: Id<"requests">[] = [];
-      const specialHandlingUpdates: Promise<any>[] = [];
-
-      itemsToProcess.forEach(id => {
-        const item = allRequests?.find(r => r._id === id);
-        if (!item) return;
-
-        // If it's already in sign_pending, "Approve" means approving the PO (unless rejected separately)
-        if (item.status === "sign_pending" || item.status === "sign_rejected") {
-          signApproveIds.push(id);
-          return;
-        }
-
-        // For pending items, check the USER INTENT
-        const intents = itemIntents[id] || [];
-
-        if (intents.length > 0) {
-          specialHandlingIds.push(id);
-
-          // Prepare detail updates
-          const isSplit = intents.includes("split");
-          let directAction: string | undefined = undefined;
-
-          if (intents.includes("direct_delivery") && intents.includes("direct_po")) {
-            directAction = "all";
-          } else if (intents.includes("direct_delivery")) {
-            directAction = "delivery";
-          } else if (intents.includes("direct_po")) {
-            directAction = "po";
-          }
-
-          specialHandlingUpdates.push(updateRequestDetails({
-            requestId: id,
-            isSplitApproved: isSplit ? true : undefined,
-            directAction: directAction
-          }));
-        } else {
-          // Default/Null intent -> Standard Approval (Ready for CC)
-          standardApproveIds.push(id);
-        }
-      });
-
-      // Execute Mutations
-      if (signApproveIds.length > 0) {
-        promises.push(Promise.all(signApproveIds.map(id => approveDirectPO({ requestId: id as Id<"requests"> }))));
-      }
-
-      // Handle Special Intents (Update Details + Move to Recheck)
-      if (specialHandlingIds.length > 0) {
-        // First update the details (flags)
-        await Promise.all(specialHandlingUpdates);
-
-        // Then move to approved status. Use approved so it doesn't look like a rejection/recheck logic.
-        // The PurchaseRequestGroupCard has been updated to show action buttons for 'approved' status items too.
-        promises.push(bulkUpdateStatus({
-          requestIds: specialHandlingIds,
-          status: "approved",
-        }));
-      }
-
-      if (standardApproveIds.length > 0) {
-        promises.push(bulkUpdateStatus({
-          requestIds: standardApproveIds,
-          status: "approved",
-        }));
-      }
-
-      await Promise.all(promises);
-      toast.success(`${itemsToProcess.length} items processed based on selection`);
-      setSelectedItemsForAction(new Set());
-      setItemIntents({}); // Reset intents // Keep dialog open
-      setShowSignPendingApproveConfirm(null); // Close the confirmation modal
-    } catch (error: any) {
-      toast.error(error.message || "Failed to approve items");
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
 
 
@@ -1000,101 +1125,200 @@ export function RequestDetailsDialog({
     const status = inventoryStatus?.[item.itemName];
     const stock = status?.centralStock || 0;
     const isPartial = stock > 0 && stock < item.quantity;
-    const isDirectDeliverySelected = itemIntents[item._id]?.includes("direct_delivery");
-    const isDirectPOSelected = itemIntents[item._id]?.includes("direct_po");
-    const isSplitSelected = itemIntents[item._id]?.includes("split");
-    const isPending = item.status === "pending";
-    const canModify = isPending || item.status === "approved";
+    const hasIntent = itemIntents[item._id] && itemIntents[item._id].length > 0;
 
-    // Dynamic border color based on selection
+    // Prioritize user's immediate selection (intent) over the stored status
+    // If user has selected an intent, ignore the current status for visualization
+    const directAction = item.directAction || "";
+
+    const isPending = item.status === "pending";
+    const isRecheck = item.status === "recheck";
+
+    // For pending items, only show selections from user intent (not from stale directAction)
+    // For recheck items, show existing approved permissions
+    const isDirectDeliverySelected = hasIntent
+      ? itemIntents[item._id].includes("direct_delivery")
+      : (!isPending && (item.status === "delivery_stage" || ["all", "delivery", "split_delivery", "split_po_delivery"].includes(directAction)));
+
+    const isDirectPOSelected = hasIntent
+      ? itemIntents[item._id].includes("direct_po")
+      : (!isPending && (item.status === "direct_po" || ["all", "po", "split_po", "split_po_delivery"].includes(directAction)));
+
+    const isSplitSelected = hasIntent
+      ? itemIntents[item._id].includes("split")
+      : (!isPending && item.isSplitApproved === true);
+
+    // Determine which permissions are already "locked" (approved previously)
+    // If directAction is set and we are on recheck, those permissions are locked
+    const lockedDelivery = isRecheck && ["all", "delivery", "split_delivery", "split_po_delivery"].includes(directAction);
+    const lockedPO = isRecheck && ["all", "po", "split_po", "split_po_delivery"].includes(directAction);
+    const lockedSplit = isRecheck && item.isSplitApproved === true;
+
+    // canModify means user can interact with buttons
+    const canModify = isPending || isRecheck || item.status === "rejected" || item.status === "sign_rejected" || item.status === "cc_rejected";
+
+    // Dynamic border color based on selection - show gradient for multiple selections
     const getSegmentBorder = () => {
-      if (!canModify) return "border-border/40 opacity-50";
+      const selectedCount = [isDirectDeliverySelected, isDirectPOSelected, isSplitSelected].filter(Boolean).length;
+      if (selectedCount >= 2) return "border-gradient-to-r from-purple-500 via-blue-500 to-orange-500 shadow-[0_0_20px_rgba(147,51,234,0.4)]";
       if (isDirectDeliverySelected) return "border-purple-500 shadow-[0_0_15px_rgba(168,85,247,0.3)]";
       if (isSplitSelected) return "border-blue-500 shadow-[0_0_15px_rgba(59,130,246,0.3)]";
       if (isDirectPOSelected) return "border-orange-500 shadow-[0_0_15px_rgba(249,115,22,0.3)]";
-      return "border-border/60";
+      if (!canModify) return "border-border/40 opacity-50";
+      return "border-transparent bg-muted/40 hover:bg-muted/60";
+    };
+
+    // Defaults are only used for items that are ALREADY approved (on recheck)
+    // For pending items, always start fresh with no defaults
+    const defaults: string[] = [];
+    if (isRecheck) {
+      if (["po", "all", "split_po", "split_po_delivery"].includes(directAction)) defaults.push("direct_po");
+      if (["delivery", "all", "split_delivery", "split_po_delivery"].includes(directAction)) defaults.push("direct_delivery");
+      if (item.isSplitApproved) defaults.push("split");
+    }
+
+    // isLocked returns true if a specific permission is already approved and cannot be changed
+    const isLocked = (permission: "delivery" | "po" | "split") => {
+      if (permission === "delivery") return lockedDelivery;
+      if (permission === "po") return lockedPO;
+      if (permission === "split") return lockedSplit;
+      return false;
     };
 
     return (
-      <div className={cn("flex w-full items-center", !isCard && "max-w-[420px] ml-auto gap-3")}>
+      <div className={cn(
+        "flex items-center p-1 rounded-xl border-2 transition-all duration-300 ease-out h-10 w-[320px] backdrop-blur-sm",
+        getSegmentBorder()
+      )}>
+        {/* Deliver Button */}
+        <div
+          onClick={() => {
+            if (isLocked("delivery")) return;
+            if (!canModify || stock < item.quantity) return;
 
-        <div className={cn(
-          "flex items-center border rounded-xl bg-background dark:bg-slate-950 transition-all h-10 divide-x divide-border/20 overflow-hidden w-full",
-          getSegmentBorder(),
-        )}>
-          {/* Direct Delivery Button */}
-          <div
-            onClick={(e) => {
-              if (canModify && stock >= item.quantity) {
-                e.stopPropagation();
-                if (isPending) toggleIntent(item._id, "direct_delivery");
-                else setShowItemDirectDeliveryConfirm(item._id);
-              }
-            }}
-            className={cn(
-              "flex items-center gap-2 px-3 h-full transition-all select-none flex-1 justify-center relative group/btn",
-              (canModify && stock >= item.quantity)
-                ? "cursor-pointer hover:bg-purple-50 dark:hover:bg-purple-950/30"
-                : "cursor-not-allowed bg-muted/20 opacity-40 grayscale",
-              isDirectDeliverySelected && stock >= item.quantity
-                ? "bg-purple-600 text-white shadow-[inset_0_0_10px_rgba(0,0,0,0.2)]"
-                : cn("font-bold", (canModify && stock >= item.quantity) ? "text-purple-600 dark:text-purple-400" : "text-muted-foreground")
-            )}
-            title={stock >= item.quantity ? "Mark for Direct Delivery" : "Not enough stock"}
-          >
-            <Truck className={cn("h-3.5 w-3.5 transition-transform", isDirectDeliverySelected ? "scale-110" : "group-hover/btn:scale-110")} />
-            <span className="text-[10px] tracking-tight uppercase font-black">Deliver</span>
-          </div>
+            // For recheck items, show confirmation popup
+            if (isRecheck) {
+              setShowPermissionConfirm({
+                itemId: item._id,
+                itemName: item.itemName,
+                permission: "delivery",
+                permissionLabel: "Direct Delivery"
+              });
+            } else {
+              // For pending items, use toggle intent
+              toggleIntent(item._id, "direct_delivery", defaults);
+            }
+          }}
+          className={cn(
+            "flex items-center gap-2 px-3 h-full transition-all duration-200 ease-out select-none flex-1 justify-center relative group/btn rounded-lg",
+            (canModify && stock >= item.quantity && !isLocked("delivery"))
+              ? "cursor-pointer hover:bg-purple-100/80 dark:hover:bg-purple-900/40 hover:scale-105 hover:shadow-lg active:scale-95"
+              : "cursor-default",
 
-          {/* Split Button */}
-          <div
-            onClick={(e) => {
-              if (canModify && isPartial) {
-                e.stopPropagation();
-                if (isPending) toggleIntent(item._id, "split");
-                else {
-                  updateStatus({ requestId: item._id, status: "recheck" });
-                  toast.info("Item marked for Split");
-                }
-              }
-            }}
-            className={cn(
-              "flex items-center gap-2 px-3 h-full transition-all select-none flex-1 justify-center relative group/btn",
-              (canModify && isPartial)
-                ? "cursor-pointer hover:bg-blue-50 dark:hover:bg-blue-950/30"
-                : "cursor-not-allowed bg-muted/20 opacity-40 grayscale",
-              isSplitSelected && isPartial
-                ? "bg-blue-600 text-white shadow-[inset_0_0_10px_rgba(0,0,0,0.2)]"
-                : cn("font-bold", (canModify && isPartial) ? "text-blue-600 dark:text-blue-400" : "text-muted-foreground")
-            )}
-            title={isPartial ? "Mark for Split" : "Partial stock required for split"}
-          >
-            <GitFork className={cn("h-3.5 w-3.5 transition-transform", isSplitSelected ? "rotate-90 scale-110" : "group-hover/btn:rotate-90")} />
-            <span className="text-[10px] tracking-tight uppercase font-black">Split</span>
-          </div>
+            isDirectDeliverySelected
+              ? cn(
+                "bg-gradient-to-br from-purple-500 to-purple-700 text-white shadow-lg shadow-purple-500/30 scale-[1.02] z-10 rounded-lg",
+                isLocked("delivery") && "ring-2 ring-green-400 ring-offset-1 ring-offset-background"
+              )
+              : cn(
+                "font-bold",
+                (canModify && stock >= item.quantity && !isLocked("delivery"))
+                  ? "text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300"
+                  : "text-muted-foreground opacity-50"
+              )
+          )}
+        >
+          <Package className={cn("h-4 w-4 transition-all duration-200 group-hover/btn:scale-125 group-hover/btn:rotate-12", isDirectDeliverySelected ? "fill-current drop-shadow-md" : "")} />
+          <span className="text-[11px] uppercase tracking-wider font-black">Deliver</span>
+          {isLocked("delivery") && <span className="absolute -top-1.5 -right-1.5 h-4 w-4 bg-gradient-to-br from-green-400 to-green-600 rounded-full border-2 border-background shadow-sm flex items-center justify-center"><span className="text-[8px] text-white">✓</span></span>}
+        </div>
 
-          {/* Direct PO Button */}
-          <div
-            onClick={(e) => {
-              if (canModify) {
-                e.stopPropagation();
-                if (isPending) toggleIntent(item._id, "direct_po");
-                else setShowItemDirectPOConfirm(item._id);
-              }
-            }}
-            className={cn(
-              "flex items-center gap-2 px-3 h-full transition-all select-none flex-1 justify-center relative group/btn",
-              canModify
-                ? "cursor-pointer hover:bg-orange-50 dark:hover:bg-orange-950/30"
-                : "cursor-not-allowed bg-muted/20 opacity-40 grayscale",
-              isDirectPOSelected
-                ? "bg-orange-600 text-white shadow-[inset_0_0_10px_rgba(0,0,0,0.2)]"
-                : cn("font-bold", canModify ? "text-orange-600 dark:text-orange-400" : "text-muted-foreground")
-            )}
-          >
-            <ShoppingCart className={cn("h-3.5 w-3.5 transition-transform", isDirectPOSelected ? "scale-110" : "group-hover/btn:scale-110")} />
-            <span className="text-[10px] tracking-tight uppercase font-black whitespace-nowrap">Direct PO</span>
-          </div>
+        <div className="w-px h-5 bg-gradient-to-b from-transparent via-border/50 to-transparent mx-1" />
+
+        {/* Split Button */}
+        <div
+          onClick={() => {
+            if (isLocked("split")) return;
+            if (!canModify || !isPartial) return;
+
+            // For recheck items, show confirmation popup
+            if (isRecheck) {
+              setShowPermissionConfirm({
+                itemId: item._id,
+                itemName: item.itemName,
+                permission: "split",
+                permissionLabel: "Split"
+              });
+            } else {
+              // For pending items, use toggle intent
+              toggleIntent(item._id, "split", defaults);
+            }
+          }}
+          className={cn(
+            "flex items-center gap-2 px-3 h-full transition-all duration-200 ease-out select-none flex-1 justify-center relative group/btn rounded-lg",
+            (canModify && isPartial && !isLocked("split"))
+              ? "cursor-pointer hover:bg-blue-100/80 dark:hover:bg-blue-900/40 hover:scale-105 hover:shadow-lg active:scale-95"
+              : "cursor-default",
+            isSplitSelected
+              ? cn(
+                "bg-gradient-to-br from-blue-500 to-blue-700 text-white shadow-lg shadow-blue-500/30 scale-[1.02] z-10 rounded-lg",
+                isLocked("split") && "ring-2 ring-green-400 ring-offset-1 ring-offset-background"
+              )
+              : cn(
+                "font-bold",
+                (canModify && isPartial && !isLocked("split"))
+                  ? "text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300"
+                  : "text-muted-foreground opacity-50"
+              )
+          )}
+        >
+          <GitFork className={cn("h-4 w-4 transition-all duration-200 group-hover/btn:scale-125 group-hover/btn:-rotate-12", isSplitSelected ? "fill-current drop-shadow-md" : "")} />
+          <span className="text-[11px] uppercase tracking-wider font-black">Split</span>
+          {isLocked("split") && <span className="absolute -top-1.5 -right-1.5 h-4 w-4 bg-gradient-to-br from-green-400 to-green-600 rounded-full border-2 border-background shadow-sm flex items-center justify-center"><span className="text-[8px] text-white">✓</span></span>}
+        </div>
+
+        <div className="w-px h-5 bg-gradient-to-b from-transparent via-border/50 to-transparent mx-1" />
+
+        {/* Direct PO Button */}
+        <div
+          onClick={() => {
+            if (isLocked("po")) return;
+            if (!canModify) return;
+
+            // For recheck items, show confirmation popup
+            if (isRecheck) {
+              setShowPermissionConfirm({
+                itemId: item._id,
+                itemName: item.itemName,
+                permission: "po",
+                permissionLabel: "Direct PO"
+              });
+            } else {
+              // For pending items, use toggle intent
+              toggleIntent(item._id, "direct_po", defaults);
+            }
+          }}
+          className={cn(
+            "flex items-center gap-2 px-3 h-full transition-all duration-200 ease-out select-none flex-1 justify-center relative group/btn rounded-lg",
+            (canModify && !isLocked("po"))
+              ? "cursor-pointer hover:bg-orange-100/80 dark:hover:bg-orange-900/40 hover:scale-105 hover:shadow-lg active:scale-95"
+              : "cursor-default",
+            isDirectPOSelected
+              ? cn(
+                "bg-gradient-to-br from-orange-500 to-orange-700 text-white shadow-lg shadow-orange-500/30 scale-[1.02] z-10 rounded-lg",
+                isLocked("po") && "ring-2 ring-green-400 ring-offset-1 ring-offset-background"
+              )
+              : cn(
+                "font-bold",
+                (canModify && !isLocked("po"))
+                  ? "text-orange-600 dark:text-orange-400 hover:text-orange-700 dark:hover:text-orange-300"
+                  : "text-muted-foreground opacity-50"
+              )
+          )}
+        >
+          <ShoppingCart className={cn("h-4 w-4 transition-all duration-200 group-hover/btn:scale-125 group-hover/btn:rotate-12", isDirectPOSelected ? "fill-current drop-shadow-md" : "")} />
+          <span className="text-[11px] uppercase tracking-wider font-black">Direct PO</span>
+          {isLocked("po") && <span className="absolute -top-1.5 -right-1.5 h-4 w-4 bg-gradient-to-br from-green-400 to-green-600 rounded-full border-2 border-background shadow-sm flex items-center justify-center"><span className="text-[8px] text-white">✓</span></span>}
         </div>
       </div>
     );
@@ -1521,44 +1745,80 @@ export function RequestDetailsDialog({
                           </TableHeader>
                           <TableBody>
                             {/* Render Grouped POs First */}
-                            {pendingPOs && Object.values(pendingPOs.filter(p => p.status === "sign_pending").reduce((acc, po) => {
+                            {/* Render Grouped POs First */}
+                            {pendingPOs && Object.values(pendingPOs.filter(p => p.status === "sign_pending" || p.status === "sign_rejected").reduce((acc, po) => {
                               if (!po.vendor) return acc;
                               const vendorId = po.vendor._id;
                               if (!acc[vendorId]) {
                                 acc[vendorId] = {
                                   vendor: po.vendor,
-                                  items: []
+                                  items: [],
+                                  status: po.status // Track status for the group
                                 };
                               }
                               acc[vendorId].items.push(po);
                               return acc;
-                            }, {} as Record<string, { vendor: any, items: any[] }>)).map((group: any) => (
-                              <TableRow key={`group-${group.vendor._id}`} className="bg-amber-50/50 dark:bg-amber-950/10 hover:bg-amber-50 dark:hover:bg-amber-900/20 shadow-sm border-b border-amber-200/50 dark:border-amber-800/50">
+                            }, {} as Record<string, { vendor: any, items: any[], status: string }>)).map((group: any) => (
+                              <TableRow key={`group-${group.vendor._id}`} className={cn(
+                                "shadow-sm border-b",
+                                group.status === "sign_rejected"
+                                  ? "bg-red-50/50 dark:bg-red-950/10 hover:bg-red-50 dark:hover:bg-red-900/20 border-red-200/50 dark:border-red-800/50"
+                                  : "bg-amber-50/50 dark:bg-amber-950/10 hover:bg-amber-50 dark:hover:bg-amber-900/20 border-amber-200/50 dark:border-amber-800/50"
+                              )}>
                                 <TableCell colSpan={10} className="p-0">
                                   <div className="flex flex-col sm:flex-row w-full">
                                     {/* Left: Vendor & PO Info */}
-                                    <div className="p-4 flex-1 flex flex-col justify-center border-r border-amber-200/30 dark:border-amber-800/30">
+                                    <div className={cn(
+                                      "p-4 flex-1 flex flex-col justify-center border-r",
+                                      group.status === "sign_rejected" ? "border-red-200/30 dark:border-red-800/30" : "border-amber-200/30 dark:border-amber-800/30"
+                                    )}>
                                       <div className="flex items-center gap-3 mb-2">
-                                        <div className="h-10 w-10 rounded-full bg-amber-100 dark:bg-amber-900/40 flex items-center justify-center border border-amber-200 dark:border-amber-800">
-                                          <Building2 className="h-5 w-5 text-amber-700 dark:text-amber-400" />
+                                        <div className={cn(
+                                          "h-10 w-10 rounded-full flex items-center justify-center border",
+                                          group.status === "sign_rejected"
+                                            ? "bg-red-100 dark:bg-red-900/40 border-red-200 dark:border-red-800"
+                                            : "bg-amber-100 dark:bg-amber-900/40 border-amber-200 dark:border-amber-800"
+                                        )}>
+                                          <Building2 className={cn(
+                                            "h-5 w-5",
+                                            group.status === "sign_rejected" ? "text-red-700 dark:text-red-400" : "text-amber-700 dark:text-amber-400"
+                                          )} />
                                         </div>
                                         <div>
-                                          <div className="font-bold text-base text-amber-950 dark:text-amber-100">{group.vendor.companyName}</div>
-                                          <div className="text-xs text-amber-800/70 dark:text-amber-300/70 flex items-center gap-1.5">
-                                            <span className="font-mono bg-amber-100/50 dark:bg-amber-900/30 px-1 rounded">{group.vendor.gstNumber}</span>
+                                          <div className={cn(
+                                            "font-bold text-base",
+                                            group.status === "sign_rejected" ? "text-red-950 dark:text-red-100" : "text-amber-950 dark:text-amber-100"
+                                          )}>{group.vendor.companyName}</div>
+                                          <div className={cn(
+                                            "text-xs flex items-center gap-1.5",
+                                            group.status === "sign_rejected" ? "text-red-800/70 dark:text-red-300/70" : "text-amber-800/70 dark:text-amber-300/70"
+                                          )}>
+                                            <span className={cn(
+                                              "font-mono px-1 rounded",
+                                              group.status === "sign_rejected" ? "bg-red-100/50 dark:bg-red-900/30" : "bg-amber-100/50 dark:bg-amber-900/30"
+                                            )}>{group.vendor.gstNumber}</span>
                                             {group.items[0].poNumber && <span className="font-mono font-semibold">• PO: {group.items[0].poNumber}</span>}
                                           </div>
                                         </div>
                                       </div>
                                       <div className="mt-2 pl-[52px]">
-                                        <div className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-amber-100 text-amber-700 dark:bg-amber-900/60 dark:text-amber-400 border border-amber-200 dark:border-amber-800">
-                                          <Pencil className="h-3 w-3 mr-1" /> Waiting for Signature
-                                        </div>
+                                        {group.status === "sign_rejected" ? (
+                                          <div className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-red-100 text-red-700 dark:bg-red-900/60 dark:text-red-400 border border-red-200 dark:border-red-800">
+                                            <XCircle className="h-3 w-3 mr-1" /> Sign Rejected
+                                          </div>
+                                        ) : (
+                                          <div className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-amber-100 text-amber-700 dark:bg-amber-900/60 dark:text-amber-400 border border-amber-200 dark:border-amber-800">
+                                            <Pencil className="h-3 w-3 mr-1" /> Waiting for Signature
+                                          </div>
+                                        )}
                                       </div>
                                     </div>
 
                                     {/* Middle: Items List */}
-                                    <div className="flex-[2] p-4 border-r border-amber-200/30 dark:border-amber-800/30">
+                                    <div className={cn(
+                                      "flex-[2] p-4 border-r",
+                                      group.status === "sign_rejected" ? "border-red-200/30 dark:border-red-800/30" : "border-amber-200/30 dark:border-amber-800/30"
+                                    )}>
                                       <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2 flex items-center gap-2">
                                         <List className="h-3 w-3" /> Includes {group.items.length} Item{group.items.length > 1 ? 's' : ''}
                                       </h4>
@@ -1580,8 +1840,14 @@ export function RequestDetailsDialog({
                                           </div>
                                         ))}
                                       </div>
-                                      <div className="mt-3 pt-2 border-t border-dashed border-amber-200/50 dark:border-amber-800/50 flex justify-between items-center px-1">
-                                        <span className="text-xs font-medium text-amber-800/70 dark:text-amber-400/70">Total PO Value</span>
+                                      <div className={cn(
+                                        "mt-3 pt-2 border-t border-dashed flex justify-between items-center px-1",
+                                        group.status === "sign_rejected" ? "border-red-200/50 dark:border-red-800/50" : "border-amber-200/50 dark:border-amber-800/50"
+                                      )}>
+                                        <span className={cn(
+                                          "text-xs font-medium",
+                                          group.status === "sign_rejected" ? "text-red-800/70 dark:text-red-400/70" : "text-amber-800/70 dark:text-amber-400/70"
+                                        )}>Total PO Value</span>
                                         <span className="text-sm font-bold text-foreground">
                                           ₹
                                           {group.items.reduce((sum: number, i: any) => sum + i.totalAmount, 0).toLocaleString()}
@@ -1590,41 +1856,47 @@ export function RequestDetailsDialog({
                                     </div>
 
                                     {/* Right: Actions */}
-                                    <div className="p-4 flex flex-col justify-center gap-2 min-w-[160px] bg-amber-100/20 dark:bg-amber-950/20">
+                                    <div className={cn(
+                                      "p-4 flex flex-col justify-center gap-2 min-w-[160px]",
+                                      group.status === "sign_rejected" ? "bg-red-100/20 dark:bg-red-950/20" : "bg-amber-100/20 dark:bg-amber-950/20"
+                                    )}>
+                                      {/* Only show Approve/Reject if NOT rejected */}
+                                      {isManager && group.status === "sign_pending" && (
+                                        <>
+                                          <Button
+                                            size="sm"
+                                            className="w-full bg-amber-600 hover:bg-amber-700 text-white font-semibold shadow-sm"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              const poIds = group.items.map((i: any) => i._id);
+                                              setShowSignPendingApproveConfirm({ type: 'po_batch', ids: poIds } as any);
+                                            }}
+                                          >
+                                            <Pencil className="h-3.5 w-3.5 mr-2" /> Sign PO
+                                          </Button>
+                                          <Button
+                                            variant="outline"
+                                            size="sm"
+                                            className="w-full text-xs h-8 border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300 dark:border-red-900/30 dark:hover:bg-red-950/30"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              const poIds = group.items.map((i: any) => i._id);
+                                              setShowRejectionInput({ type: 'po_batch', ids: poIds } as any);
+                                            }}
+                                          >
+                                            Reject
+                                          </Button>
+                                        </>
+                                      )}
                                       <Button
+                                        variant="outline"
                                         size="sm"
-                                        className="w-full bg-amber-600 hover:bg-amber-700 text-white font-semibold shadow-sm"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          const poIds = group.items.map((i: any) => i._id);
-                                          setShowSignPendingApproveConfirm({ type: 'po_batch', ids: poIds } as any);
-                                        }}
+                                        className={cn("text-xs h-8", isManager ? "w-full" : "w-full bg-background")}
+                                        onClick={() => setPdfPreviewPoNumber(group.items[0].poNumber)}
                                       >
-                                        <Pencil className="h-3.5 w-3.5 mr-2" /> Sign PO
+                                        <FileText className="h-3.5 w-3.5 mr-1.5" />
+                                        View PDF
                                       </Button>
-                                      <div className="flex gap-2">
-                                        <Button
-                                          variant="outline"
-                                          size="sm"
-                                          className="flex-1 text-xs h-8 border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300 dark:border-red-900/30 dark:hover:bg-red-950/30"
-                                          onClick={(e) => {
-                                            // Reject Logic
-                                            e.stopPropagation();
-                                            const poIds = group.items.map((i: any) => i._id);
-                                            setShowRejectionInput({ type: 'po_batch', ids: poIds } as any);
-                                          }}
-                                        >
-                                          Reject
-                                        </Button>
-                                        <Button
-                                          variant="outline"
-                                          size="sm"
-                                          className="flex-1 text-xs h-8"
-                                          onClick={() => setPdfPreviewPoNumber(group.items[0].poNumber)}
-                                        >
-                                          PDF
-                                        </Button>
-                                      </div>
                                     </div>
                                   </div>
                                 </TableCell>
@@ -1675,7 +1947,7 @@ export function RequestDetailsDialog({
                                           {/* Selection Checkbox */}
                                           <TableCell className="p-2 text-center w-[45px] relative rounded-l-lg overflow-hidden">
                                             <div className="flex items-center justify-center h-full w-full">
-                                              {isManager && isPending && (
+                                              {((isManager && (isPending || item.status === "ready_for_po")) || (isPurchaseOfficer && ["pending_po", "direct_po", "ready_for_po"].includes(item.status))) && (
                                                 <Checkbox
                                                   checked={isSelected}
                                                   onCheckedChange={() => toggleItemSelection(item._id)}
@@ -2010,7 +2282,7 @@ export function RequestDetailsDialog({
                                   )}
                                 >
                                   {/* Selection Checkbox */}
-                                  {isPending && isManager && (
+                                  {((isManager && (isPending || item.status === "ready_for_po")) || (isPurchaseOfficer && ["pending_po", "direct_po", "ready_for_po"].includes(item.status))) && (
                                     <div className="absolute top-2 right-2 z-10">
                                       <Checkbox
                                         checked={isSelected}
@@ -2101,7 +2373,7 @@ export function RequestDetailsDialog({
 
 
                                   {/* Actions Footer for Cards */}
-                                  {isManager && (isPending || item.status === "sign_pending" || item.status === "sign_rejected" || item.status === "cc_pending") && (
+                                  {isManager && (isPending || item.status === "sign_pending" || item.status === "cc_pending") && (
                                     <div className={cn(
                                       "p-3 border-t bg-muted/5 w-full",
                                       (item.status === "sign_pending" || item.status === "sign_rejected") ? "grid grid-cols-2 gap-3" : "flex"
@@ -2651,6 +2923,75 @@ export function RequestDetailsDialog({
                                 className="flex-1"
                               >
                                 Cancel
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Permission Grant Confirmation (for recheck items) */}
+                    {showPermissionConfirm && (
+                      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+                        <div className="w-full max-w-sm mx-4 bg-white dark:bg-gray-900 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+                          <div className={cn(
+                            "p-4 text-white",
+                            showPermissionConfirm.permission === "delivery" && "bg-gradient-to-r from-purple-500 to-purple-700",
+                            showPermissionConfirm.permission === "split" && "bg-gradient-to-r from-blue-500 to-blue-700",
+                            showPermissionConfirm.permission === "po" && "bg-gradient-to-r from-orange-500 to-orange-700"
+                          )}>
+                            <div className="flex items-center gap-3">
+                              {showPermissionConfirm.permission === "delivery" && <Package className="h-6 w-6" />}
+                              {showPermissionConfirm.permission === "split" && <GitFork className="h-6 w-6" />}
+                              {showPermissionConfirm.permission === "po" && <ShoppingCart className="h-6 w-6" />}
+                              <div>
+                                <h3 className="text-lg font-bold">Grant Permission</h3>
+                                <p className="text-sm opacity-90">{showPermissionConfirm.permissionLabel}</p>
+                              </div>
+                            </div>
+                          </div>
+                          <div className="p-5">
+                            <p className="text-sm text-gray-600 dark:text-gray-300 mb-1">
+                              Are you sure you want to grant <span className="font-semibold text-gray-900 dark:text-white">{showPermissionConfirm.permissionLabel}</span> permission for:
+                            </p>
+                            <div className="bg-gray-100 dark:bg-gray-800 rounded-lg p-3 my-3">
+                              <p className="font-medium text-gray-900 dark:text-white truncate">
+                                {showPermissionConfirm.itemName}
+                              </p>
+                            </div>
+                            <p className="text-xs text-amber-600 dark:text-amber-400 mb-4">
+                              ⚠️ This action cannot be undone. The permission will be locked.
+                            </p>
+                            <div className="flex gap-3">
+                              <Button
+                                variant="outline"
+                                onClick={() => setShowPermissionConfirm(null)}
+                                disabled={isLoading}
+                                className="flex-1"
+                              >
+                                Cancel
+                              </Button>
+                              <Button
+                                onClick={handleGrantPermission}
+                                disabled={isLoading}
+                                className={cn(
+                                  "flex-1 text-white",
+                                  showPermissionConfirm.permission === "delivery" && "bg-purple-600 hover:bg-purple-700",
+                                  showPermissionConfirm.permission === "split" && "bg-blue-600 hover:bg-blue-700",
+                                  showPermissionConfirm.permission === "po" && "bg-orange-600 hover:bg-orange-700"
+                                )}
+                              >
+                                {isLoading ? (
+                                  <>
+                                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                    Granting...
+                                  </>
+                                ) : (
+                                  <>
+                                    <CheckCircle className="h-4 w-4 mr-2" />
+                                    Grant Permission
+                                  </>
+                                )}
                               </Button>
                             </div>
                           </div>

@@ -6,7 +6,7 @@
  */
 
 import { v } from "convex/values";
-import { mutation, query } from "./_generated/server";
+import { mutation, query, internalMutation } from "./_generated/server";
 
 // ============================================================================
 // Queries
@@ -510,4 +510,90 @@ export const deleteUser = mutation({
     return { success: true, clerkUserId: args.clerkUserId };
   },
 });
+
+
+// ============================================================================
+// Internal Mutations (Webhooks)
+// ============================================================================
+
+/**
+ * Upsert user from Clerk webhook
+ * Creates or updates user based on Clerk data
+ */
+export const internalUpsertUser = internalMutation({
+  args: {
+    clerkUserId: v.string(),
+    username: v.string(),
+    fullName: v.string(),
+    phoneNumber: v.optional(v.string()),
+    email: v.optional(v.string()),
+    profileImage: v.optional(v.string()),
+    role: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    // Check if user exists
+    const existingUser = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_user_id", (q) => q.eq("clerkUserId", args.clerkUserId))
+      .unique();
+
+    // Determine role (default to site_engineer if not provided)
+    // Note: This logic might need refinement based on how role is passed from Clerk
+    const role = args.role === "manager" ? "manager" :
+      args.role === "purchase_officer" ? "purchase_officer" : "site_engineer";
+
+    if (existingUser) {
+      // Update existing user
+      await ctx.db.patch(existingUser._id, {
+        username: args.username,
+        fullName: args.fullName,
+        ...(args.phoneNumber && { phoneNumber: args.phoneNumber }),
+        ...(args.profileImage && { profileImage: args.profileImage }),
+        // Only update role if explicitly provided (e.g. metadata change)
+        ...(args.role && { role }),
+        updatedAt: Date.now(),
+        isActive: true, // Ensure user is active on update
+      });
+      return existingUser._id;
+    }
+
+    // Create new user
+    const userId = await ctx.db.insert("users", {
+      clerkUserId: args.clerkUserId,
+      username: args.username,
+      fullName: args.fullName,
+      phoneNumber: args.phoneNumber || "",
+      address: "", // Default empty
+      role: role,
+      assignedSites: [],
+      isActive: true, // Default active
+      profileImage: args.profileImage,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    });
+
+    return userId;
+  },
+});
+
+/**
+ * Delete user from Clerk webhook
+ */
+export const internalDeleteUserByClerkId = internalMutation({
+  args: { clerkUserId: v.string() },
+  handler: async (ctx, args) => {
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_user_id", (q) => q.eq("clerkUserId", args.clerkUserId))
+      .unique();
+
+    if (user) {
+      await ctx.db.delete(user._id);
+      return { success: true, id: user._id };
+    }
+
+    return { success: false, reason: "User not found" };
+  },
+});
+
 

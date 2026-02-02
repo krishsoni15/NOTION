@@ -1122,7 +1122,14 @@ export const updateRequestStatus = mutation({
       v.literal("recheck")
     ),
     rejectionReason: v.optional(v.string()),
-    directAction: v.optional(v.union(v.literal("delivery"), v.literal("po"))),
+    directAction: v.optional(v.union(
+      v.literal("delivery"),
+      v.literal("po"),
+      v.literal("all"),
+      v.literal("split_po"),
+      v.literal("split_delivery"),
+      v.literal("split_po_delivery")
+    )),
   },
   handler: async (ctx, args) => {
     const currentUser = await getCurrentUser(ctx);
@@ -1226,7 +1233,13 @@ export const updateRequestStatus = mutation({
 export const bulkUpdateRequestStatus = mutation({
   args: {
     requestIds: v.array(v.id("requests")),
-    status: v.union(v.literal("approved"), v.literal("rejected"), v.literal("direct_po"), v.literal("delivery_stage"), v.literal("recheck")), // Added delivery_stage and recheck
+    status: v.union(
+      v.literal("approved"),
+      v.literal("rejected"),
+      v.literal("direct_po"),
+      v.literal("delivery_stage"),
+      v.literal("recheck")
+    ),
     rejectionReason: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
@@ -1244,17 +1257,20 @@ export const bulkUpdateRequestStatus = mutation({
     const now = Date.now();
 
     // Determine new status and flags
-    let newStatus: "recheck" | "rejected";
-    let directAction: "po" | "delivery" | undefined = undefined;
+    let newStatus: string;
+    let directAction: "po" | "delivery" | "all" | undefined = undefined;
 
     if (args.status === "approved") {
-      newStatus = "recheck";
+      newStatus = "recheck"; // Standard approval flow -> Recheck
     } else if (args.status === "direct_po") {
       newStatus = "recheck";
       directAction = "po";
     } else if (args.status === "delivery_stage") {
       newStatus = "recheck";
       directAction = "delivery";
+    } else if (args.status === "recheck") {
+      newStatus = "recheck";
+      // Do NOT overwrite directAction here. It is handled finely by updateRequestDetails on the frontend before calling this.
     } else {
       newStatus = "rejected";
     }
@@ -1278,7 +1294,7 @@ export const bulkUpdateRequestStatus = mutation({
     await Promise.all(
       args.requestIds.map(async (requestId) => {
         const request = await ctx.db.get(requestId);
-        if (!request || request.status !== "pending") return; // Skip invalid or non-pending
+        if (!request) return; // Skip invalid
 
         await ctx.db.patch(requestId, updates);
         processedRequestNumbers.add(request.requestNumber);

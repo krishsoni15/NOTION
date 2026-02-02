@@ -37,7 +37,7 @@ interface LocationFormDialogProps {
     code?: string;
     address?: string;
     description?: string;
-    type?: "site" | "inventory";
+    type?: "site" | "inventory" | "other";
     isActive?: boolean;
   } | null;
 }
@@ -60,7 +60,7 @@ export function LocationFormDialog({
     code: string;
     address: string;
     description: string;
-    type: "site" | "inventory";
+    type: "site" | "inventory" | "other";
     isActive: boolean;
   }>({
     name: "",
@@ -99,7 +99,7 @@ export function LocationFormDialog({
         code: initialData.code || "",
         address: initialData.address || "",
         description: initialData.description || "",
-        type: (initialData.type as "site" | "inventory") || "site",
+        type: (initialData.type as "site" | "inventory" | "other") || "site",
         isActive: initialData.isActive !== undefined ? initialData.isActive : true,
       });
     } else {
@@ -209,7 +209,7 @@ export function LocationFormDialog({
             <RadioGroup
               defaultValue="site"
               value={formData.type}
-              onValueChange={(value) => setFormData({ ...formData, type: value as "site" | "inventory" })}
+              onValueChange={(value) => setFormData({ ...formData, type: value as "site" | "inventory" | "other" })}
               className="flex gap-4"
               disabled={isLoading}
             >
@@ -221,16 +221,20 @@ export function LocationFormDialog({
                 <RadioGroupItem value="inventory" id="type-inventory" />
                 <Label htmlFor="type-inventory" className="cursor-pointer font-normal">Inventory</Label>
               </div>
+              <div className="flex items-center space-x-2">
+                <RadioGroupItem value="other" id="type-other" />
+                <Label htmlFor="type-other" className="cursor-pointer font-normal">Other</Label>
+              </div>
             </RadioGroup>
           </div>
 
           <div className="space-y-1.5">
             <Label htmlFor="name" className="text-sm">
-              {formData.type === "inventory" ? "Store Name *" : "Site Name *"}
+              {formData.type === "inventory" ? "Store Name *" : formData.type === "other" ? "Location Name *" : "Site Name *"}
             </Label>
             <Input
               id="name"
-              placeholder={formData.type === "inventory" ? "Enter store name" : "Enter site name"}
+              placeholder={formData.type === "inventory" ? "Enter store name" : formData.type === "other" ? "Enter location name" : "Enter site name"}
               value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
               disabled={isLoading}

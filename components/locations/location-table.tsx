@@ -44,7 +44,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 // ... imports
-import { MoreHorizontal, Edit, Trash2, Building2, MapPin, Hash, Calendar, Info, Power, PowerOff } from "lucide-react";
+import { MoreHorizontal, Edit, Trash2, Building2, MapPin, Hash, Calendar, Info, Power, PowerOff, Package, Globe } from "lucide-react";
 import { LocationFormDialog } from "./location-form-dialog";
 import { LocationInfoDialog } from "./location-info-dialog";
 import { toast } from "sonner";
@@ -70,6 +70,18 @@ export function LocationTable({ locations, viewMode = "table" }: LocationTablePr
     const encodedAddress = encodeURIComponent(address);
     const mapUrl = `https://www.google.com/maps/search/?api=1&query=${encodedAddress}`;
     window.open(mapUrl, '_blank');
+  };
+
+  const getLocationIcon = (type: string | undefined) => {
+    switch (type) {
+      case "inventory":
+        return Package;
+      case "other":
+        return Globe; // Better icon for "Other"
+      case "site":
+      default:
+        return Building2;
+    }
   };
 
   // Check location usage when delete dialog opens
@@ -150,6 +162,7 @@ export function LocationTable({ locations, viewMode = "table" }: LocationTablePr
   }
 
   const LocationCard = ({ location }: { location: Doc<"sites"> }) => {
+    const Icon = getLocationIcon(location.type);
     return (
       <Card className="h-full flex flex-col hover:shadow-md transition-all duration-200 border border-border bg-card group rounded-xl overflow-hidden hover:border-primary/20">
         <CardHeader className="p-4 pb-3 border-b border-border/40 bg-gradient-to-br from-primary/5 to-transparent">
@@ -157,7 +170,7 @@ export function LocationTable({ locations, viewMode = "table" }: LocationTablePr
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 mb-1.5">
                 <div className="h-9 w-9 rounded-lg bg-background/60 backdrop-blur-sm flex items-center justify-center shrink-0 border border-primary/10 overflow-hidden shadow-sm">
-                  <Building2 className="h-4.5 w-4.5 text-primary" />
+                  <Icon className="h-4.5 w-4.5 text-primary" />
                 </div>
                 <div className="flex-1 min-w-0">
                   <button
@@ -175,7 +188,7 @@ export function LocationTable({ locations, viewMode = "table" }: LocationTablePr
                   </Badge>
                 )}
                 <Badge variant="outline" className="text-[10px] h-5 px-1.5 capitalize text-muted-foreground border-border/50 bg-background/30 backdrop-blur-sm">
-                  {location.type || "site"}
+                  {location.type === "other" ? "Other" : (location.type || "site")}
                 </Badge>
               </div>
             </div>
@@ -297,112 +310,115 @@ export function LocationTable({ locations, viewMode = "table" }: LocationTablePr
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {locations.map((location, index) => (
-                  <TableRow
-                    key={location._id}
-                    className={`
-                        group transition-all duration-300 border-b last:border-0 hover:bg-primary/5 hover:shadow-sm hover:z-10 hover:relative
-                        ${index % 2 === 0 ? "bg-background" : "bg-muted/20"}
-                        animate-in fade-in slide-in-from-bottom-3
-                     `}
-                    style={{ animationDelay: `${index * 50}ms`, animationFillMode: 'both' }}
-                  >
-                    <TableCell className="align-top py-4 pl-4 font-medium">
-                      <div className="flex items-center gap-2.5">
-                        <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0 border border-primary/10 text-primary">
-                          <Building2 className="h-4 w-4" />
-                        </div>
-                        <button
-                          onClick={() => setSelectedLocationId(location._id)}
-                          className="text-sm font-bold text-foreground hover:text-primary transition-colors cursor-pointer text-left hover:underline decoration-primary/30 underline-offset-4"
-                        >
-                          {location.name}
-                        </button>
-                      </div>
-                    </TableCell>
-                    <TableCell className="align-top py-4">
-                      <span className="font-mono text-xs text-muted-foreground bg-muted/50 px-1.5 py-0.5 rounded border border-border/50">
-                        {location.code || "-"}
-                      </span>
-                    </TableCell>
-                    <TableCell className="align-top py-4">
-                      <Badge variant="outline" className="text-[10px] bg-background/50 h-5 px-2 capitalize">
-                        {location.type || "site"}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="align-top py-4 max-w-xs text-sm text-muted-foreground leading-relaxed">
-                      {location.address ? (
-                        <div className="flex items-start gap-2 group/addr">
-                          <span className="line-clamp-2">{location.address}</span>
+                {locations.map((location, index) => {
+                  const Icon = getLocationIcon(location.type);
+                  return (
+                    <TableRow
+                      key={location._id}
+                      className={`
+                          group transition-all duration-300 border-b last:border-0 hover:bg-primary/5 hover:shadow-sm hover:z-10 hover:relative
+                          ${index % 2 === 0 ? "bg-background" : "bg-muted/20"}
+                          animate-in fade-in slide-in-from-bottom-3
+                       `}
+                      style={{ animationDelay: `${index * 50}ms`, animationFillMode: 'both' }}
+                    >
+                      <TableCell className="align-top py-4 pl-4 font-medium">
+                        <div className="flex items-center gap-2.5">
+                          <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center shrink-0 border border-primary/10 text-primary">
+                            <Icon className="h-4 w-4" />
+                          </div>
                           <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleOpenInMap(location.address!);
-                            }}
-                            className="text-primary p-1 hover:bg-primary/10 rounded shrink-0"
-                            title="Open in Maps"
+                            onClick={() => setSelectedLocationId(location._id)}
+                            className="text-sm font-bold text-foreground hover:text-primary transition-colors cursor-pointer text-left hover:underline decoration-primary/30 underline-offset-4"
                           >
-                            <MapPin className="h-3.5 w-3.5" />
+                            {location.name}
                           </button>
                         </div>
-                      ) : (
-                        <span className="text-muted-foreground/30">—</span>
-                      )}
-                    </TableCell>
-                    <TableCell className="align-top py-4 max-w-xs text-sm text-muted-foreground italic leading-relaxed">
-                      {location.description || <span className="text-muted-foreground/30">—</span>}
-                    </TableCell>
-                    <TableCell className="align-top py-4">
-                      <Badge variant={location.isActive ? "default" : "secondary"} className="h-5 text-[10px] px-2 uppercase tracking-wider font-bold">
-                        {location.isActive ? "Active" : "Inactive"}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="align-top py-4 text-xs text-muted-foreground/70">
-                      {new Date(location.createdAt).toLocaleDateString()}
-                    </TableCell>
-                    <TableCell className="align-top py-4 text-right pr-4">
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground">
-                            <MoreHorizontal className="h-4 w-4" />
-                            <span className="sr-only">Actions</span>
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem onClick={() => setEditingLocation(location)}>
-                            <Edit className="h-4 w-4 mr-2" />
-                            Edit Location
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            onClick={() => handleToggleStatus(location)}
-                            disabled={loadingLocationId === location._id}
-                          >
-                            {location.isActive ? (
-                              <>
-                                <PowerOff className="h-4 w-4 mr-2" />
-                                Deactivate
-                              </>
-                            ) : (
-                              <>
-                                <Power className="h-4 w-4 mr-2" />
-                                Activate
-                              </>
-                            )}
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            onClick={() => setDeletingLocation(location)}
-                            className="text-destructive focus:text-destructive"
-                          >
-                            <Trash2 className="h-4 w-4 mr-2" />
-                            Delete Location
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                      </TableCell>
+                      <TableCell className="align-top py-4">
+                        <span className="font-mono text-xs text-muted-foreground bg-muted/50 px-1.5 py-0.5 rounded border border-border/50">
+                          {location.code || "-"}
+                        </span>
+                      </TableCell>
+                      <TableCell className="align-top py-4">
+                        <Badge variant="outline" className="text-[10px] bg-background/50 h-5 px-2 capitalize">
+                          {location.type === "other" ? "Other" : (location.type || "site")}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="align-top py-4 max-w-xs text-sm text-muted-foreground leading-relaxed">
+                        {location.address ? (
+                          <div className="flex items-start gap-2 group/addr">
+                            <span className="line-clamp-2">{location.address}</span>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleOpenInMap(location.address!);
+                              }}
+                              className="text-primary p-1 hover:bg-primary/10 rounded shrink-0"
+                              title="Open in Maps"
+                            >
+                              <MapPin className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        ) : (
+                          <span className="text-muted-foreground/30">—</span>
+                        )}
+                      </TableCell>
+                      <TableCell className="align-top py-4 max-w-xs text-sm text-muted-foreground italic leading-relaxed">
+                        {location.description || <span className="text-muted-foreground/30">—</span>}
+                      </TableCell>
+                      <TableCell className="align-top py-4">
+                        <Badge variant={location.isActive ? "default" : "secondary"} className="h-5 text-[10px] px-2 uppercase tracking-wider font-bold">
+                          {location.isActive ? "Active" : "Inactive"}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="align-top py-4 text-xs text-muted-foreground/70">
+                        {new Date(location.createdAt).toLocaleDateString()}
+                      </TableCell>
+                      <TableCell className="align-top py-4 text-right pr-4">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground">
+                              <MoreHorizontal className="h-4 w-4" />
+                              <span className="sr-only">Actions</span>
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem onClick={() => setEditingLocation(location)}>
+                              <Edit className="h-4 w-4 mr-2" />
+                              Edit Location
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() => handleToggleStatus(location)}
+                              disabled={loadingLocationId === location._id}
+                            >
+                              {location.isActive ? (
+                                <>
+                                  <PowerOff className="h-4 w-4 mr-2" />
+                                  Deactivate
+                                </>
+                              ) : (
+                                <>
+                                  <Power className="h-4 w-4 mr-2" />
+                                  Activate
+                                </>
+                              )}
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() => setDeletingLocation(location)}
+                              className="text-destructive focus:text-destructive"
+                            >
+                              <Trash2 className="h-4 w-4 mr-2" />
+                              Delete Location
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           </div>

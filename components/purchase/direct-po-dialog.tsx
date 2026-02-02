@@ -1105,17 +1105,28 @@ export function DirectPODialog({ open, onOpenChange, initialData }: DirectPODial
                                         <div className="space-y-1.5 relative">
                                             <div className="flex items-center justify-between">
                                                 <Label className="text-sm">SGST (%)</Label>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => {
-                                                        handleItemChange(index, 'sgst', '9');
-                                                        handleItemChange(index, 'cgst', '9');
-                                                    }}
-                                                    className="text-[10px] text-blue-600 hover:text-blue-700 font-medium hover:underline"
-                                                    title="Set standard 18% GST (9% SGST + 9% CGST)"
-                                                >
-                                                    Apply 18%
-                                                </button>
+                                                <div className="flex items-center gap-1.5">
+                                                    <Checkbox
+                                                        id={`apply-18-${index}`}
+                                                        className="h-3.5 w-3.5"
+                                                        checked={parseFloat(item.sgst || "0") === 9 && parseFloat(item.cgst || "0") === 9}
+                                                        onCheckedChange={(checked) => {
+                                                            if (checked) {
+                                                                handleItemChange(index, 'sgst', '9');
+                                                                handleItemChange(index, 'cgst', '9');
+                                                            } else {
+                                                                handleItemChange(index, 'sgst', '0');
+                                                                handleItemChange(index, 'cgst', '0');
+                                                            }
+                                                        }}
+                                                    />
+                                                    <label
+                                                        htmlFor={`apply-18-${index}`}
+                                                        className="text-[10px] font-medium text-blue-600 dark:text-blue-400 cursor-pointer select-none"
+                                                    >
+                                                        18% GST
+                                                    </label>
+                                                </div>
                                             </div>
                                             <Input type="number" min="0" max="100" step="0.1" value={item.sgst} onChange={(e) => handleItemChange(index, 'sgst', e.target.value)} className="h-9" />
                                         </div>

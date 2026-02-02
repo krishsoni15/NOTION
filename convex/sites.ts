@@ -97,7 +97,7 @@ export const createSite = mutation({
     code: v.optional(v.string()),
     address: v.optional(v.string()),
     description: v.optional(v.string()),
-    type: v.optional(v.union(v.literal("site"), v.literal("inventory"))),
+    type: v.optional(v.union(v.literal("site"), v.literal("inventory"), v.literal("other"))),
   },
   handler: async (ctx, args) => {
     const userId = await getAuthUserId(ctx);
@@ -156,7 +156,7 @@ export const updateSite = mutation({
     code: v.optional(v.string()),
     address: v.optional(v.string()),
     description: v.optional(v.string()),
-    type: v.optional(v.union(v.literal("site"), v.literal("inventory"))),
+    type: v.optional(v.union(v.literal("site"), v.literal("inventory"), v.literal("other"))),
     isActive: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {

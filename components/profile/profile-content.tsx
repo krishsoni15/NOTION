@@ -22,11 +22,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
 import { ROLE_LABELS } from "@/lib/auth/roles";
 import { PersonalInfoForm } from "./personal-info-form";
-
 import { PasswordForm } from "./password-form";
-import { User, Lock, Shield, MapPin, Camera } from "lucide-react";
+import { SignatureUploadDialog } from "./signature-upload-dialog";
+import { User, Lock, Shield, MapPin, Camera, Pen } from "lucide-react";
 import { UserAvatar } from "@/components/user-management/user-avatar";
 
 export function ProfileContent() {
@@ -35,6 +36,9 @@ export function ProfileContent() {
     api.users.getUserByClerkId,
     isLoaded && user ? { clerkUserId: user.id } : "skip"
   );
+
+  // All hooks must be called before any conditional returns
+  const [signatureDialogOpen, setSignatureDialogOpen] = useState(false);
 
   if (!isLoaded || !user) {
     return (
@@ -176,6 +180,53 @@ export function ProfileContent() {
               )}
             </CardContent>
           </Card>
+
+          {/* Signature Section - Manager Only */}
+          {isManager && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Pen className="h-5 w-5" />
+                  Digital Signature
+                </CardTitle>
+                <CardDescription>
+                  Your signature will appear on approved Purchase Orders
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="flex items-center gap-4">
+                  {/* Current Signature Preview */}
+                  <div className="flex-1 border rounded-lg bg-white dark:bg-slate-900 p-4 min-h-[80px] flex items-center justify-center">
+                    {convexUser?.signatureUrl ? (
+                      <img
+                        src={convexUser.signatureUrl}
+                        alt="Your signature"
+                        className="max-h-16 max-w-full object-contain"
+                      />
+                    ) : (
+                      <p className="text-sm text-muted-foreground italic">No signature uploaded</p>
+                    )}
+                  </div>
+
+                  {/* Upload Button */}
+                  <Button
+                    variant={convexUser?.signatureUrl ? "outline" : "default"}
+                    onClick={() => setSignatureDialogOpen(true)}
+                    className="shrink-0"
+                  >
+                    <Pen className="h-4 w-4 mr-2" />
+                    {convexUser?.signatureUrl ? "Change" : "Add Signature"}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Signature Upload Dialog */}
+          <SignatureUploadDialog
+            open={signatureDialogOpen}
+            onOpenChange={setSignatureDialogOpen}
+          />
         </TabsContent>
 
         <TabsContent value="security" className="space-y-4">

@@ -23,6 +23,7 @@ export interface POData {
     } | null;
     approver?: {
         fullName: string;
+        signatureUrl?: string; // Manager's signature image
     } | null;
     items: Array<{
         _id: string;
@@ -186,7 +187,7 @@ export function PurchaseOrderTemplate({ data }: { data: POData }) {
     });
 
     return (
-        <div className="bg-white text-black font-sans text-xs" style={{ width: '210mm', minHeight: '297mm', padding: '10mm', margin: '0 auto', boxSizing: 'border-box' }}>
+        <div className="bg-white text-[#000000] font-sans text-xs" style={{ width: '210mm', minHeight: '297mm', padding: '10mm', margin: '0 auto', boxSizing: 'border-box' }}>
             {/* PO Content */}
             <div className="w-full bg-white">
 
@@ -230,47 +231,47 @@ export function PurchaseOrderTemplate({ data }: { data: POData }) {
                 </div>
 
                 {/* Items Table */}
-                <table className="w-full border-collapse border border-black text-[10px] mb-2">
+                <table className="w-full border-collapse border border-[#000000] text-[10px] mb-2">
                     <thead>
                         <tr style={{ backgroundColor: '#f9fafb' }}>
-                            <th className="border border-black p-1 text-center w-[30px]">No.</th>
-                            <th className="border border-black p-1 text-left">Item & Description</th>
-                            <th className="border border-black p-1 text-center w-[60px]">HSN / SAC</th>
-                            <th className="border border-black p-1 text-center w-[40px]">Qty</th>
-                            <th className="border border-black p-1 text-center w-[40px]">Unit</th>
-                            <th className="border border-black p-1 text-right w-[60px]">Rate (₹)</th>
-                            <th className="border border-black p-1 text-right w-[50px]">Discount</th>
-                            <th className="border border-black p-1 text-right w-[70px]">Taxable (₹)</th>
-                            <th className="border border-black p-1 text-right w-[40px]">CGST</th>
-                            <th className="border border-black p-1 text-right w-[40px]">SGST</th>
-                            <th className="border border-black p-1 text-right w-[80px]">Amount (₹)</th>
+                            <th className="border border-[#000000] p-1 text-center w-[30px]">No.</th>
+                            <th className="border border-[#000000] p-1 text-left">Item & Description</th>
+                            <th className="border border-[#000000] p-1 text-center w-[60px]">HSN / SAC</th>
+                            <th className="border border-[#000000] p-1 text-center w-[40px]">Qty</th>
+                            <th className="border border-[#000000] p-1 text-center w-[40px]">Unit</th>
+                            <th className="border border-[#000000] p-1 text-right w-[60px]">Rate (₹)</th>
+                            <th className="border border-[#000000] p-1 text-right w-[50px]">Discount</th>
+                            <th className="border border-[#000000] p-1 text-right w-[70px]">Taxable (₹)</th>
+                            <th className="border border-[#000000] p-1 text-right w-[40px]">CGST</th>
+                            <th className="border border-[#000000] p-1 text-right w-[40px]">SGST</th>
+                            <th className="border border-[#000000] p-1 text-right w-[80px]">Amount (₹)</th>
                         </tr>
                     </thead>
                     <tbody>
                         {processedItems.map((item, idx) => (
                             <tr key={item._id}>
-                                <td className="border border-black p-1 text-center font-bold">{idx + 1}</td>
-                                <td className="border border-black p-1">
+                                <td className="border border-[#000000] p-1 text-center font-bold">{idx + 1}</td>
+                                <td className="border border-[#000000] p-1">
                                     <div className="font-bold uppercase">{item.itemDescription.split('\n')[0]}</div>
                                     <div className="text-[9px] whitespace-pre-line" style={{ color: '#4b5563' }}>{item.itemDescription}</div>
                                 </td>
-                                <td className="border border-black p-1 text-center">{item.hsnSacCode || '-'}</td>
-                                <td className="border border-black p-1 text-center font-bold">{item.quantity}</td>
-                                <td className="border border-black p-1 text-center">{item.unit}</td>
-                                <td className="border border-black p-1 text-right">{item.unitRate.toFixed(2)}</td>
-                                <td className="border border-black p-1 text-right">{item.discountPercent > 0 ? `${item.discountPercent}%` : '0.00%'}</td>
-                                <td className="border border-black p-1 text-right font-bold">{item.taxableValue.toFixed(2)}</td>
-                                <td className="border border-black p-1 text-right">{item.cgstRate}%</td>
-                                <td className="border border-black p-1 text-right">{item.sgstRate}%</td>
-                                <td className="border border-black p-1 text-right font-bold">{item.itemTotal.toFixed(2)}</td>
+                                <td className="border border-[#000000] p-1 text-center">{item.hsnSacCode || '-'}</td>
+                                <td className="border border-[#000000] p-1 text-center font-bold">{item.quantity}</td>
+                                <td className="border border-[#000000] p-1 text-center">{item.unit}</td>
+                                <td className="border border-[#000000] p-1 text-right">{item.unitRate.toFixed(2)}</td>
+                                <td className="border border-[#000000] p-1 text-right">{item.discountPercent > 0 ? `${item.discountPercent}%` : '0.00%'}</td>
+                                <td className="border border-[#000000] p-1 text-right font-bold">{item.taxableValue.toFixed(2)}</td>
+                                <td className="border border-[#000000] p-1 text-right">{item.cgstRate}%</td>
+                                <td className="border border-[#000000] p-1 text-right">{item.sgstRate}%</td>
+                                <td className="border border-[#000000] p-1 text-right font-bold">{item.itemTotal.toFixed(2)}</td>
                             </tr>
                         ))}
                     </tbody>
                 </table>
 
                 {/* Totals Section */}
-                <div className="flex border border-black text-[10px] mb-2">
-                    <div className="w-[60%] border-r border-black p-2 flex flex-col justify-between">
+                <div className="flex border border-[#000000] text-[10px] mb-2">
+                    <div className="w-[60%] border-r border-[#000000] p-2 flex flex-col justify-between">
                         <div>
                             <div className="font-bold underline mb-1">Total Purchase Order Amount in Words :</div>
                             <div className="font-bold italic uppercase">{numberToWords(finalGrandTotal)}</div>
@@ -289,7 +290,7 @@ export function PurchaseOrderTemplate({ data }: { data: POData }) {
                             <span>Add SGST (₹)</span>
                             <span>{totalSGST.toFixed(2)}</span>
                         </div>
-                        <div className="flex justify-between border-b border-black p-1">
+                        <div className="flex justify-between border-b border-[#000000] p-1">
                             <span>Round Off (₹)</span>
                             <span>{roundOff.toFixed(2)}</span>
                         </div>
@@ -301,19 +302,30 @@ export function PurchaseOrderTemplate({ data }: { data: POData }) {
                 </div>
 
                 {/* Notes & Signature */}
-                <div className="flex border border-black text-[10px] min-h-[80px]">
-                    <div className="w-[60%] border-r border-black p-2">
+                <div className="flex border border-[#000000] text-[10px] min-h-[80px]">
+                    <div className="w-[60%] border-r border-[#000000] p-2">
                         <div className="font-bold mb-1">Notes :</div>
                         <div className="uppercase">{data.site?.name}</div>
                         {data.creator?.role === "purchase_officer" && <div className="mt-2" style={{ color: '#6b7280', fontSize: '8px' }}>Created by: {data.creator.fullName}</div>}
                     </div>
                     <div className="w-[40%] flex flex-col justify-between p-2 text-center">
                         <div className="font-bold text-[9px]">For, NOTION ELECTRONICS PVT LTD</div>
-                        <div className="h-10">
-                            {/* Signature Space */}
-                            {data.approver && <div className="font-script text-lg">{data.approver.fullName}</div>}
+                        <div className="h-12 flex flex-col items-center justify-center">
+                            {/* Signature Image or Text */}
+                            {data.approver?.signatureUrl ? (
+                                <img
+                                    src={data.approver.signatureUrl}
+                                    alt="Signature"
+                                    className="max-h-10 max-w-[120px] object-contain"
+                                />
+                            ) : data.approver ? (
+                                <div className="font-script text-lg">{data.approver.fullName}</div>
+                            ) : null}
+                            {data.approver && (
+                                <div className="text-[8px] text-[#4b5563]">{data.approver.fullName}</div>
+                            )}
                         </div>
-                        <div className="font-bold border-t border-black pt-1">Authorised Signatory</div>
+                        <div className="font-bold border-t border-[#000000] pt-1">Authorised Signatory</div>
                     </div>
                 </div>
 
@@ -324,15 +336,15 @@ export function PurchaseOrderTemplate({ data }: { data: POData }) {
 
                 {/* Tax Breakdown Table (Bottom Left - Extra) */}
                 <div className="mt-4 w-[60%]">
-                    <table className="w-full border-collapse border border-black text-[8px]">
+                    <table className="w-full border-collapse border border-[#000000] text-[8px]">
                         <thead>
                             <tr style={{ backgroundColor: '#f3f4f6' }}>
-                                <th className="border border-black p-1">HSN/SAC Code</th>
-                                <th className="border border-black p-1">Taxable (₹)</th>
-                                <th className="border border-black p-1">CGST %</th>
-                                <th className="border border-black p-1">CGST (₹)</th>
-                                <th className="border border-black p-1">SGST %</th>
-                                <th className="border border-black p-1">SGST (₹)</th>
+                                <th className="border border-[#000000] p-1">HSN/SAC Code</th>
+                                <th className="border border-[#000000] p-1">Taxable (₹)</th>
+                                <th className="border border-[#000000] p-1">CGST %</th>
+                                <th className="border border-[#000000] p-1">CGST (₹)</th>
+                                <th className="border border-[#000000] p-1">SGST %</th>
+                                <th className="border border-[#000000] p-1">SGST (₹)</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -340,12 +352,12 @@ export function PurchaseOrderTemplate({ data }: { data: POData }) {
                                 const [hsn, _] = key.split('-');
                                 return (
                                     <tr key={key}>
-                                        <td className="border border-black p-1 text-center">{hsn}</td>
-                                        <td className="border border-black p-1 text-right">{val.taxable.toFixed(2)}</td>
-                                        <td className="border border-black p-1 text-center">{val.cgstRate}%</td>
-                                        <td className="border border-black p-1 text-right">{val.cgst.toFixed(2)}</td>
-                                        <td className="border border-black p-1 text-center">{val.sgstRate}%</td>
-                                        <td className="border border-black p-1 text-right">{val.sgst.toFixed(2)}</td>
+                                        <td className="border border-[#000000] p-1 text-center">{hsn}</td>
+                                        <td className="border border-[#000000] p-1 text-right">{val.taxable.toFixed(2)}</td>
+                                        <td className="border border-[#000000] p-1 text-center">{val.cgstRate}%</td>
+                                        <td className="border border-[#000000] p-1 text-right">{val.cgst.toFixed(2)}</td>
+                                        <td className="border border-[#000000] p-1 text-center">{val.sgstRate}%</td>
+                                        <td className="border border-[#000000] p-1 text-right">{val.sgst.toFixed(2)}</td>
                                     </tr>
                                 );
                             })}

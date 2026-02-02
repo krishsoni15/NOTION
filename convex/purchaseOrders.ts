@@ -180,7 +180,10 @@ export const getPurchaseOrderDetails = query({
             vendor,
             site,
             creator,
-            approver,
+            approver: approver ? {
+                fullName: approver.fullName,
+                signatureUrl: approver.signatureUrl || undefined,
+            } : null,
             items: pos.map(po => ({
                 _id: po._id,
                 itemDescription: po.itemDescription,
@@ -202,6 +205,67 @@ export const getPurchaseOrderDetails = query({
         };
     },
 });
+
+/**
+ * Get PO details for public/vendor viewing (NO AUTH REQUIRED)
+ * Only returns approved/ordered POs - not pending ones
+ */
+export const getPublicPODetails = query({
+    args: { poNumber: v.string() },
+    handler: async (ctx, args) => {
+        const pos = await ctx.db
+            .query("purchaseOrders")
+            .withIndex("by_po_number", (q) => q.eq("poNumber", args.poNumber))
+            .collect();
+
+        if (pos.length === 0) {
+            return null;
+        }
+
+        const firstPO = pos[0];
+
+        // Only show ordered/delivered POs to public (not pending or cancelled)
+        if (firstPO.status !== "ordered" && firstPO.status !== "delivered" && firstPO.status !== "sign_pending") {
+            return null;
+        }
+
+        const vendor = await ctx.db.get(firstPO.vendorId);
+        const site = firstPO.deliverySiteId ? await ctx.db.get(firstPO.deliverySiteId) : null;
+
+        return {
+            poNumber: firstPO.poNumber,
+            createdAt: firstPO.createdAt,
+            validTill: firstPO.validTill,
+            status: firstPO.status,
+            vendor: vendor ? {
+                companyName: vendor.companyName,
+                contactName: vendor.contactName,
+                phone: vendor.phone,
+                email: vendor.email,
+                address: vendor.address,
+                gstNumber: vendor.gstNumber,
+            } : null,
+            site: site ? {
+                name: site.name,
+                address: site.address,
+            } : null,
+            items: pos.map(po => ({
+                _id: po._id,
+                itemDescription: po.itemDescription,
+                quantity: po.quantity,
+                unit: po.unit,
+                hsnSacCode: po.hsnSacCode,
+                unitRate: po.unitRate,
+                amount: po.totalAmount,
+                discountPercent: po.discountPercent || 0,
+                gstTaxRate: po.gstTaxRate,
+                perUnitBasis: po.perUnitBasis,
+                perUnitBasisUnit: po.perUnitBasisUnit
+            }))
+        };
+    },
+});
+
 
 /**
  * Get PO by ID
@@ -304,18 +368,32 @@ export const getPOsForRequestNumber = query({
             allPos.push(...pos);
         }
 
-        // 3. Enrich with Vendor details
-        const enrichedPOs = await Promise.all(
-            allPos.map(async (po) => {
-                const vendor = await ctx.db.get(po.vendorId);
-                return {
-                    ...po,
-                    vendor,
-                };
-            })
-        );
+        // 3. Group by PO Number
+        const poMap = new Map();
 
-        return enrichedPOs;
+        for (const po of allPos) {
+            if (!poMap.has(po.poNumber)) {
+                const vendor = await ctx.db.get(po.vendorId);
+                const deliverySite = po.deliverySiteId ? await ctx.db.get(po.deliverySiteId) : null;
+
+                poMap.set(po.poNumber, {
+                    _id: po._id, // Use ID of first item as representative ID
+                    poNumber: po.poNumber,
+                    _creationTime: po._creationTime,
+                    vendor,
+                    deliverySite,
+                    status: po.status,
+                    totalAmount: 0,
+                    items: []
+                });
+            }
+
+            const poGroup = poMap.get(po.poNumber);
+            poGroup.items.push(po);
+            poGroup.totalAmount += po.totalAmount;
+        }
+
+        return Array.from(poMap.values());
     },
 });
 

@@ -597,3 +597,125 @@ export const internalDeleteUserByClerkId = internalMutation({
 });
 
 
+// ============================================================================
+// Signature Management (Manager Only)
+// ============================================================================
+
+/**
+ * Generate upload URL for signature image
+ */
+export const generateSignatureUploadUrl = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new Error("Not authenticated");
+    }
+
+    // Get current user
+    const currentUser = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_user_id", (q) => q.eq("clerkUserId", identity.subject))
+      .unique();
+
+    if (!currentUser) {
+      throw new Error("User not found");
+    }
+
+    // Only managers can upload signatures
+    if (currentUser.role !== "manager") {
+      throw new Error("Unauthorized: Only managers can upload signatures");
+    }
+
+    return await ctx.storage.generateUploadUrl();
+  },
+});
+
+/**
+ * Save signature after upload
+ */
+export const updateSignature = mutation({
+  args: {
+    storageId: v.id("_storage"),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new Error("Not authenticated");
+    }
+
+    // Get current user
+    const currentUser = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_user_id", (q) => q.eq("clerkUserId", identity.subject))
+      .unique();
+
+    if (!currentUser) {
+      throw new Error("User not found");
+    }
+
+    // Only managers can update signatures
+    if (currentUser.role !== "manager") {
+      throw new Error("Unauthorized: Only managers can update signatures");
+    }
+
+    // Delete old signature if exists
+    if (currentUser.signatureStorageId) {
+      await ctx.storage.delete(currentUser.signatureStorageId);
+    }
+
+    // Get the URL for the uploaded file
+    const signatureUrl = await ctx.storage.getUrl(args.storageId);
+
+    // Update user with new signature
+    await ctx.db.patch(currentUser._id, {
+      signatureUrl: signatureUrl || undefined,
+      signatureStorageId: args.storageId,
+      updatedAt: Date.now(),
+    });
+
+    return { success: true, signatureUrl };
+  },
+});
+
+/**
+ * Delete signature
+ */
+export const deleteSignature = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      throw new Error("Not authenticated");
+    }
+
+    // Get current user
+    const currentUser = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_user_id", (q) => q.eq("clerkUserId", identity.subject))
+      .unique();
+
+    if (!currentUser) {
+      throw new Error("User not found");
+    }
+
+    // Only managers can delete signatures
+    if (currentUser.role !== "manager") {
+      throw new Error("Unauthorized: Only managers can delete signatures");
+    }
+
+    // Delete from storage
+    if (currentUser.signatureStorageId) {
+      await ctx.storage.delete(currentUser.signatureStorageId);
+    }
+
+    // Remove from user
+    await ctx.db.patch(currentUser._id, {
+      signatureUrl: undefined,
+      signatureStorageId: undefined,
+      updatedAt: Date.now(),
+    });
+
+    return { success: true };
+  },
+});

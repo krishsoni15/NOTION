@@ -2172,33 +2172,22 @@ export function RequestDetailsDialog({
                       <div className="block">
                         {/* Card View - Grouped POs first */}
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 mb-4">
-                          {pendingPOs && Object.values(pendingPOs.filter(p => p.status === "sign_pending").reduce((acc, po) => {
-                            if (!po.vendor) return acc;
-                            const vendorId = po.vendor._id;
-                            if (!acc[vendorId]) {
-                              acc[vendorId] = {
-                                vendor: po.vendor,
-                                items: []
-                              };
-                            }
-                            acc[vendorId].items.push(po);
-                            return acc;
-                          }, {} as Record<string, { vendor: any, items: any[] }>)).map((group: any) => (
-                            <div key={`card-group-${group.vendor._id}`} className="flex flex-col border rounded-xl bg-card overflow-hidden shadow-sm hover:shadow-md transition-shadow ring-1 ring-amber-500/20">
+                          {pendingPOs && pendingPOs.filter((p: any) => p.status === "sign_pending").map((group: any) => (
+                            <div key={`card-group-${group.poNumber}`} className="flex flex-col border rounded-xl bg-card overflow-hidden shadow-sm hover:shadow-md transition-shadow ring-1 ring-amber-500/20">
                               <div className="p-4 bg-amber-50 dark:bg-amber-950/20 border-b flex items-center gap-3">
                                 <div className="h-10 w-10 rounded-full bg-white dark:bg-amber-900/40 flex items-center justify-center shadow-sm text-amber-600">
                                   <Building2 className="h-5 w-5" />
                                 </div>
                                 <div className="flex-1 min-w-0">
-                                  <h3 className="font-bold text-foreground truncate">{group.vendor.companyName}</h3>
+                                  <h3 className="font-bold text-foreground truncate">{group.vendor?.companyName || "Unknown Vendor"}</h3>
                                   <div className="text-xs text-muted-foreground flex items-center gap-2">
                                     <span className="flex items-center gap-1"><Pencil className="h-3 w-3" /> Sign Pending</span>
                                     <span>•</span>
-                                    <span className="font-mono">PO: {group.items[0].poNumber}</span>
+                                    <span className="font-mono">PO: {group.poNumber}</span>
                                   </div>
                                 </div>
                                 <div className="text-right">
-                                  <div className="text-sm font-bold">₹{group.items.reduce((sum: number, i: any) => sum + i.totalAmount, 0).toLocaleString()}</div>
+                                  <div className="text-sm font-bold">₹{group.totalAmount.toLocaleString()}</div>
                                 </div>
                               </div>
                               <div className="p-3 bg-muted/10 space-y-2">
@@ -2208,7 +2197,7 @@ export function RequestDetailsDialog({
                                       #{allRequests?.find(r => r._id === po.requestId)?.itemOrder ?? "?"}
                                     </span>
                                     <Badge variant="secondary" className="h-5 text-[10px] px-1">{po.quantity} {po.unit}</Badge>
-                                    <span className="truncate flex-1">{po.itemDescription.split('\n')[0]}</span>
+                                    <span className="truncate flex-1">{po.itemDescription?.split('\n')[0]}</span>
                                   </div>
                                 ))}
                               </div>
@@ -2218,7 +2207,17 @@ export function RequestDetailsDialog({
                                   className="flex-1 bg-amber-600 hover:bg-amber-700 text-white"
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    const poIds = group.items.map((i: any) => i._id);
+                                    const poIds = group.items.map((i: any) => i._id); // Assuming we approve all items in PO? No, approveDirectPOById takes poId.
+                                    // Actually approveDirectPOById takes poId (purchaseOrder ID).
+                                    // The `group` is NOT a purchaseOrder row. It's a constructed object.
+                                    // But `group.items` contains the purchaseOrder rows.
+                                    // Wait, approveDirectPOById takes `poId`.
+                                    // If we are signing the whole PO, we just need to approve the items? 
+                                    // Or does the backend handle it?
+                                    // approveDirectPO (mutation) takes `poId`.
+                                    // Since multiple items share `poNumber` but have different `_id` (purchaseOrders table row ID), 
+                                    // we need to approve EACH ROW.
+                                    // So passing all IDs is correct.
                                     setShowSignPendingApproveConfirm({ type: 'po_batch', ids: poIds } as any);
                                   }}
                                 >
@@ -2228,7 +2227,7 @@ export function RequestDetailsDialog({
                                   variant="outline"
                                   size="sm"
                                   className="px-2"
-                                  onClick={() => setPdfPreviewPoNumber(group.items[0].poNumber)}
+                                  onClick={() => setPdfPreviewPoNumber(group.poNumber)}
                                 >
                                   <FileText className="h-4 w-4" />
                                 </Button>
@@ -2262,8 +2261,12 @@ export function RequestDetailsDialog({
                               const itemPhotos = getItemPhotos(item);
 
                               // Check if item is part of a pending PO group
-                              const itemPO = pendingPOs?.find(p => p.requestId === item._id && p.status === "sign_pending");
-                              if (itemPO && itemPO.vendor) return null; // Rendered in group card
+                              // pendingPOs is now array of groups.
+                              const itemPOGroup = pendingPOs?.find((group: any) =>
+                                group.status === "sign_pending" &&
+                                group.items.some((i: any) => i.requestId === item._id)
+                              );
+                              if (itemPOGroup) return null; // Rendered in group card
 
                               return (
                                 <div

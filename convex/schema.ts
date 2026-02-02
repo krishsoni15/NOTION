@@ -26,6 +26,8 @@ export default defineSchema({
     isActive: v.boolean(),
     profileImage: v.optional(v.string()), // Profile image URL
     profileImageKey: v.optional(v.string()), // Profile image storage key
+    signatureUrl: v.optional(v.string()), // Manager signature image URL
+    signatureStorageId: v.optional(v.id("_storage")), // Signature storage ID
     createdBy: v.optional(v.id("users")), // Manager who created this user (null for first manager)
     createdAt: v.number(),
     updatedAt: v.number(),

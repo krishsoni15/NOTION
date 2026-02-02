@@ -177,7 +177,7 @@ interface Request {
   notes?: string;
   createdAt: number;
   updatedAt: number;
-  directAction?: "po" | "delivery" | "all"; // Flag for direct action
+  directAction?: "po" | "delivery" | "all" | "split_po" | "split_delivery" | "split_po_delivery"; // Flag for direct action
   site?: {
     _id: Id<"sites">;
     name: string;

@@ -7,12 +7,14 @@
  */
 
 import { ROLES } from "@/lib/auth/roles";
-import { WelcomeHeader } from "@/components/dashboard/welcome-header";
+
+import { ManagerDashboardView } from "@/components/dashboard/manager-dashboard-view";
 
 export default function ManagerDashboardClient() {
   return (
     <div className="space-y-6">
-      <WelcomeHeader role={ROLES.MANAGER} />
+
+      <ManagerDashboardView />
     </div>
   );
 }

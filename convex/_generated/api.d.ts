@@ -12,6 +12,7 @@ import type * as auth from "../auth.js";
 import type * as chat from "../chat.js";
 import type * as costComparisons from "../costComparisons.js";
 import type * as cron from "../cron.js";
+import type * as dashboard from "../dashboard.js";
 import type * as deliveries from "../deliveries.js";
 import type * as http from "../http.js";
 import type * as inventory from "../inventory.js";
@@ -36,6 +37,7 @@ declare const fullApi: ApiFromModules<{
   chat: typeof chat;
   costComparisons: typeof costComparisons;
   cron: typeof cron;
+  dashboard: typeof dashboard;
   deliveries: typeof deliveries;
   http: typeof http;
   inventory: typeof inventory;

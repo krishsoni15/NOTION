@@ -1832,7 +1832,7 @@ export function RequestDetailsDialog({
                                               <Badge variant="outline" className="h-5 px-1.5 text-[10px] bg-muted/50">
                                                 {po.quantity} {po.unit}
                                               </Badge>
-                                              <span className="font-medium truncate max-w-[200px]" title={po.itemDescription}>{po.itemDescription.split('\n')[0]}</span>
+                                              <span className="font-medium truncate max-w-[200px]" title={po.itemDescription}>{po.itemDescription?.split('\n')[0] || "Item"}</span>
                                             </div>
                                             <div className="font-semibold font-mono text-xs">
                                               ₹{po.totalAmount.toLocaleString()}
@@ -3443,7 +3443,7 @@ export function RequestDetailsDialog({
                                     <div className="flex gap-2 items-start overflow-hidden">
                                       <span className="text-[10px] font-black font-mono bg-primary/10 text-primary px-1.5 py-0.5 rounded border border-primary/20 shadow-sm h-fit mt-0.5">#{itemOrder}</span>
                                       <div className="flex flex-col min-w-0">
-                                        <span className="font-medium truncate leading-tight" title={po.itemDescription}>{po.itemDescription.split('\n')[0]}</span>
+                                        <span className="font-medium truncate leading-tight" title={po.itemDescription}>{po.itemDescription?.split('\n')[0] || "Item"}</span>
                                         <span className="text-[10px] text-muted-foreground">{po.quantity} {po.unit}</span>
                                       </div>
                                     </div>

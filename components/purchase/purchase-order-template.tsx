@@ -252,7 +252,7 @@ export function PurchaseOrderTemplate({ data }: { data: POData }) {
                             <tr key={item._id}>
                                 <td className="border border-[#000000] p-1 text-center font-bold">{idx + 1}</td>
                                 <td className="border border-[#000000] p-1">
-                                    <div className="font-bold uppercase">{item.itemDescription.split('\n')[0]}</div>
+                                    <div className="font-bold uppercase">{item.itemDescription?.split('\n')[0] || "Item"}</div>
                                     <div className="text-[9px] whitespace-pre-line" style={{ color: '#4b5563' }}>{item.itemDescription}</div>
                                 </td>
                                 <td className="border border-[#000000] p-1 text-center">{item.hsnSacCode || '-'}</td>

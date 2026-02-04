@@ -42,9 +42,11 @@ interface InventoryCardProps {
     onDelete: (item: Doc<"inventory">) => void;
     onManageImages: (item: Doc<"inventory">) => void;
     onImageClick: (item: Doc<"inventory">, index: number) => void;
+    onViewDetails: (item: Doc<"inventory">) => void;
     canPerformCRUD: boolean;
     canAddImages: boolean;
 }
+
 
 export function InventoryCard({
     item,
@@ -52,6 +54,7 @@ export function InventoryCard({
     onDelete,
     onManageImages,
     onImageClick,
+    onViewDetails,
     canPerformCRUD,
     canAddImages,
 }: InventoryCardProps) {
@@ -184,10 +187,9 @@ export function InventoryCard({
                 <div className="space-y-1.5">
                     <div className="flex items-start justify-between gap-2">
                         <h3
-                            className="font-bold text-lg leading-snug text-foreground transition-colors hover:text-primary cursor-pointer line-clamp-1"
-                            // Keeping title for tooltip, removing onClick since we have image click for preview, or maybe allow onClick to view too? 
-                            // User specifically asked for "click on image to view".
+                            className="font-bold text-lg leading-snug text-foreground transition-colors hover:text-primary cursor-pointer line-clamp-1 hover:underline underline-offset-4 decoration-primary/30"
                             title={item.itemName}
+                            onClick={() => onViewDetails(item)}
                         >
                             {item.itemName}
                         </h3>

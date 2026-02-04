@@ -95,7 +95,9 @@ export default function MapPicker({ initialLocation, onLocationSelect, className
 
     // Generate a unique key for the map container to prevent reuse errors
     // This forces a complete remount of the map when the component remounts
-    const [mapId] = useState(() => Math.random().toString(36).substr(2, 9));
+    // Generate a unique key based on initial location to force full re-render on change
+    // Also use a random ID to prevent "Map container is being reused" on fast toggles
+    const [mapId] = useState(() => `map-${Date.now()}-${Math.random()}`);
 
     return (
         <div className={className}>

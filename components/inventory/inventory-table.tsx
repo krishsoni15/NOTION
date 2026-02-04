@@ -491,6 +491,7 @@ export function InventoryTable({ items, viewMode = "table", onRefresh }: Invento
                 onDelete={handleDeleteTrigger}
                 onManageImages={handleManageImages}
                 onImageClick={handleImageClick}
+                onViewDetails={(item) => setSelectedItemName(item.itemName)}
                 canPerformCRUD={canPerformCRUD}
                 canAddImages={canAddImages}
               />

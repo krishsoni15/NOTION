@@ -39,12 +39,18 @@ export async function POST(request: NextRequest) {
         // Generate unique public ID (using existing helper but for generic files)
         const publicId = generateImageKey(`chat-file-${userId}`, file.name);
 
+        // Determine resource type: 'image' for images, 'raw' for everything else (PDFs, docs)
+        // This ensures PDFs are stored as downloadable files, not converted to images
+        const isImage = file.type.startsWith("image/");
+        const resourceType = isImage ? "image" : "raw";
+
         // Upload to Cloudinary
         try {
             const { url, key } = await uploadImage(buffer, publicId, {
                 folder: 'notion-chat-files',
-                quality: 'auto',
-                resourceType: 'auto' // Use auto to detect PDF/raw files
+                resourceType: resourceType,
+                // @ts-ignore - access_mode is now supported via spread, ignoring strict typing for now
+                access_mode: 'public'
             });
 
             if (!url || !key) {

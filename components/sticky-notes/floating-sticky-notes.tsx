@@ -53,15 +53,15 @@ export function FloatingStickyNotes({
   const currentUser = useQuery(api.users.getCurrentUser);
   const userRole = useUserRole();
   const isManager = userRole === ROLES.MANAGER;
-  
+
   // Only show notes that have been dragged out (have position set and not removed)
   const floatingNotes = allNotes?.filter(note => {
     if (note.isCompleted) return false;
     const noteAny = note as any;
-    return noteAny.positionX !== undefined && 
-           noteAny.positionY !== undefined &&
-           noteAny.positionX >= 0 && 
-           noteAny.positionY >= 0;
+    return noteAny.positionX !== undefined &&
+      noteAny.positionY !== undefined &&
+      noteAny.positionX >= 0 &&
+      noteAny.positionY >= 0;
   }) || [];
   const updateNote = useUpdateStickyNote();
   const completeNote = useCompleteStickyNote();
@@ -163,13 +163,17 @@ export function FloatingStickyNotes({
         const noteAny = note as any;
         let x = noteAny.positionX ?? 100;
         let y = noteAny.positionY ?? 100;
-        
-        // Ensure notes stay within window bounds
-        x = Math.max(0, Math.min(x, window.innerWidth - DEFAULT_WIDTH));
-        y = Math.max(0, Math.min(y, window.innerHeight - DEFAULT_HEIGHT));
-        
+
         const width = noteAny.width ?? DEFAULT_WIDTH;
         const height = noteAny.height ?? DEFAULT_HEIGHT;
+
+        // Ensure notes stay within window bounds with safety margin
+        // We use innerWidth/Height - (width/height) to ensure the whole note stays visible
+        const maxX = typeof window !== 'undefined' ? window.innerWidth - width - 20 : 1000;
+        const maxY = typeof window !== 'undefined' ? window.innerHeight - height - 20 : 1000;
+
+        x = Math.max(20, Math.min(x, maxX));
+        y = Math.max(20, Math.min(y, maxY));
 
         // Generate a subtle rotation based on note ID for realistic sticky note effect
         const rotation = (note._id.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0) % 7) - 3; // -3 to +3 degrees
@@ -188,7 +192,18 @@ export function FloatingStickyNotes({
             }}
             onDragStop={(e, d) => {
               document.body.style.cursor = '';
-              handlePositionChange(note._id, d.x, d.y);
+              const target = e.target as HTMLElement; // Cast or optional chain
+              // Clamp coordinates before saving to avoid "stuck" notes off-screen
+              // Safely access width/height, fallback to defaults
+              const currentWidth = target?.style?.width ? parseInt(target.style.width) : DEFAULT_WIDTH;
+              const currentHeight = target?.style?.height ? parseInt(target.style.height) : DEFAULT_HEIGHT;
+
+              const maxX = window.innerWidth - (currentWidth || DEFAULT_WIDTH) - 20;
+              const maxY = window.innerHeight - (currentHeight || DEFAULT_HEIGHT) - 20;
+
+              const clampedX = Math.max(20, Math.min(d.x, maxX));
+              const clampedY = Math.max(20, Math.min(d.y, maxY));
+              handlePositionChange(note._id, clampedX, clampedY);
             }}
             onResizeStop={(e, direction, ref, delta, position) => {
               handleResize(
@@ -231,7 +246,7 @@ export function FloatingStickyNotes({
               >
                 <X className="h-4 w-4 transition-transform duration-200 hover:rotate-90" />
               </Button>
-              
+
               <StickyNoteCard
                 note={note}
                 onComplete={handleComplete}
@@ -263,7 +278,7 @@ export function FloatingStickyNotes({
             <AlertDialogDescription>
               {deleteNoteId && (() => {
                 const noteToDelete = allNotes?.find(n => n._id === deleteNoteId);
-                return noteToDelete 
+                return noteToDelete
                   ? `Are you sure you want to delete "${noteToDelete.title}"? This action cannot be undone.`
                   : "Are you sure you want to delete this note? This action cannot be undone.";
               })()}

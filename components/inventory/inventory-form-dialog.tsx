@@ -331,6 +331,16 @@ export function InventoryFormDialog({
         setIsLoading(false);
         return;
       }
+      if (!formData.hsnSacCode.trim()) {
+        setError("HSN / SAC Code is required");
+        setIsLoading(false);
+        return;
+      }
+      if (!formData.unit.trim()) {
+        setError("Unit is required");
+        setIsLoading(false);
+        return;
+      }
     }
 
     try {
@@ -482,7 +492,7 @@ export function InventoryFormDialog({
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="hsnSacCode">HSN / SAC Code</Label>
+                  <Label htmlFor="hsnSacCode">HSN / SAC Code *</Label>
                   <Input
                     id="hsnSacCode"
                     placeholder="Enter HSN/SAC code"
@@ -491,6 +501,7 @@ export function InventoryFormDialog({
                       setFormData({ ...formData, hsnSacCode: e.target.value })
                     }
                     disabled={isLoading || !canEdit}
+                    required
                   />
                 </div>
               </div>

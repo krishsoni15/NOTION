@@ -59,13 +59,14 @@ const colorClasses = {
 };
 
 // Enhanced color classes for floating notes - more realistic sticky note appearance
+// Enhanced color classes for floating notes - premium glassmorphism look
 const floatingColorClasses = {
-  yellow: "bg-[#FFFC9B] dark:bg-[#FFFC9B]/90 border-2 border-yellow-400/60 text-yellow-950 shadow-[0_4px_8px_rgba(0,0,0,0.15),0_2px_4px_rgba(0,0,0,0.1)] hover:shadow-[0_6px_12px_rgba(0,0,0,0.2),0_3px_6px_rgba(0,0,0,0.15)]",
-  pink: "bg-[#FFB3D9] dark:bg-[#FFB3D9]/90 border-2 border-pink-400/60 text-pink-950 shadow-[0_4px_8px_rgba(0,0,0,0.15),0_2px_4px_rgba(0,0,0,0.1)] hover:shadow-[0_6px_12px_rgba(0,0,0,0.2),0_3px_6px_rgba(0,0,0,0.15)]",
-  blue: "bg-[#B3D9FF] dark:bg-[#B3D9FF]/90 border-2 border-blue-400/60 text-blue-950 shadow-[0_4px_8px_rgba(0,0,0,0.15),0_2px_4px_rgba(0,0,0,0.1)] hover:shadow-[0_6px_12px_rgba(0,0,0,0.2),0_3px_6px_rgba(0,0,0,0.15)]",
-  green: "bg-[#B3FFB3] dark:bg-[#B3FFB3]/90 border-2 border-green-400/60 text-green-950 shadow-[0_4px_8px_rgba(0,0,0,0.15),0_2px_4px_rgba(0,0,0,0.1)] hover:shadow-[0_6px_12px_rgba(0,0,0,0.2),0_3px_6px_rgba(0,0,0,0.15)]",
-  purple: "bg-[#D9B3FF] dark:bg-[#D9B3FF]/90 border-2 border-purple-400/60 text-purple-950 shadow-[0_4px_8px_rgba(0,0,0,0.15),0_2px_4px_rgba(0,0,0,0.1)] hover:shadow-[0_6px_12px_rgba(0,0,0,0.2),0_3px_6px_rgba(0,0,0,0.15)]",
-  orange: "bg-[#FFD9B3] dark:bg-[#FFD9B3]/90 border-2 border-orange-400/60 text-orange-950 shadow-[0_4px_8px_rgba(0,0,0,0.15),0_2px_4px_rgba(0,0,0,0.1)] hover:shadow-[0_6px_12px_rgba(0,0,0,0.2),0_3px_6px_rgba(0,0,0,0.15)]",
+  yellow: "bg-[#FFFC9B]/90 dark:bg-yellow-950/80 backdrop-blur-md border border-yellow-400/50 dark:border-yellow-700/50 text-yellow-950 dark:text-yellow-100 shadow-[0_8px_32px_rgba(0,0,0,0.12)] hover:shadow-[0_12px_40px_rgba(0,0,0,0.2)] dark:shadow-none",
+  pink: "bg-[#FFB3D9]/90 dark:bg-pink-950/80 backdrop-blur-md border border-pink-400/50 dark:border-pink-700/50 text-pink-950 dark:text-pink-100 shadow-[0_8px_32px_rgba(0,0,0,0.12)] hover:shadow-[0_12px_40px_rgba(0,0,0,0.2)] dark:shadow-none",
+  blue: "bg-[#B3D9FF]/90 dark:bg-blue-950/80 backdrop-blur-md border border-blue-400/50 dark:border-blue-700/50 text-blue-950 dark:text-blue-100 shadow-[0_8px_32px_rgba(0,0,0,0.12)] hover:shadow-[0_12px_40px_rgba(0,0,0,0.2)] dark:shadow-none",
+  green: "bg-[#B3FFB3]/90 dark:bg-green-950/80 backdrop-blur-md border border-green-400/50 dark:border-green-700/50 text-green-950 dark:text-green-100 shadow-[0_8px_32px_rgba(0,0,0,0.12)] hover:shadow-[0_12px_40px_rgba(0,0,0,0.2)] dark:shadow-none",
+  purple: "bg-[#D9B3FF]/90 dark:bg-purple-950/80 backdrop-blur-md border border-purple-400/50 dark:border-purple-700/50 text-purple-950 dark:text-purple-100 shadow-[0_8px_32px_rgba(0,0,0,0.12)] hover:shadow-[0_12px_40px_rgba(0,0,0,0.2)] dark:shadow-none",
+  orange: "bg-[#FFD9B3]/90 dark:bg-orange-950/80 backdrop-blur-md border border-orange-400/50 dark:border-orange-700/50 text-orange-950 dark:text-orange-100 shadow-[0_8px_32px_rgba(0,0,0,0.12)] hover:shadow-[0_12px_40px_rgba(0,0,0,0.2)] dark:shadow-none",
 };
 
 export function StickyNoteCard({
@@ -91,14 +92,14 @@ export function StickyNoteCard({
 
   // Check if current user is the assignee (note is assigned to them)
   const isAssignee = currentUserId && note.assignee?._id === currentUserId;
-  
+
   // Only the assigned manager can edit and delete sticky notes
   const canEdit = isAssignee; // Only assignee can edit
   const canDelete = isAssignee; // Only assignee can delete
-  
+
   // Check if note has been edited (updatedAt is different from createdAt)
   const isEdited = note.updatedAt && note.createdAt && note.updatedAt > note.createdAt + 1000; // 1 second buffer for timing differences
-  
+
   // Generate a consistent rotation based on note ID
   const rotation = useMemo(() => {
     const hash = note._id.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
@@ -128,23 +129,23 @@ export function StickyNoteCard({
   const handleMouseDown = (e: React.MouseEvent) => {
     // Disable dragging if disableDrag is true
     if (disableDrag) return;
-    
+
     // Only start drag if clicking on the drag handle or card header area
     const target = e.target as HTMLElement;
     if (target.closest('button') || target.closest('a') || target.closest('input') || target.closest('textarea')) {
       return; // Don't drag if clicking buttons or inputs
     }
-    
+
     // Only allow dragging from the top area of the card
     const card = cardRef.current;
     if (!card) return;
-    
+
     const cardRect = card.getBoundingClientRect();
     const clickY = e.clientY - cardRect.top;
-    
+
     // Only allow dragging if clicking in the top 60px (header area)
     if (clickY > 60) return;
-    
+
     e.preventDefault();
     setIsDragging(true);
     setDragStart({
@@ -155,7 +156,7 @@ export function StickyNoteCard({
 
   const handleMouseMove = (e: MouseEvent) => {
     if (!isDragging || !cardRef.current) return;
-    
+
     const container = cardRef.current.closest('.sticky-notes-container');
     if (!container) {
       // Fallback to document if container not found
@@ -164,18 +165,18 @@ export function StickyNoteCard({
       setPosition({ x: newX, y: newY });
       return;
     }
-    
+
     const containerRect = container.getBoundingClientRect();
     const cardWidth = cardRef.current.offsetWidth || 300;
     const cardHeight = cardRef.current.offsetHeight || 200;
-    
+
     const newX = e.clientX - containerRect.left - dragStart.x;
     const newY = e.clientY - containerRect.top - dragStart.y;
-    
+
     // Constrain to container bounds
     const maxX = Math.max(0, containerRect.width - cardWidth);
     const maxY = Math.max(0, containerRect.height - cardHeight);
-    
+
     setPosition({
       x: Math.max(0, Math.min(newX, maxX)),
       y: Math.max(0, Math.min(newY, maxY)),
@@ -184,10 +185,10 @@ export function StickyNoteCard({
 
   useEffect(() => {
     if (!isDragging) return;
-    
+
     const moveHandler = (e: MouseEvent) => {
       if (!cardRef.current) return;
-      
+
       const container = cardRef.current.closest('.sticky-notes-container');
       if (!container) {
         const newX = e.clientX - dragStart.x;
@@ -195,32 +196,32 @@ export function StickyNoteCard({
         setPosition({ x: newX, y: newY });
         return;
       }
-      
+
       const containerRect = container.getBoundingClientRect();
       const cardWidth = cardRef.current.offsetWidth || 300;
       const cardHeight = cardRef.current.offsetHeight || 200;
-      
+
       const newX = e.clientX - containerRect.left - dragStart.x;
       const newY = e.clientY - containerRect.top - dragStart.y;
-      
+
       const maxX = Math.max(0, containerRect.width - cardWidth);
       const maxY = Math.max(0, containerRect.height - cardHeight);
-      
+
       setPosition({
         x: Math.max(0, Math.min(newX, maxX)),
         y: Math.max(0, Math.min(newY, maxY)),
       });
     };
-    
+
     const upHandler = () => {
       setIsDragging(false);
     };
-    
+
     document.addEventListener('mousemove', moveHandler);
     document.addEventListener('mouseup', upHandler);
     document.body.style.userSelect = 'none';
     document.body.style.cursor = 'grabbing';
-    
+
     return () => {
       document.removeEventListener('mousemove', moveHandler);
       document.removeEventListener('mouseup', upHandler);
@@ -250,10 +251,10 @@ export function StickyNoteCard({
         isDragging && isFloating && "!bg-inherit"
       )}
       style={{
-        transform: disableDrag 
+        transform: disableDrag
           ? 'none'
-          : position.x !== 0 || position.y !== 0 
-            ? `translate(${position.x}px, ${position.y}px) rotate(${rotation}deg)` 
+          : position.x !== 0 || position.y !== 0
+            ? `translate(${position.x}px, ${position.y}px) rotate(${rotation}deg)`
             : `rotate(${rotation}deg)`,
         position: disableDrag || (position.x === 0 && position.y === 0) ? 'relative' : 'absolute',
         left: disableDrag || (position.x === 0 && position.y === 0) ? 'auto' : 0,
@@ -369,7 +370,7 @@ export function StickyNoteCard({
             >
               {/* Shine effect on hover */}
               <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700" />
-              
+
               <div className="relative flex items-center justify-center gap-2">
                 {note.isCompleted ? (
                   <>

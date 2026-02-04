@@ -18,6 +18,11 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -29,7 +34,8 @@ import {
 } from "@/components/ui/select";
 import { ROLES, ROLE_LABELS, Role } from "@/lib/auth/roles";
 
-import { Eye, EyeOff, Loader2, X, Camera } from "lucide-react";
+import { Eye, EyeOff, Loader2, Camera, X } from "lucide-react";
+import { MediaInput } from "@/components/shared/media-input";
 import { SiteSelector } from "./site-selector";
 import { AddressAutocomplete } from "@/components/vendors/address-autocomplete";
 import { toast } from "sonner";
@@ -44,6 +50,8 @@ export function CreateUserDialog({ open, onOpenChange }: CreateUserDialogProps) 
   const createUser = useMutation(api.users.createUser);
   const updateUser = useMutation(api.users.updateUser);
 
+  const generateUploadUrl = useMutation(api.users.generateSignatureUploadUrl);
+
   const [isLoading, setIsLoading] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState("");
@@ -52,6 +60,10 @@ export function CreateUserDialog({ open, onOpenChange }: CreateUserDialogProps) 
   // Image state
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
+  const [isImagePopoverOpen, setIsImagePopoverOpen] = useState(false);
+
+  // Signature state
+  const [selectedSignature, setSelectedSignature] = useState<File | null>(null);
 
   // Form state
   const [formData, setFormData] = useState({
@@ -78,32 +90,34 @@ export function CreateUserDialog({ open, onOpenChange }: CreateUserDialogProps) 
       });
       setShowPassword(false);
       setError("");
+      setError("");
       // Reset image
       setSelectedImage(null);
       setImagePreview(null);
+      // Reset signature
+      setSelectedSignature(null);
     }
     onOpenChange(newOpen);
   };
 
-  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      const file = e.target.files[0];
-      if (!file.type.startsWith("image/")) {
-        toast.error("Please select an image file");
-        return;
-      }
-      setSelectedImage(file);
 
-      // Create preview
+
+  const handleImageChange = (file: File | null) => {
+    setSelectedImage(file);
+    if (file) {
       const reader = new FileReader();
       reader.onload = (e) => {
         setImagePreview(e.target?.result as string);
       };
       reader.readAsDataURL(file);
+    } else {
+      setImagePreview(null);
     }
+    setIsImagePopoverOpen(false);
   };
 
-  const handleRemoveImage = () => {
+  const handleRemoveImage = (e: React.MouseEvent) => {
+    e.stopPropagation();
     setSelectedImage(null);
     setImagePreview(null);
   };
@@ -144,6 +158,35 @@ export function CreateUserDialog({ open, onOpenChange }: CreateUserDialogProps) 
         return;
       }
 
+      // Step 0: Upload Signature if present (Manager only)
+      let signatureStorageId: Id<"_storage"> | undefined;
+      if (formData.role === ROLES.MANAGER && selectedSignature) {
+        setIsUploading(true);
+        try {
+          // Get upload URL
+          const postUrl = await generateUploadUrl();
+
+          // Upload file
+          const result = await fetch(postUrl, {
+            method: "POST",
+            headers: { "Content-Type": selectedSignature.type },
+            body: selectedSignature,
+          });
+
+          if (!result.ok) {
+            throw new Error(`Upload failed: ${result.statusText}`);
+          }
+
+          const { storageId } = await result.json();
+          signatureStorageId = storageId;
+        } catch (uploadError) {
+          console.error("Failed to upload signature:", uploadError);
+          toast.warning("Failed to upload signature, continuing with user creation...");
+        } finally {
+          setIsUploading(false);
+        }
+      }
+
       // Step 1: Create user in Clerk via API
       const clerkResponse = await fetch("/api/admin/create-user", {
         method: "POST",
@@ -175,6 +218,7 @@ export function CreateUserDialog({ open, onOpenChange }: CreateUserDialogProps) 
         address: formData.address,
         role: formData.role as Role,
         assignedSites: assignedSites,
+        signatureStorageId: signatureStorageId,
       });
 
       // Step 3: Upload image if selected
@@ -218,53 +262,60 @@ export function CreateUserDialog({ open, onOpenChange }: CreateUserDialogProps) 
       <DialogContent className="sm:max-w-[550px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Create New User</DialogTitle>
-
+          <DialogDescription>
+            Add a new user to the system.
+          </DialogDescription>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4 py-2">
           {/* Profile Image */}
+          {/* Profile Image */}
+          {/* Profile Image */}
           <div className="flex flex-col items-center gap-4 py-2">
-            <div className="relative group">
-              <div className="h-24 w-24 rounded-full overflow-hidden border-2 border-border relative bg-muted flex items-center justify-center">
-                {imagePreview ? (
-                  <img
-                    src={imagePreview}
-                    alt="Profile"
-                    className="h-full w-full object-cover"
+            <Popover open={isImagePopoverOpen} onOpenChange={setIsImagePopoverOpen}>
+              <PopoverTrigger asChild>
+                <div className="relative group cursor-pointer">
+                  <div className="h-24 w-24 rounded-full overflow-hidden border-2 border-border relative bg-muted flex items-center justify-center transition-all hover:border-primary/50">
+                    {imagePreview ? (
+                      <img
+                        src={imagePreview}
+                        alt="Profile"
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <Camera className="h-8 w-8 text-muted-foreground/50" />
+                    )}
+
+                    {/* Overlay */}
+                    <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity text-white text-xs font-medium">
+                      {imagePreview ? "Change" : "Upload"}
+                    </div>
+                  </div>
+
+                  {imagePreview && (
+                    <button
+                      type="button"
+                      onClick={handleRemoveImage}
+                      className="absolute -top-1 -right-1 bg-destructive text-destructive-foreground rounded-full p-1 shadow-sm hover:bg-destructive/90 transition-colors z-10"
+                      title="Remove photo"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  )}
+                </div>
+              </PopoverTrigger>
+              <PopoverContent className="w-80 p-0" align="center">
+                <div className="p-4">
+                  <h4 className="font-medium mb-2">Update Profile Photo</h4>
+                  <MediaInput
+                    onValueChange={handleImageChange}
+                    type="image"
+                    className="w-full"
+                    initialPreview={null} // Don't show preview inside popover, we show it in circle
                   />
-                ) : (
-                  <Camera className="h-8 w-8 text-muted-foreground/50" />
-                )}
-
-                {/* Overlay for edit */}
-                <label
-                  htmlFor="create-profile-image-upload"
-                  className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer text-white text-xs font-medium"
-                >
-                  {imagePreview ? "Change" : "Upload"}
-                </label>
-              </div>
-
-              {imagePreview && (
-                <button
-                  type="button"
-                  onClick={handleRemoveImage}
-                  className="absolute -top-1 -right-1 bg-destructive text-destructive-foreground rounded-full p-1 shadow-sm hover:bg-destructive/90 transition-colors"
-                  title="Remove photo"
-                >
-                  <X className="h-3 w-3" />
-                </button>
-              )}
-            </div>
-
-            <input
-              id="create-profile-image-upload"
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={handleImageSelect}
-              disabled={isLoading || isUploading}
-            />
+                </div>
+              </PopoverContent>
+            </Popover>
             <p className="text-xs text-muted-foreground">Profile Photo (Optional)</p>
           </div>
 
@@ -381,7 +432,22 @@ export function CreateUserDialog({ open, onOpenChange }: CreateUserDialogProps) 
                 </SelectItem>
               </SelectContent>
             </Select>
+
           </div>
+
+          {/* Signature Upload - Only for Managers */}
+          {formData.role === ROLES.MANAGER && (
+            <div className="space-y-3 pt-1">
+              <MediaInput
+                label="Digital Signature *"
+                onValueChange={setSelectedSignature}
+                type="signature"
+              />
+              <p className="text-[10px] text-muted-foreground">
+                This signature will be applied to approved Purchase Orders.
+              </p>
+            </div>
+          )}
 
           {/* Site Selection - Only for Site Engineers */}
           {formData.role === ROLES.SITE_ENGINEER && (
@@ -427,7 +493,7 @@ export function CreateUserDialog({ open, onOpenChange }: CreateUserDialogProps) 
           </DialogFooter>
         </form>
       </DialogContent>
-    </Dialog>
+    </Dialog >
   );
 }
 

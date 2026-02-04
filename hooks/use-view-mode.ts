@@ -13,22 +13,17 @@ export function useViewMode(storageKey: string = "requests-view-mode") {
         // 1. Check local storage first
         const savedMode = localStorage.getItem(storageKey) as ViewMode | null;
 
-        // 2. Check viewport if no saved preference
-        const isMobile = window.innerWidth < 768;
+        // 2. Check viewport
+        // User requested 1200px breakpoint for card layout
+        const isSmallScreen = window.innerWidth < 1200;
 
         let initialMode: ViewMode;
         if (savedMode && (savedMode === "card" || savedMode === "table")) {
             // Use saved preference if valid
-            // However, if it's mobile, we might want to prioritize card view for usability
-            // User said "on phone it will be automaticly card"
-            if (isMobile) {
-                initialMode = "card";
-            } else {
-                initialMode = savedMode;
-            }
+            initialMode = savedMode;
         } else {
-            // Default behavior
-            initialMode = isMobile ? "card" : "table";
+            // Default behavior based on screen size
+            initialMode = isSmallScreen ? "card" : "table";
         }
 
         setViewMode(initialMode);

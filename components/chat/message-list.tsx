@@ -155,11 +155,8 @@ export function MessageList({ messages, currentUserId, otherUserId, className }:
   };
 
   const handleFileClick = (url: string, name: string, type?: string) => {
-    if (type === 'application/pdf') {
-      setPreviewPdf({ url, name });
-    } else {
-      window.open(url, '_blank');
-    }
+    // Always open in new tab to leverage browser's native viewer (more reliable than embed)
+    window.open(url, '_blank');
   };
 
   // Group messages for grid display

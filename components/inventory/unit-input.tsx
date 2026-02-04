@@ -65,7 +65,7 @@ function generateNumberSuggestions(input: string): string[] {
     const number = numberMatch[1];
     const numberValue = parseInt(number, 10);
     const unitPart = numberMatch[2].toLowerCase().trim();
-    
+
     if (unitPart.length === 0) {
       // If just a number, suggest smart units based on number value
       const smartUnits = getSmartUnitSuggestions(numberValue);
@@ -80,14 +80,14 @@ function generateNumberSuggestions(input: string): string[] {
         unit.toLowerCase().startsWith(unitPart) && unit.toLowerCase() !== unitPart
       );
       const containsMatches = COMMON_UNITS.filter(unit =>
-        unit.toLowerCase().includes(unitPart) && 
+        unit.toLowerCase().includes(unitPart) &&
         !unit.toLowerCase().startsWith(unitPart) &&
         unit.toLowerCase() !== unitPart
       );
-      
+
       // Combine: exact matches first, then starts with, then contains
       const allMatches = [...exactMatches, ...startsWithMatches, ...containsMatches];
-      
+
       if (allMatches.length > 0) {
         return allMatches.map(unit => `${number} ${unit}`);
       } else {
@@ -185,7 +185,7 @@ export function UnitInput({
 
   return (
     <div className="space-y-2">
-      <Label htmlFor={id}>Unit</Label>
+      <Label htmlFor={id}>Unit *</Label>
       <div className="relative">
         <Input
           id={id}

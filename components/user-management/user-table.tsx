@@ -58,6 +58,7 @@ import { toast } from "sonner";
 import { OnlineIndicator } from "@/components/chat/online-indicator";
 import { useMultipleUserPresence } from "@/hooks/use-presence";
 import { UserAvatar } from "./user-avatar";
+import { UserInfoDialog } from "./user-info-dialog";
 
 type ViewMode = "table" | "card";
 
@@ -77,6 +78,7 @@ export function UserTable({ users, viewMode = "table" }: UserTableProps) {
 
   const [loadingUserId, setLoadingUserId] = useState<string | null>(null);
   const [editingUser, setEditingUser] = useState<Doc<"users"> | null>(null);
+  const [viewingUser, setViewingUser] = useState<Doc<"users"> | null>(null);
   const [deletingUser, setDeletingUser] = useState<Doc<"users"> | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedSiteId, setSelectedSiteId] = useState<Doc<"sites">["_id"] | null>(null);
@@ -177,6 +179,12 @@ export function UserTable({ users, viewMode = "table" }: UserTableProps) {
         <DropdownMenuContent align="end">
           <DropdownMenuLabel>Actions</DropdownMenuLabel>
           <DropdownMenuSeparator />
+          <DropdownMenuItem
+            onClick={() => setViewingUser(user)}
+          >
+            <User className="h-4 w-4 mr-2" />
+            View Details
+          </DropdownMenuItem>
           <DropdownMenuItem
             onClick={() => setEditingUser(user)}
           >
@@ -418,7 +426,13 @@ export function UserTable({ users, viewMode = "table" }: UserTableProps) {
                               <span className="absolute -bottom-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-green-500 ring-2 ring-background" />
                             )}
                           </div>
-                          <span className="text-sm font-bold text-foreground hover:text-primary transition-colors cursor-default">{user.fullName}</span>
+
+                          <span
+                            className="text-sm font-bold text-foreground hover:text-primary transition-colors cursor-pointer hover:underline underline-offset-4 decoration-primary/30"
+                            onClick={() => setViewingUser(user)}
+                          >
+                            {user.fullName}
+                          </span>
                           {isCurrentUser && (
                             <Badge variant="secondary" className="ml-1 text-[10px] h-4 px-1">You</Badge>
                           )}
@@ -520,22 +534,25 @@ export function UserTable({ users, viewMode = "table" }: UserTableProps) {
             </Table>
           </div>
         </div>
-      )}
+      )
+      }
 
       {/* Card View */}
-      {viewMode === "card" && (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4 sm:gap-6 pt-2 pb-10">
-          {paginatedUsers.map((user, index) => (
-            <div
-              key={user._id}
-              className="animate-in fade-in slide-in-from-bottom-5 h-full"
-              style={{ animationDelay: `${index * 50}ms`, animationFillMode: 'both' }}
-            >
-              <UserCard user={user} />
-            </div>
-          ))}
-        </div>
-      )}
+      {
+        viewMode === "card" && (
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4 sm:gap-6 pt-2 pb-10">
+            {paginatedUsers.map((user, index) => (
+              <div
+                key={user._id}
+                className="animate-in fade-in slide-in-from-bottom-5 h-full"
+                style={{ animationDelay: `${index * 50}ms`, animationFillMode: 'both' }}
+              >
+                <UserCard user={user} />
+              </div>
+            ))}
+          </div>
+        )
+      }
 
       {/* Edit User Dialog */}
       <EditUserDialog
@@ -573,6 +590,12 @@ export function UserTable({ users, viewMode = "table" }: UserTableProps) {
         }}
         locationId={selectedSiteId}
       />
-    </div>
+
+      <UserInfoDialog
+        open={!!viewingUser}
+        onOpenChange={(open) => !open && setViewingUser(null)}
+        user={viewingUser}
+      />
+    </div >
   );
 }

@@ -232,6 +232,7 @@ export const createUser = mutation({
     assignedSites: v.optional(v.array(v.id("sites"))),
     profileImage: v.optional(v.string()),
     profileImageKey: v.optional(v.string()),
+    signatureStorageId: v.optional(v.id("_storage")),
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
@@ -264,6 +265,12 @@ export const createUser = mutation({
       throw new Error("Username already exists");
     }
 
+    // Get signature URL if storage ID provided
+    let signatureUrl: string | null | undefined = undefined;
+    if (args.signatureStorageId) {
+      signatureUrl = await ctx.storage.getUrl(args.signatureStorageId);
+    }
+
     // Create user
     const userId = await ctx.db.insert("users", {
       clerkUserId: args.clerkUserId,
@@ -276,6 +283,8 @@ export const createUser = mutation({
       isActive: true,
       profileImage: args.profileImage,
       profileImageKey: args.profileImageKey,
+      signatureStorageId: args.signatureStorageId,
+      signatureUrl: signatureUrl || undefined,
       createdBy: currentUser._id,
       createdAt: Date.now(),
       updatedAt: Date.now(),
@@ -299,6 +308,7 @@ export const updateUser = mutation({
     isActive: v.optional(v.boolean()),
     profileImage: v.optional(v.string()),
     profileImageKey: v.optional(v.string()),
+    signatureStorageId: v.optional(v.id("_storage")),
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
@@ -327,6 +337,16 @@ export const updateUser = mutation({
       throw new Error("User not found");
     }
 
+    // Handle Signature Update
+    let signatureUrl: string | null | undefined = undefined;
+    if (args.signatureStorageId) {
+      // If user has old signature, delete it
+      if (userToUpdate.signatureStorageId) {
+        await ctx.storage.delete(userToUpdate.signatureStorageId);
+      }
+      signatureUrl = await ctx.storage.getUrl(args.signatureStorageId);
+    }
+
     // Update user
     await ctx.db.patch(args.userId, {
       ...(args.fullName && { fullName: args.fullName }),
@@ -337,6 +357,8 @@ export const updateUser = mutation({
       ...(args.isActive !== undefined && { isActive: args.isActive }),
       ...(args.profileImage !== undefined && { profileImage: args.profileImage }),
       ...(args.profileImageKey !== undefined && { profileImageKey: args.profileImageKey }),
+      ...(args.signatureStorageId && { signatureStorageId: args.signatureStorageId }),
+      ...(signatureUrl && { signatureUrl: signatureUrl }),
       updatedAt: Date.now(),
     });
 

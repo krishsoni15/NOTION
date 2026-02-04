@@ -37,13 +37,17 @@ export async function uploadImage(
   } = {}
 ): Promise<{ url: string; publicId: string; key: string }> {
   try {
-    const { folder = 'notion-uploads', transformation, quality = 'auto', format, resourceType = 'image' } = options;
+    const { folder = 'notion-uploads', transformation, quality = 'auto', format, resourceType = 'image', ...rest } = options;
 
     const uploadOptions: any = {
       folder,
-      quality,
       resource_type: resourceType,
+      ...rest, // Pass through any other options like access_mode
     };
+
+    if (resourceType === 'image') {
+      uploadOptions.quality = quality;
+    }
 
     if (publicId) {
       uploadOptions.public_id = publicId;

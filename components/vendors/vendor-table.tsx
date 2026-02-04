@@ -48,7 +48,9 @@ import { useUserRole } from "@/hooks/use-user-role";
 import { ROLES } from "@/lib/auth/roles";
 import { VendorFormDialog } from "./vendor-form-dialog";
 import { toast } from "sonner";
+// ... top imports ...
 import type { Doc } from "@/convex/_generated/dataModel";
+import { VendorInfoDialog } from "@/components/purchase/vendor-info-dialog";
 
 type ViewMode = "table" | "card";
 
@@ -61,6 +63,7 @@ export function VendorTable({ vendors, viewMode = "table" }: VendorTableProps) {
   const userRole = useUserRole();
 
   const [editingVendor, setEditingVendor] = useState<Doc<"vendors"> | null>(null);
+  const [viewingVendorId, setViewingVendorId] = useState<string | null>(null);
   const [deletingVendor, setDeletingVendor] = useState<Doc<"vendors"> | null>(null);
   const [loadingVendorId, setLoadingVendorId] = useState<string | null>(null);
   const deleteVendor = useMutation(api.vendors.deleteVendor);
@@ -119,7 +122,11 @@ export function VendorTable({ vendors, viewMode = "table" }: VendorTableProps) {
                   <Building2 className="h-4.5 w-4.5 text-primary" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <CardTitle className="text-base font-bold truncate pr-2 leading-tight" title={vendor.companyName}>
+                  <CardTitle
+                    className="text-base font-bold truncate pr-2 leading-tight cursor-pointer hover:text-primary transition-colors hover:underline underline-offset-4 decoration-primary/30"
+                    title={vendor.companyName}
+                    onClick={() => setViewingVendorId(vendor._id)}
+                  >
                     {vendor.companyName}
                   </CardTitle>
                 </div>
@@ -248,12 +255,20 @@ export function VendorTable({ vendors, viewMode = "table" }: VendorTableProps) {
                     style={{ animationDelay: `${index * 50}ms`, animationFillMode: 'both' }}
                   >
                     <TableCell className="align-top py-4 pl-4">
-                      <div className="font-bold text-sm text-foreground hover:text-primary transition-colors cursor-default">
+                      <div
+                        className="font-bold text-sm text-foreground hover:text-primary transition-colors cursor-pointer hover:underline underline-offset-4 decoration-primary/30"
+                        onClick={() => setViewingVendorId(vendor._id)}
+                      >
                         {vendor.companyName}
                       </div>
                     </TableCell>
                     <TableCell className="align-top py-4 font-medium text-sm text-muted-foreground">
-                      {vendor.contactName || <span className="text-muted-foreground/30">—</span>}
+                      <div
+                        className="cursor-pointer hover:text-foreground transition-colors w-fit"
+                        onClick={() => setViewingVendorId(vendor._id)}
+                      >
+                        {vendor.contactName || <span className="text-muted-foreground/30 pointer-events-none">—</span>}
+                      </div>
                     </TableCell>
                     <TableCell className="align-top py-4 text-sm font-medium">{vendor.email}</TableCell>
                     <TableCell className="align-top py-4 text-xs font-mono">{vendor.phone || <span className="text-muted-foreground/30 font-sans text-sm">—</span>}</TableCell>
@@ -265,7 +280,7 @@ export function VendorTable({ vendors, viewMode = "table" }: VendorTableProps) {
                         <span className="text-sm text-muted-foreground line-clamp-2 leading-relaxed flex-1">{vendor.address}</span>
                         <button
                           onClick={() => handleOpenInMap(vendor.address)}
-                          className="text-primary opacity-0 group-hover/addr:opacity-100 transition-opacity p-1 hover:bg-primary/10 rounded"
+                          className="text-primary p-1 hover:bg-primary/10 rounded transition-colors"
                           title="Open in Maps"
                         >
                           <MapPin className="h-3.5 w-3.5" />
@@ -343,6 +358,13 @@ export function VendorTable({ vendors, viewMode = "table" }: VendorTableProps) {
           gstNumber: editingVendor.gstNumber,
           address: editingVendor.address,
         } : null}
+      />
+
+      {/* View Vendor Details Dialog */}
+      <VendorInfoDialog
+        open={viewingVendorId !== null}
+        onOpenChange={(open) => !open && setViewingVendorId(null)}
+        vendorId={viewingVendorId as any}
       />
 
       {/* Delete Confirmation Dialog */}

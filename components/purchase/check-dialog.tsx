@@ -131,6 +131,8 @@ export function CheckDialog({
     const [quoteUnit, setQuoteUnit] = useState("");
     const [quoteDiscount, setQuoteDiscount] = useState("");  // Discount percentage
     const [quoteGst, setQuoteGst] = useState("");            // GST percentage
+    const [quoteSgst, setQuoteSgst] = useState("");          // SGST percentage
+    const [quoteCgst, setQuoteCgst] = useState("");          // CGST percentage
     const [showVendorDetails, setShowVendorDetails] = useState<string | null>(null);
     const [showDirectDeliveryConfirm, setShowDirectDeliveryConfirm] = useState(false);
     const [showCreateVendorDialog, setShowCreateVendorDialog] = useState(false);
@@ -344,7 +346,15 @@ export function CheckDialog({
         const amount = parseFloat(quoteAmount) || 1;
         const unit = quoteUnit.trim();
         const discount = parseFloat(quoteDiscount) || 0;
-        const gst = parseFloat(quoteGst) || 0;
+
+        // Calculate GST from partials or total
+        const sgst = parseFloat(quoteSgst) || 0;
+        const cgst = parseFloat(quoteCgst) || 0;
+        const totalGst = sgst + cgst;
+
+        // Fallback to legacy field if new ones empty? 
+        // We'll prioritize the splits if provided, otherwise the legacy one (which we don't expose in UI anymore)
+        const gst = totalGst > 0 ? totalGst : (parseFloat(quoteGst) || 0);
 
         const newQuote: VendorQuote = {
             vendorId: selectedVendorId as Id<"vendors">,
@@ -379,6 +389,8 @@ export function CheckDialog({
         setQuoteUnit("");
         setQuoteDiscount("");
         setQuoteGst("");
+        setQuoteSgst(""); // Reset splits
+        setQuoteCgst("");
         setEditingQuoteIndex(-1);
         setVendorSearchTerm("");
         setVendorDialogOpen(false);
@@ -396,7 +408,19 @@ export function CheckDialog({
         setQuoteAmount((quote.amount || 1).toString());
         setQuoteUnit(quote.unit || "");
         setQuoteDiscount(quote.discountPercent?.toString() || "");
-        setQuoteGst(quote.gstPercent?.toString() || "");
+
+        // Handle GST split logic
+        const gst = quote.gstPercent || 0;
+        setQuoteGst(gst.toString());
+        // Default assumption: Split 50/50 between SGST and CGST
+        if (gst > 0) {
+            setQuoteSgst((gst / 2).toString());
+            setQuoteCgst((gst / 2).toString());
+        } else {
+            setQuoteSgst("");
+            setQuoteCgst("");
+        }
+
         setVendorDialogOpen(true);
     };
 
@@ -1368,6 +1392,48 @@ export function CheckDialog({
                             )}
 
                             {/* Vendor Quotes Section */}
+                            <div className="space-y-3 pt-4 border-t mt-4">
+                                <div className="flex items-center justify-between">
+                                    <h4 className="font-medium text-sm">Vendor Quotes</h4>
+                                    <Button onClick={() => {
+                                        setEditingQuoteIndex(-1);
+                                        setUnitPrice("");
+                                        // Auto-fill quantity from calculated needs
+                                        setQuoteAmount((quantityToBuy || request?.quantity || 1).toString());
+                                        setQuoteUnit(request?.unit || "");
+                                        setQuoteDiscount("");
+                                        setQuoteSgst("");
+                                        setQuoteCgst("");
+                                        setVendorDialogOpen(true);
+                                    }} size="sm" variant="outline" className="h-7 text-xs">
+                                        <Plus className="h-3 w-3 mr-1" /> Add Quote
+                                    </Button>
+                                </div>
+                                <div className="grid gap-2">
+                                    {vendorQuotes.map((quote, index) => (
+                                        <div key={index} className="p-3 bg-card border rounded-lg flex justify-between items-center shadow-sm">
+                                            <div>
+                                                <div className="font-medium text-sm">{getVendorName(quote.vendorId)}</div>
+                                                <div className="text-xs text-muted-foreground mt-0.5">
+                                                    Rate: ₹{quote.unitPrice}/{quote.unit}
+                                                    {quote.gstPercent ? ` • GST: ${quote.gstPercent}%` : ''}
+                                                    {quote.discountPercent ? ` • Disc: ${quote.discountPercent}%` : ''}
+                                                </div>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <Button size="sm" variant="ghost" onClick={() => handleEditQuote(index)} className="h-7 w-7 p-0 hover:bg-muted">
+                                                    <Edit className="h-3.5 w-3.5" />
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    ))}
+                                    {vendorQuotes.length === 0 && (
+                                        <div className="text-center py-6 text-xs text-muted-foreground bg-muted/30 rounded-lg border border-dashed">
+                                            No vendor quotes added yet.
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
 
 
 
@@ -1436,6 +1502,88 @@ export function CheckDialog({
                     )}
                 </DialogContent>
             </Dialog >
+
+            {/* Vendor Quote Dialog */}
+            <Dialog open={vendorDialogOpen} onOpenChange={setVendorDialogOpen}>
+                <DialogContent className="sm:max-w-[425px]">
+                    <DialogHeader>
+                        <DialogTitle>{editingQuoteIndex >= 0 ? "Edit" : "Add"} Vendor Quote</DialogTitle>
+                        <DialogDescription>
+                            Enter the price and details for this vendor.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="grid gap-4 py-4">
+                        <div className="grid gap-2">
+                            <Label>Select Vendor</Label>
+                            <Select value={selectedVendorId as string} onValueChange={(v) => setSelectedVendorId(v as Id<"vendors">)}>
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Select vendor..." />
+                                </SelectTrigger>
+                                <SelectContent className="max-h-[200px]">
+                                    <div className="p-2 sticky top-0 bg-popover z-10">
+                                        <Input
+                                            placeholder="Search vendors..."
+                                            value={vendorSearchTerm}
+                                            onChange={(e) => setVendorSearchTerm(e.target.value)}
+                                            className="h-8"
+                                            onKeyDown={(e) => e.stopPropagation()}
+                                        />
+                                    </div>
+                                    {filteredVendors.length > 0 ? (
+                                        filteredVendors.map((vendor) => (
+                                            <SelectItem key={vendor._id} value={vendor._id}>{vendor.companyName}</SelectItem>
+                                        ))
+                                    ) : (
+                                        <div className="p-2 text-xs text-muted-foreground text-center">No vendors found</div>
+                                    )}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="grid gap-2">
+                                <Label>Unit Price (₹)</Label>
+                                <Input type="number" value={unitPrice} onChange={(e) => setUnitPrice(e.target.value)} placeholder="0.00" />
+                            </div>
+                            <div className="grid gap-2">
+                                <Label>Unit</Label>
+                                <Input value={quoteUnit} onChange={(e) => setQuoteUnit(e.target.value)} placeholder="Unit" />
+                            </div>
+                        </div>
+                        <div className="grid grid-cols-3 gap-2">
+                            <div className="grid gap-1">
+                                <Label className="text-xs">Discount %</Label>
+                                <Input type="number" value={quoteDiscount} onChange={(e) => setQuoteDiscount(e.target.value)} placeholder="0" className="h-8" />
+                            </div>
+                            <div className="grid gap-1">
+                                <Label className="text-xs">CGST %</Label>
+                                <Input type="number" value={quoteCgst} onChange={(e) => setQuoteCgst(e.target.value)} placeholder="0" className="h-8" />
+                            </div>
+                            <div className="grid gap-1">
+                                <Label className="text-xs">SGST %</Label>
+                                <Input type="number" value={quoteSgst} onChange={(e) => setQuoteSgst(e.target.value)} placeholder="0" className="h-8" />
+                            </div>
+                        </div>
+                        <div className="grid gap-2">
+                            <Label>Total Unit Cost</Label>
+                            <div className="p-2 bg-muted rounded font-mono text-center font-bold">
+                                ₹{(() => {
+                                    const price = parseFloat(unitPrice) || 0;
+                                    const disc = parseFloat(quoteDiscount) || 0;
+                                    const tCgst = parseFloat(quoteCgst) || 0;
+                                    const tSgst = parseFloat(quoteSgst) || 0;
+                                    const base = price * (1 - disc / 100);
+                                    const tax = base * ((tCgst + tSgst) / 100);
+                                    return (base + tax).toFixed(2);
+                                })()} <span className="text-xs font-normal text-muted-foreground">/ unit</span>
+                            </div>
+                        </div>
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setVendorDialogOpen(false)}>Cancel</Button>
+                        <Button onClick={handleAddVendor}>Save Quote</Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
 
             {/* Direct Delivery Confirmation */}
             < AlertDialog open={showDirectDeliveryConfirm} onOpenChange={setShowDirectDeliveryConfirm} >

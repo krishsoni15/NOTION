@@ -211,6 +211,7 @@ export const upsertCostComparison = mutation({
     ),
     isDirectDelivery: v.boolean(),
     inventoryFulfillmentQuantity: v.optional(v.number()),
+    purchaseQuantity: v.optional(v.number()), // Quantity to buy (may be > required for extra inventory)
     managerNotes: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
@@ -247,6 +248,7 @@ export const upsertCostComparison = mutation({
         vendorQuotes: args.vendorQuotes,
         isDirectDelivery: args.isDirectDelivery,
         inventoryFulfillmentQuantity: args.inventoryFulfillmentQuantity,
+        purchaseQuantity: args.purchaseQuantity,
         managerNotes: args.managerNotes !== undefined ? args.managerNotes : existing.managerNotes,
         updatedAt: now,
       });
@@ -260,6 +262,7 @@ export const upsertCostComparison = mutation({
         status: "draft",
         isDirectDelivery: args.isDirectDelivery,
         inventoryFulfillmentQuantity: args.inventoryFulfillmentQuantity,
+        purchaseQuantity: args.purchaseQuantity,
         managerNotes: args.managerNotes,
         createdAt: now,
         updatedAt: now,

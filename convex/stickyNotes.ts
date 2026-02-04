@@ -44,9 +44,9 @@ export const list = query({
       notes = await ctx.db
         .query("stickyNotes")
         .filter((q) => q.eq(q.field("isDeleted"), false))
-        .filter((q) => 
-          args.includeCompleted 
-            ? true 
+        .filter((q) =>
+          args.includeCompleted
+            ? true
             : q.eq(q.field("isCompleted"), false)
         )
         .order("desc")
@@ -57,9 +57,9 @@ export const list = query({
         .query("stickyNotes")
         .withIndex("by_assigned_to", (q) => q.eq("assignedTo", currentUser._id))
         .filter((q) => q.eq(q.field("isDeleted"), false))
-        .filter((q) => 
-          args.includeCompleted 
-            ? true 
+        .filter((q) =>
+          args.includeCompleted
+            ? true
             : q.eq(q.field("isCompleted"), false)
         )
         .order("desc")
@@ -230,9 +230,27 @@ export const create = mutation({
       isCompleted: false,
       isDeleted: false,
       reminderTriggered: false,
+      isRead: args.assignedTo === currentUser._id, // Mark as read if assigning to self
       createdAt: now,
       updatedAt: now,
     });
+
+    // Send notification if assigned to someone else
+    if (args.assignedTo !== currentUser._id) {
+      await ctx.db.insert("notifications", {
+        userId: args.assignedTo,
+        title: "New Sticky Note Assigned",
+        message: `${currentUser.fullName} assigned you a new sticky note: "${args.title}"`,
+        type: "assignment",
+        isRead: false,
+        link: "/dashboard?sticky-notes=true", // Query param to trigger opening sticky notes
+        metadata: {
+          entityId: noteId,
+          entityType: "stickyNote",
+        },
+        createdAt: now,
+      });
+    }
 
     return noteId;
   },
@@ -289,17 +307,17 @@ export const update = mutation({
     const canViewNote = isManager || isAssignee;
 
     // Check if this is only a position/size update (drag and drop)
-    const isOnlyPositionUpdate = 
-      args.positionX !== undefined || 
-      args.positionY !== undefined || 
-      args.width !== undefined || 
+    const isOnlyPositionUpdate =
+      args.positionX !== undefined ||
+      args.positionY !== undefined ||
+      args.width !== undefined ||
       args.height !== undefined;
-    
-    const hasContentUpdate = 
-      args.title !== undefined || 
-      args.content !== undefined || 
-      args.color !== undefined || 
-      args.reminderAt !== undefined || 
+
+    const hasContentUpdate =
+      args.title !== undefined ||
+      args.content !== undefined ||
+      args.color !== undefined ||
+      args.reminderAt !== undefined ||
       args.checklistItems !== undefined;
 
     // For position/size updates: Allow anyone who can view the note
@@ -310,7 +328,7 @@ export const update = mutation({
     } else {
       // For content updates: Only assignee can update
       if (!isAssignee) {
-      throw new Error("Unauthorized: Only the assigned manager can update this note");
+        throw new Error("Unauthorized: Only the assigned manager can update this note");
       }
     }
 
@@ -319,7 +337,7 @@ export const update = mutation({
       ...(args.title !== undefined && { title: args.title }),
       ...(args.content !== undefined && { content: args.content }),
       ...(args.color !== undefined && { color: args.color }),
-      ...(args.reminderAt !== undefined && { 
+      ...(args.reminderAt !== undefined && {
         reminderAt: args.reminderAt,
         reminderTriggered: false, // Reset reminder trigger when updating reminder time
       }),
@@ -424,6 +442,68 @@ export const markReminderTriggered = mutation({
       reminderTriggered: true,
       updatedAt: Date.now(),
     });
+
+    return { success: true };
+  },
+});
+
+/**
+ * Get count of unread sticky notes for the current user
+ */
+export const getUnreadCount = query({
+  args: {},
+  handler: async (ctx) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) return 0;
+
+    const currentUser = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_user_id", (q) => q.eq("clerkUserId", userId))
+      .unique();
+
+    if (!currentUser) return 0;
+
+    const notes = await ctx.db
+      .query("stickyNotes")
+      .withIndex("by_assigned_to", (q) => q.eq("assignedTo", currentUser._id))
+      .filter((q) => q.eq(q.field("isDeleted"), false))
+      .filter((q) => q.eq(q.field("isCompleted"), false))
+      .filter((q) => q.eq(q.field("isRead"), false))
+      .collect();
+
+    return notes.length;
+  },
+});
+
+/**
+ * Mark all notes for the current user as read
+ */
+export const markAllRead = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new Error("Not authenticated");
+
+    const currentUser = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_user_id", (q) => q.eq("clerkUserId", userId))
+      .unique();
+
+    if (!currentUser) throw new Error("User not found");
+
+    const unreadNotes = await ctx.db
+      .query("stickyNotes")
+      .withIndex("by_assigned_to", (q) => q.eq("assignedTo", currentUser._id))
+      .filter((q) => q.eq(q.field("isDeleted"), false))
+      .filter((q) => q.eq(q.field("isCompleted"), false))
+      .filter((q) => q.eq(q.field("isRead"), false))
+      .collect();
+
+    await Promise.all(
+      unreadNotes.map((note) =>
+        ctx.db.patch(note._id, { isRead: true })
+      )
+    );
 
     return { success: true };
   },

@@ -792,7 +792,7 @@ export function MaterialRequestForm({
       }
     }
 
-    // Check for duplicates
+    // Check for duplicates (same name + same quantity + same unit)
     for (let i = 0; i < items.length; i++) {
       for (let j = i + 1; j < items.length; j++) {
         const item1 = items[i];
@@ -801,6 +801,22 @@ export function MaterialRequestForm({
           item1.itemName.trim().toLowerCase() === item2.itemName.trim().toLowerCase() &&
           item1.quantity === item2.quantity &&
           item1.unit.trim().toLowerCase() === item2.unit.trim().toLowerCase()
+        ) {
+          return false;
+        }
+      }
+    }
+
+    // Check for same name + same description
+    for (let i = 0; i < items.length; i++) {
+      for (let j = i + 1; j < items.length; j++) {
+        const item1 = items[i];
+        const item2 = items[j];
+        if (
+          item1.itemName.trim().toLowerCase() === item2.itemName.trim().toLowerCase() &&
+          item1.itemName.trim() !== "" &&
+          item1.description.trim().toLowerCase() === item2.description.trim().toLowerCase() &&
+          item1.description.trim() !== ""
         ) {
           return false;
         }
@@ -893,7 +909,7 @@ export function MaterialRequestForm({
       }
     }
 
-    // Check for duplicates
+    // Check for duplicates (same name + same quantity + same unit)
     for (let i = 0; i < items.length; i++) {
       for (let j = i + 1; j < items.length; j++) {
         const item1 = items[i];
@@ -904,6 +920,22 @@ export function MaterialRequestForm({
           item1.unit.trim().toLowerCase() === item2.unit.trim().toLowerCase()
         ) {
           return `Item ${i + 1} and Item ${j + 1} are identical. Please remove the duplicate.`;
+        }
+      }
+    }
+
+    // Check for same name + same description (block this too)
+    for (let i = 0; i < items.length; i++) {
+      for (let j = i + 1; j < items.length; j++) {
+        const item1 = items[i];
+        const item2 = items[j];
+        if (
+          item1.itemName.trim().toLowerCase() === item2.itemName.trim().toLowerCase() &&
+          item1.itemName.trim() !== "" &&
+          item1.description.trim().toLowerCase() === item2.description.trim().toLowerCase() &&
+          item1.description.trim() !== ""
+        ) {
+          return `Item ${i + 1} and Item ${j + 1} have the same name and description. Please use different descriptions or remove the duplicate.`;
         }
       }
     }
@@ -1628,6 +1660,7 @@ export function MaterialRequestForm({
                             </h4>
                           </div>
                           {(() => {
+                            // Check for exact duplicates (same name, quantity, unit)
                             const isDuplicate = items.some((otherItem) =>
                               otherItem.id !== item.id &&
                               otherItem.itemName.trim().toLowerCase() === item.itemName.trim().toLowerCase() &&
@@ -1636,12 +1669,48 @@ export function MaterialRequestForm({
                               otherItem.unit.trim().toLowerCase() === item.unit.trim().toLowerCase()
                             );
 
-                            return isDuplicate ? (
-                              <div className="flex items-center gap-1.5 px-3 py-1 bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 rounded-full text-xs font-medium animate-in fade-in zoom-in duration-300">
-                                <AlertCircle className="h-3.5 w-3.5" />
-                                <span>Already Added</span>
+                            // Check for same name AND same description (blocks submission)
+                            const hasSameNameSameDesc = items.some((otherItem) =>
+                              otherItem.id !== item.id &&
+                              otherItem.itemName.trim().toLowerCase() === item.itemName.trim().toLowerCase() &&
+                              otherItem.itemName.trim() !== "" &&
+                              item.itemName.trim() !== "" &&
+                              otherItem.description.trim().toLowerCase() === item.description.trim().toLowerCase() &&
+                              otherItem.description.trim() !== "" &&
+                              item.description.trim() !== ""
+                            );
+
+                            // Check for same name but different description (just a warning)
+                            const hasSameNameDifferentDesc = items.some((otherItem) =>
+                              otherItem.id !== item.id &&
+                              otherItem.itemName.trim().toLowerCase() === item.itemName.trim().toLowerCase() &&
+                              otherItem.itemName.trim() !== "" &&
+                              item.itemName.trim() !== "" &&
+                              otherItem.description.trim().toLowerCase() !== item.description.trim().toLowerCase()
+                            );
+
+                            return (
+                              <div className="flex items-center gap-2">
+                                {isDuplicate && (
+                                  <div className="flex items-center gap-1.5 px-3 py-1 bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 rounded-full text-xs font-medium animate-in fade-in zoom-in duration-300">
+                                    <AlertCircle className="h-3.5 w-3.5" />
+                                    <span>Already Added</span>
+                                  </div>
+                                )}
+                                {hasSameNameSameDesc && !isDuplicate && (
+                                  <div className="flex items-center gap-1.5 px-3 py-1 bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 rounded-full text-xs font-medium animate-in fade-in zoom-in duration-300">
+                                    <AlertCircle className="h-3.5 w-3.5" />
+                                    <span>Same name & description</span>
+                                  </div>
+                                )}
+                                {hasSameNameDifferentDesc && !isDuplicate && !hasSameNameSameDesc && (
+                                  <div className="flex items-center gap-1.5 px-3 py-1 bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 rounded-full text-xs font-medium animate-in fade-in zoom-in duration-300">
+                                    <AlertTriangle className="h-3.5 w-3.5" />
+                                    <span>Same item, different description</span>
+                                  </div>
+                                )}
                               </div>
-                            ) : null;
+                            );
                           })()}
                           <div className="flex items-center gap-2">
                             {/* Urgent Checkbox per Item */}
@@ -2202,8 +2271,8 @@ export function MaterialRequestForm({
                   type="submit"
                   disabled={isLoading || isUploading}
                   className={`w-full sm:w-auto order-1 sm:order-3 h-10 sm:h-11 text-sm font-bold shadow-lg hover:shadow-2xl hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none disabled:hover:scale-100 focus:ring-4 focus:ring-primary/30 transition-all duration-200 ${isFormValid()
-                      ? "bg-gradient-to-r from-primary to-primary/90 hover:from-primary/90 hover:to-primary"
-                      : "bg-destructive text-destructive-foreground hover:bg-destructive/90 ring-destructive/20"
+                    ? "bg-gradient-to-r from-primary to-primary/90 hover:from-primary/90 hover:to-primary"
+                    : "bg-destructive text-destructive-foreground hover:bg-destructive/90 ring-destructive/20"
                     }`}
                   title="Send request"
                 >

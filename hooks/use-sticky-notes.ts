@@ -44,3 +44,19 @@ export function useDeleteStickyNote() {
   return useMutation(api.stickyNotes.deleteNote);
 }
 
+// ... existing exports ...
+
+/**
+ * Hook to get unread sticky notes count
+ */
+export function useStickyNotesUnreadCount() {
+  const count = useQuery(api.stickyNotes.getUnreadCount);
+  return count ?? 0;
+}
+
+/**
+ * Hook to mark all sticky notes as read
+ */
+export function useMarkStickyNotesAllRead() {
+  return useMutation(api.stickyNotes.markAllRead);
+}

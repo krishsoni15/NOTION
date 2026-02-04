@@ -37,6 +37,7 @@ import {
   useUpdateStickyNote,
   useCompleteStickyNote,
   useDeleteStickyNote,
+  useMarkStickyNotesAllRead,
 } from "@/hooks/use-sticky-notes";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
@@ -81,7 +82,7 @@ function DraggableNoteCard({
     if (!target.closest('.drag-handle') && e.clientY > (cardRef.current?.getBoundingClientRect().top || 0) + 60) {
       return;
     }
-    
+
     if (target.closest('button') || target.closest('a') || target.closest('input') || target.closest('textarea')) {
       return;
     }
@@ -113,10 +114,10 @@ function DraggableNoteCard({
 
       const sheet = document.querySelector('[role="dialog"]');
       const sheetRect = sheet?.getBoundingClientRect();
-      
+
       // Check if dropped outside the sheet
-      if (sheetRect && (e.clientX < sheetRect.left || e.clientX > sheetRect.right || 
-          e.clientY < sheetRect.top || e.clientY > sheetRect.bottom)) {
+      if (sheetRect && (e.clientX < sheetRect.left || e.clientX > sheetRect.right ||
+        e.clientY < sheetRect.top || e.clientY > sheetRect.bottom)) {
         // Calculate position relative to viewport
         const x = Math.max(0, Math.min(e.clientX - dragStartRef.current.x, window.innerWidth - 300));
         const y = Math.max(0, Math.min(e.clientY - dragStartRef.current.y, window.innerHeight - 250));
@@ -180,9 +181,9 @@ function DraggableNoteCard({
         >
           <StickyNoteCard
             note={note}
-            onComplete={() => {}}
-            onDelete={() => {}}
-            onEdit={() => {}}
+            onComplete={() => { }}
+            onDelete={() => { }}
+            onEdit={() => { }}
             isCreator={isCreator}
             disableDrag={true}
             isManager={isManager}
@@ -218,11 +219,11 @@ export function StickyNotesWindow({
   const currentUser = useQuery(api.users.getCurrentUser);
   const userRole = useUserRole();
   const isManager = userRole === ROLES.MANAGER;
-  
+
   // Filter notes locally
   const allActiveNotes = allNotesList?.filter(note => !note.isCompleted) || [];
   const allCompletedNotes = allNotesList?.filter(note => note.isCompleted) || [];
-  
+
   // Filter active notes based on selected filter
   const activeNotes = currentUser ? allActiveNotes.filter(note => {
     if (activeFilter === "me") {
@@ -233,7 +234,7 @@ export function StickyNotesWindow({
       return note.assignee?._id && note.assignee._id !== currentUser._id;
     }
   }) : [];
-  
+
   // Filter completed notes based on selected filter
   const completedNotes = currentUser ? allCompletedNotes.filter(note => {
     if (completedFilter === "me") {
@@ -249,6 +250,12 @@ export function StickyNotesWindow({
   const updateNote = useUpdateStickyNote();
   const completeNote = useCompleteStickyNote();
   const deleteNote = useDeleteStickyNote();
+  const markAllRead = useMarkStickyNotesAllRead();
+
+  // Mark all notes as read when window opens
+  useEffect(() => {
+    markAllRead();
+  }, []);
 
   // Get note to edit
   const editingNote = editingNoteId
@@ -458,7 +465,7 @@ export function StickyNotesWindow({
                 )}
               </div>
             </div>
-            
+
             {filteredActiveNotes.length === 0 ? (
               <div className="text-center py-16 w-full px-4">
                 <div className="inline-flex h-16 w-16 rounded-full bg-muted/50 items-center justify-center mb-4">
@@ -468,8 +475,8 @@ export function StickyNotesWindow({
                   {activeFilter === "me" ? "No active notes for you" : "No assigned notes"}
                 </p>
                 <p className="text-sm text-muted-foreground mb-4">
-                  {activeFilter === "me" 
-                    ? "Create your first sticky note to get started!" 
+                  {activeFilter === "me"
+                    ? "Create your first sticky note to get started!"
                     : "Notes you assign to others will appear here."}
                 </p>
                 {activeFilter === "me" && (
@@ -538,7 +545,7 @@ export function StickyNotesWindow({
                 )}
               </div>
             </div>
-            
+
             {filteredCompletedNotes.length === 0 ? (
               <div className="text-center py-16 w-full px-4">
                 <div className="inline-flex h-16 w-16 rounded-full bg-muted/50 items-center justify-center mb-4">
@@ -548,8 +555,8 @@ export function StickyNotesWindow({
                   {completedFilter === "me" ? "No completed notes for you" : "No completed assigned notes"}
                 </p>
                 <p className="text-sm text-muted-foreground">
-                  {completedFilter === "me" 
-                    ? "Completed notes assigned to you will appear here." 
+                  {completedFilter === "me"
+                    ? "Completed notes assigned to you will appear here."
                     : "Completed notes you assigned to others will appear here."}
                 </p>
               </div>
@@ -566,9 +573,9 @@ export function StickyNotesWindow({
                       onDragOut={handleDragOut}
                       onChecklistUpdate={async (noteId, items) => {
                         try {
-                          await updateNote({ 
-                            noteId, 
-                            checklistItems: items.length > 0 ? items : [] 
+                          await updateNote({
+                            noteId,
+                            checklistItems: items.length > 0 ? items : []
                           });
                         } catch (error: any) {
                           toast.error("Failed to update checklist");
@@ -590,7 +597,7 @@ export function StickyNotesWindow({
 
       {/* Create/Edit Form Dialog */}
       <Dialog open={showForm} onOpenChange={setShowForm} modal={true}>
-        <DialogContent 
+        <DialogContent
           className="max-w-2xl max-h-[90vh] overflow-hidden flex flex-col"
         >
           <DialogHeader className="shrink-0">
@@ -602,13 +609,13 @@ export function StickyNotesWindow({
             <StickyNoteForm
               noteId={editingNoteId || undefined}
               initialData={editingNote ? {
-              title: editingNote.title,
-              content: editingNote.content,
-              color: editingNote.color,
-              reminderAt: editingNote.reminderAt,
-              assignedTo: editingNote.assignedTo,
-              checklistItems: editingNote.checklistItems,
-            } : undefined}
+                title: editingNote.title,
+                content: editingNote.content,
+                color: editingNote.color,
+                reminderAt: editingNote.reminderAt,
+                assignedTo: editingNote.assignedTo,
+                checklistItems: editingNote.checklistItems,
+              } : undefined}
               currentUserId={currentUserId}
               onSubmit={editingNoteId ? handleUpdate : handleCreate}
               onCancel={() => {
@@ -628,7 +635,7 @@ export function StickyNotesWindow({
             <AlertDialogDescription>
               {deleteNoteId && (() => {
                 const noteToDelete = allNotesList?.find(n => n._id === deleteNoteId);
-                return noteToDelete 
+                return noteToDelete
                   ? `Are you sure you want to delete "${noteToDelete.title}"? This action cannot be undone.`
                   : "Are you sure you want to delete this note? This action cannot be undone.";
               })()}

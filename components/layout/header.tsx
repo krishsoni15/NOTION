@@ -6,6 +6,8 @@
  * Top navigation bar with user info, theme toggle, chat, and logout.
  */
 
+import { useSearchParams, useRouter, usePathname } from "next/navigation";
+import { useEffect, Suspense } from "react";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { UserMenu } from "./user-menu";
 import { ChatIcon } from "@/components/chat/chat-icon";
@@ -24,14 +26,42 @@ import { MobileSidebar } from "./mobile-sidebar";
 import { Role } from "@/lib/auth/roles";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
+import { NotificationBell } from "@/components/notifications/notification-bell";
 
 interface HeaderProps {
   userRole: Role;
 }
 
-export function Header({ userRole }: HeaderProps) {
+function HeaderContent({ userRole }: HeaderProps) {
   const currentUser = useQuery(api.users.getCurrentUser);
   const { isChatOpen, setIsChatOpen, isStickyNotesOpen, setIsStickyNotesOpen } = useChatWidth();
+
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
+
+  useEffect(() => {
+    // Check for sticky notes param
+    if (searchParams.get("sticky-notes") === "true") {
+      setIsStickyNotesOpen(true);
+      setIsChatOpen(false);
+      // Clean up URL
+      const params = new URLSearchParams(searchParams.toString());
+      params.delete("sticky-notes");
+      router.replace(`${pathname}?${params.toString()}`);
+    }
+
+    // Check for chat param
+    const chatParam = searchParams.get("chat");
+    if (chatParam) {
+      setIsChatOpen(true);
+      setIsStickyNotesOpen(false);
+      // Clean up URL
+      const params = new URLSearchParams(searchParams.toString());
+      params.delete("chat");
+      router.replace(`${pathname}?${params.toString()}`);
+    }
+  }, [searchParams, setIsStickyNotesOpen, setIsChatOpen, router, pathname]);
 
   return (
     <header className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -63,6 +93,7 @@ export function Header({ userRole }: HeaderProps) {
         <div className="flex items-center gap-2 md:gap-4">
           {currentUser && (
             <>
+              <NotificationBell />
               <StickyNotesIcon
                 onClick={() => {
                   if (isStickyNotesOpen) {
@@ -127,3 +158,10 @@ export function Header({ userRole }: HeaderProps) {
   );
 }
 
+export function Header(props: HeaderProps) {
+  return (
+    <Suspense fallback={<div className="h-16 border-b bg-background" />}>
+      <HeaderContent {...props} />
+    </Suspense>
+  );
+}

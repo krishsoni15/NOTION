@@ -161,7 +161,36 @@ export function RequestDetailsDialog({
   const [showNotesTimeline, setShowNotesTimeline] = useState(false);
   const [showSignPendingApproveConfirm, setShowSignPendingApproveConfirm] = useState<Id<"requests"> | boolean | null>(null);
   const [editQuantityItem, setEditQuantityItem] = useState<{ id: Id<"requests">; quantity: number; name: string; unit: string } | null>(null);
-  const [viewMode, setViewMode] = useState<"table" | "card">("table");
+  // View mode with responsive default and cookie persistence
+  const [viewMode, setViewMode] = useState<"table" | "card">("card"); // Default to card for mobile-first
+  const [viewModeInitialized, setViewModeInitialized] = useState(false);
+
+  // Initialize view mode on client side based on cookie or screen width
+  useEffect(() => {
+    if (viewModeInitialized) return;
+
+    // Check for saved preference in cookie
+    const savedMode = document.cookie
+      .split("; ")
+      .find((row) => row.startsWith("request-details-view-mode="))
+      ?.split("=")[1];
+
+    if (savedMode === "table" || savedMode === "card") {
+      setViewMode(savedMode);
+    } else {
+      // Default based on screen width: >= 1200px = table, < 1200px = card
+      setViewMode(window.innerWidth >= 1200 ? "table" : "card");
+    }
+    setViewModeInitialized(true);
+  }, [viewModeInitialized]);
+
+  // Handle view mode toggle and save to cookie
+  const handleViewModeToggle = () => {
+    const newMode = viewMode === "table" ? "card" : "table";
+    setViewMode(newMode);
+    // Save to cookie (expires in 1 year)
+    document.cookie = `request-details-view-mode=${newMode}; path=/; max-age=${60 * 60 * 24 * 365}`;
+  };
   const hasRefreshedRef = useRef(false);
   const [isExpanded, setIsExpanded] = useState(false);
 
@@ -421,7 +450,7 @@ export function RequestDetailsDialog({
       setItemRejectionReasons({});
       setShowItemRejectionInput(null);
       setSelectedItemsForAction(new Set());
-      setViewMode("table"); // Reset view mode
+      // Don't reset viewMode - let it persist from cookie/user choice
       setItemActions({});
       setShowBatchProcessDialog(false);
       setShowApproveConfirm(false);
@@ -1187,7 +1216,8 @@ export function RequestDetailsDialog({
 
     return (
       <div className={cn(
-        "flex items-center p-1 rounded-xl border-2 transition-all duration-300 ease-out h-10 w-[320px] backdrop-blur-sm",
+        "flex items-center p-1 rounded-xl border-2 transition-all duration-300 ease-out h-10 backdrop-blur-sm",
+        isCard ? "w-full" : "w-[320px]",
         getSegmentBorder()
       )}>
         {/* Deliver Button */}
@@ -1715,7 +1745,7 @@ export function RequestDetailsDialog({
                       <Button
                         variant="outline"
                         size="icon"
-                        onClick={() => setViewMode(viewMode === "table" ? "card" : "table")}
+                        onClick={handleViewModeToggle}
                         className="h-8 w-8 ml-2 bg-muted/30 border-muted-foreground/20 hover:bg-primary/10 hover:border-primary/30 hover:text-primary transition-all"
                         title={viewMode === "table" ? "Switch to Grid View" : "Switch to Table View"}
                       >

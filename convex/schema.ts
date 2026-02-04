@@ -285,6 +285,7 @@ export default defineSchema({
     isCompleted: v.boolean(),
     isDeleted: v.boolean(),
     reminderTriggered: v.optional(v.boolean()), // Track if reminder was already triggered
+    isRead: v.optional(v.boolean()), // Track if the assignee has seen the note
     // Checklist items for todo functionality
     checklistItems: v.optional(v.array(v.object({
       id: v.string(),
@@ -353,6 +354,7 @@ export default defineSchema({
     approvedBy: v.optional(v.id("users")), // Manager who approved/rejected
     isDirectDelivery: v.boolean(), // If item is in inventory, can go directly to delivery
     inventoryFulfillmentQuantity: v.optional(v.number()), // Quantity to be fulfilled from inventory in a split/mixed plan
+    purchaseQuantity: v.optional(v.number()), // Quantity to buy (may be > required for extra inventory)
     createdAt: v.number(),
     updatedAt: v.number(),
   })
@@ -442,6 +444,32 @@ export default defineSchema({
     createdAt: v.number(), // Timestamp
   })
     .index("by_request_number", ["requestNumber"])
+    .index("by_created_at", ["createdAt"]),
+
+  // ============================================================================
+  // Notifications Table
+  // ============================================================================
+  notifications: defineTable({
+    userId: v.id("users"), // Who receives the notification
+    title: v.string(),
+    message: v.string(),
+    type: v.union(
+      v.literal("info"),
+      v.literal("success"),
+      v.literal("warning"),
+      v.literal("error"),
+      v.literal("assignment")
+    ),
+    link: v.optional(v.string()), // Optional link to navigate to
+    isRead: v.boolean(),
+    metadata: v.optional(v.object({
+      entityId: v.optional(v.string()),
+      entityType: v.optional(v.string()),
+    })),
+    createdAt: v.number(),
+  })
+    .index("by_user_id", ["userId"])
+    .index("by_is_read", ["isRead"])
     .index("by_created_at", ["createdAt"]),
 });
 

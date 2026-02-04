@@ -381,6 +381,23 @@ export const sendMessage = mutation({
       updatedAt: now,
     });
 
+    // Send notification to the recipient
+    if (otherUserId) {
+      await ctx.db.insert("notifications", {
+        userId: otherUserId,
+        title: "New Message",
+        message: `${currentUser.fullName}: ${trimmedContent.substring(0, 50)}${trimmedContent.length > 50 ? "..." : ""}`,
+        type: "info",
+        isRead: false,
+        link: `/dashboard?chat=${args.conversationId}`, // Or wherever chat opens
+        metadata: {
+          entityId: args.conversationId,
+          entityType: "conversation",
+        },
+        createdAt: now,
+      });
+    }
+
     return messageId;
   },
 });

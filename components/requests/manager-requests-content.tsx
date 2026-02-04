@@ -66,7 +66,7 @@ export function ManagerRequestsContent() {
     const [pdfPreviewPoNumber, setPdfPreviewPoNumber] = useState<string | null>(null);
     const [pdfRequestNumber, setPdfRequestNumber] = useState<string | null>(null);
     const [searchQuery, setSearchQuery] = useState<string>("");
-    const [workFilter, setWorkFilter] = useState<string>("all");
+    const [workFilter, setWorkFilter] = useState<string>("work_pending");
     const [categoryFilter, setCategoryFilter] = useState<string>("all");
     const [statusFilter, setStatusFilter] = useState<string[]>([]);
     const [inventoryFilter, setInventoryFilter] = useState<string>("all");
@@ -390,7 +390,7 @@ export function ManagerRequestsContent() {
                             </SelectTrigger>
                             <SelectContent>
                                 <SelectItem value="all">Total: {allRequests?.length || 0}</SelectItem>
-                                <SelectItem value="work_pending">Detail Review ({workCounts.work_pending || 0})</SelectItem>
+                                <SelectItem value="work_pending">Pending Work ({workCounts.work_pending || 0})</SelectItem>
                             </SelectContent>
                         </Select>
 

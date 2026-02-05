@@ -1977,7 +1977,7 @@ export function RequestDetailsDialog({
                                           {/* Selection Checkbox */}
                                           <TableCell className="p-2 text-center w-[45px] relative rounded-l-lg overflow-hidden">
                                             <div className="flex items-center justify-center h-full w-full">
-                                              {((isManager && (isPending || item.status === "ready_for_po")) || (isPurchaseOfficer && ["pending_po", "direct_po", "ready_for_po"].includes(item.status))) && (
+                                              {((isManager && item.status === "pending") || (isPurchaseOfficer && ["pending_po", "direct_po", "ready_for_po"].includes(item.status))) && (
                                                 <Checkbox
                                                   checked={isSelected}
                                                   onCheckedChange={() => toggleItemSelection(item._id)}
@@ -2199,6 +2199,7 @@ export function RequestDetailsDialog({
                         </Table>
                       </div>
                     ) : (
+                      // Fallback to single item display if allRequests not loaded yet
                       <div className="block">
                         {/* Card View - Grouped POs first */}
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 mb-4">
@@ -2315,7 +2316,7 @@ export function RequestDetailsDialog({
                                   )}
                                 >
                                   {/* Selection Checkbox */}
-                                  {((isManager && (isPending || item.status === "ready_for_po")) || (isPurchaseOfficer && ["pending_po", "direct_po", "ready_for_po"].includes(item.status))) && (
+                                  {((isManager && item.status === "pending") || (isPurchaseOfficer && ["pending_po", "direct_po", "ready_for_po"].includes(item.status))) && (
                                     <div className="absolute top-2 right-2 z-10">
                                       <Checkbox
                                         checked={isSelected}
@@ -2406,9 +2407,9 @@ export function RequestDetailsDialog({
 
 
                                   {/* Actions Footer for Cards */}
-                                  {isManager && (isPending || item.status === "sign_pending" || item.status === "cc_pending") && (
+                                  {isManager && (isPending || item.status === "recheck" || item.status === "sign_pending" || item.status === "cc_pending" || item.status === "sign_rejected" || item.status === "rejected") && (
                                     <div className={cn(
-                                      "p-3 border-t bg-muted/5 w-full",
+                                      "p-4 border-t bg-muted/5 w-full",
                                       (item.status === "sign_pending" || item.status === "sign_rejected") ? "grid grid-cols-2 gap-3" : "flex"
                                     )}>
                                       {item.status === "sign_pending" ? (
@@ -2436,17 +2437,36 @@ export function RequestDetailsDialog({
                                         /* Standard Approve/Reject */
                                         <RenderActionSegments item={item} isCard />
                                       ) : item.status === "cc_pending" ? (
+                                        <div className="flex flex-col gap-3 w-full">
+                                          {/* Vendor Details Section */}
+                                          {item.vendorQuotes && item.vendorQuotes.length > 0 && (
+                                            <div className="flex flex-col gap-1.5 p-2 bg-background/50 rounded-md border border-border/50">
+                                              <div className="flex items-center gap-1.5">
+                                                <Building2 className="h-3 w-3 text-muted-foreground" />
+                                                <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Vendor Details</span>
+                                              </div>
+                                              <div className="flex flex-col gap-0.5 pl-4.5">
+                                                <span className="text-xs font-medium text-blue-600 dark:text-blue-400">
+                                                  Vendors Quoted: {item.vendorQuotes.length} vendors
+                                                </span>
+                                                {/* We don't have vendor names readily available in the request object without a join, 
+                                                    so we will show the count. If names are critical, we'd need to fetch them. 
+                                                    For now, sticking to the count as per immediate data availability or adding a placeholder if requested style matches. */}
+                                              </div>
+                                            </div>
+                                          )}
 
-                                        onOpenCC ? (
-                                          <Button
-                                            variant="outline"
-                                            size="sm"
-                                            onClick={(e) => { e.stopPropagation(); onOpenCC(item._id); }}
-                                            className="h-9 border-blue-200 text-blue-700 hover:bg-blue-50 w-full"
-                                          >
-                                            <FileText className="h-4 w-4 mr-1.5" /> View CC
-                                          </Button>
-                                        ) : null
+                                          {onOpenCC ? (
+                                            <Button
+                                              variant="outline"
+                                              size="sm"
+                                              onClick={(e) => { e.stopPropagation(); onOpenCC(item._id); }}
+                                              className="h-9 border-blue-200 text-blue-700 hover:bg-blue-50 w-full"
+                                            >
+                                              <FileText className="h-4 w-4 mr-1.5" /> View CC
+                                            </Button>
+                                          ) : null}
+                                        </div>
                                       ) : (
                                         <RenderActionSegments item={item} isCard />
                                       )}

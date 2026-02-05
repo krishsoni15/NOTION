@@ -252,11 +252,23 @@ export function CheckDialog({
                 existingCC.vendorQuotes.map((q) => ({
                     vendorId: q.vendorId,
                     unitPrice: q.unitPrice,
+                    amount: q.amount,
+                    unit: q.unit,
+                    discountPercent: q.discountPercent,
+                    gstPercent: q.gstPercent,
                 }))
             );
             setIsDirectDelivery(existingCC.isDirectDelivery);
             // If there are vendor quotes, user chose external purchase
             setUseInventoryStock(existingCC.vendorQuotes.length === 0);
+
+            if (existingCC.purchaseQuantity) {
+                setQuantityToBuy(existingCC.purchaseQuantity);
+            }
+            if (existingCC.inventoryFulfillmentQuantity) {
+                setQuantityFromInventory(existingCC.inventoryFulfillmentQuantity);
+            }
+
             // Reset manager notes when opening
             if (isManager) {
                 setManagerNotes("");
@@ -285,6 +297,11 @@ export function CheckDialog({
 
     // Initialize split fulfillment quantities when request and inventory loads
     useEffect(() => {
+        // If we have an existing CC with saved quantities, don't overwrite them with defaults
+        if (existingCC && (existingCC.purchaseQuantity || existingCC.inventoryFulfillmentQuantity)) {
+            return;
+        }
+
         if (request && itemInInventory && open) {
             const availableStock = itemInInventory.centralStock || 0;
             const requiredQuantity = request.quantity || 0;
@@ -312,7 +329,18 @@ export function CheckDialog({
             setQuantityFromVendor(request.quantity || 0);
             setQuantityToBuy(request.quantity || 0);
         }
-    }, [request, itemInInventory, open]);
+    }, [request, itemInInventory, open, existingCC]);
+
+    // Sync vendor quote amounts with quantity to buy
+    useEffect(() => {
+        if (open && vendorQuotes.length > 0 && quantityToBuy > 0) {
+            // Only update if the amount is actually different to avoid unnecessary updates
+            const needsUpdate = vendorQuotes.some(q => q.amount !== quantityToBuy);
+            if (needsUpdate) {
+                setVendorQuotes(prev => prev.map(q => ({ ...q, amount: quantityToBuy })));
+            }
+        }
+    }, [quantityToBuy, open]);
 
     // Get vendor name by ID
     const getVendorName = (vendorId: Id<"vendors">) => {
@@ -447,6 +475,7 @@ export function CheckDialog({
                 vendorQuotes: quotes,
                 isDirectDelivery,
                 inventoryFulfillmentQuantity: quantityFromInventory,
+                purchaseQuantity: quantityToBuy,
             });
             if (!silent) toast.success("Changes saved");
         } catch (error: any) {
@@ -1428,12 +1457,11 @@ export function CheckDialog({
                                         </div>
                                     ))}
                                     {vendorQuotes.length === 0 && (
-                                        <div className="text-center py-6 text-xs text-muted-foreground bg-muted/30 rounded-lg border border-dashed">
-                                            No vendor quotes added yet.
-                                        </div>
+                                        <></>
                                     )}
                                 </div>
                             </div>
+
 
 
 

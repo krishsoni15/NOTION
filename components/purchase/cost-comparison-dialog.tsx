@@ -229,6 +229,18 @@ export function CostComparisonDialog({
       setIsDirectDelivery(existingCC.isDirectDelivery);
       // If there are vendor quotes, user chose external purchase
       setUseInventoryStock(existingCC.vendorQuotes.length === 0);
+
+      // Load saved quantity preferences if available
+      if (existingCC.purchaseQuantity) {
+        setQuantityToBuy(existingCC.purchaseQuantity);
+        // If we have saved purchase quantity, we should trust it for quantityFromVendor too unless we want to recalculate
+        // But usually purchaseQuantity >= quantityFromVendor
+      }
+
+      if (existingCC.inventoryFulfillmentQuantity) {
+        setQuantityFromInventory(existingCC.inventoryFulfillmentQuantity);
+      }
+
       // Reset manager notes when opening
       if (isManager) {
         setManagerNotes("");
@@ -257,6 +269,11 @@ export function CostComparisonDialog({
 
   // Initialize split fulfillment quantities when request and inventory loads
   useEffect(() => {
+    // If we have an existing CC with saved quantities, don't overwrite them with defaults
+    if (existingCC?.purchaseQuantity || existingCC?.inventoryFulfillmentQuantity) {
+      return;
+    }
+
     if (request && itemInInventory && open) {
       const availableStock = itemInInventory.centralStock || 0;
       const requiredQuantity = request.quantity || 0;
@@ -284,7 +301,7 @@ export function CostComparisonDialog({
       setQuantityFromVendor(request.quantity || 0);
       setQuantityToBuy(request.quantity || 0);
     }
-  }, [request, itemInInventory, open]);
+  }, [request, itemInInventory, open, existingCC]);
 
   // Get vendor name by ID
   const getVendorName = (vendorId: Id<"vendors">) => {
@@ -452,6 +469,8 @@ export function CostComparisonDialog({
         requestId: activeRequestId,
         vendorQuotes: quotes,
         isDirectDelivery,
+        purchaseQuantity: quantityToBuy,
+        inventoryFulfillmentQuantity: quantityFromInventory,
       });
       if (!silent) toast.success("Cost comparison saved");
     } catch (error: any) {
@@ -706,6 +725,9 @@ export function CostComparisonDialog({
   const isSubmitted = existingCC?.status === "cc_pending";
   const isManagerReview = isManager && isSubmitted;
 
+  // Check if inventory data is still loading
+  const isInventoryLoading = inventoryItems === undefined;
+
   // Filter vendors based on search term
   const filteredVendors = vendors?.filter(vendor =>
     vendor.companyName.toLowerCase().includes(vendorSearchTerm.toLowerCase())
@@ -844,7 +866,7 @@ export function CostComparisonDialog({
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-3xl w-[95vw] max-h-[90vh] flex flex-col overflow-hidden">
           <DialogHeader className="pb-4 border-b">
             <div className="flex items-start justify-between">
               <div>
@@ -890,7 +912,7 @@ export function CostComparisonDialog({
             )}
           </DialogHeader>
 
-          <div className="space-y-3">
+          <div className="space-y-3 flex-1 overflow-y-auto pr-1">
             {/* Item Information Card - Compact & Clean */}
             {request && (
               <div className="bg-muted/30 rounded-lg p-1">
@@ -1066,8 +1088,22 @@ export function CostComparisonDialog({
             )}
 
 
+            {/* Loading Indicator for Inventory Data */}
+            {isInventoryLoading && canEdit && !isSubmitted && !isManager && (
+              <div className="p-4 bg-muted/50 border border-border/60 rounded-lg animate-pulse">
+                <div className="flex items-center gap-3">
+                  <div className="h-10 w-10 bg-muted rounded-full"></div>
+                  <div className="flex-1 space-y-2">
+                    <div className="h-4 bg-muted rounded w-3/4"></div>
+                    <div className="h-3 bg-muted rounded w-1/2"></div>
+                  </div>
+                </div>
+                <p className="text-xs text-muted-foreground mt-2">Loading inventory status...</p>
+              </div>
+            )}
+
             {/* Direct Delivery - Shows when item is in inventory with sufficient stock */}
-            {hasSufficientInventory && canEdit && !isSubmitted && !isManager && (
+            {!isInventoryLoading && hasSufficientInventory && canEdit && !isSubmitted && !isManager && (
               <div className="p-4 bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-950/30 dark:to-emerald-950/30 border border-green-300 dark:border-green-700 rounded-lg">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
@@ -1099,7 +1135,7 @@ export function CostComparisonDialog({
             )}
 
             {/* Smart Fulfillment - Shows when item is in inventory but with partial stock */}
-            {itemInInventory && !hasSufficientInventory && canEdit && !isSubmitted && !isManager && (itemInInventory.centralStock || 0) > 0 && (
+            {!isInventoryLoading && itemInInventory && !hasSufficientInventory && canEdit && !isSubmitted && !isManager && (itemInInventory.centralStock || 0) > 0 && (
               <div className="p-4 bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-950/30 dark:to-purple-950/30 border border-blue-300 dark:border-blue-700 rounded-lg space-y-4">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
@@ -1183,7 +1219,19 @@ export function CostComparisonDialog({
                         type="number"
                         min="1"
                         value={quantityToBuy}
-                        onChange={(e) => setQuantityToBuy(Math.max(1, Number(e.target.value) || 0))}
+                        onChange={(e) => {
+                          const val = Math.max(1, Number(e.target.value) || 0);
+                          setQuantityToBuy(val);
+
+                          if (itemInInventory && request) {
+                            const currentStock = itemInInventory.centralStock || 0;
+                            const reqQty = request.quantity || 0;
+                            // Reduce inventory usage if we are buying more to maintain total quantity
+                            const newInvUsage = Math.min(currentStock, Math.max(0, reqQty - val));
+                            setQuantityFromInventory(newInvUsage);
+                            setQuantityFromVendor(Math.max(0, reqQty - newInvUsage));
+                          }
+                        }}
                         className="w-20 text-center font-bold"
                       />
                       <span className="text-sm text-blue-600 dark:text-blue-400">{request?.unit || 'units'}</span>
@@ -1249,7 +1297,7 @@ export function CostComparisonDialog({
             )}
 
             {/* Out of Stock - Item in inventory but 0 stock */}
-            {itemInInventory && !hasSufficientInventory && (itemInInventory.centralStock || 0) === 0 && canEdit && !isSubmitted && !isManager && (
+            {!isInventoryLoading && itemInInventory && !hasSufficientInventory && (itemInInventory.centralStock || 0) === 0 && canEdit && !isSubmitted && !isManager && (
               <div className="p-4 bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-950/30 dark:to-orange-950/30 border border-amber-300 dark:border-amber-700 rounded-lg space-y-4">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
@@ -1306,7 +1354,7 @@ export function CostComparisonDialog({
             )}
 
             {/* New Item - Not in inventory */}
-            {!itemInInventory && canEdit && !isSubmitted && !isManager && (
+            {!isInventoryLoading && !itemInInventory && canEdit && !isSubmitted && !isManager && (
               <div className="p-4 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/30 dark:to-indigo-950/30 border border-blue-300 dark:border-blue-700 rounded-lg space-y-4">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
@@ -1393,7 +1441,7 @@ export function CostComparisonDialog({
                       variant="outline"
                       size="sm"
                       onClick={() => {
-                        setQuoteAmount((request?.quantity || 0).toString());
+                        setQuoteAmount((quantityToBuy || request?.quantity || 0).toString());
                         const bestUnit = itemInInventory?.unit || request?.unit || "";
                         if (bestUnit) setQuoteUnit(bestUnit);
                         setVendorDialogOpen(true);
@@ -1406,11 +1454,41 @@ export function CostComparisonDialog({
                   )}
                 </div>
 
+                {/* Quantity Analysis Summary - Visible for Manager review OR when quotes exist */}
+                {request && (isManagerReview || vendorQuotes.length > 0) && (
+                  <div className="mb-4 p-3 bg-muted/40 border border-border/60 rounded-lg flex items-center justify-between text-sm">
+                    <div className="flex items-center gap-4">
+                      <div className="flex flex-col">
+                        <span className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Requested</span>
+                        <span className="font-medium">{request.quantity} {request.unit}</span>
+                      </div>
+                      <div className="h-8 w-px bg-border/60"></div>
+                      <div className="flex flex-col">
+                        <span className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">To Buy</span>
+                        <span className="font-medium text-blue-600 dark:text-blue-400">
+                          {existingCC?.purchaseQuantity || quantityToBuy || vendorQuotes[0]?.amount || request.quantity} {request.unit}
+                        </span>
+                      </div>
+                      {((existingCC?.purchaseQuantity || quantityToBuy || vendorQuotes[0]?.amount || 0) > request.quantity) && (
+                        <>
+                          <div className="h-8 w-px bg-border/60"></div>
+                          <div className="flex flex-col">
+                            <span className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Extra → Inventory</span>
+                            <span className="font-bold text-green-600 dark:text-green-400">
+                              +{((existingCC?.purchaseQuantity || quantityToBuy || vendorQuotes[0]?.amount || 0) - request.quantity).toFixed(2).replace(/\.00$/, '')} {request.unit}
+                            </span>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                )}
+
                 {/* Empty State / Add First Vendor Button */}
                 {vendorQuotes.length === 0 && canEdit && !isManagerReview && (
                   <button
                     onClick={() => {
-                      setQuoteAmount((request?.quantity || 0).toString());
+                      setQuoteAmount((quantityToBuy || request?.quantity || 0).toString());
                       const bestUnit = itemInInventory?.unit || request?.unit || "";
                       if (bestUnit) setQuoteUnit(bestUnit);
                       setVendorDialogOpen(true);

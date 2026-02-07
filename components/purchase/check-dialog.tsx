@@ -1117,24 +1117,79 @@ export function CheckDialog({
                             )}
 
                             {itemInInventory && !hasSufficientInventory && (itemInInventory.centralStock || 0) > 0 && (canEdit || isManager) && (
-                                <div className="p-5 bg-gradient-to-br from-white to-blue-50 dark:from-gray-950 dark:to-blue-950/20 border border-blue-100 dark:border-blue-900 rounded-xl shadow-sm space-y-4">
-                                    <div className="space-y-1">
-                                        <h3 className="font-semibold text-lg text-foreground tracking-tight">Mixed Fulfillment Plan</h3>
-                                        <p className="text-sm text-muted-foreground">Item partially available in inventory</p>
+                                <div className="p-5 bg-gradient-to-br from-slate-50 to-blue-50 dark:from-gray-950 dark:to-blue-950/20 border border-blue-200 dark:border-blue-900 rounded-xl shadow-sm space-y-5">
+                                    {/* Header with Quick Actions */}
+                                    <div className="flex items-start justify-between">
+                                        <div className="space-y-1">
+                                            <h3 className="font-bold text-lg text-foreground tracking-tight flex items-center gap-2">
+                                                <Package className="h-5 w-5 text-blue-600" />
+                                                Split Fulfillment
+                                            </h3>
+                                            <p className="text-sm text-muted-foreground">
+                                                Available: <span className="font-semibold text-orange-600">{itemInInventory.centralStock} {itemInInventory.unit}</span> in inventory
+                                            </p>
+                                        </div>
+                                        {!isManager && (
+                                            <div className="flex gap-2">
+                                                <Button
+                                                    variant={quantityFromInventory === (itemInInventory.centralStock || 0) ? "default" : "outline"}
+                                                    size="sm"
+                                                    onClick={() => {
+                                                        const maxInv = itemInInventory.centralStock || 0;
+                                                        setQuantityFromInventory(maxInv);
+                                                        const newNeeded = Math.max(0, (request?.quantity || 0) - maxInv);
+                                                        setQuantityFromVendor(newNeeded);
+                                                        setQuantityToBuy(newNeeded);
+                                                        setIsInitialLoad(false);
+                                                    }}
+                                                    className={`text-xs h-7 ${quantityFromInventory === (itemInInventory.centralStock || 0) ? 'bg-orange-600 hover:bg-orange-700' : ''}`}
+                                                >
+                                                    Max Inventory
+                                                </Button>
+                                                <Button
+                                                    variant={quantityFromInventory === 0 ? "default" : "outline"}
+                                                    size="sm"
+                                                    onClick={() => {
+                                                        setQuantityFromInventory(0);
+                                                        setQuantityFromVendor(request?.quantity || 0);
+                                                        setQuantityToBuy(request?.quantity || 0);
+                                                        setIsInitialLoad(false);
+                                                    }}
+                                                    className={`text-xs h-7 ${quantityFromInventory === 0 ? 'bg-emerald-600 hover:bg-emerald-700' : ''}`}
+                                                >
+                                                    All Vendor
+                                                </Button>
+                                            </div>
+                                        )}
                                     </div>
 
-                                    <div className="p-4 bg-white/50 dark:bg-black/20 rounded-lg border border-border/50 space-y-4">
+                                    {/* Request Quantity Banner */}
+                                    <div className="bg-white dark:bg-black/30 rounded-lg border border-border/60 p-3">
                                         <div className="flex items-center justify-between">
-                                            <span className="text-sm font-medium text-muted-foreground">Required</span>
-                                            <span className="font-bold text-foreground">{request?.quantity} {request?.unit}</span>
+                                            <span className="text-sm font-medium text-muted-foreground">Total Required</span>
+                                            <span className="font-bold text-xl text-foreground">{request?.quantity} <span className="text-sm font-normal text-muted-foreground">{request?.unit}</span></span>
                                         </div>
+                                    </div>
 
-                                        <div className="space-y-3 pt-2 border-t border-border/50">
-                                            <div className="flex items-center justify-between group">
-                                                <Label className="text-sm text-orange-700 dark:text-orange-400 font-medium">From Inventory</Label>
+                                    {/* Split Breakdown */}
+                                    <div className="space-y-3">
+                                        {/* From Inventory Section */}
+                                        <div className={`rounded-lg border-2 p-4 transition-all ${quantityFromInventory > 0 ? 'border-orange-400 bg-orange-50/50 dark:bg-orange-950/20' : 'border-dashed border-gray-300 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-900/30'}`}>
+                                            <div className="flex items-center justify-between">
+                                                <div className="flex items-center gap-3">
+                                                    <div className={`w-10 h-10 rounded-full flex items-center justify-center ${quantityFromInventory > 0 ? 'bg-orange-100 dark:bg-orange-900/40' : 'bg-gray-200 dark:bg-gray-800'}`}>
+                                                        <Truck className={`h-5 w-5 ${quantityFromInventory > 0 ? 'text-orange-600' : 'text-gray-400'}`} />
+                                                    </div>
+                                                    <div>
+                                                        <p className={`font-semibold ${quantityFromInventory > 0 ? 'text-orange-700 dark:text-orange-400' : 'text-gray-500'}`}>
+                                                            Direct Delivery
+                                                        </p>
+                                                        <p className="text-xs text-muted-foreground">From Inventory Stock</p>
+                                                    </div>
+                                                </div>
                                                 <div className="flex items-center gap-2">
                                                     {isManager ? (
-                                                        <span className="font-bold text-orange-700 dark:text-orange-400 text-lg">
+                                                        <span className="font-bold text-2xl text-orange-700 dark:text-orange-400">
                                                             {quantityFromInventory}
                                                         </span>
                                                     ) : (
@@ -1149,116 +1204,94 @@ export function CheckDialog({
                                                                 const newNeeded = Math.max(0, (request?.quantity || 0) - val);
                                                                 setQuantityFromVendor(newNeeded);
                                                                 setQuantityToBuy(Math.max(newNeeded, quantityToBuy < newNeeded ? newNeeded : quantityToBuy));
+                                                                setIsInitialLoad(false);
                                                             }}
-                                                            className="h-8 w-24 text-right font-bold text-orange-700 bg-orange-50/50 border-orange-200 focus-visible:ring-orange-500"
+                                                            className="h-10 w-24 text-right text-lg font-bold text-orange-700 bg-white dark:bg-gray-900 border-orange-300 focus-visible:ring-orange-500"
                                                         />
                                                     )}
-                                                    <span className="text-xs text-muted-foreground w-8">{itemInInventory.unit}</span>
+                                                    <span className="text-sm text-muted-foreground min-w-[40px]">{itemInInventory.unit}</span>
                                                 </div>
                                             </div>
+                                        </div>
 
-                                            {!isManager && quantityFromInventory > 0 && (
-                                                <div className="flex justify-end -mt-1 mb-2">
-                                                    <Button
-                                                        onClick={() => setShowSplitDeliverConfirm(true)}
-                                                        size="sm"
-                                                        disabled={isEditingItem}
-                                                        className="w-full h-7 bg-orange-600 hover:bg-orange-700 text-white text-xs"
-                                                        title="Deliver this amount from Inventory"
-                                                    >
-                                                        <Package className="h-3 w-3 mr-1.5" />
-                                                        Deliver {quantityFromInventory} {itemInInventory.unit}
-                                                    </Button>
-                                                </div>
-                                            )}
+                                        {/* Divider with Arrow */}
+                                        <div className="flex items-center justify-center gap-2 py-1">
+                                            <div className="flex-1 h-px bg-gradient-to-r from-transparent via-gray-300 dark:via-gray-600 to-transparent"></div>
+                                            <span className="text-xs text-muted-foreground bg-background px-2">+</span>
+                                            <div className="flex-1 h-px bg-gradient-to-r from-transparent via-gray-300 dark:via-gray-600 to-transparent"></div>
+                                        </div>
 
+                                        {/* Buy from Vendor Section */}
+                                        <div className={`rounded-lg border-2 p-4 transition-all ${quantityToBuy > 0 ? 'border-emerald-400 bg-emerald-50/50 dark:bg-emerald-950/20' : 'border-dashed border-gray-300 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-900/30'}`}>
                                             <div className="flex items-center justify-between">
-                                                <Label className="text-sm text-emerald-700 dark:text-emerald-400 font-medium">Buy from Vendor</Label>
+                                                <div className="flex items-center gap-3">
+                                                    <div className={`w-10 h-10 rounded-full flex items-center justify-center ${quantityToBuy > 0 ? 'bg-emerald-100 dark:bg-emerald-900/40' : 'bg-gray-200 dark:bg-gray-800'}`}>
+                                                        <ShoppingCart className={`h-5 w-5 ${quantityToBuy > 0 ? 'text-emerald-600' : 'text-gray-400'}`} />
+                                                    </div>
+                                                    <div>
+                                                        <p className={`font-semibold ${quantityToBuy > 0 ? 'text-emerald-700 dark:text-emerald-400' : 'text-gray-500'}`}>
+                                                            Purchase Order
+                                                        </p>
+                                                        <p className="text-xs text-muted-foreground">Buy from Vendor</p>
+                                                    </div>
+                                                </div>
                                                 <div className="flex items-center gap-2">
                                                     {isManager ? (
-                                                        <span className="font-bold text-emerald-700 dark:text-emerald-400 text-lg">
+                                                        <span className="font-bold text-2xl text-emerald-700 dark:text-emerald-400">
                                                             {quantityToBuy}
                                                         </span>
                                                     ) : (
                                                         <Input
                                                             type="number"
-                                                            min="1"
+                                                            min="0"
                                                             value={quantityToBuy}
-
-                                                            onChange={(e) => setQuantityToBuy(Math.max(1, Number(e.target.value) || 0))}
-                                                            className="h-8 w-24 text-right font-bold text-emerald-700 bg-emerald-50/50 border-emerald-200 focus-visible:ring-emerald-500"
+                                                            onChange={(e) => {
+                                                                setQuantityToBuy(Math.max(0, Number(e.target.value) || 0));
+                                                                setIsInitialLoad(false);
+                                                            }}
+                                                            className="h-10 w-24 text-right text-lg font-bold text-emerald-700 bg-white dark:bg-gray-900 border-emerald-300 focus-visible:ring-emerald-500"
                                                         />
                                                     )}
-                                                    <span className="text-xs text-muted-foreground w-8">{request?.unit}</span>
+                                                    <span className="text-sm text-muted-foreground min-w-[40px]">{request?.unit}</span>
                                                 </div>
                                             </div>
-
-                                            {/* Total Status */}
-                                            <div className="flex justify-end text-xs font-medium pt-1 px-1">
-                                                {quantityFromInventory + quantityToBuy < (request?.quantity || 0) ? (
-                                                    <span className="text-amber-600 dark:text-amber-400 flex items-center gap-1">
-                                                        <AlertCircle className="h-3 w-3" />
-                                                        Total: {quantityFromInventory + quantityToBuy} (Less than needed)
-                                                    </span>
-                                                ) : quantityFromInventory + quantityToBuy > (request?.quantity || 0) ? (
-                                                    <span className="text-purple-600 dark:text-purple-400 flex items-center gap-1">
-                                                        <CheckCircle className="h-3 w-3" />
-                                                        Total: {quantityFromInventory + quantityToBuy} (+{quantityFromInventory + quantityToBuy - (request?.quantity || 0)} Extra)
-                                                    </span>
-                                                ) : (
-                                                    <span className="text-green-600 dark:text-green-400 flex items-center gap-1">
-                                                        <CheckCircle className="h-3 w-3" />
-                                                        Total: {quantityFromInventory + quantityToBuy} (Matches required)
-                                                    </span>
-                                                )}
-                                            </div>
-
                                         </div>
                                     </div>
 
-                                    {/* Manager Action */}
+                                    {/* Total Validation */}
+                                    <div className={`rounded-lg p-3 text-center font-medium text-sm ${quantityFromInventory + quantityToBuy < (request?.quantity || 0)
+                                            ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 border border-amber-300 dark:border-amber-700'
+                                            : quantityFromInventory + quantityToBuy > (request?.quantity || 0)
+                                                ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400 border border-purple-300 dark:border-purple-700'
+                                                : 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 border border-green-300 dark:border-green-700'
+                                        }`}>
+                                        {quantityFromInventory + quantityToBuy < (request?.quantity || 0) ? (
+                                            <span className="flex items-center justify-center gap-2">
+                                                <AlertCircle className="h-4 w-4" />
+                                                Total: {quantityFromInventory + quantityToBuy} — Need {(request?.quantity || 0) - (quantityFromInventory + quantityToBuy)} more
+                                            </span>
+                                        ) : quantityFromInventory + quantityToBuy > (request?.quantity || 0) ? (
+                                            <span className="flex items-center justify-center gap-2">
+                                                <CheckCircle className="h-4 w-4" />
+                                                Total: {quantityFromInventory + quantityToBuy} — Extra +{quantityFromInventory + quantityToBuy - (request?.quantity || 0)} for buffer
+                                            </span>
+                                        ) : (
+                                            <span className="flex items-center justify-center gap-2">
+                                                <CheckCircle className="h-4 w-4" />
+                                                Total: {quantityFromInventory + quantityToBuy} — Matches required ✓
+                                            </span>
+                                        )}
+                                    </div>
+
+                                    {/* Manager Quick Action */}
                                     {isManager && (
-                                        <div className="space-y-3 pt-2">
-
-                                            <Button
-                                                onClick={() => setShowSplitApproveConfirm(true)}
-                                                className="w-full h-10 bg-blue-600 hover:bg-blue-700 text-white shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200"
-                                            >
-                                                <CheckCircle className="h-4 w-4 mr-2" />
-                                                Confirm Split & Approve
-                                            </Button>
-                                        </div>
-                                    )}
-
-                                    {/* User Action Controls */}
-                                    {!isManager && (
-                                        <div className="grid grid-cols-2 gap-3 pt-2">
-                                            <Button
-                                                variant="outline"
-                                                size="sm"
-                                                onClick={() => {
-                                                    setQuantityFromInventory(itemInInventory.centralStock || 0);
-                                                    const newNeeded = Math.max(0, (request?.quantity || 0) - (itemInInventory.centralStock || 0));
-                                                    setQuantityFromVendor(newNeeded);
-                                                    setQuantityToBuy(newNeeded);
-                                                }}
-                                                className="text-xs h-8"
-                                            >
-                                                Max Inventory
-                                            </Button>
-                                            <Button
-                                                variant="outline"
-                                                size="sm"
-                                                onClick={() => {
-                                                    setQuantityFromInventory(0);
-                                                    setQuantityFromVendor(request?.quantity || 0);
-                                                    setQuantityToBuy(request?.quantity || 0);
-                                                }}
-                                                className="text-xs h-8"
-                                            >
-                                                Max Vendor
-                                            </Button>
-                                        </div>
+                                        <Button
+                                            onClick={() => setShowSplitApproveConfirm(true)}
+                                            className="w-full h-11 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-md hover:shadow-lg transition-all"
+                                        >
+                                            <CheckCircle className="h-4 w-4 mr-2" />
+                                            Approve Split Plan
+                                        </Button>
                                     )}
                                 </div>
                             )}

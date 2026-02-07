@@ -412,6 +412,8 @@ export const createDirectPO = mutation({
         validTill: v.number(),
         notes: v.optional(v.string()),
         existingRequestNumber: v.optional(v.string()), // Optional: Use existing request number
+        isDirect: v.optional(v.boolean()), // Optional: Default to true
+        isUrgent: v.optional(v.boolean()), // Optional: Default to true
         items: v.array(v.object({
             requestId: v.optional(v.id("requests")), // Optional: Link to existing request
             itemDescription: v.string(),
@@ -449,6 +451,9 @@ export const createDirectPO = mutation({
         const idNumber = args.existingRequestNumber || await generateRequestNumber(ctx);
         const now = Date.now();
         const results = [];
+
+        const isDirect = args.isDirect ?? true;
+        const isUrgent = args.isUrgent ?? true;
 
         // Create POs and Requests for each item
         let itemOrder = 1;
@@ -489,7 +494,7 @@ export const createDirectPO = mutation({
                     quantity: item.quantity,
                     unit: item.unit,
                     requiredBy: args.validTill, // Use ValidTill as required date
-                    isUrgent: true, // Direct POs are usually urgent
+                    isUrgent: isUrgent, // Use provided isUrgent
                     status: "sign_pending", // New status: Pending Manager Signature
                     createdAt: now,
                     updatedAt: now,
@@ -524,7 +529,7 @@ export const createDirectPO = mutation({
                 totalAmount,
                 notes: args.notes,
                 status: "sign_pending", // Wait for Manager Sign Off
-                isDirect: true,
+                isDirect: isDirect, // Use provided isDirect
                 validTill: args.validTill,
                 perUnitBasis: item.perUnitBasis,
                 perUnitBasisUnit: item.perUnitBasisUnit,

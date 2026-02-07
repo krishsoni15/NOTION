@@ -148,12 +148,21 @@ export function CheckDialog({
     const handleDirectPO = async () => {
         setIsSaving(true);
         try {
-            // Upsert CC to persist the "Buy All" intent (Inventory=0)
+            // 1. Handle Split if needed (Mixed Fulfillment)
+            if (quantityFromInventory > 0 && quantityToBuy > 0) {
+                await splitAndDeliverInventory({
+                    requestId: activeRequestId,
+                    inventoryQuantity: quantityFromInventory
+                });
+                toast.success("Inventory split processed");
+            }
+
+            // 2. Upsert CC to persist the "Direct PO" intent
             await upsertCC({
                 requestId: activeRequestId,
                 vendorQuotes: vendorQuotes,
                 isDirectDelivery: false,
-                inventoryFulfillmentQuantity: 0
+                inventoryFulfillmentQuantity: 0 // Remainder is fully vendor (or handled)
             });
 
             await updateStatus({
@@ -206,6 +215,8 @@ export function CheckDialog({
 
     const userRole = useUserRole();
     const isManager = userRole === ROLES.MANAGER;
+    const isPurchaseOfficer = userRole === ROLES.PURCHASE_OFFICER;
+    const canCreateDirectPO = isManager || isPurchaseOfficer;
     const reviewCC = useMutation(api.costComparisons.reviewCostComparison);
     const approveSplit = useMutation(api.costComparisons.approveSplitFulfillment);
 
@@ -784,10 +795,10 @@ export function CheckDialog({
             if (hasSufficientInventory || quantityFromVendor === 0) {
                 await updatePurchaseRequestStatus({
                     requestId: activeRequestId,
-                    status: "delivered",
+                    status: "ready_for_delivery",
                 });
                 toast.success(
-                    `Direct Delivery created! ${deliveryQuantity} ${request.unit || 'units'} deducted from inventory. ` +
+                    `Request moved to Ready for Delivery! ${deliveryQuantity} ${request.unit || 'units'} deducted from inventory. ` +
                     `Remaining stock: ${result.newStock} ${itemInInventory?.unit || 'units'}`
                 );
             } else {
@@ -1201,57 +1212,7 @@ export function CheckDialog({
                                                     </span>
                                                 )}
                                             </div>
-                                            {!isManager && quantityToBuy > 0 && (
-                                                <div className="mt-2">
-                                                    {request?.directAction === "po" ? (
-                                                        <div className="grid grid-cols-2 gap-2">
-                                                            <Button
-                                                                onClick={(e) => {
-                                                                    e.preventDefault();
-                                                                    e.stopPropagation();
-                                                                    setShowDirectPOConfirm(true);
-                                                                }}
-                                                                size="sm"
-                                                                disabled={isEditingItem}
-                                                                className="w-full h-7 bg-emerald-600 hover:bg-emerald-700 text-white text-xs shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200"
-                                                                title="Create Direct PO for this quantity"
-                                                            >
-                                                                <ShoppingCart className="h-3 w-3 mr-1.5" />
-                                                                Direct PO
-                                                            </Button>
-                                                            <Button
-                                                                onClick={(e) => {
-                                                                    e.preventDefault();
-                                                                    e.stopPropagation();
-                                                                    setShowSaveConfirm(true);
-                                                                }}
-                                                                size="sm"
-                                                                disabled={isEditingItem}
-                                                                className="w-full h-7 bg-blue-600 hover:bg-blue-700 text-white text-xs shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200"
-                                                                title="Send this quantity for Cost Comparison"
-                                                            >
-                                                                <FileText className="h-3 w-3 mr-1.5" />
-                                                                Ready for CC
-                                                            </Button>
-                                                        </div>
-                                                    ) : (
-                                                        <Button
-                                                            onClick={(e) => {
-                                                                e.preventDefault();
-                                                                e.stopPropagation();
-                                                                setShowSaveConfirm(true);
-                                                            }}
-                                                            size="sm"
-                                                            disabled={isEditingItem}
-                                                            className="w-full h-7 bg-blue-600 hover:bg-blue-700 text-white text-xs shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200"
-                                                            title="Send this quantity for Cost Comparison"
-                                                        >
-                                                            <FileText className="h-3 w-3 mr-1.5" />
-                                                            Ready for CC ({quantityToBuy})
-                                                        </Button>
-                                                    )}
-                                                </div>
-                                            )}
+
                                         </div>
                                     </div>
 
@@ -1420,24 +1381,13 @@ export function CheckDialog({
                                 </div>
                             )}
 
-                            {/* Vendor Quotes Section */}
+                            {/* Vendor Quotes Section (Header/Add Button removed per user request) */}
                             <div className="space-y-3 pt-4 border-t mt-4">
-                                <div className="flex items-center justify-between">
-                                    <h4 className="font-medium text-sm">Vendor Quotes</h4>
-                                    <Button onClick={() => {
-                                        setEditingQuoteIndex(-1);
-                                        setUnitPrice("");
-                                        // Auto-fill quantity from calculated needs
-                                        setQuoteAmount((quantityToBuy || request?.quantity || 1).toString());
-                                        setQuoteUnit(request?.unit || "");
-                                        setQuoteDiscount("");
-                                        setQuoteSgst("");
-                                        setQuoteCgst("");
-                                        setVendorDialogOpen(true);
-                                    }} size="sm" variant="outline" className="h-7 text-xs">
-                                        <Plus className="h-3 w-3 mr-1" /> Add Quote
-                                    </Button>
-                                </div>
+                                {vendorQuotes.length > 0 && (
+                                    <div className="flex items-center justify-between mb-2">
+                                        <h4 className="font-medium text-sm">Vendor Quotes</h4>
+                                    </div>
+                                )}
                                 <div className="grid gap-2">
                                     {vendorQuotes.map((quote, index) => (
                                         <div key={index} className="p-3 bg-card border rounded-lg flex justify-between items-center shadow-sm">
@@ -1481,48 +1431,78 @@ export function CheckDialog({
                                             Auto-saving...
                                         </div>
                                     )}
-                                    <div className="flex gap-2 justify-end">
-                                        <Button
-                                            variant="ghost"
-                                            onClick={() => onOpenChange(false)}
-                                            size="sm"
-                                        >
-                                            Cancel
-                                        </Button>
-
-                                        <Button
-                                            variant="outline"
-                                            onClick={async () => {
-                                                await handleSave(true);
-                                                toast.success("Changes Saved");
-                                            }}
-                                            disabled={isSaving || isSubmitting}
-                                            size="sm"
-                                        >
-                                            <Save className="h-3.5 w-3.5 mr-1.5" />
-                                            Save
-                                        </Button>
-
-                                        {(request?.directAction === "po" || request?.directAction === "all") && (
-                                            <Button
-                                                onClick={() => setShowDirectPOConfirm(true)}
-                                                disabled={isSaving || isSubmitting || (quantityFromInventory > 0 && quantityToBuy > 0)}
-                                                size="sm"
-                                                className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200"
-                                            >
-                                                <ShoppingCart className="h-3.5 w-3.5 mr-1.5" />
-                                                Direct PO
-                                            </Button>
+                                    <div className="flex flex-wrap gap-2 justify-between items-center w-full">
+                                        {/* Split Indication Tag */}
+                                        {/* Split Indication Tag */}
+                                        {quantityFromInventory > 0 && quantityToBuy > 0 && (
+                                            <>
+                                                {(existingCC?.managerNotes?.includes("Split Fulfillment Approved") || request?.isSplitApproved) ? (
+                                                    <div className="flex items-center gap-1.5 px-2.5 py-1 bg-gradient-to-r from-green-100 to-emerald-100 border border-emerald-200 rounded-full">
+                                                        <div className="flex items-center justify-center h-4 w-4 rounded-full bg-emerald-500 ring-1 ring-white">
+                                                            <Check className="h-2.5 w-2.5 text-white" />
+                                                        </div>
+                                                        <span className="text-[10px] font-semibold text-emerald-800 uppercase tracking-wider">
+                                                            Split Granted
+                                                        </span>
+                                                    </div>
+                                                ) : (
+                                                    <div className="flex items-center gap-1.5 px-2.5 py-1 bg-gradient-to-r from-orange-100 to-emerald-100 border border-orange-200 rounded-full">
+                                                        <div className="flex -space-x-1">
+                                                            <div className="h-2 w-2 rounded-full bg-orange-500 ring-1 ring-white"></div>
+                                                            <div className="h-2 w-2 rounded-full bg-emerald-500 ring-1 ring-white"></div>
+                                                        </div>
+                                                        <span className="text-[10px] font-semibold text-orange-800 uppercase tracking-wider">
+                                                            Mixed Action
+                                                        </span>
+                                                    </div>
+                                                )}
+                                            </>
                                         )}
-                                        <Button
-                                            onClick={() => setShowSaveConfirm(true)}
-                                            disabled={isSaving || isSubmitting}
-                                            size="sm"
-                                            className="bg-blue-600 hover:bg-blue-700 text-white shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200"
-                                        >
-                                            <CheckCircle className="h-3.5 w-3.5 mr-1.5" />
-                                            Ready for CC
-                                        </Button>
+
+                                        {/* Action Buttons Group - Pushed to right */}
+                                        <div className="flex flex-wrap gap-2 items-center ml-auto">
+                                            <Button
+                                                variant="ghost"
+                                                onClick={() => onOpenChange(false)}
+                                                size="sm"
+                                            >
+                                                Cancel
+                                            </Button>
+
+                                            <Button
+                                                variant="outline"
+                                                onClick={async () => {
+                                                    await handleSave(true);
+                                                    toast.success("Changes Saved");
+                                                }}
+                                                disabled={isSaving || isSubmitting}
+                                                size="sm"
+                                            >
+                                                <Save className="h-3.5 w-3.5 mr-1.5" />
+                                                Save
+                                            </Button>
+
+                                            {(canCreateDirectPO || request?.directAction === "po" || request?.directAction === "all") && (
+                                                <Button
+                                                    onClick={() => setShowDirectPOConfirm(true)}
+                                                    disabled={isSaving || isSubmitting}
+                                                    size="sm"
+                                                    className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200"
+                                                >
+                                                    <ShoppingCart className="h-3.5 w-3.5 mr-1.5" />
+                                                    Direct PO
+                                                </Button>
+                                            )}
+                                            <Button
+                                                onClick={() => setShowSaveConfirm(true)}
+                                                disabled={isSaving || isSubmitting}
+                                                size="sm"
+                                                className="bg-blue-600 hover:bg-blue-700 text-white shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200"
+                                            >
+                                                <CheckCircle className="h-3.5 w-3.5 mr-1.5" />
+                                                Ready for CC
+                                            </Button>
+                                        </div>
                                     </div>
                                 </div>
                             )}

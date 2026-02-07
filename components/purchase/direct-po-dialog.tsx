@@ -80,6 +80,7 @@ interface DirectPODialogProps {
     open: boolean;
     onOpenChange: (open: boolean) => void;
     initialData?: DirectPOInitialData | null;
+    mode?: "standard" | "direct";
 }
 
 // Common units for construction materials
@@ -108,7 +109,7 @@ const TAX_RATES = [
     { value: "28", label: "28%" },
 ];
 
-export function DirectPODialog({ open, onOpenChange, initialData }: DirectPODialogProps) {
+export function DirectPODialog({ open, onOpenChange, initialData, mode = "standard" }: DirectPODialogProps) {
     const createDirectPO = useMutation(api.purchaseOrders.createDirectPO);
     const inventoryItems = useQuery(api.inventory.getAllInventoryItems);
     const vendors = useQuery(api.vendors.getAllVendors);
@@ -137,6 +138,14 @@ export function DirectPODialog({ open, onOpenChange, initialData }: DirectPODial
     const [selectedItemSuggestionIndex, setSelectedItemSuggestionIndex] = useState<number>(0);
     const [selectedSiteSuggestionIndex, setSelectedSiteSuggestionIndex] = useState<number>(0);
     const [roundOff, setRoundOff] = useState(false);
+
+    // Set poType based on mode prop
+    const [poType, setPoType] = useState<"standard" | "direct">(mode);
+
+    // Sync poType when mode prop changes
+    useEffect(() => {
+        setPoType(mode);
+    }, [mode]);
 
     const [commonData, setCommonData] = useState({
         requestNumber: "",
@@ -453,8 +462,10 @@ export function DirectPODialog({ open, onOpenChange, initialData }: DirectPODial
                 validTill: new Date(commonData.validTill).getTime(),
                 notes: commonData.notes || undefined,
                 items: formattedItems,
+                isDirect: poType === "direct",
+                isUrgent: poType === "direct",
             });
-            toast.success("Direct PO request generated successfully!", {
+            toast.success(`${poType === "direct" ? "Direct PO" : "Purchase Order"} generated successfully!`, {
                 description: "The PO is now pending approval.",
             });
 
@@ -478,8 +489,19 @@ export function DirectPODialog({ open, onOpenChange, initialData }: DirectPODial
                 >
                     <DialogHeader>
                         <DialogTitle className="flex items-center gap-2">
-                            <AlertCircle className="h-5 w-5 text-orange-500" />
-                            Create Direct PO
+                            {poType === "direct" ? (
+                                <>
+                                    <AlertCircle className="h-5 w-5 text-orange-500" />
+                                    Create Direct PO
+                                </>
+                            ) : (
+                                <>
+                                    <div className="h-5 w-5 rounded-full bg-blue-100 flex items-center justify-center">
+                                        <div className="h-2.5 w-2.5 rounded-full bg-blue-600" />
+                                    </div>
+                                    Create Purchase Order
+                                </>
+                            )}
                         </DialogTitle>
                     </DialogHeader>
 

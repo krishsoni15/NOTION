@@ -83,6 +83,7 @@ export function PurchaseRequestsContent() {
   const [selectedItemName, setSelectedItemName] = useState<string | null>(null);
   const [selectedSiteId, setSelectedSiteId] = useState<Id<"sites"> | null>(null);
   const [showDirectPODialog, setShowDirectPODialog] = useState(false);
+  const [directPOMode, setDirectPOMode] = useState<"standard" | "direct">("standard");
   const [directPOInitialData, setDirectPOInitialData] = useState<DirectPOInitialData | null>(null);
   const [pdfPreviewPoNumber, setPdfPreviewPoNumber] = useState<string | null>(null);
 
@@ -281,6 +282,7 @@ export function PurchaseRequestsContent() {
         validTill: rejectedPO.validTill ? new Date(rejectedPO.validTill).toISOString().split('T')[0] : undefined
       });
       toast.success("Restored rejected draft details");
+      setDirectPOMode("standard");
       setShowDirectPODialog(true);
       return;
     }
@@ -338,6 +340,7 @@ export function PurchaseRequestsContent() {
       setDirectPOInitialData(null);
     }
 
+    setDirectPOMode("standard");
     setShowDirectPODialog(true);
   };
 
@@ -432,6 +435,13 @@ export function PurchaseRequestsContent() {
     });
 
     toast.dismiss(toastId);
+    setDirectPOMode("standard");
+    setShowDirectPODialog(true);
+  };
+
+  const handleOpenDirectPO = () => {
+    setDirectPOMode("direct");
+    setDirectPOInitialData(null);
     setShowDirectPODialog(true);
   };
 
@@ -589,7 +599,7 @@ export function PurchaseRequestsContent() {
             </div>
 
             <Button
-              onClick={() => setShowDirectPODialog(true)}
+              onClick={handleOpenDirectPO}
               className="bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white shadow-lg hover:shadow-xl transition-all duration-200 h-9 sm:h-10 ml-auto"
             >
               <Zap className="h-4 w-4 mr-2" />
@@ -759,6 +769,7 @@ export function PurchaseRequestsContent() {
           if (!open) setDirectPOInitialData(null);
         }}
         initialData={directPOInitialData}
+        mode={directPOMode}
       />
 
       <PDFPreviewDialog

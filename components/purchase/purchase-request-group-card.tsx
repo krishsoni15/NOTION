@@ -1320,12 +1320,12 @@ export function PurchaseRequestGroupCard({
                       {/* Ready for Delivery / PO Actions */}
                       {["recheck", "pending", "approved"].includes(item.status) && (
                         <>
-                          {(item.directAction === "delivery" || item.directAction === "all") && onDirectDelivery && (
+                          {(["delivery", "all", "split_delivery", "split_po_delivery"].includes(item.directAction || "") || item.status === "ready_for_delivery") && onDirectDelivery && (
                             <Button size="sm" onClick={() => setShowReadyForDeliveryConfirm(item._id)} disabled={!hasFullStock} className="h-7 text-xs bg-orange-50 text-orange-700 border-orange-200 hover:bg-orange-100 hover:text-orange-800 dark:bg-orange-950/30 dark:text-orange-400 dark:border-orange-800 flex-1 sm:flex-none" variant="outline">
                               <Truck className="h-3.5 w-3.5 mr-1.5" /> Ready for Delivery
                             </Button>
                           )}
-                          {(item.directAction === "po" || item.directAction === "all") && onDirectPO && (
+                          {(["po", "all", "split_po", "split_po_delivery"].includes(item.directAction || "") || item.status === "ready_for_po") && onDirectPO && (
                             <Button size="sm" onClick={() => setShowReadyForPOConfirm(item._id)} className="h-7 text-xs bg-teal-50 text-teal-700 border-teal-200 hover:bg-teal-100 hover:text-teal-800 dark:bg-teal-950/30 dark:text-teal-400 dark:border-teal-800 flex-1 sm:flex-none" variant="outline">
                               <ShoppingCart className="h-3.5 w-3.5 mr-1.5" /> Ready for PO
                             </Button>
@@ -1339,6 +1339,16 @@ export function PurchaseRequestGroupCard({
                           {onMoveToCC && (
                             <Button size="sm" onClick={() => setShowReadyForCCConfirm(item._id)} className="h-7 text-xs bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100 hover:text-blue-800 dark:bg-blue-950/30 dark:text-blue-400 dark:border-blue-800 flex-1 sm:flex-none" variant="outline">
                               <FileText className="h-3.5 w-3.5 mr-1.5" /> Ready for CC
+                            </Button>
+                          )}
+                          {isManager && onDirectPO && (
+                            <Button size="sm" onClick={() => setShowReadyForPOConfirm(item._id)} className="h-7 text-xs bg-teal-50 text-teal-700 border-teal-200 hover:bg-teal-100 hover:text-teal-800 dark:bg-teal-950/30 dark:text-teal-400 dark:border-teal-800 flex-1 sm:flex-none" variant="outline">
+                              <ShoppingCart className="h-3.5 w-3.5 mr-1.5" /> Direct PO
+                            </Button>
+                          )}
+                          {isManager && onDirectDelivery && (
+                            <Button size="sm" onClick={() => setShowReadyForDeliveryConfirm(item._id)} className="h-7 text-xs bg-orange-50 text-orange-700 border-orange-200 hover:bg-orange-100 hover:text-orange-800 dark:bg-orange-950/30 dark:text-orange-400 dark:border-orange-800 flex-1 sm:flex-none" variant="outline">
+                              <Truck className="h-3.5 w-3.5 mr-1.5" /> Direct Delivery
                             </Button>
                           )}
                           {onCheck && (
@@ -1390,6 +1400,23 @@ export function PurchaseRequestGroupCard({
                       {item.status === "ready_for_po" && onCreatePO && (
                         <Button size="sm" onClick={() => onCreatePO(item._id)} className="h-7 text-xs bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100 hover:text-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-400 dark:border-emerald-800 flex-1 sm:flex-none" variant="outline">
                           <ShoppingCart className="h-3.5 w-3.5 mr-1.5" /> Create PO
+                        </Button>
+                      )}
+
+                      {/* Create DC Action */}
+                      {item.status === "ready_for_delivery" && (
+                        <Button
+                          size="sm"
+                          onClick={() => setMarkDeliveryItem({
+                            id: item._id,
+                            quantity: item.quantity,
+                            name: item.itemName,
+                            unit: item.unit
+                          })}
+                          className="h-7 text-xs bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100 hover:text-indigo-800 dark:bg-indigo-950/30 dark:text-indigo-400 dark:border-indigo-800 flex-1 sm:flex-none"
+                          variant="outline"
+                        >
+                          <FileText className="h-3.5 w-3.5 mr-1.5" /> Create DC
                         </Button>
                       )}
 

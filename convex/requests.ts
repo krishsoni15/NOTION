@@ -1874,7 +1874,7 @@ export const splitAndDeliverInventory = mutation({
     const deliveryRequestId = await ctx.db.insert("requests", {
       ...requestData,
       quantity: args.inventoryQuantity,
-      status: "delivery_stage",
+      status: "ready_for_delivery",
       directAction: "delivery",
       createdAt: now,
       updatedAt: now,

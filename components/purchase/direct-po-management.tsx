@@ -856,6 +856,7 @@ export function DirectPOManagement() {
                 open={showCreateDialog}
                 onOpenChange={setShowCreateDialog}
                 initialData={createDialogInitialData}
+                mode="direct"
             />
         </>
     );

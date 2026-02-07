@@ -1092,13 +1092,13 @@ export function CheckDialog({
 
                             {/* Direct Delivery - Shows when item is in inventory with sufficient stock */}
                             {hasSufficientInventory && canEdit && !isManager && (
-                                <div className="p-4 bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-950/30 dark:to-emerald-950/30 border border-green-300 dark:border-green-700 rounded-lg">
-                                    <div className="flex items-center justify-between">
-                                        <div className="flex items-center gap-3">
-                                            <div className="p-2 bg-green-100 dark:bg-green-900/50 rounded-full">
+                                <div className="p-4 bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-950/30 dark:to-emerald-950/30 border border-green-300 dark:border-green-700 rounded-lg overflow-hidden">
+                                    <div className="flex items-center justify-between gap-3 flex-wrap">
+                                        <div className="flex items-center gap-3 min-w-0 flex-1">
+                                            <div className="p-2 bg-green-100 dark:bg-green-900/50 rounded-full flex-shrink-0">
                                                 <CheckCircle className="h-6 w-6 text-green-600 dark:text-green-400" />
                                             </div>
-                                            <div>
+                                            <div className="min-w-0">
                                                 <h3 className="font-semibold text-green-700 dark:text-green-300">
                                                     ✓ Item Available in Inventory
                                                 </h3>
@@ -1111,7 +1111,7 @@ export function CheckDialog({
                                         </div>
                                         <Button
                                             onClick={() => setShowDirectDeliveryConfirm(true)}
-                                            className="bg-green-600 hover:bg-green-700 text-white shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200"
+                                            className="bg-green-600 hover:bg-green-700 text-white shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 flex-shrink-0"
                                             size="sm"
                                             disabled={isEditingItem}
                                         >
@@ -1138,38 +1138,43 @@ export function CheckDialog({
                                                 Available: <span className="font-semibold text-orange-600">{itemInInventory.centralStock} {itemInInventory.unit}</span> in inventory
                                             </p>
                                         </div>
-                                        {!isManager && (
-                                            <div className="flex gap-2">
-                                                <Button
-                                                    variant={quantityFromInventory === (itemInInventory.centralStock || 0) ? "default" : "outline"}
-                                                    size="sm"
-                                                    onClick={() => {
-                                                        const maxInv = itemInInventory.centralStock || 0;
-                                                        setQuantityFromInventory(maxInv);
-                                                        const newNeeded = Math.max(0, (request?.quantity || 0) - maxInv);
-                                                        setQuantityFromVendor(newNeeded);
-                                                        setQuantityToBuy(newNeeded);
-                                                        setIsInitialLoad(false);
-                                                    }}
-                                                    className={`text-xs h-7 ${quantityFromInventory === (itemInInventory.centralStock || 0) ? 'bg-orange-600 hover:bg-orange-700' : ''}`}
-                                                >
-                                                    Max Inventory
-                                                </Button>
-                                                <Button
-                                                    variant={quantityFromInventory === 0 ? "default" : "outline"}
-                                                    size="sm"
-                                                    onClick={() => {
-                                                        setQuantityFromInventory(0);
-                                                        setQuantityFromVendor(request?.quantity || 0);
-                                                        setQuantityToBuy(request?.quantity || 0);
-                                                        setIsInitialLoad(false);
-                                                    }}
-                                                    className={`text-xs h-7 ${quantityFromInventory === 0 ? 'bg-emerald-600 hover:bg-emerald-700' : ''}`}
-                                                >
-                                                    All Vendor
-                                                </Button>
-                                            </div>
-                                        )}
+                                        {!isManager && (() => {
+                                            const isSplitApproved = existingCC?.managerNotes?.includes("Split Fulfillment Approved") || request?.isSplitApproved;
+                                            const isMaxInventory = quantityFromInventory === (itemInInventory.centralStock || 0) && quantityFromInventory > 0;
+                                            const isAllVendor = quantityFromInventory === 0;
+                                            return (
+                                                <div className="flex gap-2 flex-shrink-0">
+                                                    <Button
+                                                        variant={isMaxInventory ? "default" : "outline"}
+                                                        size="sm"
+                                                        onClick={() => {
+                                                            const maxInv = itemInInventory.centralStock || 0;
+                                                            setQuantityFromInventory(maxInv);
+                                                            const newNeeded = Math.max(0, (request?.quantity || 0) - maxInv);
+                                                            setQuantityFromVendor(newNeeded);
+                                                            setQuantityToBuy(newNeeded);
+                                                            setIsInitialLoad(false);
+                                                        }}
+                                                        className={`text-xs h-7 ${isMaxInventory ? 'bg-orange-600 hover:bg-orange-700 text-white' : ''}`}
+                                                    >
+                                                        Max Inventory
+                                                    </Button>
+                                                    <Button
+                                                        variant={isAllVendor ? "default" : "outline"}
+                                                        size="sm"
+                                                        onClick={() => {
+                                                            setQuantityFromInventory(0);
+                                                            setQuantityFromVendor(request?.quantity || 0);
+                                                            setQuantityToBuy(request?.quantity || 0);
+                                                            setIsInitialLoad(false);
+                                                        }}
+                                                        className={`text-xs h-7 ${isAllVendor ? 'bg-emerald-600 hover:bg-emerald-700 text-white' : ''}`}
+                                                    >
+                                                        All Vendor
+                                                    </Button>
+                                                </div>
+                                            );
+                                        })()}
                                     </div>
 
                                     {/* Request Quantity Banner */}

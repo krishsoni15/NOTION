@@ -316,18 +316,27 @@ export function CheckDialog({
         if (request && itemInInventory && open) {
             const availableStock = itemInInventory.centralStock || 0;
             const requiredQuantity = request.quantity || 0;
+            const isSplitApproved = existingCC?.managerNotes?.includes("Split Fulfillment Approved") || request?.isSplitApproved;
 
             if (availableStock >= requiredQuantity) {
-                // Full inventory fulfillment possible
+                // Full inventory fulfillment possible - always use inventory
                 setQuantityFromInventory(requiredQuantity);
                 setQuantityFromVendor(0);
                 setQuantityToBuy(0);
             } else if (availableStock > 0) {
-                // Partial inventory fulfillment
-                const neededFromVendor = requiredQuantity - availableStock;
-                setQuantityFromInventory(availableStock);
-                setQuantityFromVendor(neededFromVendor);
-                setQuantityToBuy(neededFromVendor); // Default to minimum needed
+                // Partial inventory available (Split scenario)
+                if (isSplitApproved) {
+                    // Split IS approved → use max inventory, rest from vendor
+                    const neededFromVendor = requiredQuantity - availableStock;
+                    setQuantityFromInventory(availableStock);
+                    setQuantityFromVendor(neededFromVendor);
+                    setQuantityToBuy(neededFromVendor);
+                } else {
+                    // Split NOT approved → all from vendor (pending permission)
+                    setQuantityFromInventory(0);
+                    setQuantityFromVendor(requiredQuantity);
+                    setQuantityToBuy(requiredQuantity);
+                }
             } else {
                 // No inventory, all from vendors
                 setQuantityFromInventory(0);

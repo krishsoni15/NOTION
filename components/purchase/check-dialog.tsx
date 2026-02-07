@@ -1260,10 +1260,10 @@ export function CheckDialog({
 
                                     {/* Total Validation */}
                                     <div className={`rounded-lg p-3 text-center font-medium text-sm ${quantityFromInventory + quantityToBuy < (request?.quantity || 0)
-                                            ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 border border-amber-300 dark:border-amber-700'
-                                            : quantityFromInventory + quantityToBuy > (request?.quantity || 0)
-                                                ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400 border border-purple-300 dark:border-purple-700'
-                                                : 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 border border-green-300 dark:border-green-700'
+                                        ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 border border-amber-300 dark:border-amber-700'
+                                        : quantityFromInventory + quantityToBuy > (request?.quantity || 0)
+                                            ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400 border border-purple-300 dark:border-purple-700'
+                                            : 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 border border-green-300 dark:border-green-700'
                                         }`}>
                                         {quantityFromInventory + quantityToBuy < (request?.quantity || 0) ? (
                                             <span className="flex items-center justify-center gap-2">
@@ -1454,9 +1454,9 @@ export function CheckDialog({
 
 
 
-                            {/* Main Action Buttons */}
+                            {/* Main Action Footer */}
                             {canEdit && (
-                                <div className="space-y-2 pt-1 border-t mt-4">
+                                <div className="pt-4 border-t mt-4 space-y-3">
                                     {/* Auto-save indicator */}
                                     {isSaving && (
                                         <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
@@ -1464,44 +1464,50 @@ export function CheckDialog({
                                             Auto-saving...
                                         </div>
                                     )}
-                                    <div className="flex flex-wrap gap-2 justify-between items-center w-full">
-                                        {/* Split Indication Tag */}
-                                        {/* Split Indication Tag */}
-                                        {quantityFromInventory > 0 && quantityToBuy > 0 && (
-                                            <>
-                                                {(existingCC?.managerNotes?.includes("Split Fulfillment Approved") || request?.isSplitApproved) ? (
-                                                    <div className="flex items-center gap-1.5 px-2.5 py-1 bg-gradient-to-r from-green-100 to-emerald-100 border border-emerald-200 rounded-full">
-                                                        <div className="flex items-center justify-center h-4 w-4 rounded-full bg-emerald-500 ring-1 ring-white">
-                                                            <Check className="h-2.5 w-2.5 text-white" />
-                                                        </div>
-                                                        <span className="text-[10px] font-semibold text-emerald-800 uppercase tracking-wider">
-                                                            Split Granted
-                                                        </span>
-                                                    </div>
-                                                ) : (
-                                                    <div className="flex items-center gap-1.5 px-2.5 py-1 bg-gradient-to-r from-orange-100 to-emerald-100 border border-orange-200 rounded-full">
-                                                        <div className="flex -space-x-1">
-                                                            <div className="h-2 w-2 rounded-full bg-orange-500 ring-1 ring-white"></div>
-                                                            <div className="h-2 w-2 rounded-full bg-emerald-500 ring-1 ring-white"></div>
-                                                        </div>
-                                                        <span className="text-[10px] font-semibold text-orange-800 uppercase tracking-wider">
-                                                            Mixed Action
-                                                        </span>
-                                                    </div>
-                                                )}
-                                            </>
-                                        )}
 
-                                        {/* Action Buttons Group - Pushed to right */}
-                                        <div className="flex flex-wrap gap-2 items-center ml-auto">
-                                            <Button
-                                                variant="ghost"
-                                                onClick={() => onOpenChange(false)}
-                                                size="sm"
-                                            >
-                                                Cancel
-                                            </Button>
+                                    {/* Status Badge Row */}
+                                    {quantityFromInventory > 0 && quantityToBuy > 0 && (
+                                        <div className="flex justify-center">
+                                            {(existingCC?.managerNotes?.includes("Split Fulfillment Approved") || request?.isSplitApproved) ? (
+                                                <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-gradient-to-r from-green-100 to-emerald-100 dark:from-green-900/30 dark:to-emerald-900/30 border border-emerald-300 dark:border-emerald-700 rounded-full">
+                                                    <div className="flex items-center justify-center h-5 w-5 rounded-full bg-emerald-500">
+                                                        <Check className="h-3 w-3 text-white" />
+                                                    </div>
+                                                    <span className="text-xs font-bold text-emerald-700 dark:text-emerald-400 uppercase tracking-wider">
+                                                        Split Approved
+                                                    </span>
+                                                </div>
+                                            ) : (
+                                                <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-gradient-to-r from-amber-100 to-orange-100 dark:from-amber-900/30 dark:to-orange-900/30 border border-amber-300 dark:border-amber-700 rounded-full">
+                                                    <div className="flex -space-x-1">
+                                                        <div className="h-3 w-3 rounded-full bg-orange-500 ring-2 ring-white dark:ring-gray-900"></div>
+                                                        <div className="h-3 w-3 rounded-full bg-emerald-500 ring-2 ring-white dark:ring-gray-900"></div>
+                                                    </div>
+                                                    <span className="text-xs font-bold text-amber-700 dark:text-amber-400 uppercase tracking-wider">
+                                                        Split Pending Approval
+                                                    </span>
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
 
+                                    {/* Action Buttons - Clean Grid Layout */}
+                                    <div className="flex items-center gap-3">
+                                        {/* Left: Cancel */}
+                                        <Button
+                                            variant="ghost"
+                                            onClick={() => onOpenChange(false)}
+                                            className="text-muted-foreground hover:text-foreground"
+                                        >
+                                            Cancel
+                                        </Button>
+
+                                        {/* Spacer */}
+                                        <div className="flex-1" />
+
+                                        {/* Right: Action Buttons */}
+                                        <div className="flex items-center gap-2">
+                                            {/* Save Button */}
                                             <Button
                                                 variant="outline"
                                                 onClick={async () => {
@@ -1509,30 +1515,43 @@ export function CheckDialog({
                                                     toast.success("Changes Saved");
                                                 }}
                                                 disabled={isSaving || isSubmitting}
-                                                size="sm"
+                                                className="border-gray-300 dark:border-gray-600"
                                             >
-                                                <Save className="h-3.5 w-3.5 mr-1.5" />
+                                                <Save className="h-4 w-4 mr-2" />
                                                 Save
                                             </Button>
 
+                                            {/* Direct Delivery Button - Show when split approved and has inventory quantity */}
+                                            {quantityFromInventory > 0 && (existingCC?.managerNotes?.includes("Split Fulfillment Approved") || request?.isSplitApproved || hasSufficientInventory) && (
+                                                <Button
+                                                    onClick={() => setShowSplitDeliverConfirm(true)}
+                                                    disabled={isSaving || isSubmitting || isEditingItem}
+                                                    className="bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white shadow-md hover:shadow-lg transition-all"
+                                                >
+                                                    <Truck className="h-4 w-4 mr-2" />
+                                                    Deliver {quantityFromInventory} {itemInInventory?.unit || request?.unit}
+                                                </Button>
+                                            )}
+
+                                            {/* Direct PO Button */}
                                             {(canCreateDirectPO || request?.directAction === "po" || request?.directAction === "all") && (
                                                 <Button
                                                     onClick={() => setShowDirectPOConfirm(true)}
                                                     disabled={isSaving || isSubmitting}
-                                                    size="sm"
-                                                    className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200"
+                                                    className="bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white shadow-md hover:shadow-lg transition-all"
                                                 >
-                                                    <ShoppingCart className="h-3.5 w-3.5 mr-1.5" />
+                                                    <ShoppingCart className="h-4 w-4 mr-2" />
                                                     Direct PO
                                                 </Button>
                                             )}
+
+                                            {/* Ready for CC Button */}
                                             <Button
                                                 onClick={() => setShowSaveConfirm(true)}
                                                 disabled={isSaving || isSubmitting}
-                                                size="sm"
-                                                className="bg-blue-600 hover:bg-blue-700 text-white shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200"
+                                                className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-md hover:shadow-lg transition-all"
                                             >
-                                                <CheckCircle className="h-3.5 w-3.5 mr-1.5" />
+                                                <CheckCircle className="h-4 w-4 mr-2" />
                                                 Ready for CC
                                             </Button>
                                         </div>

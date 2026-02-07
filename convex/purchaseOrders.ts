@@ -355,8 +355,18 @@ export const getPOsForRequestNumber = query({
 
         if (requests.length === 0) return [];
 
+        // Create a map of requestId -> request data for quick lookup
+        const requestDataMap = new Map<string, { itemOrder: number; itemName: string; quantity: number; unit: string }>();
+        requests.forEach((r, idx) => {
+            requestDataMap.set(r._id, {
+                itemOrder: r.itemOrder ?? (idx + 1),
+                itemName: r.itemName,
+                quantity: r.quantity,
+                unit: r.unit
+            });
+        });
+
         // 2. Collect all POs linked to these requests
-        // Note: This matches POs that have a direct linkage to the request items
         const requestIds = requests.map(r => r._id);
         const allPos = [];
 
@@ -389,7 +399,15 @@ export const getPOsForRequestNumber = query({
             }
 
             const poGroup = poMap.get(po.poNumber);
-            poGroup.items.push(po);
+            // Include itemOrder, itemName, quantity from the linked request
+            const reqData = po.requestId ? requestDataMap.get(po.requestId) : undefined;
+            poGroup.items.push({
+                ...po,
+                itemOrder: reqData?.itemOrder ?? 0,
+                itemName: reqData?.itemName || po.itemDescription?.split('\n')[0] || "Item",
+                requestQuantity: reqData?.quantity ?? po.quantity,
+                requestUnit: reqData?.unit ?? po.unit
+            });
             poGroup.totalAmount += po.totalAmount;
         }
 

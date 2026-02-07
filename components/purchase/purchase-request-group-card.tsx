@@ -83,6 +83,7 @@ interface RequestItem {
   directAction?: "po" | "delivery" | "all";
   rejectionReason?: string;
   poId?: Id<"purchaseOrders">;
+  poNumber?: string;
   deliveryId?: Id<"deliveries">;
 }
 
@@ -968,7 +969,7 @@ export function PurchaseRequestGroupCard({
         {/* Items List */}
         <div className="space-y-3 mb-3">
           {(isExpanded ? itemsWithVendor : itemsWithVendor.slice(0, 1)).map((item, idx) => {
-            const displayNumber = item.itemOrder ?? (items.length - idx);
+            const displayNumber = item.itemOrder ?? (idx + 1);
             const itemPhotos = getItemPhotos(item);
             const isEditing = editingItemId === item._id;
 
@@ -1013,7 +1014,7 @@ export function PurchaseRequestGroupCard({
                       <div className="flex justify-between items-start gap-3">
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2 mb-1">
-                            <Badge variant="outline" className="text-xs px-1.5 py-0.5 h-5 min-w-[24px] flex items-center justify-center flex-shrink-0 bg-primary/5 text-primary border-primary/20">
+                            <Badge variant="outline" className="text-base px-2.5 py-1.5 h-8 min-w-[42px] flex items-center justify-center flex-shrink-0 bg-gradient-to-r from-purple-600 to-indigo-600 text-white border-0 font-black shadow-lg rounded-lg">
                               #{displayNumber}
                             </Badge>
                             {/* Selection Checkbox */}
@@ -1312,6 +1313,13 @@ export function PurchaseRequestGroupCard({
                           Split Approved
                         </Badge>
                       )}
+                      {/* PO Number Badge for sign_pending/sign_rejected */}
+                      {item.poNumber && ["sign_pending", "sign_rejected"].includes(item.status) && (
+                        <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/30 dark:text-blue-400 dark:border-blue-800 text-[10px] px-2 py-0.5 h-5 gap-1 shadow-sm font-mono">
+                          <FileText className="h-3 w-3" />
+                          PO: {item.poNumber}
+                        </Badge>
+                      )}
                     </div>
 
                     <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto sm:justify-end">
@@ -1333,7 +1341,7 @@ export function PurchaseRequestGroupCard({
                         </>
                       )}
 
-                      {/* Manager Actions: Ready for CC / Check */}
+                      {/* Manager Actions: Ready for CC / Check - Only for approved/recheck items */}
                       {["approved", "recheck"].includes(item.status) && (
                         <>
                           {onMoveToCC && (
@@ -1341,12 +1349,14 @@ export function PurchaseRequestGroupCard({
                               <FileText className="h-3.5 w-3.5 mr-1.5" /> Ready for CC
                             </Button>
                           )}
+                          {/* Direct PO - Show for managers (they have permission) */}
                           {isManager && onDirectPO && (
                             <Button size="sm" onClick={() => setShowReadyForPOConfirm(item._id)} className="h-7 text-xs bg-teal-50 text-teal-700 border-teal-200 hover:bg-teal-100 hover:text-teal-800 dark:bg-teal-950/30 dark:text-teal-400 dark:border-teal-800 flex-1 sm:flex-none" variant="outline">
                               <ShoppingCart className="h-3.5 w-3.5 mr-1.5" /> Direct PO
                             </Button>
                           )}
-                          {isManager && onDirectDelivery && (
+                          {/* Direct Delivery - Only show if approved */}
+                          {isManager && onDirectDelivery && ["delivery", "all"].includes(item.directAction || "") && (
                             <Button size="sm" onClick={() => setShowReadyForDeliveryConfirm(item._id)} className="h-7 text-xs bg-orange-50 text-orange-700 border-orange-200 hover:bg-orange-100 hover:text-orange-800 dark:bg-orange-950/30 dark:text-orange-400 dark:border-orange-800 flex-1 sm:flex-none" variant="outline">
                               <Truck className="h-3.5 w-3.5 mr-1.5" /> Direct Delivery
                             </Button>
@@ -1433,10 +1443,10 @@ export function PurchaseRequestGroupCard({
                       )}
 
                       {/* View PDF Button */}
-                      {onViewPDF && ["sign_pending", "sign_rejected", "ordered", "pending_po", "direct_po"].includes(item.status) && (
+                      {onViewPDF && item.poNumber && ["sign_pending", "sign_rejected", "ordered", "pending_po", "direct_po"].includes(item.status) && (
                         <Button
                           size="sm"
-                          onClick={() => onViewPDF(item.requestNumber)}
+                          onClick={() => onViewPDF(item.poNumber!)}
                           className="h-7 text-xs flex-1 sm:flex-none"
                           variant="outline"
                         >

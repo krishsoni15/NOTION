@@ -45,7 +45,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Separator } from "@/components/ui/separator";
-import { AlertCircle, CheckCircle, XCircle, Package, ShoppingCart, MapPin, PackageX, Sparkles, FileText, PieChart, LayoutGrid, List, Edit, Image as ImageIcon, Calendar, Clock, Check, Send, NotebookPen, Loader2, Truck, Pencil, GitFork, Building2, User } from "lucide-react";
+import { AlertCircle, CheckCircle, XCircle, Package, ShoppingCart, MapPin, PackageX, Sparkles, FileText, PieChart, LayoutGrid, List, Edit, Image as ImageIcon, Calendar, Clock, Check, Send, NotebookPen, Loader2, Truck, Pencil, GitFork, Building2, User, RefreshCw } from "lucide-react";
 import { useUserRole } from "@/hooks/use-user-role";
 import { ROLES } from "@/lib/auth/roles";
 import { CompactImageGallery } from "@/components/ui/image-gallery";
@@ -67,6 +67,7 @@ interface RequestDetailsDialogProps {
   requestId: Id<"requests"> | null;
   onCheck?: (requestId: Id<"requests">) => void;
   onOpenCC?: (requestId: Id<"requests">, requestIds?: Id<"requests">[]) => void;
+  onCreatePO?: (requestIds: Id<"requests">[]) => void;
 }
 
 export function RequestDetailsDialog({
@@ -75,6 +76,7 @@ export function RequestDetailsDialog({
   requestId,
   onCheck,
   onOpenCC,
+  onCreatePO,
 }: RequestDetailsDialogProps) {
   const userRole = useUserRole();
   const request = useQuery(
@@ -381,7 +383,7 @@ export function RequestDetailsDialog({
 
   // Manager permissions based on pending items or ability to modify existing items
   const canManagerModifyStatus = (status: string) => {
-    return ["pending", "approved", "recheck", "ready_for_cc", "cc_pending", "cc_approved", "ready_for_po", "pending_po", "sign_pending", "sign_rejected", "rejected_po", "ordered", "partially_processed", "direct_po"].includes(status);
+    return ["pending", "approved", "recheck", "ready_for_cc", "cc_pending", "cc_approved", "pending_po", "sign_pending", "sign_rejected", "rejected_po", "ordered", "partially_processed", "direct_po"].includes(status);
   };
 
   // Get pending items for manager actions
@@ -1214,6 +1216,11 @@ export function RequestDetailsDialog({
       return false;
     };
 
+    // For ready_for_po items, don't show action buttons - manager has already given permissions
+    if (item.status === "ready_for_po") {
+      return null;
+    }
+
     return (
       <div className={cn(
         "flex items-center p-1 rounded-xl border-2 transition-all duration-300 ease-out h-10 backdrop-blur-sm",
@@ -1555,6 +1562,40 @@ export function RequestDetailsDialog({
             </div>
             {/* Right Side Actions */}
             <div className="flex items-center gap-2">
+              {/* Create PO for Selected - Purchase Officer only */}
+              {isPurchaseOfficer && selectedItemsForAction.size > 0 && (() => {
+                const selectedReadyForPO = allRequests?.filter(item =>
+                  selectedItemsForAction.has(item._id) &&
+                  ["pending_po", "direct_po", "ready_for_po"].includes(item.status)
+                ) || [];
+                if (selectedReadyForPO.length === 0) return null;
+                return (
+                  <Button
+                    variant="default"
+                    size="sm"
+                    className="h-9 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 shadow-md"
+                    onClick={() => {
+                      setDirectPOInitialData({
+                        requestNumber: request?.requestNumber,
+                        deliverySiteId: request?.site?._id,
+                        deliverySiteName: request?.site?.name,
+                        items: selectedReadyForPO.map(item => ({
+                          requestId: item._id,
+                          itemDescription: item.itemName,
+                          description: item.description,
+                          quantity: item.quantity,
+                          unit: item.unit,
+                          unitPrice: 0
+                        }))
+                      });
+                      setShowDirectPODialog(true);
+                    }}
+                  >
+                    <ShoppingCart className="h-4 w-4 mr-1.5" />
+                    Create PO ({selectedReadyForPO.length} items)
+                  </Button>
+                );
+              })()}
             </div>
           </div>
 
@@ -1794,21 +1835,8 @@ export function RequestDetailsDialog({
                             </TableRow>
                           </TableHeader>
                           <TableBody>
-                            {/* Render Grouped POs First */}
-                            {/* Render Grouped POs First */}
-                            {pendingPOs && Object.values(pendingPOs.filter(p => p.status === "sign_pending" || p.status === "sign_rejected").reduce((acc, po) => {
-                              if (!po.vendor) return acc;
-                              const vendorId = po.vendor._id;
-                              if (!acc[vendorId]) {
-                                acc[vendorId] = {
-                                  vendor: po.vendor,
-                                  items: [],
-                                  status: po.status // Track status for the group
-                                };
-                              }
-                              acc[vendorId].items.push(po);
-                              return acc;
-                            }, {} as Record<string, { vendor: any, items: any[], status: string }>)).map((group: any) => (
+                            {/* Render Grouped POs First - pendingPOs is already grouped by PO number with items array */}
+                            {pendingPOs && pendingPOs.filter(group => group.status === "sign_pending" || group.status === "sign_rejected").map((group: any) => (
                               <TableRow key={`group-${group.vendor._id}`} className={cn(
                                 "shadow-sm border-b",
                                 group.status === "sign_rejected"
@@ -1873,19 +1901,19 @@ export function RequestDetailsDialog({
                                         <List className="h-3 w-3" /> Includes {group.items.length} Item{group.items.length > 1 ? 's' : ''}
                                       </h4>
                                       <div className="space-y-2 max-h-[120px] overflow-y-auto pr-2 custom-scrollbar">
-                                        {group.items.map((po: any) => (
-                                          <div key={po._id} className="flex items-center justify-between text-sm p-2 rounded bg-background/50 border border-border/50">
-                                            <div className="flex items-center gap-2">
-                                              <span className="text-[10px] font-black font-mono bg-primary/10 text-primary px-1.5 py-0.5 rounded border border-primary/20 shadow-sm">
-                                                #{allRequests?.find(r => r._id === po.requestId)?.itemOrder ?? "?"}
+                                        {group.items.map((po: any, idx: number) => (
+                                          <div key={po._id} className="flex items-center justify-between text-sm p-2.5 rounded-lg bg-background/70 border border-border/60 hover:bg-background/90 transition-colors">
+                                            <div className="flex items-center gap-2.5">
+                                              <span className="text-xs font-black font-mono bg-gradient-to-r from-purple-500 to-indigo-500 text-white px-2.5 py-1 rounded-lg shadow-md min-w-[32px] text-center">
+                                                #{po.itemOrder || (idx + 1)}
                                               </span>
-                                              <Badge variant="outline" className="h-5 px-1.5 text-[10px] bg-muted/50">
-                                                {po.quantity} {po.unit}
+                                              <Badge variant="outline" className="h-5 px-2 text-[10px] bg-muted/40 font-medium">
+                                                {po.requestQuantity || po.quantity} {po.requestUnit || po.unit}
                                               </Badge>
-                                              <span className="font-medium truncate max-w-[200px]" title={po.itemDescription}>{po.itemDescription?.split('\n')[0] || "Item"}</span>
+                                              <span className="font-semibold truncate max-w-[180px] text-foreground" title={po.itemName || po.itemDescription}>{po.itemName || po.itemDescription?.split('\n')[0] || "Item"}</span>
                                             </div>
-                                            <div className="font-semibold font-mono text-xs">
-                                              ₹{po.totalAmount.toLocaleString()}
+                                            <div className="font-bold font-mono text-xs bg-green-50 dark:bg-green-950/40 text-green-700 dark:text-green-400 px-2 py-1 rounded">
+                                              ₹{po.totalAmount?.toLocaleString() || 0}
                                             </div>
                                           </div>
                                         ))}
@@ -1938,6 +1966,24 @@ export function RequestDetailsDialog({
                                           </Button>
                                         </>
                                       )}
+                                      {/* Resubmit button for Purchase Officers on rejected POs */}
+                                      {isPurchaseOfficer && group.status === "sign_rejected" && (
+                                        <Button
+                                          size="sm"
+                                          className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold shadow-sm"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            // Get the request IDs from the group items
+                                            const requestIds = group.items.map((i: any) => i.requestId);
+                                            // Set the items for resubmission using create PO flow
+                                            if (requestIds.length > 0 && onCreatePO) {
+                                              onCreatePO(requestIds);
+                                            }
+                                          }}
+                                        >
+                                          <RefreshCw className="h-3.5 w-3.5 mr-2" /> Resubmit PO
+                                        </Button>
+                                      )}
                                       <Button
                                         variant="outline"
                                         size="sm"
@@ -1971,9 +2017,12 @@ export function RequestDetailsDialog({
                                     const isSelected = selectedItemsForAction.has(item._id);
                                     const itemPhotos = getItemPhotos(item);
 
-                                    // Check if item is part of a pending PO group
-                                    const itemPO = pendingPOs?.find(p => p.requestId === item._id && p.status === "sign_pending");
-                                    if (itemPO && itemPO.vendor) return null; // Rendered in group row
+                                    // Check if item is part of a pending PO group (looking inside group.items)
+                                    const isInSignPendingGroup = pendingPOs?.some(group =>
+                                      (group.status === "sign_pending" || group.status === "sign_rejected") &&
+                                      group.items?.some((poItem: any) => poItem.requestId === item._id)
+                                    );
+                                    if (isInSignPendingGroup) return null; // Rendered in group row on top
 
                                     return (
                                       <Fragment key={item._id}>
@@ -2009,8 +2058,8 @@ export function RequestDetailsDialog({
 
                                           <TableCell className="py-3">
                                             <div className="flex items-start gap-3">
-                                              <span className="bg-primary/10 text-primary text-[10px] font-black font-mono px-1.5 py-0.5 rounded border border-primary/20 shadow-sm shrink-0 mt-2">
-                                                #{idx + 1}
+                                              <span className="bg-gradient-to-r from-purple-600 to-indigo-600 text-white text-sm font-black font-mono px-2.5 py-1.5 rounded-lg shadow-lg shrink-0 mt-1">
+                                                #{displayNumber}
                                               </span>
 
                                               <div className="flex-shrink-0 mt-0.5" onClick={(e) => e.stopPropagation()}>
@@ -2127,36 +2176,23 @@ export function RequestDetailsDialog({
                                                   <div className="flex items-center gap-3">
                                                     <RenderActionSegments item={item} />
                                                     {isPurchaseOfficer && ["pending_po", "direct_po", "ready_for_po"].includes(item.status) && (
-                                                      <div className="flex items-center gap-2 border-l pl-3 border-border/60">
-                                                        <Button
-                                                          variant="outline"
-                                                          size="sm"
-                                                          className="h-9 border-blue-200 text-blue-700 hover:bg-blue-50"
-                                                          onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            setEditQuantityItem({ id: item._id, quantity: item.quantity, name: item.itemName, unit: item.unit });
-                                                          }}
-                                                        >
-                                                          <Edit className="h-4 w-4" />
-                                                        </Button>
-                                                        <Button
-                                                          variant="default"
-                                                          size="sm"
-                                                          className="h-9"
-                                                          onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            setDirectPOInitialData({
-                                                              requestNumber: request?.requestNumber,
-                                                              deliverySiteId: request?.site?._id,
-                                                              deliverySiteName: request?.site?.name,
-                                                              items: [{ requestId: item._id, itemDescription: item.itemName, description: item.description, quantity: item.quantity, unit: item.unit, unitPrice: 0 }]
-                                                            });
-                                                            setShowDirectPODialog(true);
-                                                          }}
-                                                        >
-                                                          <ShoppingCart className="h-4 w-4 mr-1.5" /> Order
-                                                        </Button>
-                                                      </div>
+                                                      <Button
+                                                        variant="default"
+                                                        size="sm"
+                                                        className="h-9 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600"
+                                                        onClick={(e) => {
+                                                          e.stopPropagation();
+                                                          setDirectPOInitialData({
+                                                            requestNumber: request?.requestNumber,
+                                                            deliverySiteId: request?.site?._id,
+                                                            deliverySiteName: request?.site?.name,
+                                                            items: [{ requestId: item._id, itemDescription: item.itemName, description: item.description, quantity: item.quantity, unit: item.unit, unitPrice: 0 }]
+                                                          });
+                                                          setShowDirectPODialog(true);
+                                                        }}
+                                                      >
+                                                        <ShoppingCart className="h-4 w-4 mr-1.5" /> Create PO
+                                                      </Button>
                                                     )}
                                                   </div>
                                                 )}
@@ -2242,13 +2278,14 @@ export function RequestDetailsDialog({
                                 </div>
                               </div>
                               <div className="p-3 bg-muted/10 space-y-2">
-                                {group.items.map((po: any) => (
-                                  <div key={po._id} className="flex items-center gap-2 text-sm">
-                                    <span className="text-[10px] font-black font-mono bg-primary/10 text-primary px-1.5 py-0.5 rounded border border-primary/20 shadow-sm">
-                                      #{allRequests?.find(r => r._id === po.requestId)?.itemOrder ?? "?"}
+                                {group.items.map((po: any, idx: number) => (
+                                  <div key={po._id} className="flex items-center gap-2.5 text-sm p-2 rounded-lg bg-background/60 border border-border/50 hover:bg-background/80 transition-colors">
+                                    <span className="text-xs font-black font-mono bg-gradient-to-r from-purple-500 to-indigo-500 text-white px-2 py-1 rounded-lg shadow-sm min-w-[28px] text-center">
+                                      #{po.itemOrder || (idx + 1)}
                                     </span>
-                                    <Badge variant="secondary" className="h-5 text-[10px] px-1">{po.quantity} {po.unit}</Badge>
-                                    <span className="truncate flex-1">{po.itemDescription?.split('\n')[0]}</span>
+                                    <Badge variant="secondary" className="h-5 text-[10px] px-1.5">{po.requestQuantity || po.quantity} {po.requestUnit || po.unit}</Badge>
+                                    <span className="truncate flex-1 font-semibold">{po.itemName || po.itemDescription?.split('\n')[0]}</span>
+                                    <span className="font-mono text-xs font-bold text-green-600 dark:text-green-400">₹{po.totalAmount?.toLocaleString() || 0}</span>
                                   </div>
                                 ))}
                               </div>
@@ -2372,8 +2409,8 @@ export function RequestDetailsDialog({
                                     <div className="min-w-0 flex-1 flex flex-col justify-between h-full pt-1">
                                       <div className="flex flex-col gap-1.5">
                                         <div className="flex items-start gap-2.5">
-                                          <span className="bg-primary/10 text-primary text-[10px] font-black font-mono px-1.5 py-0.5 rounded border border-primary/20 shadow-sm shrink-0 mt-0.5">
-                                            #{idx + 1}
+                                          <span className="bg-gradient-to-r from-purple-600 to-indigo-600 text-white text-sm font-black font-mono px-2.5 py-1.5 rounded-lg shadow-lg shrink-0 mt-0.5">
+                                            #{displayNumber}
                                           </span>
                                           <h4
                                             className="font-black text-lg leading-tight text-foreground dark:text-white hover:text-primary transition-colors cursor-pointer line-clamp-2 uppercase tracking-tight"
@@ -3268,14 +3305,14 @@ export function RequestDetailsDialog({
                 <XCircle className="h-8 w-8 text-red-600 dark:text-red-400" />
               </div>
               <div className="space-y-2">
-                <h3 className="text-xl font-bold text-gray-900 dark:text-white tracking-tight">
+                <DialogTitle className="text-xl font-bold text-gray-900 dark:text-white tracking-tight">
                   Confirm Rejection
-                </h3>
-                <p className="text-sm text-gray-500 dark:text-gray-400 max-w-[260px] mx-auto leading-relaxed">
+                </DialogTitle>
+                <DialogDescription className="text-sm text-gray-500 dark:text-gray-400 max-w-[260px] mx-auto leading-relaxed">
                   Reject {selectedItemsForAction.size > 0
                     ? `${selectedItemsForAction.size} item(s)`
                     : `all ${signPendingItems.length + pendingItems.length} item(s)`}?
-                </p>
+                </DialogDescription>
               </div>
             </div>
 
@@ -3452,19 +3489,22 @@ export function RequestDetailsDialog({
                   <div className="w-full text-left mt-2">
                     {(() => {
                       const ids = (showSignPendingApproveConfirm as any).ids;
-                      const batchItems = pendingPOs?.filter(p => ids.includes(p._id)) || [];
-                      const firstItem = batchItems[0];
-                      const totalValue = batchItems.reduce((sum, item) => sum + (item.totalAmount || 0), 0);
+                      // Find the group that contains items with matching IDs
+                      const matchingGroup = pendingPOs?.find(group =>
+                        group.items?.some((item: any) => ids.includes(item._id))
+                      );
+                      const batchItems = matchingGroup?.items?.filter((item: any) => ids.includes(item._id)) || [];
+                      const totalValue = batchItems.reduce((sum: number, item: any) => sum + (item.totalAmount || 0), 0);
 
-                      if (batchItems.length === 0) return null;
+                      if (batchItems.length === 0 || !matchingGroup) return null;
 
                       return (
                         <div className="bg-muted/30 rounded-lg p-3 border border-border/50 space-y-3">
                           {/* Vendor & PO Header */}
                           <div className="flex justify-between items-start border-b border-border/40 pb-2">
                             <div>
-                              <div className="font-bold text-sm text-foreground">{firstItem.vendor?.companyName}</div>
-                              <div className="text-xs text-muted-foreground font-mono mt-0.5">PO: {firstItem.poNumber}</div>
+                              <div className="font-bold text-sm text-foreground">{matchingGroup.vendor?.companyName}</div>
+                              <div className="text-xs text-muted-foreground font-mono mt-0.5">PO: {matchingGroup.poNumber}</div>
                             </div>
                             <Badge variant="outline" className="bg-background font-mono text-xs">
                               ₹{totalValue.toLocaleString()}
@@ -3473,19 +3513,18 @@ export function RequestDetailsDialog({
 
                           {/* Items List */}
                           <div className="space-y-2 max-h-[160px] overflow-y-auto pr-1 custom-scrollbar">
-                            {batchItems.map((po) => {
-                              const itemOrder = allRequests?.find(r => r._id === po.requestId)?.itemOrder ?? "?";
+                            {batchItems.map((po: any, idx: number) => {
                               return (
-                                <div key={po._id} className="flex justify-between items-start text-xs bg-background/50 p-1.5 rounded border border-transparent hover:border-border/60 transition-colors">
-                                  <div className="flex gap-2 items-start overflow-hidden">
-                                    <span className="text-[10px] font-black font-mono bg-primary/10 text-primary px-1.5 py-0.5 rounded border border-primary/20 shadow-sm h-fit mt-0.5">#{itemOrder}</span>
-                                    <div className="flex flex-col min-w-0">
-                                      <span className="font-medium truncate leading-tight" title={po.itemDescription}>{po.itemDescription?.split('\n')[0] || "Item"}</span>
-                                      <span className="text-[10px] text-muted-foreground">{po.quantity} {po.unit}</span>
+                                <div key={po._id} className="flex justify-between items-center text-xs bg-background/60 p-2 rounded-lg border border-border/50 hover:bg-background/80 transition-colors">
+                                  <div className="flex gap-2.5 items-center overflow-hidden">
+                                    <span className="text-xs font-black font-mono bg-gradient-to-r from-purple-500 to-indigo-500 text-white px-2 py-1 rounded-lg shadow-sm min-w-[28px] text-center">#{po.itemOrder || (idx + 1)}</span>
+                                    <div className="flex flex-col min-w-0 gap-0.5">
+                                      <span className="font-semibold truncate leading-tight" title={po.itemName || po.itemDescription}>{po.itemName || po.itemDescription?.split('\n')[0] || "Item"}</span>
+                                      <span className="text-[10px] text-muted-foreground font-medium bg-muted/40 px-1.5 py-0.5 rounded w-fit">{po.requestQuantity || po.quantity} {po.requestUnit || po.unit}</span>
                                     </div>
                                   </div>
-                                  <div className="font-mono font-semibold text-right whitespace-nowrap pl-2">
-                                    ₹{po.totalAmount.toLocaleString()}
+                                  <div className="font-mono font-bold text-right whitespace-nowrap pl-2 text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-950/40 px-2 py-1 rounded">
+                                    ₹{po.totalAmount?.toLocaleString() || 0}
                                   </div>
                                 </div>
                               );

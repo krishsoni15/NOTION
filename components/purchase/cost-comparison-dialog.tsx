@@ -912,7 +912,7 @@ export function CostComparisonDialog({
             )}
           </DialogHeader>
 
-          <div className="space-y-3 flex-1 overflow-y-auto pr-1">
+          <div className="space-y-3 flex-1 overflow-y-auto overflow-x-hidden pr-1">
             {/* Item Information Card - Compact & Clean */}
             {request && (
               <div className="bg-muted/30 rounded-lg p-1">
@@ -1134,32 +1134,32 @@ export function CostComparisonDialog({
                   </div>
 
                   {/* Vertical Divider - Hidden on mobile */}
-                  <div className="hidden sm:block h-8 w-px bg-border/60"></div>
+                  <div className="hidden sm:block h-8 w-px bg-border/60 shrink-0"></div>
 
-                  {/* Stats Grid */}
-                  <div className="flex items-center justify-between sm:justify-start gap-2 sm:gap-8 w-full sm:flex-1">
-                    <div>
+                  {/* Stats Grid - Responsive with overflow protection */}
+                  <div className="flex flex-wrap items-center gap-3 sm:gap-6 w-full sm:flex-1 overflow-hidden">
+                    <div className="min-w-0">
                       <span className="text-xs text-muted-foreground uppercase tracking-wider font-semibold block mb-0.5">Required</span>
-                      <span className="font-medium text-lg">{request.quantity} <span className="text-sm text-muted-foreground">{request.unit}</span></span>
+                      <span className="font-medium text-base sm:text-lg truncate block">{request.quantity} <span className="text-xs sm:text-sm text-muted-foreground">{request.unit}</span></span>
                     </div>
 
-                    <div>
+                    <div className="min-w-0">
                       <span className="text-xs text-muted-foreground uppercase tracking-wider font-semibold block mb-0.5">Available</span>
-                      <span className={`font-medium text-lg ${(itemInInventory?.centralStock || 0) > 0 ? "text-foreground" : "text-muted-foreground"}`}>
-                        {itemInInventory?.centralStock || 0} <span className="text-sm text-muted-foreground">{itemInInventory?.unit || request.unit}</span>
+                      <span className={`font-medium text-base sm:text-lg truncate block ${(itemInInventory?.centralStock || 0) > 0 ? "text-foreground" : "text-muted-foreground"}`}>
+                        {itemInInventory?.centralStock || 0} <span className="text-xs sm:text-sm text-muted-foreground">{itemInInventory?.unit || request.unit}</span>
                       </span>
                     </div>
 
                     {!itemInInventory || (itemInInventory.centralStock || 0) < request.quantity ? (
-                      <div>
+                      <div className="min-w-0">
                         <span className="text-xs text-muted-foreground uppercase tracking-wider font-semibold block mb-0.5">To Buy</span>
-                        <span className="font-medium text-lg text-blue-600 dark:text-blue-400">
-                          {quantityToBuy > 0 ? quantityToBuy : (request.quantity - (itemInInventory?.centralStock || 0))} <span className="text-sm text-muted-foreground">{request.unit}</span>
+                        <span className="font-medium text-base sm:text-lg text-blue-600 dark:text-blue-400 truncate block">
+                          {quantityToBuy > 0 ? quantityToBuy : (request.quantity - (itemInInventory?.centralStock || 0))} <span className="text-xs sm:text-sm text-muted-foreground">{request.unit}</span>
                         </span>
                       </div>
                     ) : (
-                      <div>
-                        <span className="text-xs text-green-600 font-medium bg-green-100 dark:bg-green-900/30 px-2 py-1 rounded">
+                      <div className="min-w-0">
+                        <span className="text-xs text-green-600 font-medium bg-green-100 dark:bg-green-900/30 px-2 py-1 rounded whitespace-nowrap">
                           ✓ Sufficient Stock
                         </span>
                       </div>

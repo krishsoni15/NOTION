@@ -724,6 +724,7 @@ export function PurchaseRequestsContent() {
           }
         }}
         requestId={selectedRequestId}
+        onCreatePO={handleCreateBulkPO}
       />
 
       {ccRequestId && (

@@ -483,17 +483,22 @@ export const getPurchaseRequestsByStatus = query({
 
         // Fetch related Purchase Order linkage
         let poId: Id<"purchaseOrders"> | null = null;
-        if (["pending_po", "ready_for_delivery", "delivery_stage", "delivered"].includes(request.status)) {
+        let poNumber: string | null = null;
+        if (["pending_po", "ready_for_delivery", "delivery_stage", "delivered", "sign_pending", "sign_rejected"].includes(request.status)) {
           const po = await ctx.db
             .query("purchaseOrders")
             .withIndex("by_request_id", (q) => q.eq("requestId", request._id))
             .first();
-          if (po) poId = po._id;
+          if (po) {
+            poId = po._id;
+            poNumber = po.poNumber;
+          }
         }
 
         return {
           ...request,
           poId,
+          poNumber,
           site: site
             ? {
               _id: site._id,

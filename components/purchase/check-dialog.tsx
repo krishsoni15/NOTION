@@ -144,6 +144,8 @@ export function CheckDialog({
     const [showDirectPOConfirm, setShowDirectPOConfirm] = useState(false);
     const [showSplitApproveConfirm, setShowSplitApproveConfirm] = useState(false);
     const [showSplitDeliverConfirm, setShowSplitDeliverConfirm] = useState(false);
+    const [showSplitActionConfirm, setShowSplitActionConfirm] = useState(false);
+    const [splitRemainingAction, setSplitRemainingAction] = useState<"directPO" | "cc">("cc");
 
     const handleDirectPO = async () => {
         setIsSaving(true);
@@ -212,6 +214,7 @@ export function CheckDialog({
 
     // New mutation for split delivery
     const splitAndDeliverInventory = useMutation(api.requests.splitAndDeliverInventory);
+    const directToPO = useMutation(api.requests.directToPO);
 
     const userRole = useUserRole();
     const isManager = userRole === ROLES.MANAGER;
@@ -890,7 +893,7 @@ export function CheckDialog({
     return (
         <>
             <Dialog open={open} onOpenChange={onOpenChange}>
-                <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+                <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto overflow-x-hidden">
                     <DialogHeader className="pb-3">
                         <DialogTitle className="text-lg">Review & Check Request - {request?.requestNumber}</DialogTitle>
                         <DialogDescription className="text-xs">
@@ -1099,13 +1102,13 @@ export function CheckDialog({
                                                 <CheckCircle className="h-6 w-6 text-green-600 dark:text-green-400" />
                                             </div>
                                             <div className="min-w-0">
-                                                <h3 className="font-semibold text-green-700 dark:text-green-300">
+                                                <h3 className="font-semibold text-green-700 dark:text-green-300 text-sm sm:text-base">
                                                     ✓ Item Available in Inventory
                                                 </h3>
-                                                <p className="text-sm text-green-600 dark:text-green-400">
-                                                    Stock: <span className="font-bold">{itemInInventory?.centralStock || 0}</span> {itemInInventory?.unit || 'units'}
-                                                    <span className="mx-2">•</span>
-                                                    Required: <span className="font-bold">{request?.quantity || 0}</span> {request?.unit || 'units'}
+                                                <p className="text-xs sm:text-sm text-green-600 dark:text-green-400 flex flex-wrap gap-x-2 gap-y-0.5">
+                                                    <span>Stock: <span className="font-bold">{itemInInventory?.centralStock || 0}</span> {itemInInventory?.unit || 'units'}</span>
+                                                    <span className="hidden sm:inline">•</span>
+                                                    <span>Required: <span className="font-bold">{request?.quantity || 0}</span> {request?.unit || 'units'}</span>
                                                 </p>
                                             </div>
                                         </div>
@@ -1147,6 +1150,7 @@ export function CheckDialog({
                                                     <Button
                                                         variant={isMaxInventory ? "default" : "outline"}
                                                         size="sm"
+                                                        disabled={!isSplitApproved}
                                                         onClick={() => {
                                                             const maxInv = itemInInventory.centralStock || 0;
                                                             setQuantityFromInventory(maxInv);
@@ -1155,7 +1159,8 @@ export function CheckDialog({
                                                             setQuantityToBuy(newNeeded);
                                                             setIsInitialLoad(false);
                                                         }}
-                                                        className={`text-xs h-7 ${isMaxInventory ? 'bg-orange-600 hover:bg-orange-700 text-white' : ''}`}
+                                                        className={`text-xs h-7 ${isMaxInventory && isSplitApproved ? 'bg-orange-600 hover:bg-orange-700 text-white' : ''} ${!isSplitApproved ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                                        title={!isSplitApproved ? "Split must be approved by manager first" : "Use maximum available inventory"}
                                                     >
                                                         Max Inventory
                                                     </Button>
@@ -1186,127 +1191,135 @@ export function CheckDialog({
                                     </div>
 
                                     {/* Split Breakdown */}
-                                    <div className="space-y-3">
-                                        {/* From Inventory Section */}
-                                        <div className={`rounded-lg border-2 p-4 transition-all ${quantityFromInventory > 0 ? 'border-orange-400 bg-orange-50/50 dark:bg-orange-950/20' : 'border-dashed border-gray-300 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-900/30'}`}>
-                                            <div className="flex items-center justify-between">
-                                                <div className="flex items-center gap-3">
-                                                    <div className={`w-10 h-10 rounded-full flex items-center justify-center ${quantityFromInventory > 0 ? 'bg-orange-100 dark:bg-orange-900/40' : 'bg-gray-200 dark:bg-gray-800'}`}>
-                                                        <Truck className={`h-5 w-5 ${quantityFromInventory > 0 ? 'text-orange-600' : 'text-gray-400'}`} />
-                                                    </div>
-                                                    <div>
-                                                        <p className={`font-semibold ${quantityFromInventory > 0 ? 'text-orange-700 dark:text-orange-400' : 'text-gray-500'}`}>
-                                                            Direct Delivery
-                                                        </p>
-                                                        <p className="text-xs text-muted-foreground">From Inventory Stock</p>
+                                    {(() => {
+                                        const isSplitApproved = existingCC?.managerNotes?.includes("Split Fulfillment Approved") || request?.isSplitApproved;
+                                        return (
+                                            <div className="space-y-3">
+                                                {/* From Inventory Section */}
+                                                <div className={`rounded-lg border-2 p-4 transition-all ${quantityFromInventory > 0 && isSplitApproved ? 'border-orange-400 bg-orange-50/50 dark:bg-orange-950/20' : 'border-dashed border-gray-300 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-900/30'} ${!isSplitApproved ? 'opacity-60' : ''}`}>
+                                                    <div className="flex items-center justify-between">
+                                                        <div className="flex items-center gap-3">
+                                                            <div className={`w-10 h-10 rounded-full flex items-center justify-center ${quantityFromInventory > 0 && isSplitApproved ? 'bg-orange-100 dark:bg-orange-900/40' : 'bg-gray-200 dark:bg-gray-800'}`}>
+                                                                <Truck className={`h-5 w-5 ${quantityFromInventory > 0 && isSplitApproved ? 'text-orange-600' : 'text-gray-400'}`} />
+                                                            </div>
+                                                            <div>
+                                                                <p className={`font-semibold ${quantityFromInventory > 0 && isSplitApproved ? 'text-orange-700 dark:text-orange-400' : 'text-gray-500'}`}>
+                                                                    Direct Delivery
+                                                                </p>
+                                                                <p className="text-xs text-muted-foreground">
+                                                                    {isSplitApproved ? 'From Inventory Stock' : 'Requires split approval'}
+                                                                </p>
+                                                            </div>
+                                                        </div>
+                                                        <div className="flex items-center gap-2">
+                                                            {isManager ? (
+                                                                <span className="font-bold text-2xl text-orange-700 dark:text-orange-400">
+                                                                    {quantityFromInventory}
+                                                                </span>
+                                                            ) : (
+                                                                <Input
+                                                                    type="number"
+                                                                    min="0"
+                                                                    max={itemInInventory.centralStock || 0}
+                                                                    value={isSplitApproved ? quantityFromInventory : 0}
+                                                                    disabled={!isSplitApproved}
+                                                                    onChange={(e) => {
+                                                                        const val = Math.max(0, Math.min(Number(e.target.value), itemInInventory.centralStock || 0));
+                                                                        setQuantityFromInventory(val);
+                                                                        const newNeeded = Math.max(0, (request?.quantity || 0) - val);
+                                                                        setQuantityFromVendor(newNeeded);
+                                                                        setQuantityToBuy(Math.max(newNeeded, quantityToBuy < newNeeded ? newNeeded : quantityToBuy));
+                                                                        setIsInitialLoad(false);
+                                                                    }}
+                                                                    className={`h-10 w-24 text-right text-lg font-bold bg-white dark:bg-gray-900 ${isSplitApproved ? 'text-orange-700 border-orange-300 focus-visible:ring-orange-500' : 'text-gray-400 border-gray-300 cursor-not-allowed'}`}
+                                                                />
+                                                            )}
+                                                            <span className="text-sm text-muted-foreground min-w-[40px]">{itemInInventory.unit}</span>
+                                                        </div>
                                                     </div>
                                                 </div>
-                                                <div className="flex items-center gap-2">
-                                                    {isManager ? (
-                                                        <span className="font-bold text-2xl text-orange-700 dark:text-orange-400">
-                                                            {quantityFromInventory}
+
+                                                {/* Divider with Arrow */}
+                                                <div className="flex items-center justify-center gap-2 py-1">
+                                                    <div className="flex-1 h-px bg-gradient-to-r from-transparent via-gray-300 dark:via-gray-600 to-transparent"></div>
+                                                    <span className="text-xs text-muted-foreground bg-background px-2">+</span>
+                                                    <div className="flex-1 h-px bg-gradient-to-r from-transparent via-gray-300 dark:via-gray-600 to-transparent"></div>
+                                                </div>
+
+                                                {/* Buy from Vendor Section */}
+                                                <div className={`rounded-lg border-2 p-4 transition-all ${quantityToBuy > 0 ? 'border-emerald-400 bg-emerald-50/50 dark:bg-emerald-950/20' : 'border-dashed border-gray-300 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-900/30'}`}>
+                                                    <div className="flex items-center justify-between">
+                                                        <div className="flex items-center gap-3">
+                                                            <div className={`w-10 h-10 rounded-full flex items-center justify-center ${quantityToBuy > 0 ? 'bg-emerald-100 dark:bg-emerald-900/40' : 'bg-gray-200 dark:bg-gray-800'}`}>
+                                                                <ShoppingCart className={`h-5 w-5 ${quantityToBuy > 0 ? 'text-emerald-600' : 'text-gray-400'}`} />
+                                                            </div>
+                                                            <div>
+                                                                <p className={`font-semibold ${quantityToBuy > 0 ? 'text-emerald-700 dark:text-emerald-400' : 'text-gray-500'}`}>
+                                                                    Purchase Order
+                                                                </p>
+                                                                <p className="text-xs text-muted-foreground">Buy from Vendor</p>
+                                                            </div>
+                                                        </div>
+                                                        <div className="flex items-center gap-2">
+                                                            {isManager ? (
+                                                                <span className="font-bold text-2xl text-emerald-700 dark:text-emerald-400">
+                                                                    {quantityToBuy}
+                                                                </span>
+                                                            ) : (
+                                                                <Input
+                                                                    type="number"
+                                                                    min="0"
+                                                                    value={quantityToBuy}
+                                                                    onChange={(e) => {
+                                                                        setQuantityToBuy(Math.max(0, Number(e.target.value) || 0));
+                                                                        setIsInitialLoad(false);
+                                                                    }}
+                                                                    className="h-10 w-24 text-right text-lg font-bold text-emerald-700 bg-white dark:bg-gray-900 border-emerald-300 focus-visible:ring-emerald-500"
+                                                                />
+                                                            )}
+                                                            <span className="text-sm text-muted-foreground min-w-[40px]">{request?.unit}</span>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                {/* Total Validation */}
+                                                <div className={`rounded-lg p-3 text-center font-medium text-sm ${quantityFromInventory + quantityToBuy < (request?.quantity || 0)
+                                                    ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 border border-amber-300 dark:border-amber-700'
+                                                    : quantityFromInventory + quantityToBuy > (request?.quantity || 0)
+                                                        ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400 border border-purple-300 dark:border-purple-700'
+                                                        : 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 border border-green-300 dark:border-green-700'
+                                                    }`}>
+                                                    {quantityFromInventory + quantityToBuy < (request?.quantity || 0) ? (
+                                                        <span className="flex items-center justify-center gap-2">
+                                                            <AlertCircle className="h-4 w-4" />
+                                                            Total: {quantityFromInventory + quantityToBuy} — Need {(request?.quantity || 0) - (quantityFromInventory + quantityToBuy)} more
+                                                        </span>
+                                                    ) : quantityFromInventory + quantityToBuy > (request?.quantity || 0) ? (
+                                                        <span className="flex items-center justify-center gap-2">
+                                                            <CheckCircle className="h-4 w-4" />
+                                                            Total: {quantityFromInventory + quantityToBuy} — Extra +{quantityFromInventory + quantityToBuy - (request?.quantity || 0)} for buffer
                                                         </span>
                                                     ) : (
-                                                        <Input
-                                                            type="number"
-                                                            min="0"
-                                                            max={itemInInventory.centralStock || 0}
-                                                            value={quantityFromInventory}
-                                                            onChange={(e) => {
-                                                                const val = Math.max(0, Math.min(Number(e.target.value), itemInInventory.centralStock || 0));
-                                                                setQuantityFromInventory(val);
-                                                                const newNeeded = Math.max(0, (request?.quantity || 0) - val);
-                                                                setQuantityFromVendor(newNeeded);
-                                                                setQuantityToBuy(Math.max(newNeeded, quantityToBuy < newNeeded ? newNeeded : quantityToBuy));
-                                                                setIsInitialLoad(false);
-                                                            }}
-                                                            className="h-10 w-24 text-right text-lg font-bold text-orange-700 bg-white dark:bg-gray-900 border-orange-300 focus-visible:ring-orange-500"
-                                                        />
-                                                    )}
-                                                    <span className="text-sm text-muted-foreground min-w-[40px]">{itemInInventory.unit}</span>
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        {/* Divider with Arrow */}
-                                        <div className="flex items-center justify-center gap-2 py-1">
-                                            <div className="flex-1 h-px bg-gradient-to-r from-transparent via-gray-300 dark:via-gray-600 to-transparent"></div>
-                                            <span className="text-xs text-muted-foreground bg-background px-2">+</span>
-                                            <div className="flex-1 h-px bg-gradient-to-r from-transparent via-gray-300 dark:via-gray-600 to-transparent"></div>
-                                        </div>
-
-                                        {/* Buy from Vendor Section */}
-                                        <div className={`rounded-lg border-2 p-4 transition-all ${quantityToBuy > 0 ? 'border-emerald-400 bg-emerald-50/50 dark:bg-emerald-950/20' : 'border-dashed border-gray-300 dark:border-gray-700 bg-gray-50/50 dark:bg-gray-900/30'}`}>
-                                            <div className="flex items-center justify-between">
-                                                <div className="flex items-center gap-3">
-                                                    <div className={`w-10 h-10 rounded-full flex items-center justify-center ${quantityToBuy > 0 ? 'bg-emerald-100 dark:bg-emerald-900/40' : 'bg-gray-200 dark:bg-gray-800'}`}>
-                                                        <ShoppingCart className={`h-5 w-5 ${quantityToBuy > 0 ? 'text-emerald-600' : 'text-gray-400'}`} />
-                                                    </div>
-                                                    <div>
-                                                        <p className={`font-semibold ${quantityToBuy > 0 ? 'text-emerald-700 dark:text-emerald-400' : 'text-gray-500'}`}>
-                                                            Purchase Order
-                                                        </p>
-                                                        <p className="text-xs text-muted-foreground">Buy from Vendor</p>
-                                                    </div>
-                                                </div>
-                                                <div className="flex items-center gap-2">
-                                                    {isManager ? (
-                                                        <span className="font-bold text-2xl text-emerald-700 dark:text-emerald-400">
-                                                            {quantityToBuy}
+                                                        <span className="flex items-center justify-center gap-2">
+                                                            <CheckCircle className="h-4 w-4" />
+                                                            Total: {quantityFromInventory + quantityToBuy} — Matches required ✓
                                                         </span>
-                                                    ) : (
-                                                        <Input
-                                                            type="number"
-                                                            min="0"
-                                                            value={quantityToBuy}
-                                                            onChange={(e) => {
-                                                                setQuantityToBuy(Math.max(0, Number(e.target.value) || 0));
-                                                                setIsInitialLoad(false);
-                                                            }}
-                                                            className="h-10 w-24 text-right text-lg font-bold text-emerald-700 bg-white dark:bg-gray-900 border-emerald-300 focus-visible:ring-emerald-500"
-                                                        />
                                                     )}
-                                                    <span className="text-sm text-muted-foreground min-w-[40px]">{request?.unit}</span>
                                                 </div>
+
+                                                {/* Manager Quick Action */}
+                                                {isManager && (
+                                                    <Button
+                                                        onClick={() => setShowSplitApproveConfirm(true)}
+                                                        className="w-full h-11 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-md hover:shadow-lg transition-all"
+                                                    >
+                                                        <CheckCircle className="h-4 w-4 mr-2" />
+                                                        Approve Split Plan
+                                                    </Button>
+                                                )}
                                             </div>
-                                        </div>
-                                    </div>
-
-                                    {/* Total Validation */}
-                                    <div className={`rounded-lg p-3 text-center font-medium text-sm ${quantityFromInventory + quantityToBuy < (request?.quantity || 0)
-                                        ? 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 border border-amber-300 dark:border-amber-700'
-                                        : quantityFromInventory + quantityToBuy > (request?.quantity || 0)
-                                            ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400 border border-purple-300 dark:border-purple-700'
-                                            : 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400 border border-green-300 dark:border-green-700'
-                                        }`}>
-                                        {quantityFromInventory + quantityToBuy < (request?.quantity || 0) ? (
-                                            <span className="flex items-center justify-center gap-2">
-                                                <AlertCircle className="h-4 w-4" />
-                                                Total: {quantityFromInventory + quantityToBuy} — Need {(request?.quantity || 0) - (quantityFromInventory + quantityToBuy)} more
-                                            </span>
-                                        ) : quantityFromInventory + quantityToBuy > (request?.quantity || 0) ? (
-                                            <span className="flex items-center justify-center gap-2">
-                                                <CheckCircle className="h-4 w-4" />
-                                                Total: {quantityFromInventory + quantityToBuy} — Extra +{quantityFromInventory + quantityToBuy - (request?.quantity || 0)} for buffer
-                                            </span>
-                                        ) : (
-                                            <span className="flex items-center justify-center gap-2">
-                                                <CheckCircle className="h-4 w-4" />
-                                                Total: {quantityFromInventory + quantityToBuy} — Matches required ✓
-                                            </span>
-                                        )}
-                                    </div>
-
-                                    {/* Manager Quick Action */}
-                                    {isManager && (
-                                        <Button
-                                            onClick={() => setShowSplitApproveConfirm(true)}
-                                            className="w-full h-11 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-md hover:shadow-lg transition-all"
-                                        >
-                                            <CheckCircle className="h-4 w-4 mr-2" />
-                                            Approve Split Plan
-                                        </Button>
-                                    )}
+                                        );
+                                    })()}
                                 </div>
                             )}
 
@@ -1506,7 +1519,7 @@ export function CheckDialog({
                                     )}
 
                                     {/* Action Buttons - Clean Grid Layout */}
-                                    <div className="flex items-center gap-3">
+                                    <div className="flex flex-wrap items-center gap-2">
                                         {/* Left: Cancel */}
                                         <Button
                                             variant="ghost"
@@ -1516,12 +1529,12 @@ export function CheckDialog({
                                             Cancel
                                         </Button>
 
-                                        {/* Spacer */}
-                                        <div className="flex-1" />
+                                        {/* Spacer - hidden on small screens */}
+                                        <div className="hidden sm:flex flex-1" />
 
                                         {/* Right: Action Buttons */}
-                                        <div className="flex items-center gap-2">
-                                            {/* Save Button */}
+                                        <div className="flex flex-wrap items-center gap-2">
+                                            {/* Save Button - Always show */}
                                             <Button
                                                 variant="outline"
                                                 onClick={async () => {
@@ -1530,44 +1543,67 @@ export function CheckDialog({
                                                 }}
                                                 disabled={isSaving || isSubmitting}
                                                 className="border-gray-300 dark:border-gray-600"
+                                                size="sm"
                                             >
-                                                <Save className="h-4 w-4 mr-2" />
+                                                <Save className="h-4 w-4 mr-1" />
                                                 Save
                                             </Button>
 
-                                            {/* Direct Delivery Button - Show when split approved and has inventory quantity */}
-                                            {quantityFromInventory > 0 && (existingCC?.managerNotes?.includes("Split Fulfillment Approved") || request?.isSplitApproved || hasSufficientInventory) && (
+                                            {/* SPLIT SCENARIO: Both inventory and vendor quantities > 0 */}
+                                            {quantityFromInventory > 0 && quantityToBuy > 0 ? (
                                                 <Button
-                                                    onClick={() => setShowSplitDeliverConfirm(true)}
-                                                    disabled={isSaving || isSubmitting || isEditingItem}
-                                                    className="bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white shadow-md hover:shadow-lg transition-all"
-                                                >
-                                                    <Truck className="h-4 w-4 mr-2" />
-                                                    Deliver {quantityFromInventory} {itemInInventory?.unit || request?.unit}
-                                                </Button>
-                                            )}
-
-                                            {/* Direct PO Button */}
-                                            {(canCreateDirectPO || request?.directAction === "po" || request?.directAction === "all") && (
-                                                <Button
-                                                    onClick={() => setShowDirectPOConfirm(true)}
+                                                    onClick={() => setShowSplitActionConfirm(true)}
                                                     disabled={isSaving || isSubmitting}
-                                                    className="bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white shadow-md hover:shadow-lg transition-all"
+                                                    className="bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white shadow-md hover:shadow-lg transition-all"
+                                                    size="sm"
                                                 >
-                                                    <ShoppingCart className="h-4 w-4 mr-2" />
-                                                    Direct PO
+                                                    <Package className="h-4 w-4 mr-1" />
+                                                    Split & Confirm
                                                 </Button>
-                                            )}
+                                            ) : (
+                                                <>
+                                                    {/* NO SPLIT: Show individual buttons */}
 
-                                            {/* Ready for CC Button */}
-                                            <Button
-                                                onClick={() => setShowSaveConfirm(true)}
-                                                disabled={isSaving || isSubmitting}
-                                                className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-md hover:shadow-lg transition-all"
-                                            >
-                                                <CheckCircle className="h-4 w-4 mr-2" />
-                                                Ready for CC
-                                            </Button>
+                                                    {/* Direct Delivery - When taking all from inventory */}
+                                                    {quantityFromInventory > 0 && quantityToBuy === 0 && (existingCC?.managerNotes?.includes("Split Fulfillment Approved") || request?.isSplitApproved || hasSufficientInventory) && (
+                                                        <Button
+                                                            onClick={() => setShowSplitDeliverConfirm(true)}
+                                                            disabled={isSaving || isSubmitting || isEditingItem}
+                                                            className="bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white shadow-md hover:shadow-lg transition-all"
+                                                            size="sm"
+                                                        >
+                                                            <Truck className="h-4 w-4 mr-1" />
+                                                            Deliver {quantityFromInventory} {itemInInventory?.unit || request?.unit}
+                                                        </Button>
+                                                    )}
+
+                                                    {/* Direct PO - Only show if manager approved via directAction */}
+                                                    {quantityFromInventory === 0 && (request?.directAction === "po" || request?.directAction === "all") && (
+                                                        <Button
+                                                            onClick={() => setShowDirectPOConfirm(true)}
+                                                            disabled={isSaving || isSubmitting}
+                                                            className="bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white shadow-md hover:shadow-lg transition-all"
+                                                            size="sm"
+                                                        >
+                                                            <ShoppingCart className="h-4 w-4 mr-1" />
+                                                            Direct PO
+                                                        </Button>
+                                                    )}
+
+                                                    {/* Ready for CC - When going to cost comparison */}
+                                                    {quantityFromInventory === 0 && (
+                                                        <Button
+                                                            onClick={() => setShowSaveConfirm(true)}
+                                                            disabled={isSaving || isSubmitting}
+                                                            className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-md hover:shadow-lg transition-all"
+                                                            size="sm"
+                                                        >
+                                                            <CheckCircle className="h-4 w-4 mr-1" />
+                                                            Ready for CC
+                                                        </Button>
+                                                    )}
+                                                </>
+                                            )}
                                         </div>
                                     </div>
                                 </div>
@@ -1830,6 +1866,126 @@ export function CheckDialog({
                     </AlertDialogFooter>
                 </AlertDialogContent>
             </AlertDialog >
+
+            {/* Split Action Confirmation - When both inventory and vendor quantities are set */}
+            <AlertDialog open={showSplitActionConfirm} onOpenChange={setShowSplitActionConfirm}>
+                <AlertDialogContent className="max-w-md">
+                    <AlertDialogHeader>
+                        <AlertDialogTitle className="flex items-center gap-2">
+                            <Package className="h-5 w-5 text-purple-600" />
+                            Confirm Split Fulfillment
+                        </AlertDialogTitle>
+                    </AlertDialogHeader>
+
+                    <div className="space-y-4 py-4">
+                        {/* Inventory Portion - Fixed */}
+                        <div className="bg-green-50 dark:bg-green-950/30 border border-green-200 dark:border-green-800 rounded-lg p-3">
+                            <div className="flex items-center gap-2 text-green-700 dark:text-green-400 font-medium">
+                                <CheckCircle className="h-4 w-4" />
+                                Ready for Delivery
+                            </div>
+                            <p className="text-sm text-green-600 dark:text-green-500 mt-1">
+                                <strong>{quantityFromInventory} {request?.unit}</strong> from inventory
+                            </p>
+                        </div>
+
+                        {/* Remaining Portion - User Choice */}
+                        <div className="space-y-2">
+                            <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                                What to do with remaining <strong>{quantityToBuy} {request?.unit}</strong>?
+                            </p>
+
+                            <div className="space-y-2">
+                                {/* Direct PO Option - Only show if manager approved via directAction */}
+                                {(request?.directAction === "po" || request?.directAction === "all") && (
+                                    <label className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${splitRemainingAction === "directPO"
+                                        ? "bg-emerald-50 dark:bg-emerald-950/30 border-emerald-300 dark:border-emerald-700"
+                                        : "bg-gray-50 dark:bg-gray-900 border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600"
+                                        }`}>
+                                        <input
+                                            type="radio"
+                                            name="splitAction"
+                                            checked={splitRemainingAction === "directPO"}
+                                            onChange={() => setSplitRemainingAction("directPO")}
+                                            className="h-4 w-4 text-emerald-600"
+                                        />
+                                        <div className="flex items-center gap-2">
+                                            <ShoppingCart className="h-4 w-4 text-emerald-600" />
+                                            <div>
+                                                <p className="font-medium text-gray-900 dark:text-gray-100">Direct PO</p>
+                                                <p className="text-xs text-gray-500 dark:text-gray-400">Skip CC, go directly to Purchase Order</p>
+                                            </div>
+                                        </div>
+                                    </label>
+                                )}
+
+                                {/* Ready for CC Option */}
+                                <label className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${splitRemainingAction === "cc"
+                                    ? "bg-blue-50 dark:bg-blue-950/30 border-blue-300 dark:border-blue-700"
+                                    : "bg-gray-50 dark:bg-gray-900 border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600"
+                                    }`}>
+                                    <input
+                                        type="radio"
+                                        name="splitAction"
+                                        checked={splitRemainingAction === "cc"}
+                                        onChange={() => setSplitRemainingAction("cc")}
+                                        className="h-4 w-4 text-blue-600"
+                                    />
+                                    <div className="flex items-center gap-2">
+                                        <FileText className="h-4 w-4 text-blue-600" />
+                                        <div>
+                                            <p className="font-medium text-gray-900 dark:text-gray-100">Ready for CC</p>
+                                            <p className="text-xs text-gray-500 dark:text-gray-400">Send to Cost Comparison for vendor quotes</p>
+                                        </div>
+                                    </div>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={async () => {
+                                setIsSaving(true);
+                                try {
+                                    // 1. Split and deliver inventory portion
+                                    await splitAndDeliverInventory({
+                                        requestId: activeRequestId,
+                                        inventoryQuantity: quantityFromInventory
+                                    });
+
+                                    // 2. Save CC data
+                                    await handleSave(true);
+
+                                    // 3. Handle remaining quantity based on selection
+                                    if (splitRemainingAction === "directPO") {
+                                        await directToPO({ requestId: activeRequestId });
+                                        toast.success("Split complete! Inventory → Delivery, Remaining → Direct PO");
+                                    } else {
+                                        await updatePurchaseRequestStatus({
+                                            requestId: activeRequestId,
+                                            status: "ready_for_cc"
+                                        });
+                                        toast.success("Split complete! Inventory → Delivery, Remaining → Ready for CC");
+                                    }
+
+                                    setShowSplitActionConfirm(false);
+                                    onOpenChange(false);
+                                } catch (error: any) {
+                                    toast.error("Split failed: " + error.message);
+                                } finally {
+                                    setIsSaving(false);
+                                }
+                            }}
+                            className="bg-purple-600 hover:bg-purple-700"
+                            disabled={isSaving}
+                        >
+                            {isSaving ? "Processing..." : "Confirm Split"}
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
 
         </>
     );

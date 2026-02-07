@@ -261,15 +261,22 @@ export function PurchaseRequestsContent() {
         vendorId: rejectedPO.vendor?._id,
         deliverySiteId: rejectedPO.site?._id,
         deliverySiteName: rejectedPO.site?.name,
-        items: (rejectedPO as any).items.map((item: any) => ({
-          requestId: item.requestId,
-          itemDescription: item.itemDescription || item.itemName || "",
-          description: item.description,
-          quantity: item.quantity,
-          unit: item.unit,
-          unitPrice: item.unitRate || item.unitPrice,
-          hsnCode: item.hsnSacCode || item.hsnCode
-        })),
+        items: (rejectedPO as any).items.map((item: any) => {
+          // Extract GST rate and split into SGST/CGST
+          const gstRate = item.gstTaxRate || 0;
+          return {
+            requestId: item.requestId,
+            itemDescription: item.itemDescription || item.itemName || "",
+            description: item.description,
+            quantity: item.quantity,
+            unit: item.unit,
+            unitPrice: item.unitRate || item.unitPrice,
+            discountPercent: item.discountPercent || 0,
+            sgst: gstRate / 2,
+            cgst: gstRate / 2,
+            hsnCode: item.hsnSacCode || item.hsnCode
+          };
+        }),
         vendorDetails: rejectedPO.vendor ? {
           name: rejectedPO.vendor.companyName,
           email: rejectedPO.vendor.email,
@@ -356,9 +363,83 @@ export function PurchaseRequestsContent() {
       return;
     }
 
+    // Try to find existing rejected PO for these requests to restore full data
+    let rejectedPO = null;
+    try {
+      const allPOs = await convex.query(api.purchaseOrders.getDirectPurchaseOrders);
+      // Sort POs by creation time to get the latest rejection
+      const sortedPOs = allPOs?.slice().sort((a: any, b: any) => b._creationTime - a._creationTime);
+
+      // Try to find a rejected PO that matches any of these request IDs
+      rejectedPO = sortedPOs?.find((po: any) =>
+        ['rejected', 'sign_rejected'].includes(po.status) &&
+        (
+          po.items?.some((i: any) => requestIds.includes(i.requestId)) ||
+          requestIds.some(rid => {
+            const req = requests.find(r => r._id === rid);
+            return req && po.requestNumber && po.requestNumber === req.requestNumber;
+          })
+        )
+      );
+    } catch (error) {
+      console.error("Failed to fetch PO history:", error);
+    }
+
+    toast.dismiss(toastId);
+
+    // If we found a rejected PO, restore all its data
+    if (rejectedPO) {
+      const rpo = rejectedPO as any;
+      setDirectPOInitialData({
+        requestNumber: undefined, // Create new PO number
+        vendorId: rpo.vendorId || rpo.vendor?._id,
+        deliverySiteId: rpo.deliverySiteId || rpo.site?._id,
+        deliverySiteName: rpo.deliverySite?.name || rpo.site?.name || rpo.deliveryAddress,
+        items: rpo.items?.map((item: any) => {
+          // Extract GST rate and split into SGST/CGST
+          const gstRate = item.gstTaxRate || 0;
+          return {
+            requestId: item.requestId,
+            itemDescription: item.itemDescription || item.itemName || "",
+            description: item.description,
+            quantity: item.quantity,
+            unit: item.unit,
+            unitPrice: item.unitRate || item.unitPrice || 0,
+            discountPercent: item.discountPercent || 0,
+            sgst: gstRate / 2,
+            cgst: gstRate / 2,
+            hsnCode: item.hsnSacCode || item.hsnCode
+          };
+        }) || requests.map(req => ({
+          requestId: req._id,
+          itemDescription: req.itemName,
+          description: req.description,
+          quantity: req.quantity,
+          unit: req.unit,
+          unitPrice: 0,
+          discountPercent: 0,
+          sgst: 0,
+          cgst: 0,
+        })),
+        vendorDetails: rpo.vendor ? {
+          name: rpo.vendor.companyName,
+          email: rpo.vendor.email,
+          phone: rpo.vendor.phone,
+          contactName: rpo.vendor.contactName,
+          gstNumber: rpo.vendor.gstNumber,
+          address: rpo.vendor.address
+        } : undefined,
+        notes: rpo.rejectionReason ? `[Rejection Reason: ${rpo.rejectionReason}]\n${rpo.notes || ''}` : rpo.notes,
+        validTill: rpo.validTill ? new Date(rpo.validTill).toISOString().split('T')[0] : undefined
+      });
+      toast.success("Restored rejected PO details");
+      setDirectPOMode("standard");
+      setShowDirectPODialog(true);
+      return;
+    }
+
+    // No rejected PO found, create new from request data
     // Use the first request to determine common fields (Site, Vendor)
-    // Ideally, UI should prevent selecting mixed sites/vendors, or we handle it here.
-    // For now, we default to the first one's context.
     const firstRequest = requests[0];
     let commonVendorId = firstRequest.selectedVendorId;
     let commonSiteId = firstRequest.site?._id;
@@ -421,20 +502,15 @@ export function PurchaseRequestsContent() {
     }
 
     setDirectPOInitialData({
-      requestNumber: firstRequest.requestNumber, // Use request number for grouping? or leave undefined for new? 
-      // If they are from same group, use it.
-      // If mixed groups, maybe generate new?
-      // Code uses `existingRequestNumber` if provided.
+      requestNumber: firstRequest.requestNumber,
       vendorId: commonVendorId || undefined,
       deliverySiteId: commonSiteId,
       deliverySiteName: firstRequest.site?.name,
       items: items,
       vendorDetails: vendorDetails,
-      // Combine notes?
       notes: undefined
     });
 
-    toast.dismiss(toastId);
     setDirectPOMode("standard");
     setShowDirectPODialog(true);
   };

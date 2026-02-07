@@ -254,18 +254,30 @@ export function DirectPOManagement() {
     const handleResubmit = (po: any) => {
         // Construct initial data from the rejected PO
         // Handle both legacy flat structure and new items array structure if applicable
-        const items = po.items && po.items.length > 0 ? po.items.map((item: any) => ({
-            itemDescription: item.itemDescription || item.itemName || "", // Handle various naming conventions
-            description: item.description,
-            quantity: item.quantity,
-            unit: item.unit,
-            unitPrice: item.unitRate || item.unitPrice,
-            hsnCode: item.hsnSacCode || item.hsnCode
-        })) : [{
+        const items = po.items && po.items.length > 0 ? po.items.map((item: any) => {
+            // Extract GST rate and split into SGST/CGST
+            const gstRate = item.gstTaxRate || 0;
+            return {
+                requestId: item.requestId, // Include requestId to edit existing item
+                itemDescription: item.itemDescription || item.itemName || "", // Handle various naming conventions
+                description: item.description,
+                quantity: item.quantity,
+                unit: item.unit,
+                unitPrice: item.unitRate || item.unitPrice,
+                discountPercent: item.discountPercent || 0,
+                sgst: gstRate / 2,
+                cgst: gstRate / 2,
+                hsnCode: item.hsnSacCode || item.hsnCode
+            };
+        }) : [{
+            requestId: po.requestId, // Include requestId to edit existing item
             itemDescription: po.itemDescription,
             quantity: po.quantity,
             unit: po.unit,
             unitPrice: po.unitRate,
+            discountPercent: po.discountPercent || 0,
+            sgst: (po.gstTaxRate || 0) / 2,
+            cgst: (po.gstTaxRate || 0) / 2,
             hsnCode: po.hsnSacCode
         }];
 

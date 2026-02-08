@@ -286,7 +286,8 @@ export function PurchaseRequestsContent() {
           address: rejectedPO.vendor.address
         } : undefined,
         notes: rejectedPO.rejectionReason ? `[Rejection Reason: ${rejectedPO.rejectionReason}]\n${rejectedPO.notes || ''}` : rejectedPO.notes,
-        validTill: rejectedPO.validTill ? new Date(rejectedPO.validTill).toISOString().split('T')[0] : undefined
+        validTill: rejectedPO.validTill ? new Date(rejectedPO.validTill).toISOString().split('T')[0] : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+
       });
       toast.success("Restored rejected draft details");
       setDirectPOMode("standard");
@@ -300,7 +301,7 @@ export function PurchaseRequestsContent() {
       let discountPercent = 0;
       let sgst = 0;
       let cgst = 0;
-      let vendorId = request.selectedVendorId;
+      const vendorId = request.selectedVendorId;
 
       // Try to find price from selected vendor quote
       if (vendorId && request.vendorQuotes) {
@@ -430,7 +431,8 @@ export function PurchaseRequestsContent() {
           address: rpo.vendor.address
         } : undefined,
         notes: rpo.rejectionReason ? `[Rejection Reason: ${rpo.rejectionReason}]\n${rpo.notes || ''}` : rpo.notes,
-        validTill: rpo.validTill ? new Date(rpo.validTill).toISOString().split('T')[0] : undefined
+        validTill: rpo.validTill ? new Date(rpo.validTill).toISOString().split('T')[0] : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+
       });
       toast.success("Restored rejected PO details");
       setDirectPOMode("standard");
@@ -441,8 +443,8 @@ export function PurchaseRequestsContent() {
     // No rejected PO found, create new from request data
     // Use the first request to determine common fields (Site, Vendor)
     const firstRequest = requests[0];
-    let commonVendorId = firstRequest.selectedVendorId;
-    let commonSiteId = firstRequest.site?._id;
+    const commonVendorId = firstRequest.selectedVendorId;
+    const commonSiteId = firstRequest.site?._id;
 
     // Check for mixed vendors/sites?
     const mixedVendors = requests.some(r => r.selectedVendorId !== commonVendorId);
@@ -508,7 +510,9 @@ export function PurchaseRequestsContent() {
       deliverySiteName: firstRequest.site?.name,
       items: items,
       vendorDetails: vendorDetails,
-      notes: undefined
+      notes: undefined,
+      validTill: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+
     });
 
     setDirectPOMode("standard");

@@ -59,6 +59,8 @@ import { PDFPreviewDialog } from "@/components/purchase/pdf-preview-dialog";
 import { EditPOQuantityDialog } from "@/components/purchase/edit-po-quantity-dialog";
 import { ExpandableText } from "@/components/ui/expandable-text";
 import { DirectPODialog, type DirectPOInitialData } from "@/components/purchase/direct-po-dialog";
+import { BulkDeliveryDialog } from "@/components/purchase/bulk-delivery-dialog";
+import { CreateDCMultiDialog } from "@/components/purchase/create-dc-multi-dialog";
 import type { Id } from "@/convex/_generated/dataModel";
 
 interface RequestDetailsDialogProps {
@@ -129,6 +131,7 @@ export function RequestDetailsDialog({
   const rejectDirectPO = useMutation(api.purchaseOrders.rejectDirectPOByRequest);
   const approveDirectPOById = useMutation(api.purchaseOrders.approveDirectPO);
   const rejectDirectPOById = useMutation(api.purchaseOrders.rejectDirectPO);
+  const confirmDeliveryMutation = useMutation(api.deliveries.confirmDelivery);
 
   // Fetch pending POs for grouping
   const pendingPOs = useQuery(
@@ -139,6 +142,21 @@ export function RequestDetailsDialog({
   // Fetch latest note for this request
   const notes = useQuery(api.notes.getNotes, request?.requestNumber ? { requestNumber: request.requestNumber } : "skip");
   const latestNote = notes && notes.length > 0 ? notes[0] : null;
+
+  // Create a lookup map: requestId -> poNumber (from all PO groups)
+  const requestToPONumber = useMemo(() => {
+    const map = new Map<string, string>();
+    if (pendingPOs) {
+      pendingPOs.forEach((group: any) => {
+        group.items.forEach((item: any) => {
+          if (item.requestId && item.poNumber) {
+            map.set(item.requestId, item.poNumber);
+          }
+        });
+      });
+    }
+    return map;
+  }, [pendingPOs]);
 
   const [isLoading, setIsLoading] = useState(false);
   const [rejectionReason, setRejectionReason] = useState("");
@@ -163,6 +181,9 @@ export function RequestDetailsDialog({
   const [showNotesTimeline, setShowNotesTimeline] = useState(false);
   const [showSignPendingApproveConfirm, setShowSignPendingApproveConfirm] = useState<Id<"requests"> | boolean | null>(null);
   const [editQuantityItem, setEditQuantityItem] = useState<{ id: Id<"requests">; quantity: number; name: string; unit: string } | null>(null);
+  const [bulkDeliveryData, setBulkDeliveryData] = useState<{ items: any[]; vendorName: string; poNumber: string } | null>(null);
+  const [selectedDCItems, setSelectedDCItems] = useState<Set<Id<"requests">>>(new Set());
+  const [showBulkDCDialog, setShowBulkDCDialog] = useState(false);
   // View mode with responsive default and cookie persistence
   const [viewMode, setViewMode] = useState<"table" | "card">("card"); // Default to card for mobile-first
   const [viewModeInitialized, setViewModeInitialized] = useState(false);
@@ -1221,6 +1242,130 @@ export function RequestDetailsDialog({
       return null;
     }
 
+    // Special handling for Pending PO: Show Available button ONLY (and PDF if available)
+    if (item.status === "pending_po") {
+      const poNumber = requestToPONumber.get(item._id);
+      return (
+        <div className={cn("flex items-center gap-2", isCard ? "w-full" : "")}>
+          <Button
+            size="sm"
+            onClick={(e) => {
+              e.stopPropagation();
+              setEditQuantityItem({
+                id: item._id,
+                quantity: item.quantity,
+                name: item.itemName,
+                unit: item.unit
+              });
+            }}
+            className={cn(
+              "bg-emerald-600 hover:bg-emerald-700 text-white font-semibold shadow-sm flex-1",
+              isCard ? "w-full" : "w-auto"
+            )}
+          >
+            <CheckCircle className="h-4 w-4 mr-2" /> Available
+          </Button>
+          {poNumber && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={(e) => {
+                e.stopPropagation();
+                setPdfPreviewPoNumber(poNumber);
+              }}
+              className="px-3 border-slate-200 text-slate-600 hover:bg-slate-50"
+              title="View PDF"
+            >
+              <FileText className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
+      );
+    }
+
+    // Special handling for Ready for Delivery: Show Create DC button only
+    if (item.status === "ready_for_delivery") {
+      const poNumber = requestToPONumber.get(item._id);
+      return (
+        <div className={cn("flex items-center gap-2", isCard ? "w-full" : "")}>
+          <Button
+            size="sm"
+            onClick={(e) => {
+              e.stopPropagation();
+              // Select this item and open DC dialog
+              setSelectedDCItems(new Set([item._id]));
+              setShowBulkDCDialog(true);
+            }}
+            className={cn(
+              "bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-semibold shadow-sm",
+              isCard ? "flex-1" : "flex-1"
+            )}
+          >
+            <Truck className="h-4 w-4 mr-2" /> Create DC
+          </Button>
+          {poNumber && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={(e) => {
+                e.stopPropagation();
+                setPdfPreviewPoNumber(poNumber);
+              }}
+              className="h-9 border-muted-foreground/20 hover:bg-muted/50"
+              title="View PDF"
+            >
+              <FileText className="h-4 w-4 mr-1.5" />
+              View PDF
+            </Button>
+          )}
+        </div>
+      );
+    }
+
+    // Special handling for Delivery Stage & Delivered: Show Confirm Delivered button or View PDF
+    if (item.status === "delivery_stage" || item.status === "delivered" || item.status === "out_for_delivery") {
+      const poNumber = requestToPONumber.get(item._id);
+      return (
+        <div className={cn("flex items-center gap-2", isCard ? "w-full justify-end" : "justify-end")}>
+          {/* Show Confirm Delivered button for out_for_delivery/delivery_stage items */}
+          {(item.status === "out_for_delivery" || item.status === "delivery_stage") && (
+            <Button
+              variant="default"
+              size="sm"
+              onClick={async (e) => {
+                e.stopPropagation();
+                try {
+                  await confirmDeliveryMutation({ requestId: item._id });
+                  toast.success("Item marked as delivered");
+                } catch (error) {
+                  toast.error("Failed to confirm delivery");
+                }
+              }}
+              className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white font-semibold shadow-sm"
+            >
+              <CheckCircle className="h-4 w-4 mr-1.5" />
+              Confirm Delivered
+            </Button>
+          )}
+          {poNumber && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={(e) => {
+                e.stopPropagation();
+                setPdfPreviewPoNumber(poNumber);
+              }}
+              className="h-9 border-muted-foreground/20 hover:bg-muted/50"
+              title="View PDF"
+            >
+              <FileText className="h-4 w-4 mr-1.5" />
+              View PDF
+            </Button>
+          )}
+        </div>
+      );
+    }
+
     return (
       <div className={cn(
         "flex items-center p-1 rounded-xl border-2 transition-all duration-300 ease-out h-10 backdrop-blur-sm",
@@ -1559,6 +1704,23 @@ export function RequestDetailsDialog({
                   </Button>
                 </div>
               )}
+
+              {/* DC Selection Counter */}
+              {selectedDCItems.size > 0 && (
+                <div className="flex items-center gap-2 ml-4 animate-in fade-in slide-in-from-left-2">
+                  <span className="text-xs font-medium bg-green-600/10 text-green-700 px-2.5 py-1 rounded-full border border-green-600/20">
+                    {selectedDCItems.size} for DC
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setSelectedDCItems(new Set())}
+                    className="h-7 text-xs hover:bg-destructive/10 hover:text-destructive"
+                  >
+                    Clear DC Selection
+                  </Button>
+                </div>
+              )}
             </div>
             {/* Right Side Actions */}
             <div className="flex items-center gap-2">
@@ -1566,7 +1728,7 @@ export function RequestDetailsDialog({
               {isPurchaseOfficer && selectedItemsForAction.size > 0 && (() => {
                 const selectedReadyForPO = allRequests?.filter(item =>
                   selectedItemsForAction.has(item._id) &&
-                  ["pending_po", "direct_po", "ready_for_po"].includes(item.status)
+                  ["direct_po", "ready_for_po"].includes(item.status)
                 ) || [];
                 if (selectedReadyForPO.length === 0) return null;
                 return (
@@ -1596,6 +1758,19 @@ export function RequestDetailsDialog({
                   </Button>
                 );
               })()}
+
+              {/* Create DC for Selected Items */}
+              {selectedDCItems.size > 0 && (
+                <Button
+                  variant="default"
+                  size="sm"
+                  className="h-9 bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 shadow-md animate-in zoom-in-95 duration-200"
+                  onClick={() => setShowBulkDCDialog(true)}
+                >
+                  <Truck className="h-4 w-4 mr-1.5" />
+                  Create DC ({selectedDCItems.size} items)
+                </Button>
+              )}
             </div>
           </div>
 
@@ -1835,6 +2010,143 @@ export function RequestDetailsDialog({
                             </TableRow>
                           </TableHeader>
                           <TableBody>
+                            {/* Render Pending PO Groups (ordered status) - vendor-wise grouping */}
+                            {pendingPOs && pendingPOs.filter(group => group.status === "ordered").map((group: any) => (
+                              <TableRow key={`pending-po-group-${group.vendor._id}`} className={cn(
+                                "shadow-sm border-b",
+                                "bg-orange-50/50 dark:bg-orange-950/10 hover:bg-orange-50 dark:hover:bg-orange-900/20 border-orange-200/50 dark:border-orange-800/50"
+                              )}>
+                                <TableCell colSpan={10} className="p-0">
+                                  <div className="flex flex-col sm:flex-row w-full">
+                                    {/* Left: Vendor & PO Info */}
+                                    <div className={cn(
+                                      "p-4 flex-1 flex flex-col justify-center border-r",
+                                      "border-orange-200/30 dark:border-orange-800/30"
+                                    )}>
+                                      <div className="flex items-center gap-3 mb-2">
+                                        <div className={cn(
+                                          "h-10 w-10 rounded-full flex items-center justify-center border",
+                                          "bg-orange-100 dark:bg-orange-900/40 border-orange-200 dark:border-orange-800"
+                                        )}>
+                                          <Building2 className={cn(
+                                            "h-5 w-5",
+                                            "text-orange-700 dark:text-orange-400"
+                                          )} />
+                                        </div>
+                                        <div>
+                                          <div className={cn(
+                                            "font-bold text-base",
+                                            "text-orange-950 dark:text-orange-100"
+                                          )}>{group.vendor.companyName}</div>
+                                          <div className={cn(
+                                            "text-xs flex items-center gap-1.5",
+                                            "text-orange-800/70 dark:text-orange-300/70"
+                                          )}>
+                                            <span className={cn(
+                                              "font-mono px-1 rounded",
+                                              "bg-orange-100/50 dark:bg-orange-900/30"
+                                            )}>{group.vendor.gstNumber}</span>
+                                            {group.items[0].poNumber && <span className="font-mono font-semibold">• PO: {group.items[0].poNumber}</span>}
+                                          </div>
+                                        </div>
+                                      </div>
+                                      <div className="mt-2 pl-[52px]">
+                                        <div className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-orange-100 text-orange-700 dark:bg-orange-900/60 dark:text-orange-400 border border-orange-200 dark:border-orange-800">
+                                          <ShoppingCart className="h-3 w-3 mr-1" /> Pending PO
+                                        </div>
+                                      </div>
+                                    </div>
+
+                                    {/* Middle: Items List */}
+                                    <div className={cn(
+                                      "flex-[2] p-4 border-r",
+                                      "border-orange-200/30 dark:border-orange-800/30"
+                                    )}>
+                                      <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2 flex items-center gap-2">
+                                        <List className="h-3 w-3" /> Includes {group.items.length} Item{group.items.length > 1 ? 's' : ''}
+                                      </h4>
+                                      <div className="space-y-2 max-h-[120px] overflow-y-auto pr-2 custom-scrollbar">
+                                        {group.items.map((po: any, idx: number) => (
+                                          <div key={po._id} className="flex items-center justify-between text-sm p-2.5 rounded-lg bg-background/70 border border-border/60 hover:bg-background/90 transition-colors">
+                                            <div className="flex items-center gap-2.5">
+                                              <span className="text-xs font-black font-mono bg-gradient-to-r from-purple-500 to-indigo-500 text-white px-2.5 py-1 rounded-lg shadow-md min-w-[32px] text-center">
+                                                #{po.itemOrder || (idx + 1)}
+                                              </span>
+                                              <Badge variant="outline" className="h-5 px-2 text-[10px] bg-muted/40 font-medium">
+                                                {po.requestQuantity || po.quantity} {po.requestUnit || po.unit}
+                                              </Badge>
+                                              <span className="font-semibold truncate max-w-[180px] text-foreground" title={po.itemName || po.itemDescription}>{po.itemName || po.itemDescription?.split('\n')[0] || "Item"}</span>
+                                            </div>
+                                            <div className="font-bold font-mono text-xs bg-green-50 dark:bg-green-950/40 text-green-700 dark:text-green-400 px-2 py-1 rounded">
+                                              ₹{po.totalAmount?.toLocaleString() || 0}
+                                            </div>
+                                          </div>
+                                        ))}
+                                      </div>
+                                      <div className={cn(
+                                        "mt-3 pt-2 border-t border-dashed flex justify-between items-center px-1",
+                                        "border-orange-200/50 dark:border-orange-800/50"
+                                      )}>
+                                        <span className={cn(
+                                          "text-xs font-medium",
+                                          "text-orange-800/70 dark:text-orange-400/70"
+                                        )}>Total PO Value</span>
+                                        <span className="text-sm font-bold text-foreground">
+                                          ₹
+                                          {group.items.reduce((sum: number, i: any) => sum + i.totalAmount, 0).toLocaleString()}
+                                        </span>
+                                      </div>
+                                    </div>
+
+                                    {/* Right: Actions - Arrival/Receive & View PDF */}
+                                    <div className={cn(
+                                      "p-4 flex flex-col justify-center gap-2 min-w-[160px]",
+                                      "bg-orange-100/20 dark:bg-orange-950/20"
+                                    )}>
+                                      {/* Available button - opens delivery dialog for all PO items */}
+                                      <Button
+                                        size="sm"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          // Prepare bulk delivery data with all items from this vendor's PO
+                                          const bulkItems = group.items.map((po: any) => ({
+                                            requestId: po.requestId,
+                                            itemName: po.itemName || po.itemDescription?.split('\n')[0] || "Item",
+                                            requestedQuantity: po.requestQuantity || po.quantity,
+                                            unit: po.requestUnit || po.unit,
+                                            poQuantity: po.quantity || po.requestQuantity,
+                                            itemOrder: po.itemOrder
+                                          }));
+
+                                          setBulkDeliveryData({
+                                            items: bulkItems,
+                                            vendorName: group.vendor.companyName,
+                                            poNumber: group.items[0].poNumber
+                                          });
+                                        }}
+                                        className={cn(
+                                          "w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold shadow-sm"
+                                        )}
+                                      >
+                                        <CheckCircle className="h-3.5 w-3.5 mr-2" /> Available
+                                      </Button>
+                                      {group.items[0].poNumber && (
+                                        <Button
+                                          variant="outline"
+                                          size="sm"
+                                          className={cn("text-xs h-8 w-full bg-background")}
+                                          onClick={() => setPdfPreviewPoNumber(group.items[0].poNumber)}
+                                        >
+                                          <FileText className="h-3.5 w-3.5 mr-1.5" />
+                                          View PDF
+                                        </Button>
+                                      )}
+                                    </div>
+                                  </div>
+                                </TableCell>
+                              </TableRow>
+                            ))}
+
                             {/* Render Grouped POs First - pendingPOs is already grouped by PO number with items array */}
                             {pendingPOs && pendingPOs.filter(group => group.status === "sign_pending" || group.status === "sign_rejected").map((group: any) => (
                               <TableRow key={`group-${group.vendor._id}`} className={cn(
@@ -1981,7 +2293,7 @@ export function RequestDetailsDialog({
                                             }
                                           }}
                                         >
-                                          <RefreshCw className="h-3.5 w-3.5 mr-2" /> Resubmit PO
+                                          <RefreshCw className="h-3.5 w-3.5 mr-2" /> Resubmit PO ({group.items.length} items)
                                         </Button>
                                       )}
                                       <Button
@@ -2022,7 +2334,12 @@ export function RequestDetailsDialog({
                                       (group.status === "sign_pending" || group.status === "sign_rejected") &&
                                       group.items?.some((poItem: any) => poItem.requestId === item._id)
                                     );
-                                    if (isInSignPendingGroup) return null; // Rendered in group row on top
+                                    // Also check if item is in pending_po group (ordered status)
+                                    const isInPendingPOGroup = pendingPOs?.some(group =>
+                                      group.status === "ordered" &&
+                                      group.items?.some((poItem: any) => poItem.requestId === item._id)
+                                    );
+                                    if (isInSignPendingGroup || isInPendingPOGroup) return null; // Rendered in group row on top
 
                                     return (
                                       <Fragment key={item._id}>
@@ -2046,7 +2363,7 @@ export function RequestDetailsDialog({
                                           {/* Selection Checkbox */}
                                           <TableCell className="p-2 text-center w-[45px] relative rounded-l-lg overflow-hidden">
                                             <div className="flex items-center justify-center h-full w-full">
-                                              {((isManager && item.status === "pending") || (isPurchaseOfficer && ["pending_po", "direct_po", "ready_for_po"].includes(item.status))) && (
+                                              {((isManager && item.status === "pending") || (isPurchaseOfficer && ["pending_po", "direct_po", "ready_for_po", "ready_for_delivery"].includes(item.status))) && (
                                                 <Checkbox
                                                   checked={isSelected}
                                                   onCheckedChange={() => toggleItemSelection(item._id)}
@@ -2125,7 +2442,7 @@ export function RequestDetailsDialog({
                                               {getStatusBadge(item.status)}
                                             </div>
                                           </TableCell>
-                                          {(isManager && (isPending || item.status === "sign_pending" || item.status === "cc_pending" || canManagerModifyStatus(item.status))) || (isPurchaseOfficer && ["pending_po", "direct_po", "ready_for_po"].includes(item.status)) ? (
+                                          {(isManager && (isPending || item.status === "sign_pending" || item.status === "cc_pending" || canManagerModifyStatus(item.status))) || (isPurchaseOfficer && ["pending_po", "direct_po", "ready_for_po", "ready_for_delivery"].includes(item.status)) ? (
                                             <TableCell className="text-right p-4 align-middle rounded-r-lg overflow-hidden">
                                               <div className="flex items-center justify-end gap-3 min-w-[300px]">
                                                 {item.status === "sign_pending" ? (
@@ -2175,7 +2492,7 @@ export function RequestDetailsDialog({
                                                 ) : (
                                                   <div className="flex items-center gap-3">
                                                     <RenderActionSegments item={item} />
-                                                    {isPurchaseOfficer && ["pending_po", "direct_po", "ready_for_po"].includes(item.status) && (
+                                                    {isPurchaseOfficer && ["direct_po", "ready_for_po"].includes(item.status) && (
                                                       <Button
                                                         variant="default"
                                                         size="sm"
@@ -2259,6 +2576,73 @@ export function RequestDetailsDialog({
                       <div className="block">
                         {/* Card View - Grouped POs first */}
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 mb-4">
+                          {/* Pending PO Groups (ordered status) - vendor-wise */}
+                          {pendingPOs && pendingPOs.filter((p: any) => p.status === "ordered").map((group: any) => (
+                            <div key={`card-pending-po-${group.poNumber}`} className="flex flex-col border rounded-xl bg-card overflow-hidden shadow-sm hover:shadow-md transition-shadow ring-1 ring-orange-500/20">
+                              <div className="p-4 bg-orange-50 dark:bg-orange-950/20 border-b flex items-center gap-3">
+                                <div className="h-10 w-10 rounded-full bg-white dark:bg-orange-900/40 flex items-center justify-center shadow-sm text-orange-600">
+                                  <Building2 className="h-5 w-5" />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <h3 className="font-bold text-foreground truncate">{group.vendor?.companyName || "Unknown Vendor"}</h3>
+                                  <div className="text-xs text-muted-foreground flex items-center gap-2">
+                                    <span className="flex items-center gap-1"><ShoppingCart className="h-3 w-3" /> Pending PO</span>
+                                    <span>•</span>
+                                    <span className="font-mono">PO: {group.poNumber}</span>
+                                  </div>
+                                </div>
+                                <div className="text-right">
+                                  <div className="text-sm font-bold">₹{group.totalAmount.toLocaleString()}</div>
+                                </div>
+                              </div>
+                              <div className="p-3 bg-muted/10 space-y-2">
+                                {group.items.map((po: any, idx: number) => (
+                                  <div key={po._id} className="flex items-center gap-2.5 text-sm p-2 rounded-lg bg-background/60 border border-border/50 hover:bg-background/80 transition-colors">
+                                    <span className="text-xs font-black font-mono bg-gradient-to-r from-purple-500 to-indigo-500 text-white px-2 py-1 rounded-lg shadow-sm min-w-[28px] text-center">
+                                      #{po.itemOrder || (idx + 1)}
+                                    </span>
+                                    <Badge variant="secondary" className="h-5 text-[10px] px-1.5">{po.requestQuantity || po.quantity} {po.requestUnit || po.unit}</Badge>
+                                    <span className="truncate flex-1 font-semibold">{po.itemName || po.itemDescription?.split('\n')[0]}</span>
+                                    <span className="font-mono text-xs font-bold text-green-600 dark:text-green-400">₹{po.totalAmount?.toLocaleString() || 0}</span>
+                                  </div>
+                                ))}
+                              </div>
+                              <div className="p-3 mt-auto border-t bg-muted/20 flex items-center gap-2">
+                                <Button
+                                  size="sm"
+                                  className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    // Prepare bulk delivery data with all items from this vendor's PO
+                                    const bulkItems = group.items.map((po: any) => ({
+                                      requestId: po.requestId,
+                                      itemName: po.itemName || po.itemDescription?.split('\n')[0] || "Item",
+                                      requestedQuantity: po.requestQuantity || po.quantity,
+                                      unit: po.requestUnit || po.unit,
+                                      poQuantity: po.quantity || po.requestQuantity,
+                                      itemOrder: po.itemOrder
+                                    }));
+
+                                    setBulkDeliveryData({
+                                      items: bulkItems,
+                                      vendorName: group.vendor.companyName,
+                                      poNumber: group.poNumber
+                                    });
+                                  }}
+                                >
+                                  <CheckCircle className="h-4 w-4 mr-1" /> Available
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="px-2"
+                                  onClick={() => setPdfPreviewPoNumber(group.poNumber)}
+                                >
+                                  <FileText className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            </div>
+                          ))}
                           {pendingPOs && pendingPOs.filter((p: any) => p.status === "sign_pending").map((group: any) => (
                             <div key={`card-group-${group.poNumber}`} className="flex flex-col border rounded-xl bg-card overflow-hidden shadow-sm hover:shadow-md transition-shadow ring-1 ring-amber-500/20">
                               <div className="p-4 bg-amber-50 dark:bg-amber-950/20 border-b flex items-center gap-3">
@@ -2348,13 +2732,17 @@ export function RequestDetailsDialog({
                               const isSelected = selectedItemsForAction.has(item._id);
                               const itemPhotos = getItemPhotos(item);
 
-                              // Check if item is part of a pending PO group
-                              // pendingPOs is now array of groups.
+                              // Check if item is part of a sign_pending PO group
                               const itemPOGroup = pendingPOs?.find((group: any) =>
                                 group.status === "sign_pending" &&
                                 group.items.some((i: any) => i.requestId === item._id)
                               );
-                              if (itemPOGroup) return null; // Rendered in group card
+                              // Also check if item is part of a pending_po group (ordered status)
+                              const itemPendingPOGroup = pendingPOs?.find((group: any) =>
+                                group.status === "ordered" &&
+                                group.items.some((i: any) => i.requestId === item._id)
+                              );
+                              if (itemPOGroup || itemPendingPOGroup) return null; // Rendered in group card
 
                               return (
                                 <div
@@ -2373,7 +2761,7 @@ export function RequestDetailsDialog({
                                   )}
                                 >
                                   {/* Selection Checkbox */}
-                                  {((isManager && item.status === "pending") || (isPurchaseOfficer && ["pending_po", "direct_po", "ready_for_po"].includes(item.status))) && (
+                                  {((isManager && item.status === "pending") || (isPurchaseOfficer && ["pending_po", "direct_po", "ready_for_po", "ready_for_delivery"].includes(item.status))) && (
                                     <div className="absolute top-2 right-2 z-10">
                                       <Checkbox
                                         checked={isSelected}
@@ -2527,6 +2915,13 @@ export function RequestDetailsDialog({
                                       ) : (
                                         <RenderActionSegments item={item} isCard />
                                       )}
+                                    </div>
+                                  )}
+
+                                  {/* Actions Footer for Purchase Officer (Card View) */}
+                                  {isPurchaseOfficer && ["pending_po", "ready_for_delivery", "delivery_stage", "delivered"].includes(item.status) && (
+                                    <div className="p-4 border-t bg-muted/5 w-full">
+                                      <RenderActionSegments item={item} isCard />
                                     </div>
                                   )}
 
@@ -3616,11 +4011,46 @@ export function RequestDetailsDialog({
         }}
       />
 
+      {/* Bulk Delivery Dialog - for multiple items from same vendor PO */}
+      <BulkDeliveryDialog
+        open={!!bulkDeliveryData}
+        onOpenChange={(open) => !open && setBulkDeliveryData(null)}
+        items={bulkDeliveryData?.items || []}
+        vendorName={bulkDeliveryData?.vendorName || ""}
+        poNumber={bulkDeliveryData?.poNumber || ""}
+      />
+
       {/* Direct PO Creation Dialog */}
       <DirectPODialog
         open={showDirectPODialog}
         onOpenChange={setShowDirectPODialog}
         initialData={directPOInitialData}
+      />
+
+      {/* Multi-Item DC Creation Dialog */}
+      <CreateDCMultiDialog
+        open={showBulkDCDialog}
+        onOpenChange={(open) => {
+          setShowBulkDCDialog(open);
+          if (!open) {
+            setSelectedDCItems(new Set());
+          }
+        }}
+        items={Array.from(selectedDCItems).map(requestId => {
+          const item = allRequests?.find(i => i._id === requestId);
+          const poNumber = requestToPONumber.get(requestId);
+          return {
+            requestId,
+            itemName: item?.itemName || "",
+            quantity: item?.quantity || 0,
+            unit: item?.unit || "",
+            poNumber
+          };
+        })}
+        poNumber={
+          // Get PO number from first selected item
+          requestToPONumber.get(Array.from(selectedDCItems)[0] || "")
+        }
       />
 
     </div >

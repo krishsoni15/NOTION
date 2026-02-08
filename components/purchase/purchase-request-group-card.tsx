@@ -27,6 +27,7 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { NotesTimelineDialog } from "@/components/requests/notes-timeline-dialog";
 import { CreateDeliveryDialog } from "@/components/purchase/create-delivery-dialog";
+import { CreateDCMultiDialog } from "@/components/purchase/create-dc-multi-dialog";
 import { EditPOQuantityDialog } from "@/components/purchase/edit-po-quantity-dialog";
 import { ViewDCDialog } from "@/components/purchase/view-dc-dialog";
 import { format } from "date-fns";
@@ -584,11 +585,13 @@ export function PurchaseRequestGroupCard({
 
   const [showReadyForDeliveryConfirm, setShowReadyForDeliveryConfirm] = useState<Id<"requests"> | null>(null);
 
-  const [markDeliveryItem, setMarkDeliveryItem] = useState<{ id: Id<"requests">; poId?: Id<"purchaseOrders">; quantity: number; name: string; unit: string } | null>(null);
+  const [markDeliveryItem, setMarkDeliveryItem] = useState<{ id: Id<"requests">; quantity: number; name: string; unit: string; poId?: Id<"purchaseOrders"> } | null>(null);
   const [editQuantityItem, setEditQuantityItem] = useState<{ id: Id<"requests">; quantity: number; name: string; unit: string } | null>(null);
   const [viewDCId, setViewDCId] = useState<Id<"deliveries"> | null>(null);
   const [showConfirmDelivery, setShowConfirmDelivery] = useState<Id<"requests"> | null>(null);
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
+  const [selectedDCItems, setSelectedDCItems] = useState<Set<Id<"requests">>>(new Set());
+  const [showMultiDCDialog, setShowMultiDCDialog] = useState(false);
   const [showUserProfile, setShowUserProfile] = useState(false);
 
   // Helper to ensure creator object matches UserProfile props
@@ -866,18 +869,7 @@ export function PurchaseRequestGroupCard({
                 </span>
               </div>
 
-              {validItemsCount > 0 && onCreateBulkPO && (
-                <div className="flex items-center gap-2 mr-2 pl-3 border-l border-border/50">
-                  <Checkbox
-                    checked={isAllSelected}
-                    onCheckedChange={toggleSelectAll}
-                    id={`select-all-${requestNumber}`}
-                  />
-                  <label htmlFor={`select-all-${requestNumber}`} className="text-xs text-muted-foreground cursor-pointer select-none">
-                    Select All
-                  </label>
-                </div>
-              )}
+
             </div>
             <div className="space-y-1">
               <div className="flex items-center gap-2">
@@ -964,6 +956,18 @@ export function PurchaseRequestGroupCard({
               ) : null}
             </>
           )}
+
+          {/* Bulk DC Creation Button */}
+          {selectedDCItems.size > 0 && (
+            <Button
+              size="sm"
+              className="h-7 text-xs bg-green-600 hover:bg-green-700 text-white animate-in zoom-in-95 duration-200 ml-2"
+              onClick={() => setShowMultiDCDialog(true)}
+            >
+              <Truck className="h-3.5 w-3.5 mr-1.5" />
+              Create DC ({selectedDCItems.size} items)
+            </Button>
+          )}
         </div>
 
         {/* Items List */}
@@ -1017,7 +1021,7 @@ export function PurchaseRequestGroupCard({
                             <Badge variant="outline" className="text-base px-2.5 py-1.5 h-8 min-w-[42px] flex items-center justify-center flex-shrink-0 bg-gradient-to-r from-purple-600 to-indigo-600 text-white border-0 font-black shadow-lg rounded-lg">
                               #{displayNumber}
                             </Badge>
-                            {/* Selection Checkbox */}
+                            {/* Selection Checkbox - PO Creation */}
                             {((isManager && item.status === "pending") || (!isManager && item.status === "ready_for_po")) && (
                               <Checkbox
                                 checked={selectedItems.has(item._id)}
@@ -1323,135 +1327,164 @@ export function PurchaseRequestGroupCard({
                     </div>
 
                     <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto sm:justify-end">
-                      {/* Primary Action Buttons based on Status */}
-
-                      {/* Ready for Delivery / PO Actions */}
-                      {["recheck", "pending", "approved"].includes(item.status) && (
+                      {item.status === "pending_po" ? (
                         <>
-                          {(["delivery", "all", "split_delivery", "split_po_delivery"].includes(item.directAction || "") || item.status === "ready_for_delivery") && onDirectDelivery && (
-                            <Button size="sm" onClick={() => setShowReadyForDeliveryConfirm(item._id)} disabled={!hasFullStock} className="h-7 text-xs bg-orange-50 text-orange-700 border-orange-200 hover:bg-orange-100 hover:text-orange-800 dark:bg-orange-950/30 dark:text-orange-400 dark:border-orange-800 flex-1 sm:flex-none" variant="outline">
-                              <Truck className="h-3.5 w-3.5 mr-1.5" /> Ready for Delivery
-                            </Button>
-                          )}
-                          {(["po", "all", "split_po", "split_po_delivery"].includes(item.directAction || "") || item.status === "ready_for_po") && onDirectPO && (
-                            <Button size="sm" onClick={() => setShowReadyForPOConfirm(item._id)} className="h-7 text-xs bg-teal-50 text-teal-700 border-teal-200 hover:bg-teal-100 hover:text-teal-800 dark:bg-teal-950/30 dark:text-teal-400 dark:border-teal-800 flex-1 sm:flex-none" variant="outline">
-                              <ShoppingCart className="h-3.5 w-3.5 mr-1.5" /> Ready for PO
+                          {/* Pending PO Special Action: Available */}
+                          <Button
+                            size="sm"
+                            onClick={() => {
+                              setEditQuantityItem({
+                                id: item._id,
+                                quantity: item.quantity,
+                                name: item.itemName,
+                                unit: item.unit
+                              });
+                            }}
+                            className="h-7 text-xs bg-emerald-600 hover:bg-emerald-700 text-white flex-1 sm:flex-none"
+                          >
+                            <CheckCircle className="h-3.5 w-3.5 mr-1.5" /> Available
+                          </Button>
+
+                          {/* PDF Button for Pending PO */}
+                          {onViewPDF && item.poNumber && (
+                            <Button
+                              size="sm"
+                              onClick={() => onViewPDF(item.poNumber!)}
+                              className="h-7 text-xs flex-1 sm:flex-none"
+                              variant="outline"
+                            >
+                              <FileText className="h-3.5 w-3.5 mr-1.5" /> View PDF
                             </Button>
                           )}
                         </>
-                      )}
-
-                      {/* Manager Actions: Ready for CC / Check - Only for approved/recheck items */}
-                      {["approved", "recheck"].includes(item.status) && (
+                      ) : (
                         <>
-                          {onMoveToCC && (
-                            <Button size="sm" onClick={() => setShowReadyForCCConfirm(item._id)} className="h-7 text-xs bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100 hover:text-blue-800 dark:bg-blue-950/30 dark:text-blue-400 dark:border-blue-800 flex-1 sm:flex-none" variant="outline">
-                              <FileText className="h-3.5 w-3.5 mr-1.5" /> Ready for CC
+                          {/* Primary Action Buttons based on Status */}
+
+                          {/* Ready for Delivery / PO Actions */}
+                          {["recheck", "pending", "approved"].includes(item.status) && (
+                            <>
+                              {(["delivery", "all", "split_delivery", "split_po_delivery"].includes(item.directAction || "") || item.status === "ready_for_delivery") && onDirectDelivery && (
+                                <Button
+                                  size="sm"
+                                  onClick={() => setShowReadyForDeliveryConfirm(item._id)}
+                                  disabled={!hasFullStock}
+                                  className="h-7 text-xs bg-orange-50 text-orange-700 border-orange-200 hover:bg-orange-100 hover:text-orange-800 dark:bg-orange-950/30 dark:text-orange-400 dark:border-orange-800 flex-1 sm:flex-none"
+                                  variant="outline"
+                                >
+                                  <Truck className="h-3.5 w-3.5 mr-1.5" /> Ready for Delivery
+                                </Button>
+                              )}
+                              {(["po", "all", "split_po", "split_po_delivery"].includes(item.directAction || "") || item.status === "ready_for_po") && onDirectPO && (
+                                <Button size="sm" onClick={() => setShowReadyForPOConfirm(item._id)} className="h-7 text-xs bg-teal-50 text-teal-700 border-teal-200 hover:bg-teal-100 hover:text-teal-800 dark:bg-teal-950/30 dark:text-teal-400 dark:border-teal-800 flex-1 sm:flex-none" variant="outline">
+                                  <ShoppingCart className="h-3.5 w-3.5 mr-1.5" /> Ready for PO
+                                </Button>
+                              )}
+                            </>
+                          )}
+
+                          {/* Manager Actions: Ready for CC / Check - Only for approved/recheck items */}
+                          {["approved", "recheck"].includes(item.status) && (
+                            <>
+                              {onMoveToCC && (
+                                <Button size="sm" onClick={() => setShowReadyForCCConfirm(item._id)} className="h-7 text-xs bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100 hover:text-blue-800 dark:bg-blue-950/30 dark:text-blue-400 dark:border-blue-800 flex-1 sm:flex-none" variant="outline">
+                                  <FileText className="h-3.5 w-3.5 mr-1.5" /> Ready for CC
+                                </Button>
+                              )}
+                              {/* Direct PO - Show for managers (they have permission) */}
+                              {isManager && onDirectPO && (
+                                <Button size="sm" onClick={() => setShowReadyForPOConfirm(item._id)} className="h-7 text-xs bg-teal-50 text-teal-700 border-teal-200 hover:bg-teal-100 hover:text-teal-800 dark:bg-teal-950/30 dark:text-teal-400 dark:border-teal-800 flex-1 sm:flex-none" variant="outline">
+                                  <ShoppingCart className="h-3.5 w-3.5 mr-1.5" /> Direct PO
+                                </Button>
+                              )}
+                              {/* Direct Delivery - Only show if approved */}
+                              {isManager && onDirectDelivery && ["delivery", "all"].includes(item.directAction || "") && (
+                                <Button size="sm" onClick={() => setShowReadyForDeliveryConfirm(item._id)} className="h-7 text-xs bg-orange-50 text-orange-700 border-orange-200 hover:bg-orange-100 hover:text-orange-800 dark:bg-orange-950/30 dark:text-orange-400 dark:border-orange-800 flex-1 sm:flex-none" variant="outline">
+                                  <Truck className="h-3.5 w-3.5 mr-1.5" /> Direct Delivery
+                                </Button>
+                              )}
+                              {onCheck && (
+                                <Button size="sm" onClick={() => onCheck(item._id)} className="h-7 text-xs bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100 hover:text-purple-800 dark:bg-purple-950/30 dark:text-purple-400 dark:border-purple-800 flex-1 sm:flex-none" variant="outline">
+                                  <PieChart className="h-3.5 w-3.5 mr-1.5" /> Check/Split
+                                </Button>
+                              )}
+                            </>
+                          )}
+
+                          {/* Sign Review Actions - Managers Only */}
+                          {isManager && item.status === "sign_pending" && onViewDetails && (
+                            <Button
+                              size="sm"
+                              onClick={() => onViewDetails(item._id)}
+                              className="h-7 text-xs bg-orange-50 text-orange-700 border-orange-200 hover:bg-orange-100 hover:text-orange-800 dark:bg-orange-950/30 dark:text-orange-400 dark:border-orange-800 flex-1 sm:flex-none"
+                              variant="outline"
+                            >
+                              <NotebookPen className="h-3.5 w-3.5 mr-1.5" /> Sign Review
                             </Button>
                           )}
-                          {/* Direct PO - Show for managers (they have permission) */}
-                          {isManager && onDirectPO && (
-                            <Button size="sm" onClick={() => setShowReadyForPOConfirm(item._id)} className="h-7 text-xs bg-teal-50 text-teal-700 border-teal-200 hover:bg-teal-100 hover:text-teal-800 dark:bg-teal-950/30 dark:text-teal-400 dark:border-teal-800 flex-1 sm:flex-none" variant="outline">
-                              <ShoppingCart className="h-3.5 w-3.5 mr-1.5" /> Direct PO
+
+                          {/* Next Stage Actions */}
+                          {item.status === "ready_for_cc" && (
+                            <Button size="sm" onClick={() => (onOpenCC || onCheck)?.(item._id)} className="h-7 text-xs bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100 hover:text-blue-800 dark:bg-blue-950/30 dark:text-blue-400 dark:border-blue-800 flex-1 sm:flex-none" variant="outline">
+                              <FileText className="h-3.5 w-3.5 mr-1.5" /> CC
                             </Button>
                           )}
-                          {/* Direct Delivery - Only show if approved */}
-                          {isManager && onDirectDelivery && ["delivery", "all"].includes(item.directAction || "") && (
-                            <Button size="sm" onClick={() => setShowReadyForDeliveryConfirm(item._id)} className="h-7 text-xs bg-orange-50 text-orange-700 border-orange-200 hover:bg-orange-100 hover:text-orange-800 dark:bg-orange-950/30 dark:text-orange-400 dark:border-orange-800 flex-1 sm:flex-none" variant="outline">
-                              <Truck className="h-3.5 w-3.5 mr-1.5" /> Direct Delivery
+
+                          {/* Resubmit CC Action */}
+                          {item.status === "cc_rejected" && (
+                            <Button
+                              size="sm"
+                              onClick={() => onOpenCC?.(item._id)}
+                              className="h-7 text-xs bg-orange-50 text-orange-700 border-orange-200 hover:bg-orange-100 hover:text-orange-800 dark:bg-orange-950/30 dark:text-orange-400 dark:border-orange-800 flex-1 sm:flex-none"
+                              variant="outline"
+                            >
+                              <RotateCw className="h-3.5 w-3.5 mr-1.5" /> Resubmit CC
                             </Button>
                           )}
-                          {onCheck && (
-                            <Button size="sm" onClick={() => onCheck(item._id)} className="h-7 text-xs bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100 hover:text-purple-800 dark:bg-purple-950/30 dark:text-purple-400 dark:border-purple-800 flex-1 sm:flex-none" variant="outline">
-                              <PieChart className="h-3.5 w-3.5 mr-1.5" /> Check/Split
+
+                          {/* Manager Review CC Button */}
+                          {isManager && item.status === "cc_pending" && (
+                            <Button size="sm" onClick={() => onOpenCC?.(item._id, ccPendingItems.map(i => i._id))} className="h-7 text-xs bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100 hover:text-purple-800 dark:bg-purple-950/30 dark:text-purple-400 dark:border-purple-800 flex-1 sm:flex-none" variant="outline">
+                              <CheckCircle className="h-3.5 w-3.5 mr-1.5" /> Review CC
+                            </Button>
+                          )}
+
+                          {item.status === "ready_for_po" && onCreatePO && (
+                            <Button size="sm" onClick={() => onCreatePO(item._id)} className="h-7 text-xs bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100 hover:text-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-400 dark:border-emerald-800 flex-1 sm:flex-none" variant="outline">
+                              <ShoppingCart className="h-3.5 w-3.5 mr-1.5" /> Create PO
+                            </Button>
+                          )}
+
+                          {/* Create DC Action */}
+                          {item.status === "ready_for_delivery" && (
+                            <Button
+                              size="sm"
+                              onClick={() => setMarkDeliveryItem({
+                                id: item._id,
+                                quantity: item.quantity,
+                                name: item.itemName,
+                                unit: item.unit
+                              })}
+                              className="h-7 text-xs bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100 hover:text-indigo-800 dark:bg-indigo-950/30 dark:text-indigo-400 dark:border-indigo-800 flex-1 sm:flex-none"
+                              variant="outline"
+                            >
+                              <FileText className="h-3.5 w-3.5 mr-1.5" /> Create DC
+                            </Button>
+                          )}
+
+
+                          {/* View PDF Button */}
+                          {onViewPDF && item.poNumber && ["sign_pending", "sign_rejected", "ordered", "pending_po", "direct_po"].includes(item.status) && (
+                            <Button
+                              size="sm"
+                              onClick={() => onViewPDF(item.poNumber!)}
+                              className="h-7 text-xs flex-1 sm:flex-none"
+                              variant="outline"
+                            >
+                              <FileText className="h-3.5 w-3.5 mr-1.5" /> View PDF
                             </Button>
                           )}
                         </>
-                      )}
-
-                      {/* Sign Review Actions - Managers Only */}
-                      {isManager && item.status === "sign_pending" && onViewDetails && (
-                        <Button
-                          size="sm"
-                          onClick={() => onViewDetails(item._id)}
-                          className="h-7 text-xs bg-orange-50 text-orange-700 border-orange-200 hover:bg-orange-100 hover:text-orange-800 dark:bg-orange-950/30 dark:text-orange-400 dark:border-orange-800 flex-1 sm:flex-none"
-                          variant="outline"
-                        >
-                          <NotebookPen className="h-3.5 w-3.5 mr-1.5" /> Sign Review
-                        </Button>
-                      )}
-
-                      {/* Next Stage Actions */}
-                      {item.status === "ready_for_cc" && (
-                        <Button size="sm" onClick={() => (onOpenCC || onCheck)?.(item._id)} className="h-7 text-xs bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100 hover:text-blue-800 dark:bg-blue-950/30 dark:text-blue-400 dark:border-blue-800 flex-1 sm:flex-none" variant="outline">
-                          <FileText className="h-3.5 w-3.5 mr-1.5" /> CC
-                        </Button>
-                      )}
-
-                      {/* Resubmit CC Action */}
-                      {item.status === "cc_rejected" && (
-                        <Button
-                          size="sm"
-                          onClick={() => onOpenCC?.(item._id)}
-                          className="h-7 text-xs bg-orange-50 text-orange-700 border-orange-200 hover:bg-orange-100 hover:text-orange-800 dark:bg-orange-950/30 dark:text-orange-400 dark:border-orange-800 flex-1 sm:flex-none"
-                          variant="outline"
-                        >
-                          <RotateCw className="h-3.5 w-3.5 mr-1.5" /> Resubmit CC
-                        </Button>
-                      )}
-
-                      {/* Manager Review CC Button */}
-                      {isManager && item.status === "cc_pending" && (
-                        <Button size="sm" onClick={() => onOpenCC?.(item._id, ccPendingItems.map(i => i._id))} className="h-7 text-xs bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100 hover:text-purple-800 dark:bg-purple-950/30 dark:text-purple-400 dark:border-purple-800 flex-1 sm:flex-none" variant="outline">
-                          <CheckCircle className="h-3.5 w-3.5 mr-1.5" /> Review CC
-                        </Button>
-                      )}
-
-                      {item.status === "ready_for_po" && onCreatePO && (
-                        <Button size="sm" onClick={() => onCreatePO(item._id)} className="h-7 text-xs bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100 hover:text-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-400 dark:border-emerald-800 flex-1 sm:flex-none" variant="outline">
-                          <ShoppingCart className="h-3.5 w-3.5 mr-1.5" /> Create PO
-                        </Button>
-                      )}
-
-                      {/* Create DC Action */}
-                      {item.status === "ready_for_delivery" && (
-                        <Button
-                          size="sm"
-                          onClick={() => setMarkDeliveryItem({
-                            id: item._id,
-                            quantity: item.quantity,
-                            name: item.itemName,
-                            unit: item.unit
-                          })}
-                          className="h-7 text-xs bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100 hover:text-indigo-800 dark:bg-indigo-950/30 dark:text-indigo-400 dark:border-indigo-800 flex-1 sm:flex-none"
-                          variant="outline"
-                        >
-                          <FileText className="h-3.5 w-3.5 mr-1.5" /> Create DC
-                        </Button>
-                      )}
-
-                      {/* Resubmit PO Action */}
-                      {item.status === "sign_rejected" && onCreatePO && (
-                        <Button
-                          size="sm"
-                          onClick={() => onCreatePO(item._id)}
-                          className="h-7 text-xs bg-orange-50 text-orange-700 border-orange-200 hover:bg-orange-100 hover:text-orange-800 dark:bg-orange-950/30 dark:text-orange-400 dark:border-orange-800 flex-1 sm:flex-none"
-                          variant="outline"
-                        >
-                          <RotateCw className="h-3.5 w-3.5 mr-1.5" /> Resubmit PO
-                        </Button>
-                      )}
-
-                      {/* View PDF Button */}
-                      {onViewPDF && item.poNumber && ["sign_pending", "sign_rejected", "ordered", "pending_po", "direct_po"].includes(item.status) && (
-                        <Button
-                          size="sm"
-                          onClick={() => onViewPDF(item.poNumber!)}
-                          className="h-7 text-xs flex-1 sm:flex-none"
-                          variant="outline"
-                        >
-                          <FileText className="h-3.5 w-3.5 mr-1.5" /> View PDF
-                        </Button>
                       )}
                     </div>
                   </div>
@@ -1593,18 +1626,7 @@ export function PurchaseRequestGroupCard({
                   )}
                 </>
               )}
-              {validItemsCount > 1 && (
-                <div className="flex items-center gap-2 border-r border-border/50 pr-3 h-5">
-                  <Checkbox
-                    checked={isAllSelected}
-                    onCheckedChange={toggleSelectAll}
-                    className="h-4 w-4"
-                  />
-                  <span className="text-xs font-medium text-muted-foreground whitespace-nowrap">
-                    Select Ready ({validItemsCount})
-                  </span>
-                </div>
-              )}
+
             </div>
           )}
 
@@ -1866,6 +1888,43 @@ export function PurchaseRequestGroupCard({
           />
         )
       }
+      {/* Edit PO Quantity Dialog */}
+      <EditPOQuantityDialog
+        open={!!editQuantityItem}
+        onOpenChange={(open) => !open && setEditQuantityItem(null)}
+        requestId={editQuantityItem?.id || null}
+        currentQuantity={editQuantityItem?.quantity || 0}
+        itemName={editQuantityItem?.name || ""}
+        unit={editQuantityItem?.unit || ""}
+        onSuccess={() => {
+          setEditQuantityItem(null);
+        }}
+      />
+
+      {/* Multi-Item DC Creation Dialog */}
+      <CreateDCMultiDialog
+        open={showMultiDCDialog}
+        onOpenChange={(open) => {
+          setShowMultiDCDialog(open);
+          if (!open) {
+            setSelectedDCItems(new Set());
+          }
+        }}
+        items={Array.from(selectedDCItems).map(requestId => {
+          const item = items.find(i => i._id === requestId);
+          return {
+            requestId,
+            itemName: item?.itemName || "",
+            quantity: item?.quantity || 0,
+            unit: item?.unit || "",
+            poNumber: item?.poNumber
+          };
+        })}
+        poNumber={
+          // Get PO number from first selected item
+          items.find(i => selectedDCItems.has(i._id))?.poNumber
+        }
+      />
     </div >
   );
 }

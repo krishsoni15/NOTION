@@ -300,17 +300,23 @@ export function DirectPODialog({ open, onOpenChange, initialData, mode = "standa
 
             if (initialData.items && initialData.items.length > 0) {
                 setItems(initialData.items.map((item) => {
+                    // Smart Split: If itemDescription has newlines, split it to Title and Description
+                    // This handles cases where data was previously saved as concatenated string
+                    const lines = (item.itemDescription || "").split('\n');
+                    const cleanName = lines[0] || "";
+                    const cleanDescFromName = lines.length > 1 ? lines.slice(1).join('\n') : "";
+
                     // Try to find matching inventory item for details like HSN
                     const matchingInvItem = inventoryItems?.find(inv =>
-                        inv.itemName.toLowerCase() === item.itemDescription.toLowerCase()
+                        inv.itemName.toLowerCase() === cleanName.toLowerCase()
                     );
 
                     return {
                         id: Date.now().toString() + Math.random().toString(),
                         requestId: item.requestId,
-                        itemDescription: item.itemDescription,
-                        description: item.description || matchingInvItem?.description || "",
-                        itemSearchQuery: item.itemDescription,
+                        itemDescription: cleanName, // Only the first line
+                        description: cleanDescFromName || item.description || matchingInvItem?.description || "",
+                        itemSearchQuery: cleanName,
                         hsnCode: item.hsnCode || (matchingInvItem as any)?.hsnSacCode || "",
                         quantity: item.quantity,
                         unit: item.unit || matchingInvItem?.unit || "pcs",
@@ -438,9 +444,19 @@ export function DirectPODialog({ open, onOpenChange, initialData, mode = "standa
                 if (item.quantity <= 0) throw new Error("Quantity must be greater than 0 for all items");
                 if (item.unitPrice <= 0) throw new Error("Unit price must be greater than 0 for all items");
 
-                const fullDescription = item.description
-                    ? `${item.itemDescription}\n${item.description}`
-                    : item.itemDescription;
+                const cleanName = item.itemDescription.trim();
+                const cleanDesc = (item.description || "").trim();
+                let fullDescription = cleanName;
+
+                if (cleanDesc) {
+                    // Check if description already starts with the name (case-insensitive)
+                    // This prevents duplication like "Cement\nCement\nDetails"
+                    if (cleanDesc.toLowerCase().startsWith(cleanName.toLowerCase())) {
+                        fullDescription = cleanDesc;
+                    } else {
+                        fullDescription = `${cleanName}\n${cleanDesc}`;
+                    }
+                }
 
                 return {
                     requestId: item.requestId,

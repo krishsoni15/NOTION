@@ -330,7 +330,7 @@ export const sendMessage = mutation({
     const otherUserId = conversation.participants.find(
       (id) => id !== currentUser._id
     );
-    let deliveredBy: Id<"users">[] = [currentUser._id]; // Sender has delivered their own message
+    const deliveredBy: Id<"users">[] = [currentUser._id]; // Sender has delivered their own message
 
     if (otherUserId) {
       // Check if other user is online

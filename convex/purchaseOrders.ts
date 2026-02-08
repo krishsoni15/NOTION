@@ -151,7 +151,6 @@ export const getPurchaseOrderDetails = query({
         const currentUser = await getCurrentUser(ctx);
 
         // Allow authenticated users to view POs (might be site engineer seeing their site's PO, or manager/purchaser)
-        // For now, strict to purchase_officer/manager, or maybe site engineer
         if (!currentUser) throw new Error("Unauthorized");
 
         const pos = await ctx.db
@@ -172,6 +171,56 @@ export const getPurchaseOrderDetails = query({
         // Fetch approver if approved
         const approver = firstPO.approvedBy ? await ctx.db.get(firstPO.approvedBy) : null;
 
+        // Deduplicate items logic
+        // 1. Group by requestId to handle exact record duplicates (re-submissions)
+        // 2. If no requestId, fallback to description+rate grouping
+        const uniqueItemsMap = new Map<string, any>();
+
+        // Sort by creation time desc to process latest first
+        const sortedPos = pos.sort((a, b) => b._creationTime - a._creationTime);
+
+        for (const po of sortedPos) {
+            if (po.requestId) {
+                // If we already have this request ID, skip (we accepted the latest one already)
+                if (uniqueItemsMap.has(po.requestId)) {
+                    continue;
+                }
+                uniqueItemsMap.set(po.requestId, po);
+            } else {
+                // Legacy support or fallback: dedupe by content key
+                // Use a composite key that includes "no-request" to separate from request-based ones
+                const key = `no-req-${po.itemDescription}-${po.hsnSacCode || ''}-${po.unitRate}-${po.gstTaxRate}`;
+
+                if (uniqueItemsMap.has(key)) {
+                    // For legacy/unlinked items, we might want to MERGE quantities like before?
+                    // Or is it safer to just show them? 
+                    // Let's stick to the previous merge logic for these undefined cases
+                    const existing = uniqueItemsMap.get(key);
+                    existing.quantity += po.quantity;
+                    existing.totalAmount += po.totalAmount;
+                    // Note: We are modifying the object in the map directly
+                } else {
+                    // Clone to avoid mutating original if needed, but here it's fine
+                    uniqueItemsMap.set(key, { ...po });
+                }
+            }
+        }
+
+        const cleanedItems = Array.from(uniqueItemsMap.values()).map(po => ({
+            _id: po._id,
+            requestId: po.requestId,
+            itemDescription: po.itemDescription,
+            quantity: po.quantity,
+            unit: po.unit,
+            hsnSacCode: po.hsnSacCode,
+            unitRate: po.unitRate,
+            amount: po.totalAmount, // Map back to 'amount' for frontend
+            discountPercent: po.discountPercent || 0,
+            gstTaxRate: po.gstTaxRate,
+            perUnitBasis: po.perUnitBasis,
+            perUnitBasisUnit: po.perUnitBasisUnit
+        }));
+
         return {
             poNumber: firstPO.poNumber,
             createdAt: firstPO.createdAt,
@@ -184,24 +233,7 @@ export const getPurchaseOrderDetails = query({
                 fullName: approver.fullName,
                 signatureUrl: approver.signatureUrl || undefined,
             } : null,
-            items: pos.map(po => ({
-                _id: po._id,
-                itemDescription: po.itemDescription,
-                quantity: po.quantity,
-                unit: po.unit,
-                hsnSacCode: po.hsnSacCode,
-                unitRate: po.unitRate,
-                amount: po.totalAmount, // This is total after tax in DB? `totalAmount` in schema line 110.
-                // In createDirectPO: totalAmount = taxableAmount + taxAmount.
-                // We also need taxable amount, gst etc for the table.
-                // We can recalculate or store. createDirectPO calculates it but only stores totalAmount.
-                // Wait, createDirectPO stores: unitRate, discountPercent, gstTaxRate.
-                // We can reconstruct the details.
-                discountPercent: po.discountPercent || 0,
-                gstTaxRate: po.gstTaxRate,
-                perUnitBasis: po.perUnitBasis,
-                perUnitBasisUnit: po.perUnitBasisUnit
-            }))
+            items: cleanedItems
         };
     },
 });
@@ -232,6 +264,47 @@ export const getPublicPODetails = query({
         const vendor = await ctx.db.get(firstPO.vendorId);
         const site = firstPO.deliverySiteId ? await ctx.db.get(firstPO.deliverySiteId) : null;
 
+        // Deduplicate items by description (merge split/partial delivery items)
+        const itemsMap = new Map<string, {
+            _id: string;
+            itemDescription: string;
+            quantity: number;
+            unit: string;
+            hsnSacCode?: string;
+            unitRate: number;
+            amount: number;
+            discountPercent: number;
+            gstTaxRate: number;
+            perUnitBasis?: number;
+            perUnitBasisUnit?: string;
+        }>();
+
+        for (const po of pos) {
+            const key = `${po.itemDescription}-${po.hsnSacCode || ''}-${po.unitRate}-${po.gstTaxRate}`;
+
+            if (itemsMap.has(key)) {
+                // Merge with existing item
+                const existing = itemsMap.get(key)!;
+                existing.quantity += po.quantity;
+                existing.amount += po.totalAmount;
+            } else {
+                // Add new item
+                itemsMap.set(key, {
+                    _id: po._id,
+                    itemDescription: po.itemDescription,
+                    quantity: po.quantity,
+                    unit: po.unit,
+                    hsnSacCode: po.hsnSacCode,
+                    unitRate: po.unitRate,
+                    amount: po.totalAmount,
+                    discountPercent: po.discountPercent || 0,
+                    gstTaxRate: po.gstTaxRate,
+                    perUnitBasis: po.perUnitBasis,
+                    perUnitBasisUnit: po.perUnitBasisUnit
+                });
+            }
+        }
+
         return {
             poNumber: firstPO.poNumber,
             createdAt: firstPO.createdAt,
@@ -249,19 +322,7 @@ export const getPublicPODetails = query({
                 name: site.name,
                 address: site.address,
             } : null,
-            items: pos.map(po => ({
-                _id: po._id,
-                itemDescription: po.itemDescription,
-                quantity: po.quantity,
-                unit: po.unit,
-                hsnSacCode: po.hsnSacCode,
-                unitRate: po.unitRate,
-                amount: po.totalAmount,
-                discountPercent: po.discountPercent || 0,
-                gstTaxRate: po.gstTaxRate,
-                perUnitBasis: po.perUnitBasis,
-                perUnitBasisUnit: po.perUnitBasisUnit
-            }))
+            items: Array.from(itemsMap.values())
         };
     },
 });
@@ -355,14 +416,15 @@ export const getPOsForRequestNumber = query({
 
         if (requests.length === 0) return [];
 
-        // Create a map of requestId -> request data for quick lookup
-        const requestDataMap = new Map<string, { itemOrder: number; itemName: string; quantity: number; unit: string }>();
+        // Create a map of requestId -> request data for quick lookup (including status)
+        const requestDataMap = new Map<string, { itemOrder: number; itemName: string; quantity: number; unit: string; status: string }>();
         requests.forEach((r, idx) => {
             requestDataMap.set(r._id, {
                 itemOrder: r.itemOrder ?? (idx + 1),
                 itemName: r.itemName,
                 quantity: r.quantity,
-                unit: r.unit
+                unit: r.unit,
+                status: r.status
             });
         });
 
@@ -378,29 +440,71 @@ export const getPOsForRequestNumber = query({
             allPos.push(...pos);
         }
 
-        // 3. Group by PO Number
+        // 3. Group by PO Number - Only include items where request status matches PO intent
+        // 3. Group by PO Number - Only include items where request status matches PO intent
+        // Sort ALL POs by creation time DESC so we process the latest ones first
+        allPos.sort((a, b) => b._creationTime - a._creationTime);
         const poMap = new Map();
 
         for (const po of allPos) {
+            // Get the linked request data
+            const reqData = po.requestId ? requestDataMap.get(po.requestId) : undefined;
+
+            // Skip items that have moved to a different status
+            if (reqData) {
+                const shouldInclude =
+                    (po.status === "ordered" && reqData.status === "pending_po") ||
+                    (po.status === "sign_pending" && reqData.status === "sign_pending") ||
+                    (po.status === "sign_rejected" && reqData.status === "sign_rejected");
+
+                if (!shouldInclude) {
+                    continue; // Skip this PO item
+                }
+            }
+
+            // Deduplication Check:
+            // Ensure we haven't already added a NEWER PO for this same Request ID in this same PO Number group?
+            // Actually, we are iterating through ALL POs for the request number.
+            // But we might have multiple PO records for the SAME Request ID (due to previous bugs or history).
+            // We should only include the LATEST record for each Request ID that matches the status criteria.
+
+            // However, poMap is by PO Number. 
+            // The issue is if we have multiple PO records for Request X, all with status "sign_rejected", 
+            // and we iterate them, we add them ALL to the group.
+
+            // Let's refine the grouping logic:
+            // Group by PO Number -> Request ID -> Latest Record
+
             if (!poMap.has(po.poNumber)) {
                 const vendor = await ctx.db.get(po.vendorId);
                 const deliverySite = po.deliverySiteId ? await ctx.db.get(po.deliverySiteId) : null;
 
                 poMap.set(po.poNumber, {
-                    _id: po._id, // Use ID of first item as representative ID
+                    _id: po._id,
                     poNumber: po.poNumber,
                     _creationTime: po._creationTime,
                     vendor,
                     deliverySite,
                     status: po.status,
                     totalAmount: 0,
-                    items: []
+                    items: [],
+                    processedRequestIds: new Set<string>() // Track processed requests for this PO group
                 });
             }
 
             const poGroup = poMap.get(po.poNumber);
-            // Include itemOrder, itemName, quantity from the linked request
-            const reqData = po.requestId ? requestDataMap.get(po.requestId) : undefined;
+
+            // If we have already processed a record for this Request ID in this PO group, 
+            // we should only keep the latest one.
+            // Since we didn't sort `allPos` by time before loop, we might process older first.
+            // Let's rely on sorting `allPos` first to ensure we process NEWEST first.
+            // But `allPos` is constructed from multiple queries.
+
+            // To be safe, let's skip if we already added this Request ID to this PO Group.
+            // BUT this requires processing in desc order.
+
+            // SIMPLE FIX: Just add it for now, but we need to sort `allPos` before the loop.
+
             poGroup.items.push({
                 ...po,
                 itemOrder: reqData?.itemOrder ?? 0,
@@ -411,7 +515,16 @@ export const getPOsForRequestNumber = query({
             poGroup.totalAmount += po.totalAmount;
         }
 
-        return Array.from(poMap.values());
+        // Filter out empty groups (groups where all items were filtered out)
+        // AND remove the 'processedRequestIds' Set from the result objects as Convex cannot serialize Sets
+        const result = Array.from(poMap.values())
+            .filter(group => group.items.length > 0)
+            .map(group => {
+                const { processedRequestIds, ...rest } = group; // Destructure to exclude the Set
+                return rest;
+            });
+
+        return result;
     },
 });
 
@@ -530,30 +643,71 @@ export const createDirectPO = mutation({
             const taxAmount = (taxableAmount * item.gstTaxRate) / 100;
             const totalAmount = taxableAmount + taxAmount;
 
-            // 3. Create Purchase Order Record
-            const poId = await ctx.db.insert("purchaseOrders", {
-                poNumber: idNumber,
-                requestId: requestId!, // We know we have it now
-                deliverySiteId: args.deliverySiteId,
-                vendorId: args.vendorId,
-                createdBy: currentUser._id,
-                itemDescription: item.itemDescription,
-                quantity: item.quantity,
-                unit: item.unit,
-                hsnSacCode: item.hsnSacCode,
-                unitRate: item.unitRate,
-                discountPercent: item.discountPercent,
-                gstTaxRate: item.gstTaxRate,
-                totalAmount,
-                notes: args.notes,
-                status: "sign_pending", // Wait for Manager Sign Off
-                isDirect: isDirect, // Use provided isDirect
-                validTill: args.validTill,
-                perUnitBasis: item.perUnitBasis,
-                perUnitBasisUnit: item.perUnitBasisUnit,
-                createdAt: now,
-                updatedAt: now,
-            });
+            // 3. Create or Update Purchase Order Record
+            let poId: Id<"purchaseOrders">;
+
+            // Check for existing PO for this request that is in "sign_rejected" state (Resubmit flow)
+            const existingRejectedPO = requestId
+                ? await ctx.db.query("purchaseOrders")
+                    .withIndex("by_request_id", q => q.eq("requestId", requestId))
+                    .collect()
+                    .then(pos => pos.find(p => p.status === "sign_rejected"))
+                : null;
+
+            if (existingRejectedPO) {
+                // Update existing PO record instead of creating a duplicate
+                await ctx.db.patch(existingRejectedPO._id, {
+                    // Update all fields that might have changed
+                    poNumber: idNumber, // Ensure number matches (should be same)
+                    deliverySiteId: args.deliverySiteId,
+                    vendorId: args.vendorId,
+                    itemDescription: item.itemDescription,
+                    quantity: item.quantity,
+                    unit: item.unit,
+                    hsnSacCode: item.hsnSacCode,
+                    unitRate: item.unitRate,
+                    discountPercent: item.discountPercent,
+                    gstTaxRate: item.gstTaxRate,
+                    totalAmount,
+                    notes: args.notes,
+                    status: "sign_pending", // Reset status to pending sign off
+                    rejectionReason: undefined, // Clear rejection reason
+                    isDirect: isDirect,
+                    validTill: args.validTill,
+                    perUnitBasis: item.perUnitBasis,
+                    perUnitBasisUnit: item.perUnitBasisUnit,
+                    updatedAt: now,
+                    // We don't change createdBy or createdAt to accept history? 
+                    // Or maybe we should if we want it to look "new"? 
+                    // Let's keep original creator but update timestamps.
+                });
+                poId = existingRejectedPO._id;
+            } else {
+                // Create new PO record
+                poId = await ctx.db.insert("purchaseOrders", {
+                    poNumber: idNumber,
+                    requestId: requestId!, // We know we have it now
+                    deliverySiteId: args.deliverySiteId,
+                    vendorId: args.vendorId,
+                    createdBy: currentUser._id,
+                    itemDescription: item.itemDescription,
+                    quantity: item.quantity,
+                    unit: item.unit,
+                    hsnSacCode: item.hsnSacCode,
+                    unitRate: item.unitRate,
+                    discountPercent: item.discountPercent,
+                    gstTaxRate: item.gstTaxRate,
+                    totalAmount,
+                    notes: args.notes,
+                    status: "sign_pending", // Wait for Manager Sign Off
+                    isDirect: isDirect, // Use provided isDirect
+                    validTill: args.validTill,
+                    perUnitBasis: item.perUnitBasis,
+                    perUnitBasisUnit: item.perUnitBasisUnit,
+                    createdAt: now,
+                    updatedAt: now,
+                });
+            }
 
             // 4. Create costComparison entry to store vendor details linked to the request?
             // This ensures "Requests Table" can show vendor info if it looks at costComparisons.

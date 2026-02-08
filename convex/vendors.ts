@@ -272,7 +272,7 @@ export const getVendorPurchaseStats = query({
     // Calculate statistics
     let totalItems = 0;
     let totalValue = 0;
-    let totalOrders = purchaseOrders.length;
+    const totalOrders = purchaseOrders.length;
 
     purchaseOrders.forEach((po) => {
       totalItems += po.quantity;

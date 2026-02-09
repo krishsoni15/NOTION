@@ -509,7 +509,10 @@ export function PurchaseRequestGroupCard({
   const getInventoryStatusBadge = (itemName: string, requestedQuantity: number, unit: string) => {
     if (!inventoryStatus) return null;
 
-    const status = inventoryStatus[itemName];
+    const status = Array.isArray(inventoryStatus)
+      ? inventoryStatus.find((s: any) => s.requestedName === itemName)
+      : (inventoryStatus as any)[itemName];
+
     if (!status) return null;
 
     if (status.status === "new_item") {
@@ -978,7 +981,9 @@ export function PurchaseRequestGroupCard({
             const isEditing = editingItemId === item._id;
 
             // Check if item has partial stock (some but not enough)
-            const itemInventory = inventoryStatus && inventoryStatus[item.itemName];
+            const itemInventory = Array.isArray(inventoryStatus)
+              ? inventoryStatus.find((s: any) => s.requestedName === item.itemName)
+              : (inventoryStatus as any)?.[item.itemName];
             const hasPartialStock = !!(
               itemInventory &&
               itemInventory.centralStock > 0 &&
@@ -1362,54 +1367,21 @@ export function PurchaseRequestGroupCard({
                           {/* Primary Action Buttons based on Status */}
 
                           {/* Ready for Delivery / PO Actions */}
-                          {["recheck", "pending", "approved"].includes(item.status) && (
-                            <>
-                              {(["delivery", "all", "split_delivery", "split_po_delivery"].includes(item.directAction || "") || item.status === "ready_for_delivery") && onDirectDelivery && (
-                                <Button
-                                  size="sm"
-                                  onClick={() => setShowReadyForDeliveryConfirm(item._id)}
-                                  disabled={!hasFullStock}
-                                  className="h-7 text-xs bg-orange-50 text-orange-700 border-orange-200 hover:bg-orange-100 hover:text-orange-800 dark:bg-orange-950/30 dark:text-orange-400 dark:border-orange-800 flex-1 sm:flex-none"
-                                  variant="outline"
-                                >
-                                  <Truck className="h-3.5 w-3.5 mr-1.5" /> Ready for Delivery
-                                </Button>
-                              )}
-                              {(["po", "all", "split_po", "split_po_delivery"].includes(item.directAction || "") || item.status === "ready_for_po") && onDirectPO && (
-                                <Button size="sm" onClick={() => setShowReadyForPOConfirm(item._id)} className="h-7 text-xs bg-teal-50 text-teal-700 border-teal-200 hover:bg-teal-100 hover:text-teal-800 dark:bg-teal-950/30 dark:text-teal-400 dark:border-teal-800 flex-1 sm:flex-none" variant="outline">
-                                  <ShoppingCart className="h-3.5 w-3.5 mr-1.5" /> Ready for PO
-                                </Button>
-                              )}
-                            </>
+
+                          {/* Check/Split Button - Consistent with Table View */}
+                          {onCheck && ["pending", "approved", "recheck"].includes(item.status) && (
+                            <Button size="sm" onClick={() => onCheck(item._id)} className="h-7 text-xs font-bold bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100 hover:text-indigo-800 dark:bg-indigo-950/30 dark:text-indigo-400 dark:border-indigo-800 flex-1 sm:flex-none shadow-sm" variant="outline">
+                              <Sparkles className="h-3.5 w-3.5 mr-1.5" /> Check/Split
+                            </Button>
                           )}
 
-                          {/* Manager Actions: Ready for CC / Check - Only for approved/recheck items */}
-                          {["approved", "recheck"].includes(item.status) && (
-                            <>
-                              {onMoveToCC && (
-                                <Button size="sm" onClick={() => setShowReadyForCCConfirm(item._id)} className="h-7 text-xs bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100 hover:text-blue-800 dark:bg-blue-950/30 dark:text-blue-400 dark:border-blue-800 flex-1 sm:flex-none" variant="outline">
-                                  <FileText className="h-3.5 w-3.5 mr-1.5" /> Ready for CC
-                                </Button>
-                              )}
-                              {/* Direct PO - Show for managers (they have permission) */}
-                              {isManager && onDirectPO && (
-                                <Button size="sm" onClick={() => setShowReadyForPOConfirm(item._id)} className="h-7 text-xs bg-teal-50 text-teal-700 border-teal-200 hover:bg-teal-100 hover:text-teal-800 dark:bg-teal-950/30 dark:text-teal-400 dark:border-teal-800 flex-1 sm:flex-none" variant="outline">
-                                  <ShoppingCart className="h-3.5 w-3.5 mr-1.5" /> Direct PO
-                                </Button>
-                              )}
-                              {/* Direct Delivery - Only show if approved */}
-                              {isManager && onDirectDelivery && ["delivery", "all"].includes(item.directAction || "") && (
-                                <Button size="sm" onClick={() => setShowReadyForDeliveryConfirm(item._id)} className="h-7 text-xs bg-orange-50 text-orange-700 border-orange-200 hover:bg-orange-100 hover:text-orange-800 dark:bg-orange-950/30 dark:text-orange-400 dark:border-orange-800 flex-1 sm:flex-none" variant="outline">
-                                  <Truck className="h-3.5 w-3.5 mr-1.5" /> Direct Delivery
-                                </Button>
-                              )}
-                              {onCheck && (
-                                <Button size="sm" onClick={() => onCheck(item._id)} className="h-7 text-xs bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100 hover:text-purple-800 dark:bg-purple-950/30 dark:text-purple-400 dark:border-purple-800 flex-1 sm:flex-none" variant="outline">
-                                  <PieChart className="h-3.5 w-3.5 mr-1.5" /> Check/Split
-                                </Button>
-                              )}
-                            </>
+                          {/* CC Button - For Ready for CC Status - Hide for Managers */}
+                          {item.status === "ready_for_cc" && !isManager && (
+                            <Button size="sm" onClick={() => (onOpenCC || onCheck)?.(item._id)} className="h-7 text-xs font-bold bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100 hover:text-blue-800 dark:bg-blue-950/30 dark:text-blue-400 dark:border-blue-800 flex-1 sm:flex-none shadow-sm" variant="outline">
+                              <FileText className="h-3.5 w-3.5 mr-1.5" /> CC
+                            </Button>
                           )}
+
 
                           {/* Sign Review Actions - Managers Only */}
                           {isManager && item.status === "sign_pending" && onViewDetails && (
@@ -1424,53 +1396,11 @@ export function PurchaseRequestGroupCard({
                           )}
 
                           {/* Next Stage Actions */}
-                          {item.status === "ready_for_cc" && (
-                            <Button size="sm" onClick={() => (onOpenCC || onCheck)?.(item._id)} className="h-7 text-xs bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100 hover:text-blue-800 dark:bg-blue-950/30 dark:text-blue-400 dark:border-blue-800 flex-1 sm:flex-none" variant="outline">
-                              <FileText className="h-3.5 w-3.5 mr-1.5" /> CC
-                            </Button>
-                          )}
 
-                          {/* Resubmit CC Action */}
-                          {item.status === "cc_rejected" && (
-                            <Button
-                              size="sm"
-                              onClick={() => onOpenCC?.(item._id)}
-                              className="h-7 text-xs bg-orange-50 text-orange-700 border-orange-200 hover:bg-orange-100 hover:text-orange-800 dark:bg-orange-950/30 dark:text-orange-400 dark:border-orange-800 flex-1 sm:flex-none"
-                              variant="outline"
-                            >
-                              <RotateCw className="h-3.5 w-3.5 mr-1.5" /> Resubmit CC
-                            </Button>
-                          )}
 
-                          {/* Manager Review CC Button */}
-                          {isManager && item.status === "cc_pending" && (
-                            <Button size="sm" onClick={() => onOpenCC?.(item._id, ccPendingItems.map(i => i._id))} className="h-7 text-xs bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100 hover:text-purple-800 dark:bg-purple-950/30 dark:text-purple-400 dark:border-purple-800 flex-1 sm:flex-none" variant="outline">
-                              <CheckCircle className="h-3.5 w-3.5 mr-1.5" /> Review CC
-                            </Button>
-                          )}
 
-                          {item.status === "ready_for_po" && onCreatePO && (
-                            <Button size="sm" onClick={() => onCreatePO(item._id)} className="h-7 text-xs bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100 hover:text-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-400 dark:border-emerald-800 flex-1 sm:flex-none" variant="outline">
-                              <ShoppingCart className="h-3.5 w-3.5 mr-1.5" /> Create PO
-                            </Button>
-                          )}
 
-                          {/* Create DC Action */}
-                          {item.status === "ready_for_delivery" && (
-                            <Button
-                              size="sm"
-                              onClick={() => setMarkDeliveryItem({
-                                id: item._id,
-                                quantity: item.quantity,
-                                name: item.itemName,
-                                unit: item.unit
-                              })}
-                              className="h-7 text-xs bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100 hover:text-indigo-800 dark:bg-indigo-950/30 dark:text-indigo-400 dark:border-indigo-800 flex-1 sm:flex-none"
-                              variant="outline"
-                            >
-                              <FileText className="h-3.5 w-3.5 mr-1.5" /> Create DC
-                            </Button>
-                          )}
+
 
 
                           {/* View PDF Button */}

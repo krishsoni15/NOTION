@@ -295,16 +295,19 @@ export function RequestDetailsDialog({
   const getInventoryStatusBadge = (itemName: string, requestedQuantity: number, unit: string) => {
     if (!inventoryStatus) return null;
 
-    const status = inventoryStatus[itemName];
+    const status = Array.isArray(inventoryStatus)
+      ? inventoryStatus.find((s: any) => s.requestedName === itemName)
+      : (inventoryStatus as any)[itemName];
+
     if (!status) return null;
 
     if (status.status === "new_item") {
       const encodedItemName = encodeURIComponent(itemName);
 
-      // Logic to redirect/navigate to inventory page
+      // Logic to open Item Info Dialog
       const handleInventoryClick = (e: React.MouseEvent) => {
         e.stopPropagation(); // Prevent row click
-        window.location.href = `/dashboard/inventory?search=${encodedItemName}`;
+        setSelectedItemName(itemName);
       };
 
       return (
@@ -331,10 +334,10 @@ export function RequestDetailsDialog({
 
     const encodedItemName = encodeURIComponent(itemName);
 
-    // Logic to redirect/navigate to inventory page
+    // Logic to open Item Info Dialog
     const handleInventoryClick = (e: React.MouseEvent) => {
       e.stopPropagation(); // Prevent row click
-      window.location.href = `/dashboard/inventory?search=${encodedItemName}`;
+      setSelectedItemName(itemName);
     };
 
     if (status.status === "out_of_stock") {
@@ -1174,7 +1177,9 @@ export function RequestDetailsDialog({
   };
 
   const RenderActionSegments = ({ item, isCard = false }: { item: any; isCard?: boolean }) => {
-    const status = inventoryStatus?.[item.itemName];
+    const status = Array.isArray(inventoryStatus)
+      ? inventoryStatus.find((s: any) => s.requestedName === item.itemName)
+      : (inventoryStatus as any)?.[item.itemName];
     const stock = status?.centralStock || 0;
     const isPartial = stock > 0 && stock < item.quantity;
     const hasIntent = itemIntents[item._id] && itemIntents[item._id].length > 0;
@@ -2481,12 +2486,12 @@ export function RequestDetailsDialog({
                                                 ) : item.status === "cc_pending" ? (
                                                   onOpenCC && (
                                                     <Button
-                                                      variant="outline"
+                                                      variant="default"
                                                       size="sm"
                                                       onClick={(e) => { e.stopPropagation(); onOpenCC(item._id); }}
-                                                      className="h-9 border-blue-200 text-blue-700 hover:bg-blue-50"
+                                                      className="h-9 bg-purple-600 hover:bg-purple-700 text-white border border-purple-500 shadow-sm transition-all hover:scale-105"
                                                     >
-                                                      <FileText className="h-4 w-4 mr-1.5" /> View CC
+                                                      <CheckCircle className="h-4 w-4 mr-1.5" /> Review CC
                                                     </Button>
                                                   )
                                                 ) : (
@@ -3438,7 +3443,7 @@ export function RequestDetailsDialog({
                   let processedCount = 0;
                   try {
                     await Promise.all(itemsToProcess.map(async (item) => {
-                      const status = inventoryStatus?.[item.itemName];
+                      const status = Array.isArray(inventoryStatus) ? inventoryStatus.find((s: any) => s.requestedName === item.itemName) : undefined;
                       if (status && status.centralStock > 0) {
                         const maxStock = Math.min(status.centralStock, item.quantity);
                         // Upsert CC with max inventory

@@ -19,6 +19,11 @@ import {
     DialogTitle,
 } from "@/components/ui/dialog";
 import {
+    Popover,
+    PopoverContent,
+    PopoverTrigger,
+} from "@/components/ui/popover";
+import {
     AlertDialog,
     AlertDialogAction,
     AlertDialogCancel,
@@ -52,6 +57,7 @@ import { LazyImage } from "@/components/ui/lazy-image";
 import { ImageSlider } from "@/components/ui/image-slider";
 import type { Id } from "@/convex/_generated/dataModel";
 import { Edit, Check, X, ShoppingCart, Truck, FileText, Search } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 interface CheckDialogProps {
     open: boolean;
@@ -835,6 +841,40 @@ export function CheckDialog({
         }
     };
 
+    const handleMarkReadyForDelivery = async () => {
+        setIsSaving(true);
+        try {
+            await handleSave(true);
+            await updatePurchaseRequestStatus({
+                requestId: activeRequestId,
+                status: "ready_for_delivery",
+            });
+            toast.success("Request marked as Ready for Delivery");
+            onOpenChange(false);
+        } catch (error: any) {
+            toast.error(error.message || "Failed to update status");
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
+    const handleMarkReadyForPO = async () => {
+        setIsSaving(true);
+        try {
+            await handleSave(true);
+            await updatePurchaseRequestStatus({
+                requestId: activeRequestId,
+                status: "ready_for_po",
+            });
+            toast.success("Request marked as Ready for PO");
+            onOpenChange(false);
+        } catch (error: any) {
+            toast.error(error.message || "Failed to update status");
+        } finally {
+            setIsSaving(false);
+        }
+    };
+
     const handleSplitAndDeliver = async () => {
         if (!request) return;
         if (quantityFromInventory <= 0) {
@@ -896,9 +936,7 @@ export function CheckDialog({
                 <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto overflow-x-hidden">
                     <DialogHeader className="pb-3">
                         <DialogTitle className="text-lg">Review & Check Request - {request?.requestNumber}</DialogTitle>
-                        <DialogDescription className="text-xs">
-                            Manage inventory fulfillment and vendor quotes.
-                        </DialogDescription>
+
 
                         {/* CC Navigation Tabs - shown when there are multiple CCs */}
                         {hasMultipleCCs && (
@@ -955,8 +993,89 @@ export function CheckDialog({
                                         {/* Item Name Row - Full Width */}
                                         <div>
                                             <div className="flex items-center justify-between">
-                                                <span className="text-muted-foreground">Item:</span>
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-muted-foreground">Item:</span>
+                                                    {itemInInventory && (
+                                                        <Popover>
+                                                            <PopoverTrigger asChild>
+                                                                <Button variant="ghost" size="sm" className="h-5 w-5 p-0 rounded-full hover:bg-muted text-muted-foreground hover:text-primary transition-colors">
+                                                                    <Info className="h-3.5 w-3.5" />
+                                                                </Button>
+                                                            </PopoverTrigger>
+                                                            <PopoverContent className="w-80 p-0 overflow-hidden border-border shadow-xl rounded-xl" align="start">
+                                                                {/* Inventory Card Content */}
+                                                                <div className="relative h-40 bg-muted flex items-center justify-center group/card">
+                                                                    {itemInInventory?.images && itemInInventory.images.length > 0 ? (
+                                                                        <>
+                                                                            <LazyImage
+                                                                                src={itemInInventory.images[0].imageUrl}
+                                                                                alt={itemInInventory.itemName}
+                                                                                width={320}
+                                                                                height={160}
+                                                                                className="h-full w-full object-cover transition-transform duration-500 group-hover/card:scale-105"
+                                                                            />
+                                                                            <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent opacity-60" />
+                                                                            {itemInInventory.images.length > 1 && (
+                                                                                <div className="absolute bottom-2 right-2 bg-black/60 backdrop-blur-md text-white text-[10px] px-2 py-0.5 rounded-full font-medium border border-white/20 z-10">
+                                                                                    {itemInInventory.images.length} images
+                                                                                </div>
+                                                                            )}
+                                                                        </>
+                                                                    ) : (
+                                                                        <div className="flex flex-col items-center justify-center text-muted-foreground/40 space-y-2">
+                                                                            <div className="p-3 bg-background/50 rounded-full border border-border/20 backdrop-blur-sm">
+                                                                                <Package className="h-6 w-6 opacity-50" />
+                                                                            </div>
+                                                                            <span className="text-[10px] font-bold uppercase tracking-widest opacity-60">No Image</span>
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                                <div className="p-4 space-y-3 bg-card">
+                                                                    <div>
+                                                                        <h4 className="font-bold text-lg leading-tight text-foreground mb-1">{itemInInventory.itemName}</h4>
+                                                                        <div className="flex items-center gap-2 flex-wrap">
+                                                                            <Badge variant="secondary" className="rounded-md font-mono text-[10px] uppercase tracking-wider h-5 px-1.5">
+                                                                                {itemInInventory.unit}
+                                                                            </Badge>
 
+                                                                        </div>
+                                                                    </div>
+
+                                                                    <div className="grid grid-cols-2 gap-3 pt-2 border-t border-border/50">
+                                                                        <div className="space-y-1">
+                                                                            <p className="text-[10px] uppercase font-bold text-muted-foreground/70 tracking-wider">Stock</p>
+                                                                            <div className={cn(
+                                                                                "flex items-baseline gap-1 font-bold text-lg tabular-nums",
+                                                                                (itemInInventory.centralStock || 0) > 0 ? "text-primary" : "text-destructive"
+                                                                            )}>
+                                                                                {itemInInventory.centralStock || 0}
+                                                                                <span className="text-xs font-medium text-muted-foreground">{itemInInventory.unit}</span>
+                                                                            </div>
+                                                                        </div>
+                                                                        <div className="space-y-1">
+                                                                            <p className="text-[10px] uppercase font-bold text-muted-foreground/70 tracking-wider">Details</p>
+                                                                            <div className="flex flex-col gap-1 text-xs text-muted-foreground">
+                                                                                {itemInInventory.hsnSacCode && (
+                                                                                    <span>HSN: {itemInInventory.hsnSacCode}</span>
+                                                                                )}
+
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+
+                                                                    {itemInInventory.description && (
+                                                                        <div className="pt-2 border-t border-border/50">
+                                                                            <p className="text-[10px] uppercase font-bold text-muted-foreground/70 tracking-wider mb-1">Description</p>
+                                                                            <p className="text-xs text-muted-foreground line-clamp-3 leading-relaxed">
+                                                                                {itemInInventory.description}
+                                                                            </p>
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            </PopoverContent>
+                                                        </Popover>
+                                                    )}
+                                                </div>
                                             </div>
                                             {isEditingItem ? (
                                                 <div className="relative mt-1">
@@ -1097,34 +1216,39 @@ export function CheckDialog({
                             {hasSufficientInventory && canEdit && !isManager && (
                                 <div className="p-4 bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-950/30 dark:to-emerald-950/30 border border-green-300 dark:border-green-700 rounded-lg overflow-hidden">
                                     <div className="flex items-center justify-between gap-3 flex-wrap">
-                                        <div className="flex items-center gap-3 min-w-0 flex-1">
+                                        <div className="flex items-center gap-3">
                                             <div className="p-2 bg-green-100 dark:bg-green-900/50 rounded-full flex-shrink-0">
                                                 <CheckCircle className="h-6 w-6 text-green-600 dark:text-green-400" />
                                             </div>
                                             <div className="min-w-0">
                                                 <h3 className="font-semibold text-green-700 dark:text-green-300 text-sm sm:text-base">
-                                                    ✓ Item Available in Inventory
+                                                    Item Available in Inventory
                                                 </h3>
-                                                <p className="text-xs sm:text-sm text-green-600 dark:text-green-400 flex flex-wrap gap-x-2 gap-y-0.5">
-                                                    <span>Stock: <span className="font-bold">{itemInInventory?.centralStock || 0}</span> {itemInInventory?.unit || 'units'}</span>
-                                                    <span className="hidden sm:inline">•</span>
-                                                    <span>Required: <span className="font-bold">{request?.quantity || 0}</span> {request?.unit || 'units'}</span>
+                                                <p className="text-xs sm:text-sm text-green-600 dark:text-green-400">
+                                                    Required: <span className="font-bold">{request?.quantity || 0}</span> {request?.unit || 'units'}
                                                 </p>
                                             </div>
                                         </div>
-                                        <Button
-                                            onClick={() => setShowDirectDeliveryConfirm(true)}
-                                            className="bg-green-600 hover:bg-green-700 text-white shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 flex-shrink-0"
-                                            size="sm"
-                                            disabled={isEditingItem}
-                                        >
-                                            <Package className="h-4 w-4 mr-2" />
-                                            Direct Delivery
-                                        </Button>
+                                        {(() => {
+                                            // Helper to check permission
+                                            const canDirectDeliver = ["delivery", "all"].includes(request?.directAction || "") || isManager;
+
+                                            if (!canDirectDeliver) return null;
+
+                                            return (
+                                                <Button
+                                                    onClick={() => setShowDirectDeliveryConfirm(true)}
+                                                    className="ml-auto bg-green-600 hover:bg-green-700 text-white shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 flex-shrink-0"
+                                                    size="sm"
+                                                    disabled={isEditingItem}
+                                                >
+                                                    <Package className="h-4 w-4 mr-2" />
+                                                    Ready for Delivery
+                                                </Button>
+                                            );
+                                        })()}
                                     </div>
-                                    <p className="text-xs text-green-600 dark:text-green-400 mt-3 pl-14">
-                                        Item in stock. No purchase needed.
-                                    </p>
+
                                 </div>
                             )}
 
@@ -1493,30 +1617,57 @@ export function CheckDialog({
                                     )}
 
                                     {/* Status Badge Row */}
-                                    {quantityFromInventory > 0 && quantityToBuy > 0 && (
-                                        <div className="flex justify-center">
-                                            {(existingCC?.managerNotes?.includes("Split Fulfillment Approved") || request?.isSplitApproved) ? (
-                                                <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-gradient-to-r from-green-100 to-emerald-100 dark:from-green-900/30 dark:to-emerald-900/30 border border-emerald-300 dark:border-emerald-700 rounded-full">
-                                                    <div className="flex items-center justify-center h-5 w-5 rounded-full bg-emerald-500">
-                                                        <Check className="h-3 w-3 text-white" />
-                                                    </div>
-                                                    <span className="text-xs font-bold text-emerald-700 dark:text-emerald-400 uppercase tracking-wider">
-                                                        Split Approved
-                                                    </span>
+                                    <div className="flex flex-col items-center gap-2 mb-2">
+                                        {/* Direct PO Approved Badge */}
+                                        {(request?.directAction === "po" || request?.directAction === "all") && (
+                                            <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-full shadow-sm">
+                                                <div className="flex items-center justify-center h-4 w-4 rounded-full bg-blue-500 text-white">
+                                                    <Check className="h-2.5 w-2.5" />
                                                 </div>
-                                            ) : (
-                                                <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-gradient-to-r from-amber-100 to-orange-100 dark:from-amber-900/30 dark:to-orange-900/30 border border-amber-300 dark:border-amber-700 rounded-full">
-                                                    <div className="flex -space-x-1">
-                                                        <div className="h-3 w-3 rounded-full bg-orange-500 ring-2 ring-white dark:ring-gray-900"></div>
-                                                        <div className="h-3 w-3 rounded-full bg-emerald-500 ring-2 ring-white dark:ring-gray-900"></div>
-                                                    </div>
-                                                    <span className="text-xs font-bold text-amber-700 dark:text-amber-400 uppercase tracking-wider">
-                                                        Split Pending Approval
-                                                    </span>
+                                                <span className="text-[10px] font-bold text-blue-700 dark:text-blue-300 uppercase tracking-wider">
+                                                    Direct PO Approved
+                                                </span>
+                                            </div>
+                                        )}
+
+                                        {/* Direct Delivery Approved Badge */}
+                                        {(request?.directAction === "delivery" || request?.directAction === "all") && (
+                                            <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-full shadow-sm">
+                                                <div className="flex items-center justify-center h-4 w-4 rounded-full bg-green-500 text-white">
+                                                    <Check className="h-2.5 w-2.5" />
                                                 </div>
-                                            )}
-                                        </div>
-                                    )}
+                                                <span className="text-[10px] font-bold text-green-700 dark:text-green-300 uppercase tracking-wider">
+                                                    Direct Delivery Approved
+                                                </span>
+                                            </div>
+                                        )}
+
+                                        {/* Split Logic Badge */}
+                                        {quantityFromInventory > 0 && quantityToBuy > 0 && (
+                                            <div className="flex justify-center">
+                                                {(existingCC?.managerNotes?.includes("Split Fulfillment Approved") || request?.isSplitApproved) ? (
+                                                    <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-gradient-to-r from-green-100 to-emerald-100 dark:from-green-900/30 dark:to-emerald-900/30 border border-emerald-300 dark:border-emerald-700 rounded-full">
+                                                        <div className="flex items-center justify-center h-5 w-5 rounded-full bg-emerald-500">
+                                                            <Check className="h-3 w-3 text-white" />
+                                                        </div>
+                                                        <span className="text-xs font-bold text-emerald-700 dark:text-emerald-400 uppercase tracking-wider">
+                                                            Split Approved
+                                                        </span>
+                                                    </div>
+                                                ) : (
+                                                    <div className="inline-flex items-center gap-2 px-4 py-1.5 bg-gradient-to-r from-amber-100 to-orange-100 dark:from-amber-900/30 dark:to-orange-900/30 border border-amber-300 dark:border-amber-700 rounded-full">
+                                                        <div className="flex -space-x-1">
+                                                            <div className="h-3 w-3 rounded-full bg-orange-500 ring-2 ring-white dark:ring-gray-900"></div>
+                                                            <div className="h-3 w-3 rounded-full bg-emerald-500 ring-2 ring-white dark:ring-gray-900"></div>
+                                                        </div>
+                                                        <span className="text-xs font-bold text-amber-700 dark:text-amber-400 uppercase tracking-wider">
+                                                            Split Pending Approval
+                                                        </span>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
 
                                     {/* Action Buttons - Clean Grid Layout */}
                                     <div className="flex flex-wrap items-center gap-2">
@@ -1535,22 +1686,10 @@ export function CheckDialog({
                                         {/* Right: Action Buttons */}
                                         <div className="flex flex-wrap items-center gap-2">
                                             {/* Save Button - Always show */}
-                                            <Button
-                                                variant="outline"
-                                                onClick={async () => {
-                                                    await handleSave(true);
-                                                    toast.success("Changes Saved");
-                                                }}
-                                                disabled={isSaving || isSubmitting}
-                                                className="border-gray-300 dark:border-gray-600"
-                                                size="sm"
-                                            >
-                                                <Save className="h-4 w-4 mr-1" />
-                                                Save
-                                            </Button>
+
 
                                             {/* SPLIT SCENARIO: Both inventory and vendor quantities > 0 */}
-                                            {quantityFromInventory > 0 && quantityToBuy > 0 ? (
+                                            {quantityFromInventory > 0 && quantityToBuy > 0 && (
                                                 <Button
                                                     onClick={() => setShowSplitActionConfirm(true)}
                                                     disabled={isSaving || isSubmitting}
@@ -1560,50 +1699,93 @@ export function CheckDialog({
                                                     <Package className="h-4 w-4 mr-1" />
                                                     Split & Confirm
                                                 </Button>
-                                            ) : (
-                                                <>
-                                                    {/* NO SPLIT: Show individual buttons */}
-
-                                                    {/* Direct Delivery - When taking all from inventory */}
-                                                    {quantityFromInventory > 0 && quantityToBuy === 0 && (existingCC?.managerNotes?.includes("Split Fulfillment Approved") || request?.isSplitApproved || hasSufficientInventory) && (
-                                                        <Button
-                                                            onClick={() => setShowSplitDeliverConfirm(true)}
-                                                            disabled={isSaving || isSubmitting || isEditingItem}
-                                                            className="bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 text-white shadow-md hover:shadow-lg transition-all"
-                                                            size="sm"
-                                                        >
-                                                            <Truck className="h-4 w-4 mr-1" />
-                                                            Deliver {quantityFromInventory} {itemInInventory?.unit || request?.unit}
-                                                        </Button>
-                                                    )}
-
-                                                    {/* Direct PO - Only show if manager approved via directAction */}
-                                                    {quantityFromInventory === 0 && (request?.directAction === "po" || request?.directAction === "all") && (
-                                                        <Button
-                                                            onClick={() => setShowDirectPOConfirm(true)}
-                                                            disabled={isSaving || isSubmitting}
-                                                            className="bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white shadow-md hover:shadow-lg transition-all"
-                                                            size="sm"
-                                                        >
-                                                            <ShoppingCart className="h-4 w-4 mr-1" />
-                                                            Direct PO
-                                                        </Button>
-                                                    )}
-
-                                                    {/* Ready for CC - When going to cost comparison */}
-                                                    {quantityFromInventory === 0 && (
-                                                        <Button
-                                                            onClick={() => setShowSaveConfirm(true)}
-                                                            disabled={isSaving || isSubmitting}
-                                                            className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-md hover:shadow-lg transition-all"
-                                                            size="sm"
-                                                        >
-                                                            <CheckCircle className="h-4 w-4 mr-1" />
-                                                            Ready for CC
-                                                        </Button>
-                                                    )}
-                                                </>
                                             )}
+
+                                            {/* Direct Delivery - Only show if has permission and conditions met */}
+                                            {(() => {
+                                                const hasDeliveryPermission = ["delivery", "all", "split_delivery", "split_po_delivery"].includes(request?.directAction || "") || isManager;
+                                                const isApprovedSplit = existingCC?.managerNotes?.includes("Split Fulfillment Approved") || request?.isSplitApproved;
+
+                                                // Show if:
+                                                // 1. We have inventory to deliver (> 0)
+                                                // 2. AND (We have explicit permission OR It is full fulfillment OR Split is approved)
+                                                // 3. AND we are NOT showing the top button (duplicate check: top button shows if hasSufficientInventory && !isManager)
+
+                                                const isSplitScenario = quantityFromInventory > 0 && quantityToBuy > 0;
+                                                const startShow = quantityFromInventory > 0 && (hasDeliveryPermission || (quantityToBuy === 0 && hasSufficientInventory) || isApprovedSplit);
+                                                const isTopButtonVisible = hasSufficientInventory && !isManager;
+
+                                                if (!startShow || isTopButtonVisible || isSplitScenario) return null;
+
+                                                return (
+                                                    <Button
+                                                        onClick={() => setShowSplitDeliverConfirm(true)}
+                                                        disabled={isSaving || isSubmitting || isEditingItem}
+                                                        className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white shadow-md hover:shadow-lg transition-all"
+                                                        size="sm"
+                                                    >
+                                                        <Package className="h-4 w-4 mr-1" />
+                                                        Deliver {quantityFromInventory} {itemInInventory?.unit || request?.unit}
+                                                    </Button>
+                                                );
+                                            })()}
+
+                                            {/* Direct PO / Ready for PO */}
+                                            {(() => {
+                                                const canDirectPO = ["po", "all", "split_po", "split_po_delivery"].includes(request?.directAction || "") || isManager;
+
+                                                // Show if:
+                                                // 1. We need to buy (quantityToBuy > 0)
+                                                // 2. AND We have permission to Direct PO
+                                                // Show if we have permission to Direct PO
+                                                // AND we are not in a split scenario where we should use "Split & Confirm"
+                                                const isSplitScenario = quantityFromInventory > 0 && quantityToBuy > 0;
+                                                const shouldShowPOButton = canDirectPO && !isSplitScenario;
+
+                                                if (!shouldShowPOButton) return null;
+
+                                                const isActionableDirectPO = canDirectPO;
+
+                                                return (
+                                                    <Button
+                                                        onClick={() => isActionableDirectPO ? setShowDirectPOConfirm(true) : handleMarkReadyForPO()}
+                                                        disabled={isSaving || isSubmitting}
+                                                        className={cn(
+                                                            "shadow-md hover:shadow-lg transition-all text-white",
+                                                            isActionableDirectPO
+                                                                ? "bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600"
+                                                                : "bg-gradient-to-r from-cyan-500 to-sky-500 hover:from-cyan-600 hover:to-sky-600"
+                                                        )}
+                                                        size="sm"
+                                                    >
+                                                        <ShoppingCart className="h-4 w-4 mr-1" />
+                                                        Ready for PO
+                                                    </Button>
+                                                );
+                                            })()}
+
+                                            {/* Ready for CC */}
+                                            {(() => {
+                                                // Always show Ready for CC unless it's strictly an inventory-only item processing event?
+                                                // But user wants "all buttons". So we show it.
+                                                // Limit slightly: if quantityToBuy is 0 and NO direct permissions, maybe hide? 
+                                                // But simplest is to allow it.
+
+                                                const isSplitScenario = quantityFromInventory > 0 && quantityToBuy > 0;
+                                                if (isSplitScenario) return null;
+
+                                                return (
+                                                    <Button
+                                                        onClick={() => setShowSaveConfirm(true)}
+                                                        disabled={isSaving || isSubmitting}
+                                                        className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-md hover:shadow-lg transition-all"
+                                                        size="sm"
+                                                    >
+                                                        <CheckCircle className="h-4 w-4 mr-1" />
+                                                        Ready for CC
+                                                    </Button>
+                                                );
+                                            })()}
                                         </div>
                                     </div>
                                 </div>
@@ -1757,22 +1939,18 @@ export function CheckDialog({
                                 await handleSave(true);
 
                                 // 3. Submit/Update Status
-                                if (vendorQuotes.length > 0 || quantityToBuy > 0) {
-                                    if (vendorQuotes.length > 0) {
-                                        await submitCC({ requestId: activeRequestId });
-                                        toast.success("Submitted for Approval");
-                                    } else {
-                                        await updatePurchaseRequestStatus({
-                                            requestId: activeRequestId,
-                                            status: "ready_for_cc"
-                                        });
-                                        toast.success("Marked as Ready for CC");
-                                    }
-                                    onOpenChange(false);
+                                // 3. Submit/Update Status
+                                if (vendorQuotes.length > 0) {
+                                    await submitCC({ requestId: activeRequestId });
+                                    toast.success("Submitted for Approval");
                                 } else {
-                                    onOpenChange(false);
-                                    toast.success("Saved");
+                                    await updatePurchaseRequestStatus({
+                                        requestId: activeRequestId,
+                                        status: "ready_for_cc"
+                                    });
+                                    toast.success("Marked as Ready for CC");
                                 }
+                                onOpenChange(false);
                             } catch (e: any) {
                                 toast.error("Failed: " + e.message);
                             }
@@ -1896,8 +2074,8 @@ export function CheckDialog({
                             </p>
 
                             <div className="space-y-2">
-                                {/* Direct PO Option - Only show if manager approved via directAction */}
-                                {(request?.directAction === "po" || request?.directAction === "all") && (
+                                {/* Direct PO Option - Show if allowed */}
+                                {(["po", "all", "split_po", "split_po_delivery"].includes(request?.directAction || "") || isManager) && (
                                     <label className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${splitRemainingAction === "directPO"
                                         ? "bg-emerald-50 dark:bg-emerald-950/30 border-emerald-300 dark:border-emerald-700"
                                         : "bg-gray-50 dark:bg-gray-900 border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600"
@@ -1907,13 +2085,13 @@ export function CheckDialog({
                                             name="splitAction"
                                             checked={splitRemainingAction === "directPO"}
                                             onChange={() => setSplitRemainingAction("directPO")}
-                                            className="h-4 w-4 text-emerald-600"
+                                            className="h-4 w-4 text-emerald-600 focus:ring-emerald-500"
                                         />
                                         <div className="flex items-center gap-2">
                                             <ShoppingCart className="h-4 w-4 text-emerald-600" />
                                             <div>
-                                                <p className="font-medium text-gray-900 dark:text-gray-100">Direct PO</p>
-                                                <p className="text-xs text-gray-500 dark:text-gray-400">Skip CC, go directly to Purchase Order</p>
+                                                <p className="font-medium text-gray-900 dark:text-gray-100">Ready for PO</p>
+                                                <p className="text-xs text-gray-500 dark:text-gray-400">Skip Cost Comparison, go directly to PO</p>
                                             </div>
                                         </div>
                                     </label>

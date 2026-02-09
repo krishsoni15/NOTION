@@ -89,10 +89,23 @@ export function ManagerRequestsContent() {
     }, [allRequests]);
 
     // Query inventory status for all items
-    const inventoryStatus = useQuery(
+    const inventoryStatusData = useQuery(
         api.inventory.getInventoryStatusForItems,
         uniqueItemNames.length > 0 ? { itemNames: uniqueItemNames } : "skip"
     );
+
+    // Create Map for efficient lookup
+    const inventoryStatus = useMemo(() => {
+        if (!inventoryStatusData) return null;
+        if (Array.isArray(inventoryStatusData)) {
+            const map: Record<string, any> = {};
+            inventoryStatusData.forEach((s: any) => {
+                map[s.requestedName] = s;
+            });
+            return map;
+        }
+        return inventoryStatusData as any;
+    }, [inventoryStatusData]);
 
     // Filter requests based on category, status, search query, and inventory status
     const filteredRequests = useMemo(() => {

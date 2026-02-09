@@ -276,10 +276,23 @@ export function RequestsTable({
   }, [requests]);
 
   // Query inventory status for all items
-  const inventoryStatus = useQuery(
+  const inventoryStatusData = useQuery(
     api.inventory.getInventoryStatusForItems,
     uniqueItemNames.length > 0 ? { itemNames: uniqueItemNames } : "skip"
   );
+
+  // Create Map for efficient lookup
+  const inventoryStatus = useMemo(() => {
+    if (!inventoryStatusData) return null;
+    if (Array.isArray(inventoryStatusData)) {
+      const map: Record<string, any> = {};
+      inventoryStatusData.forEach((s: any) => {
+        map[s.requestedName] = s;
+      });
+      return map;
+    }
+    return inventoryStatusData as any;
+  }, [inventoryStatusData]);
 
   // Helper function to get inventory status badge for an item
   const getInventoryStatusBadge = (itemName: string, requestedQuantity: number, unit: string) => {
@@ -865,7 +878,7 @@ export function RequestsTable({
                         className="h-6 px-2.5 text-[10px] font-bold bg-purple-600 hover:bg-purple-700 text-white shadow-sm border border-purple-500"
                       >
                         <CheckCircle2 className="h-3 w-3 mr-1" />
-                        CC
+                        Review CC
                       </Button>
                     )}
                   </div>
@@ -1129,7 +1142,7 @@ export function RequestsTable({
                       title="Review Cost Comparison"
                     >
                       <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
-                      CC {items.filter(i => i.status === "cc_pending").length > 1 ? `(${items.filter(i => i.status === "cc_pending").length})` : ''}
+                      Review CC {items.filter(i => i.status === "cc_pending").length > 1 ? `(${items.filter(i => i.status === "cc_pending").length})` : ''}
                     </Button>
                   )}
 
@@ -1191,7 +1204,7 @@ export function RequestsTable({
                   <TableHead className="min-w-[180px] font-bold text-xs uppercase tracking-tight text-muted-foreground/80">Location</TableHead>
                   <TableHead className="w-[150px] font-bold text-xs uppercase tracking-tight text-muted-foreground/80">Dates</TableHead>
                   <TableHead className="min-w-[350px] font-bold text-xs uppercase tracking-tight text-muted-foreground/80">Item Details</TableHead>
-                  <TableHead className="text-right min-w-[100px] font-bold text-xs uppercase tracking-tight text-muted-foreground/80">Actions</TableHead>
+                  <TableHead className="text-right min-w-[320px] font-bold text-xs uppercase tracking-tight text-muted-foreground/80">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -1445,6 +1458,50 @@ export function RequestsTable({
                               </>
                             ) : (
                               <>
+                                {/* Recheck/Approved Actions */}
+
+                                {["approved", "recheck"].includes(firstItem.status) && onCheck && (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-7 px-2 text-xs font-bold bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100 hover:text-indigo-800 dark:bg-indigo-950/30 dark:text-indigo-400 dark:border-indigo-800 flex-1 sm:flex-none shadow-sm mr-1"
+                                    onClick={(e) => { e.stopPropagation(); onCheck(firstItem._id); }}
+                                    title="Check/Split"
+                                  >
+                                    <Sparkles className="h-3.5 w-3.5 mr-1" />
+                                    Check/Split
+                                  </Button>
+                                )}
+                                {firstItem.status === "ready_for_cc" && userRole !== "manager" && (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-7 px-2 text-xs font-bold bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100 hover:text-blue-800 dark:bg-blue-950/30 dark:text-blue-400 dark:border-blue-800 flex-1 sm:flex-none shadow-sm mr-1"
+                                    onClick={(e) => { e.stopPropagation(); (onOpenCC || onCheck)?.(firstItem._id); }}
+                                    title="Process Cost Comparison"
+                                  >
+                                    <FileText className="h-3.5 w-3.5 mr-1" />
+                                    CC
+                                  </Button>
+                                )}
+                                {userRole === "manager" && items.some(i => i.status === "cc_pending") && (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-7 px-3 text-xs font-bold bg-purple-600 hover:bg-purple-700 text-white border border-purple-500 shadow-sm mr-1 transition-all hover:scale-105"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      const pendingItems = items.filter(i => i.status === "cc_pending");
+                                      if (pendingItems.length > 0) {
+                                        onOpenCC?.(pendingItems[0]._id, pendingItems.map(i => i._id));
+                                      }
+                                    }}
+                                    title="Review Cost Comparison"
+                                  >
+                                    <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
+                                    Review CC
+                                  </Button>
+                                )}
                                 {onConfirmDelivery && ["out_for_delivery", "delivery_processing", "delivery_stage"].includes(firstItem.status) && (
                                   <Button
                                     variant="default"
@@ -1458,18 +1515,7 @@ export function RequestsTable({
                                   </Button>
                                 )}
 
-                                {onOpenCC && firstItem.status === "ready_for_cc" && (
-                                  <Button
-                                    variant="outline"
-                                    size="sm"
-                                    className="h-7 px-2.5 text-xs font-bold border-blue-200 text-blue-700 hover:bg-blue-50 dark:border-blue-800 dark:text-blue-400 dark:hover:bg-blue-950 mr-1"
-                                    onClick={(e) => { e.stopPropagation(); onOpenCC(firstItem._id); }}
-                                    title="Open Cost Comparison"
-                                  >
-                                    <FileText className="h-3 w-3 mr-1" />
-                                    CC
-                                  </Button>
-                                )}
+
                                 {onCreatePO && (firstItem.status === "ready_for_po" || (firstItem.status as string) === "sign_rejected") && (
                                   <Button
                                     variant="outline"
@@ -1531,10 +1577,10 @@ export function RequestsTable({
                                 <div
                                   key={item._id}
                                   className={cn(
-                                    "relative grid grid-cols-[50px_60px_2fr_120px_140px_80px] gap-4 items-center p-3 rounded-lg transition-all w-full mb-2 shadow-sm overflow-hidden",
+                                    "relative grid grid-cols-[50px_60px_2fr_100px_80px_320px] gap-4 items-center p-3 rounded-lg transition-all w-full mb-2 shadow-sm overflow-visible",
                                     "bg-white dark:bg-slate-950",
                                     getStatusBgColor(item.status),
-                                    "border border-border/50 hover:shadow-md"
+                                    "border border-border/50 hover:shadow-md h-auto min-h-[80px]"
                                   )}
                                 >
                                   {/* Status Bar */}
@@ -1636,43 +1682,15 @@ export function RequestsTable({
                                             </>
                                           ) : (
                                             <>
-                                              {/* Ready for Delivery / PO Actions */}
-                                              {["recheck", "pending", "approved"].includes(item.status) && (
-                                                <>
-                                                  {(item.directAction === "delivery" || item.directAction === "all") && onDirectDelivery && (
-                                                    <Button
-                                                      size="sm"
-                                                      onClick={() => setShowReadyForDeliveryConfirm(item._id)}
-                                                      disabled={!hasFullStock}
-                                                      className="h-8 text-xs font-semibold bg-orange-50 text-orange-700 border-orange-200 hover:bg-orange-100 hover:text-orange-800 dark:bg-orange-950/30 dark:text-orange-400 dark:border-orange-800 flex-1 sm:flex-none px-4"
-                                                      variant="outline"
-                                                    >
-                                                      <Truck className="h-3.5 w-3.5 mr-2" /> Ready for Delivery
-                                                    </Button>
-                                                  )}
-                                                  {(item.directAction === "po" || item.directAction === "all") && onDirectPO && (
-                                                    <Button size="sm" onClick={() => setShowReadyForPOConfirm(item._id)} className="h-8 text-xs font-semibold bg-teal-50 text-teal-700 border-teal-200 hover:bg-teal-100 hover:text-teal-800 dark:bg-teal-950/30 dark:text-teal-400 dark:border-teal-800 flex-1 sm:flex-none px-4" variant="outline">
-                                                      <ShoppingCart className="h-3.5 w-3.5 mr-2" /> Ready for PO
-                                                    </Button>
-                                                  )}
-                                                </>
-                                              )}
+                                              <div className="grid grid-cols-1 xl:grid-cols-2 gap-2 w-full">
 
-                                              {/* Manager Actions: Ready for CC / Check */}
-                                              {["approved", "recheck"].includes(item.status) && (
-                                                <>
-                                                  {onMoveToCC && (
-                                                    <Button size="sm" onClick={() => setShowReadyForCCConfirm(item._id)} className="h-8 text-xs font-semibold bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100 hover:text-blue-800 dark:bg-blue-950/30 dark:text-blue-400 dark:border-blue-800 flex-1 sm:flex-none px-4" variant="outline">
-                                                      <FileText className="h-3.5 w-3.5 mr-2" /> Ready for CC
-                                                    </Button>
-                                                  )}
-                                                  {onCheck && (
-                                                    <Button size="sm" onClick={() => onCheck(item._id)} className="h-8 text-xs font-semibold bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100 hover:text-purple-800 dark:bg-purple-950/30 dark:text-purple-400 dark:border-purple-800 flex-1 sm:flex-none px-4" variant="outline">
-                                                      <PieChart className="h-3.5 w-3.5 mr-2" /> Check/Split
-                                                    </Button>
-                                                  )}
-                                                </>
-                                              )}
+                                                {/* Check/Split */}
+                                                {["approved", "recheck"].includes(item.status) && onCheck && (
+                                                  <Button size="sm" onClick={() => onCheck(item._id)} className="h-8 text-[11px] font-bold bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100 hover:text-indigo-800 dark:bg-indigo-950/30 dark:text-indigo-400 dark:border-indigo-800 w-full justify-start px-2" variant="outline">
+                                                    <Sparkles className="h-3.5 w-3.5 mr-1.5 shrink-0" /> Check/Split
+                                                  </Button>
+                                                )}
+                                              </div>
 
                                               {/* Manager Review CC Button */}
                                               {userRole === "manager" && item.status === "cc_pending" && (
@@ -1687,12 +1705,12 @@ export function RequestsTable({
                                                   className="h-8 text-xs font-semibold bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100 hover:text-purple-800 dark:bg-purple-950/30 dark:text-purple-400 dark:border-purple-800 flex-1 sm:flex-none px-4"
                                                   variant="outline"
                                                 >
-                                                  <CheckCircle2 className="h-3.5 w-3.5 mr-2" /> CC
+                                                  <CheckCircle2 className="h-3.5 w-3.5 mr-2" /> Review CC
                                                 </Button>
                                               )}
 
                                               {/* Next Stage Actions */}
-                                              {item.status === "ready_for_cc" && (
+                                              {item.status === "ready_for_cc" && userRole !== "manager" && (
                                                 <Button size="sm" onClick={() => (onOpenCC || onCheck)?.(item._id)} className="h-8 text-xs font-semibold bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100 hover:text-blue-800 dark:bg-blue-950/30 dark:text-blue-400 dark:border-blue-800 flex-1 sm:flex-none px-4" variant="outline">
                                                   <FileText className="h-3.5 w-3.5 mr-2" /> CC
                                                 </Button>

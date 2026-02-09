@@ -915,11 +915,11 @@ export function CostComparisonDialog({
           <div className="space-y-3 flex-1 overflow-y-auto overflow-x-hidden pr-1">
             {/* Item Information Card - Compact & Clean */}
             {request && (
-              <div className="bg-muted/30 rounded-lg p-1">
-                <div className="bg-card border rounded-md p-4 shadow-sm transition-all hover:shadow-md">
-                  <div className="flex items-center justify-between mb-3">
-                    <h4 className="font-semibold text-sm flex items-center gap-2">
-                      <Package className="h-4 w-4 text-primary" />
+              <div className="bg-muted/10 rounded-xl border border-border/50 overflow-hidden">
+                <div className="bg-card px-5 py-4">
+                  <div className="flex items-center justify-between mb-4">
+                    <h4 className="font-semibold text-sm flex items-center gap-2 text-primary">
+                      <Package className="h-4 w-4" />
                       Item Details
                     </h4>
                     {canEdit && !isManager && !isEditingItem && (
@@ -927,7 +927,7 @@ export function CostComparisonDialog({
                         variant="ghost"
                         size="sm"
                         onClick={handleStartEditItem}
-                        className="h-7 w-7 p-0 hover:bg-muted"
+                        className="h-7 w-7 p-0 hover:bg-muted text-muted-foreground"
                       >
                         <Edit className="h-3.5 w-3.5" />
                       </Button>
@@ -956,10 +956,10 @@ export function CostComparisonDialog({
                     )}
                   </div>
 
-                  <div className="grid grid-cols-1 gap-y-4 text-sm">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 text-sm">
                     {/* Item Name */}
-                    <div className="space-y-1">
-                      <span className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Item Name</span>
+                    <div className="space-y-1.5">
+                      <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider">Item Name</span>
                       {isEditingItem ? (
                         <div className="relative">
                           <Input
@@ -995,13 +995,13 @@ export function CostComparisonDialog({
                           )}
                         </div>
                       ) : (
-                        <p className="font-medium text-base truncate" title={request.itemName}>{request.itemName}</p>
+                        <p className="font-medium text-base truncate pr-4" title={request.itemName}>{request.itemName}</p>
                       )}
                     </div>
 
                     {/* Quantity & Unit */}
-                    <div className="space-y-1">
-                      <span className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Quantity</span>
+                    <div className="space-y-1.5">
+                      <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider">Quantity</span>
                       {isEditingItem ? (
                         <div className="flex gap-2">
                           <Input
@@ -1010,7 +1010,7 @@ export function CostComparisonDialog({
                             step="any"
                             value={editQuantity}
                             onChange={(e) => setEditQuantity(e.target.value)}
-                            className="h-8 text-sm w-32"
+                            className="h-8 text-sm w-24"
                             disabled={isUpdatingItem}
                             placeholder="Qty"
                           />
@@ -1044,17 +1044,17 @@ export function CostComparisonDialog({
                           </div>
                         </div>
                       ) : (
-                        <div className="flex items-baseline gap-1">
-                          <p className="font-bold text-lg">{request.quantity}</p>
-                          <p className="text-muted-foreground">{request.unit || itemInInventory?.unit || 'units'}</p>
+                        <div className="flex items-baseline gap-1.5">
+                          <p className="font-bold text-lg tabular-nums">{request.quantity}</p>
+                          <p className="text-sm text-muted-foreground font-medium">{request.unit || itemInInventory?.unit || 'units'}</p>
                         </div>
                       )}
                     </div>
 
-                    {/* Description - Full Width */}
-                    {request.description && (
-                      <div className="space-y-1">
-                        <span className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Description</span>
+                    {/* Description - Full Grid Width */}
+                    {(request.description || isEditingItem) && (
+                      <div className="md:col-span-2 space-y-1.5 pt-2 border-t border-dashed">
+                        <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider">Description</span>
                         {isEditingItem ? (
                           <Textarea
                             value={editDescription}
@@ -1064,19 +1064,21 @@ export function CostComparisonDialog({
                             disabled={isUpdatingItem}
                           />
                         ) : (
-                          <p className="text-sm text-muted-foreground leading-relaxed">{request.description}</p>
+                          <p className="text-sm text-muted-foreground/90 leading-relaxed bg-muted/20 p-2.5 rounded-md border border-border/40">
+                            {request.description}
+                          </p>
                         )}
                       </div>
                     )}
                   </div>
 
                   {!isEditingItem && (
-                    <div className="mt-4 pt-3 border-t flex justify-end">
+                    <div className="mt-4 flex justify-end">
                       <Button
-                        variant="outline"
+                        variant="ghost"
                         size="sm"
                         onClick={() => setInventoryInfoOpen(true)}
-                        className="text-xs h-7 gap-1.5"
+                        className="text-xs h-7 gap-1.5 text-blue-600 hover:text-blue-700 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-950/30"
                       >
                         <Info className="h-3.5 w-3.5" />
                         View Inventory Details
@@ -1102,72 +1104,7 @@ export function CostComparisonDialog({
               </div>
             )}
 
-            {/* Inventory Status Banner - Simplified/Read-Only */}
-            {!isInventoryLoading && request && (
-              <div className="bg-muted/40 border rounded-lg p-4 mb-4">
-                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 text-sm">
-                  {/* Status Icon & Label */}
-                  <div className="flex items-center gap-2 w-full sm:w-auto min-w-[140px]">
-                    {itemInInventory ? (
-                      (itemInInventory.centralStock || 0) >= request.quantity ? (
-                        <>
-                          <CheckCircle className="h-5 w-5 text-green-600 shrink-0" />
-                          <span className="font-medium text-green-700">In Stock</span>
-                        </>
-                      ) : (itemInInventory.centralStock || 0) > 0 ? (
-                        <>
-                          <Info className="h-5 w-5 text-amber-600 shrink-0" />
-                          <span className="font-medium text-amber-700">Partial Stock</span>
-                        </>
-                      ) : (
-                        <>
-                          <AlertCircle className="h-5 w-5 text-destructive shrink-0" />
-                          <span className="font-medium text-destructive">Out of Stock</span>
-                        </>
-                      )
-                    ) : (
-                      <>
-                        <Package className="h-5 w-5 text-blue-600 shrink-0" />
-                        <span className="font-medium text-blue-700">New Item</span>
-                      </>
-                    )}
-                  </div>
 
-                  {/* Vertical Divider - Hidden on mobile */}
-                  <div className="hidden sm:block h-8 w-px bg-border/60 shrink-0"></div>
-
-                  {/* Stats Grid - Responsive with overflow protection */}
-                  <div className="flex flex-wrap items-center gap-3 sm:gap-6 w-full sm:flex-1 overflow-hidden">
-                    <div className="min-w-0">
-                      <span className="text-xs text-muted-foreground uppercase tracking-wider font-semibold block mb-0.5">Required</span>
-                      <span className="font-medium text-base sm:text-lg truncate block">{request.quantity} <span className="text-xs sm:text-sm text-muted-foreground">{request.unit}</span></span>
-                    </div>
-
-                    <div className="min-w-0">
-                      <span className="text-xs text-muted-foreground uppercase tracking-wider font-semibold block mb-0.5">Available</span>
-                      <span className={`font-medium text-base sm:text-lg truncate block ${(itemInInventory?.centralStock || 0) > 0 ? "text-foreground" : "text-muted-foreground"}`}>
-                        {itemInInventory?.centralStock || 0} <span className="text-xs sm:text-sm text-muted-foreground">{itemInInventory?.unit || request.unit}</span>
-                      </span>
-                    </div>
-
-                    {!itemInInventory || (itemInInventory.centralStock || 0) < request.quantity ? (
-                      <div className="min-w-0">
-                        <span className="text-xs text-muted-foreground uppercase tracking-wider font-semibold block mb-0.5">To Buy</span>
-                        <span className="font-medium text-base sm:text-lg text-blue-600 dark:text-blue-400 truncate block">
-                          {quantityToBuy > 0 ? quantityToBuy : (request.quantity - (itemInInventory?.centralStock || 0))} <span className="text-xs sm:text-sm text-muted-foreground">{request.unit}</span>
-                        </span>
-                      </div>
-                    ) : (
-                      <div className="min-w-0">
-                        <span className="text-xs text-green-600 font-medium bg-green-100 dark:bg-green-900/30 px-2 py-1 rounded whitespace-nowrap">
-                          ✓ Sufficient Stock
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-            )}
 
             {/* Rejection Notes */}
             {existingCC?.status === "cc_rejected" && (
@@ -1428,130 +1365,136 @@ export function CostComparisonDialog({
                 )}
               </div>
             )}
-          </div>
 
-          {/* Manager Review Actions */}
-          {isManagerReview && (
-            <div className="space-y-3 pt-2 border-t mt-4">
-              <div>
-                <Label className="text-xs font-medium">
-                  Manager Notes / Rejection Reason <span className="text-red-500">*</span>
-                </Label>
-                <Textarea
-                  value={managerNotes}
-                  onChange={(e) => setManagerNotes(e.target.value)}
-                  placeholder="Required: Please provide a detailed reason for rejecting this cost comparison..."
-                  className="mt-1 text-sm min-h-[80px]"
-                  rows={3}
-                />
-              </div>
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  className="border-red-300 text-red-600 hover:bg-red-50 hover:border-red-400"
-                  onClick={async () => {
-                    if (!managerNotes.trim()) {
-                      toast.error("Please provide a reason for rejection");
-                      return;
-                    }
-
-                    setIsReviewing(true);
-                    try {
-                      await reviewCC({
-                        requestId,
-                        action: "reject",
-                        notes: managerNotes.trim(),
-                      });
-                      toast.success("Cost comparison rejected");
-                      onOpenChange(false);
-                    } catch (error: any) {
-                      toast.error(error.message || "Failed to reject");
-                    } finally {
-                      setIsReviewing(false);
-                    }
-                  }}
-                  disabled={isReviewing}
-                  size="sm"
-                >
-                  <X className="h-3.5 w-3.5 mr-1.5" />
-                  Reject CC
-                </Button>
-                <Button
-                  onClick={async () => {
-                    if (!selectedFinalVendor) {
-                      toast.error("Please select a final vendor");
-                      return;
-                    }
-                    setIsReviewing(true);
-                    try {
-                      await reviewCC({
-                        requestId,
-                        action: "approve",
-                        selectedVendorId: selectedFinalVendor as Id<"vendors">,
-                        notes: managerNotes.trim() || undefined,
-                      });
-                      toast.success("Cost comparison approved");
-                      onOpenChange(false);
-                    } catch (error: any) {
-                      toast.error(error.message || "Failed to approve");
-                    } finally {
-                      setIsReviewing(false);
-                    }
-                  }}
-                  disabled={isReviewing || !selectedFinalVendor}
-                  size="sm"
-                  className="flex-1"
-                >
-                  <CheckCircle className="h-3.5 w-3.5 mr-1.5" />
-                  Approve & Select Vendor
-                </Button>
-              </div>
-            </div>
-          )
-          }
-
-          {/* Purchase Officer Actions - Only show vendor workflow when insufficient inventory */}
-          {
-            canEdit && !isSubmitted && !isManager && (
-              <div className="space-y-2 pt-4 border-t mt-2">
-                {/* Auto-save indicator */}
-                {isSaving && (
-                  <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground mb-2">
-                    <div className="h-3 w-3 border-2 border-muted-foreground/30 border-t-muted-foreground rounded-full animate-spin" />
-                    Auto-saving...
+            {/* Manager Review Actions */}
+            {isManagerReview && (
+              <div className="mt-4 pt-4 border-t border-border/60">
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                        Manager Decision Notes
+                      </Label>
+                      <span className="text-[10px] text-muted-foreground italic">
+                        Required for rejection
+                      </span>
+                    </div>
+                    <Textarea
+                      placeholder="Add approval notes or rejection reason..."
+                      value={managerNotes}
+                      onChange={(e) => setManagerNotes(e.target.value)}
+                      className="min-h-[80px] w-full text-sm resize-none bg-muted/20 focus:bg-background transition-all border-muted-foreground/20 focus:border-primary/50"
+                    />
                   </div>
-                )}
-                <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    onClick={() => onOpenChange(false)}
-                    className="flex-1"
-                    size="sm"
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    onClick={handleSubmit}
-                    disabled={isSaving || isSubmitting || vendorQuotes.length < 2}
-                    size="sm"
-                    className="flex-1"
-                  >
-                    <Send className="h-3.5 w-3.5 mr-1.5" />
-                    {existingCC?.status === "cc_rejected" ? "Resubmit" : "Submit for Approval"}
-                  </Button>
+
+                  <div className="flex gap-3 pt-2">
+                    <Button
+                      variant="ghost"
+                      onClick={async () => {
+                        if (!managerNotes.trim()) {
+                          toast.error("Please provide a reason for rejection");
+                          return;
+                        }
+
+                        setIsReviewing(true);
+                        try {
+                          await reviewCC({
+                            requestId,
+                            action: "reject",
+                            notes: managerNotes.trim(),
+                          });
+                          toast.success("Cost comparison rejected");
+                          onOpenChange(false);
+                        } catch (error: any) {
+                          toast.error(error.message || "Failed to reject");
+                        } finally {
+                          setIsReviewing(false);
+                        }
+                      }}
+                      disabled={isReviewing}
+                      size="sm"
+                      className="flex-1 text-destructive hover:bg-destructive/10 hover:text-destructive border border-transparent hover:border-destructive/20 transition-all font-medium"
+                    >
+                      <X className="h-4 w-4 mr-1.5" />
+                      Reject
+                    </Button>
+                    <Button
+                      onClick={async () => {
+                        if (!selectedFinalVendor) {
+                          toast.error("Please select a final vendor");
+                          return;
+                        }
+                        setIsReviewing(true);
+                        try {
+                          await reviewCC({
+                            requestId,
+                            action: "approve",
+                            selectedVendorId: selectedFinalVendor as Id<"vendors">,
+                            notes: managerNotes.trim() || undefined,
+                          });
+                          toast.success("Cost comparison approved");
+                          onOpenChange(false);
+                        } catch (error: any) {
+                          toast.error(error.message || "Failed to approve");
+                        } finally {
+                          setIsReviewing(false);
+                        }
+                      }}
+                      disabled={isReviewing || !selectedFinalVendor}
+                      size="sm"
+                      className="flex-[2] bg-primary hover:bg-primary/90 text-primary-foreground shadow-sm hover:shadow transition-all font-medium"
+                    >
+                      <CheckCircle className="h-4 w-4 mr-1.5" />
+                      Approve & Select Vendor
+                    </Button>
+                  </div>
                 </div>
               </div>
             )
-          }
+            }
 
-          {
-            isSubmitted && !isManagerReview && (
-              <p className="text-xs text-muted-foreground text-center py-4 border-t mt-2">
-                Submitted for manager approval
-              </p>
-            )
-          }
-        </DialogContent>
+            {/* Purchase Officer Actions - Only show vendor workflow when insufficient inventory */}
+            {
+              canEdit && !isSubmitted && !isManager && (
+                <div className="space-y-2 pt-4 border-t mt-2">
+                  {/* Auto-save indicator */}
+                  {isSaving && (
+                    <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground mb-2">
+                      <div className="h-3 w-3 border-2 border-muted-foreground/30 border-t-muted-foreground rounded-full animate-spin" />
+                      Auto-saving...
+                    </div>
+                  )}
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      onClick={() => onOpenChange(false)}
+                      className="flex-1"
+                      size="sm"
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      onClick={handleSubmit}
+                      disabled={isSaving || isSubmitting || vendorQuotes.length < 2}
+                      size="sm"
+                      className="flex-1"
+                    >
+                      <Send className="h-3.5 w-3.5 mr-1.5" />
+                      {existingCC?.status === "cc_rejected" ? "Resubmit" : "Submit for Approval"}
+                    </Button>
+                  </div>
+                </div>
+              )
+            }
+
+            {
+              isSubmitted && !isManagerReview && (
+                <p className="text-xs text-muted-foreground text-center py-4 border-t mt-2">
+                  Submitted for manager approval
+                </p>
+              )
+            }
+          </div></DialogContent>
       </Dialog>
 
       {/* Simplified Vendor Selection Dialog */}

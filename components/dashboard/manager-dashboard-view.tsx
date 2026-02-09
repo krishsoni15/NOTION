@@ -137,9 +137,11 @@ export function ManagerDashboardView() {
             className="space-y-8 pt-2 pb-10 relative"
         >
             {/* Dynamic Background */}
-            <div className="absolute inset-0 -z-10 h-full w-full bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] [background-size:20px_20px] [mask-image:radial-gradient(ellipse_70%_70%_at_50%_10%,#000_40%,transparent_100%)] dark:bg-[radial-gradient(#1f2937_1px,transparent_1px)] opacity-40 pointer-events-none" />
-            <div className="absolute top-0 right-0 -z-10 h-[500px] w-[500px] bg-primary/5 rounded-full blur-3xl opacity-50 mix-blend-multiply filter pointer-events-none animate-blob" />
-            <div className="absolute top-0 left-0 -z-10 h-[500px] w-[500px] bg-purple-500/5 rounded-full blur-3xl opacity-50 mix-blend-multiply filter pointer-events-none animate-blob animation-delay-2000" />
+            <div className="absolute inset-0 -z-10 overflow-hidden pointer-events-none">
+                <div className="absolute inset-0 h-full w-full bg-[radial-gradient(#e5e7eb_1px,transparent_1px)] [background-size:20px_20px] [mask-image:radial-gradient(ellipse_70%_70%_at_50%_10%,#000_40%,transparent_100%)] dark:bg-[radial-gradient(#1f2937_1px,transparent_1px)] opacity-40" />
+                <div className="absolute top-0 right-0 h-[500px] w-[500px] bg-primary/5 rounded-full blur-3xl opacity-50 mix-blend-multiply filter animate-blob" />
+                <div className="absolute top-0 left-0 h-[500px] w-[500px] bg-purple-500/5 rounded-full blur-3xl opacity-50 mix-blend-multiply filter animate-blob animation-delay-2000" />
+            </div>
 
             {/* Header */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 px-1">
@@ -436,8 +438,8 @@ export function ManagerDashboardView() {
                             <div className="flex flex-col">
                                 {stats.recentActivity.map((req: any, i: number) => (
                                     <div key={req._id} className="flex items-center justify-between p-4 border-b border-border/40 hover:bg-muted/30 transition-colors group last:border-0">
-                                        <div className="flex items-center gap-4">
-                                            <div className="relative">
+                                        <div className="flex-1 min-w-0 flex items-center gap-4">
+                                            <div className="relative flex-shrink-0">
                                                 <Avatar className="h-10 w-10 ring-2 ring-offset-2 ring-transparent group-hover:ring-primary/20 transition-all">
                                                     <AvatarImage src={req.creatorImage} alt={req.creatorName} />
                                                     <AvatarFallback className="bg-gradient-to-br from-indigo-500 to-purple-600 text-white font-bold text-xs">{req.creatorName?.[0] || "?"}</AvatarFallback>
@@ -451,9 +453,9 @@ export function ManagerDashboardView() {
                                                             <Activity className="h-2.5 w-2.5 text-white" />}
                                                 </div>
                                             </div>
-                                            <div className="space-y-1">
-                                                <p className="text-sm font-semibold group-hover:text-primary transition-colors">{req.itemName}</p>
-                                                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                            <div className="space-y-1 min-w-0">
+                                                <p className="text-sm font-semibold group-hover:text-primary transition-colors truncate">{req.itemName}</p>
+                                                <div className="flex items-center gap-2 text-xs text-muted-foreground truncate">
                                                     <span className="font-medium text-foreground/80">{req.creatorName}</span>
                                                     <span>•</span>
                                                     <span>{new Date(req.createdAt).toLocaleDateString()}</span>

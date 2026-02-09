@@ -241,39 +241,33 @@ export const getInventoryStatusForItems = query({
       });
     });
 
-    // Build result object
-    const result: Record<string, {
-      exists: boolean;
-      itemName: string;
-      centralStock: number;
-      unit: string;
-      status: "in_stock" | "out_of_stock" | "new_item";
-    }> = {};
-
-    args.itemNames.forEach((name) => {
+    // Build result array
+    const results = args.itemNames.map((name) => {
       const inventoryItem = inventoryMap.get(name.toLowerCase());
 
       if (inventoryItem) {
         const stock = inventoryItem.centralStock;
-        result[name] = {
+        return {
+          requestedName: name,
           exists: true,
           itemName: inventoryItem.itemName,
           centralStock: stock,
           unit: inventoryItem.unit,
           status: stock > 0 ? "in_stock" : "out_of_stock",
-        };
+        } as const;
       } else {
-        result[name] = {
+        return {
+          requestedName: name,
           exists: false,
           itemName: name,
           centralStock: 0,
           unit: "",
           status: "new_item",
-        };
+        } as const;
       }
     });
 
-    return result;
+    return results;
   },
 });
 

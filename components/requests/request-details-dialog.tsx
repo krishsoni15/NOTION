@@ -1499,7 +1499,7 @@ export function RequestDetailsDialog({
             </Button>
           )}
           {/* Show Confirm Delivered button for out_for_delivery/delivery_stage items */}
-          {(item.status === "out_for_delivery" || item.status === "delivery_stage") && (
+          {(item.status === "out_for_delivery" || item.status === "delivery_stage" || item.status === "delivery_processing") && (
             <Button
               variant="default"
               size="sm"
@@ -2239,7 +2239,7 @@ export function RequestDetailsDialog({
                           <TableBody>
                             {/* Render Pending PO Groups (ordered status) - vendor-wise grouping */}
                             {pendingPOs && pendingPOs.filter(group => group.status === "ordered").map((group: any) => (
-                              <TableRow key={`pending-po-group-${group.vendor._id}`} className={cn(
+                              <TableRow key={`pending-po-group-${group.poNumber}-${group.vendor?._id}`} className={cn(
                                 "shadow-sm border-b",
                                 "bg-orange-50/50 dark:bg-orange-950/10 hover:bg-orange-50 dark:hover:bg-orange-900/20 border-orange-200/50 dark:border-orange-800/50"
                               )}>
@@ -2357,7 +2357,7 @@ export function RequestDetailsDialog({
                                           variant="outline"
                                           size="sm"
                                           className={cn("text-xs h-8 w-full bg-background")}
-                                          onClick={() => { setPdfPreviewPoNumber(group.items[0].poNumber); setPdfPreviewRequestIds(group.items.map((i: any) => i._id)); }}
+                                          onClick={() => { setPdfPreviewPoNumber(group.items[0].poNumber); setPdfPreviewRequestIds(group.items.map((i: any) => i.requestId)); }}
                                         >
                                           <FileText className="h-3.5 w-3.5 mr-1.5" />
                                           View PDF
@@ -2371,7 +2371,7 @@ export function RequestDetailsDialog({
 
                             {/* Render Grouped POs First - pendingPOs is already grouped by PO number with items array */}
                             {pendingPOs && pendingPOs.filter(group => group.status === "sign_pending" || group.status === "sign_rejected").map((group: any) => (
-                              <TableRow key={`group-${group.vendor._id}`} className={cn(
+                              <TableRow key={`group-${group.poNumber}-${group.vendor?._id}`} className={cn(
                                 "shadow-sm border-b",
                                 group.status === "sign_rejected"
                                   ? "bg-red-50/50 dark:bg-red-950/10 hover:bg-red-50 dark:hover:bg-red-900/20 border-red-200/50 dark:border-red-800/50"
@@ -2522,7 +2522,7 @@ export function RequestDetailsDialog({
                                         variant="outline"
                                         size="sm"
                                         className={cn("text-xs h-8", isManager ? "w-full" : "w-full bg-background")}
-                                        onClick={() => { setPdfPreviewPoNumber(group.items[0].poNumber); setPdfPreviewRequestIds(group.items.map((i: any) => i._id)); }}
+                                        onClick={() => { setPdfPreviewPoNumber(group.items[0].poNumber); setPdfPreviewRequestIds(group.items.map((i: any) => i.requestId)); }}
                                       >
                                         <FileText className="h-3.5 w-3.5 mr-1.5" />
                                         View PDF
@@ -2680,7 +2680,9 @@ export function RequestDetailsDialog({
                                               {getStatusBadge(item.status)}
                                             </div>
                                           </TableCell>
-                                          {(isManager && (isPending || item.status === "sign_pending" || item.status === "cc_pending" || canManagerModifyStatus(item.status))) || (isPurchaseOfficer && ["pending_po", "direct_po", "ready_for_po", "ready_for_delivery", "recheck", "approved", "ready_for_cc", "cc_rejected", "out_for_delivery", "delivery_processing", "delivery_stage", "delivered"].includes(item.status)) ? (
+                                          {(isManager && (isPending || item.status === "sign_pending" || item.status === "cc_pending" || canManagerModifyStatus(item.status))) ||
+                                            (isPurchaseOfficer && ["pending_po", "direct_po", "ready_for_po", "ready_for_delivery", "recheck", "approved", "ready_for_cc", "cc_rejected", "out_for_delivery", "delivery_processing", "delivery_stage", "delivered"].includes(item.status)) ||
+                                            (isSiteEngineer && ["out_for_delivery", "delivery_processing", "delivery_stage"].includes(item.status)) ? (
                                             <TableCell className="text-right p-4 align-middle rounded-r-lg overflow-hidden">
                                               <div className="flex items-center justify-end gap-3 min-w-[300px]">
                                                 {item.status === "sign_pending" ? (
@@ -2805,7 +2807,7 @@ export function RequestDetailsDialog({
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 mb-4">
                           {/* Pending PO Groups (ordered status) - vendor-wise */}
                           {pendingPOs && pendingPOs.filter((p: any) => p.status === "ordered").map((group: any) => (
-                            <div key={`card-pending-po-${group.poNumber}`} className="flex flex-col border rounded-xl bg-card overflow-hidden shadow-sm hover:shadow-md transition-shadow ring-1 ring-orange-500/20">
+                            <div key={`card-pending-po-${group.poNumber}-${group.vendor?._id}`} className="flex flex-col border rounded-xl bg-card overflow-hidden shadow-sm hover:shadow-md transition-shadow ring-1 ring-orange-500/20">
                               <div className="p-4 bg-orange-50 dark:bg-orange-950/20 border-b flex items-center gap-3">
                                 <div className="h-10 w-10 rounded-full bg-white dark:bg-orange-900/40 flex items-center justify-center shadow-sm text-orange-600">
                                   <Building2 className="h-5 w-5" />
@@ -2866,7 +2868,7 @@ export function RequestDetailsDialog({
                             </div>
                           ))}
                           {pendingPOs && pendingPOs.filter((p: any) => p.status === "sign_pending").map((group: any) => (
-                            <div key={`card-group-${group.poNumber}`} className="flex flex-col border rounded-xl bg-card overflow-hidden shadow-sm hover:shadow-md transition-shadow ring-1 ring-amber-500/20">
+                            <div key={`card-group-${group.poNumber}-${group.vendor?._id}`} className="flex flex-col border rounded-xl bg-card overflow-hidden shadow-sm hover:shadow-md transition-shadow ring-1 ring-amber-500/20">
                               <div className="p-4 bg-amber-50 dark:bg-amber-950/20 border-b flex items-center gap-3">
                                 <div className="h-10 w-10 rounded-full bg-white dark:bg-amber-900/40 flex items-center justify-center shadow-sm text-amber-600">
                                   <Building2 className="h-5 w-5" />
@@ -2937,7 +2939,7 @@ export function RequestDetailsDialog({
                           ))}
                           {/* Sign Rejected PO Groups - Vendor-wise (Card View) */}
                           {pendingPOs && pendingPOs.filter((p: any) => p.status === "sign_rejected").map((group: any) => (
-                            <div key={`card-rejected-${group.poNumber}`} className="flex flex-col border rounded-xl bg-card overflow-hidden shadow-sm hover:shadow-md transition-shadow ring-1 ring-red-500/20">
+                            <div key={`card-rejected-${group.poNumber}-${group.vendor?._id}`} className="flex flex-col border rounded-xl bg-card overflow-hidden shadow-sm hover:shadow-md transition-shadow ring-1 ring-red-500/20">
                               <div className="p-4 bg-red-50 dark:bg-red-950/20 border-b flex items-center gap-3">
                                 <div className="h-10 w-10 rounded-full bg-white dark:bg-red-900/40 flex items-center justify-center shadow-sm text-red-600">
                                   <Building2 className="h-5 w-5" />
@@ -3133,71 +3135,73 @@ export function RequestDetailsDialog({
 
 
                                   {/* Actions Footer for Cards */}
-                                  {isManager && (isPending || item.status === "recheck" || item.status === "sign_pending" || item.status === "cc_pending" || item.status === "sign_rejected" || item.status === "rejected") && (
-                                    <div className={cn(
-                                      "p-4 border-t bg-muted/5 w-full",
-                                      (item.status === "sign_pending" || item.status === "sign_rejected") ? "grid grid-cols-2 gap-3" : "flex"
-                                    )}>
-                                      {item.status === "sign_pending" ? (
-                                        <>
-                                          <Button
-                                            variant="default"
-                                            size="sm"
-                                            className="h-9 bg-amber-600 hover:bg-amber-700 text-white shadow-sm"
-                                            onClick={(e) => { e.stopPropagation(); setShowSignPendingApproveConfirm(item._id); }}
-                                            disabled={isLoading}
-                                          >
-                                            <Pencil className="h-4 w-4 mr-1.5" /> Sign PO
-                                          </Button>
-                                          <Button
-                                            variant="outline"
-                                            size="sm"
-                                            className="h-9 border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300 dark:border-red-900/30 dark:text-red-400 dark:hover:bg-red-950/20"
-                                            onClick={(e) => { e.stopPropagation(); setShowItemRejectionInput(item._id); }}
-                                            disabled={isLoading}
-                                          >
-                                            <XCircle className="h-4 w-4 mr-1.5" /> Reject
-                                          </Button>
-                                        </>
-                                      ) : (item.status === "pending") ? (
-                                        /* Standard Approve/Reject */
-                                        <RenderActionSegments item={item} isCard />
-                                      ) : item.status === "cc_pending" ? (
-                                        <div className="flex flex-col gap-3 w-full">
-                                          {/* Vendor Details Section */}
-                                          {item.vendorQuotes && item.vendorQuotes.length > 0 && (
-                                            <div className="flex flex-col gap-1.5 p-2 bg-background/50 rounded-md border border-border/50">
-                                              <div className="flex items-center gap-1.5">
-                                                <Building2 className="h-3 w-3 text-muted-foreground" />
-                                                <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Vendor Details</span>
-                                              </div>
-                                              <div className="flex flex-col gap-0.5 pl-4.5">
-                                                <span className="text-xs font-medium text-blue-600 dark:text-blue-400">
-                                                  Vendors Quoted: {item.vendorQuotes.length} vendors
-                                                </span>
-                                                {/* We don't have vendor names readily available in the request object without a join, 
-                                                    so we will show the count. If names are critical, we'd need to fetch them. 
-                                                    For now, sticking to the count as per immediate data availability or adding a placeholder if requested style matches. */}
-                                              </div>
-                                            </div>
-                                          )}
-
-                                          {onOpenCC ? (
+                                  {((isManager && (isPending || item.status === "recheck" || item.status === "sign_pending" || item.status === "cc_pending" || item.status === "sign_rejected" || item.status === "rejected")) ||
+                                    (isPurchaseOfficer && ["pending_po", "direct_po", "ready_for_po", "ready_for_delivery", "recheck", "approved", "ready_for_cc", "cc_rejected", "out_for_delivery", "delivery_processing", "delivery_stage", "delivered"].includes(item.status)) ||
+                                    (isSiteEngineer && ["out_for_delivery", "delivery_processing", "delivery_stage"].includes(item.status))) && (
+                                      <div className={cn(
+                                        "p-4 border-t bg-muted/5 w-full",
+                                        (item.status === "sign_pending" || item.status === "sign_rejected") ? "grid grid-cols-2 gap-3" : "flex"
+                                      )}>
+                                        {item.status === "sign_pending" ? (
+                                          <>
+                                            <Button
+                                              variant="default"
+                                              size="sm"
+                                              className="h-9 bg-amber-600 hover:bg-amber-700 text-white shadow-sm"
+                                              onClick={(e) => { e.stopPropagation(); setShowSignPendingApproveConfirm(item._id); }}
+                                              disabled={isLoading}
+                                            >
+                                              <Pencil className="h-4 w-4 mr-1.5" /> Sign PO
+                                            </Button>
                                             <Button
                                               variant="outline"
                                               size="sm"
-                                              onClick={(e) => { e.stopPropagation(); onOpenCC(item._id); }}
-                                              className="h-9 border-blue-200 text-blue-700 hover:bg-blue-50 w-full"
+                                              className="h-9 border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300 dark:border-red-900/30 dark:text-red-400 dark:hover:bg-red-950/20"
+                                              onClick={(e) => { e.stopPropagation(); setShowItemRejectionInput(item._id); }}
+                                              disabled={isLoading}
                                             >
-                                              <FileText className="h-4 w-4 mr-1.5" /> View CC
+                                              <XCircle className="h-4 w-4 mr-1.5" /> Reject
                                             </Button>
-                                          ) : null}
-                                        </div>
-                                      ) : (
-                                        <RenderActionSegments item={item} isCard />
-                                      )}
-                                    </div>
-                                  )}
+                                          </>
+                                        ) : (item.status === "pending") ? (
+                                          /* Standard Approve/Reject */
+                                          <RenderActionSegments item={item} isCard />
+                                        ) : item.status === "cc_pending" ? (
+                                          <div className="flex flex-col gap-3 w-full">
+                                            {/* Vendor Details Section */}
+                                            {item.vendorQuotes && item.vendorQuotes.length > 0 && (
+                                              <div className="flex flex-col gap-1.5 p-2 bg-background/50 rounded-md border border-border/50">
+                                                <div className="flex items-center gap-1.5">
+                                                  <Building2 className="h-3 w-3 text-muted-foreground" />
+                                                  <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Vendor Details</span>
+                                                </div>
+                                                <div className="flex flex-col gap-0.5 pl-4.5">
+                                                  <span className="text-xs font-medium text-blue-600 dark:text-blue-400">
+                                                    Vendors Quoted: {item.vendorQuotes.length} vendors
+                                                  </span>
+                                                  {/* We don't have vendor names readily available in the request object without a join, 
+                                                    so we will show the count. If names are critical, we'd need to fetch them. 
+                                                    For now, sticking to the count as per immediate data availability or adding a placeholder if requested style matches. */}
+                                                </div>
+                                              </div>
+                                            )}
+
+                                            {onOpenCC ? (
+                                              <Button
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={(e) => { e.stopPropagation(); onOpenCC(item._id); }}
+                                                className="h-9 border-blue-200 text-blue-700 hover:bg-blue-50 w-full"
+                                              >
+                                                <FileText className="h-4 w-4 mr-1.5" /> View CC
+                                              </Button>
+                                            ) : null}
+                                          </div>
+                                        ) : (
+                                          <RenderActionSegments item={item} isCard />
+                                        )}
+                                      </div>
+                                    )}
 
                                   {/* Actions Footer for Purchase Officer (Card View) */}
                                   {isPurchaseOfficer && ["pending_po", "ready_for_delivery", "delivery_stage", "delivered", "ready_for_po", "approved", "recheck", "ready_for_cc", "cc_rejected", "out_for_delivery", "delivery_processing"].includes(item.status) && (

@@ -62,11 +62,21 @@ export function CreateDCMultiDialog({
         items.length > 0 && !poId ? { requestId: items[0].requestId } : "skip"
     );
 
+    // Try to fetch PO by Number if provided (more reliable for generic linking)
+    const poIdFromNumber = useQuery(
+        api.purchaseOrders.getPOIdByNumber,
+        poNumber ? { poNumber } : "skip"
+    );
+
     useEffect(() => {
-        if (firstRequestPOs && firstRequestPOs.length > 0 && !poId) {
-            setPoId(firstRequestPOs[0]._id);
+        if (!poId) {
+            if (poIdFromNumber) {
+                setPoId(poIdFromNumber);
+            } else if (firstRequestPOs && firstRequestPOs.length > 0) {
+                setPoId(firstRequestPOs[0]._id);
+            }
         }
-    }, [firstRequestPOs, poId]);
+    }, [firstRequestPOs, poIdFromNumber, poId]);
 
     // Form State
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -130,11 +140,6 @@ export function CreateDCMultiDialog({
     };
 
     const handleSubmit = async () => {
-        if (!poId) {
-            toast.error("Cannot create DC: No Purchase Order found. Please create a PO first.");
-            return;
-        }
-
         if (selectedItems.size === 0) {
             toast.error("Please select at least one item to create DC");
             return;

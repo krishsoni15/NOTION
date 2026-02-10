@@ -95,11 +95,6 @@ export function CreateDeliveryDialog({
     };
 
     const handleSubmit = async () => {
-        if (!actualPoId) {
-            toast.error("Cannot create DC: No Purchase Order found for this request. Please create a PO first.");
-            return;
-        }
-
         if (!driverPhone) {
             toast.error("Driver Phone is required");
             return;

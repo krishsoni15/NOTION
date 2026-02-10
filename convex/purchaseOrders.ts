@@ -496,11 +496,14 @@ export const getPOsForRequestNumber = query({
             // Let's refine the grouping logic:
             // Group by PO Number -> Request ID -> Latest Record
 
-            if (!poMap.has(po.poNumber)) {
+            // Group by distinct PO Number AND Vendor (to prevent merging if different vendors share a PO number)
+            const groupKey = `${po.poNumber}-${po.vendorId}`;
+
+            if (!poMap.has(groupKey)) {
                 const vendor = await ctx.db.get(po.vendorId);
                 const deliverySite = po.deliverySiteId ? await ctx.db.get(po.deliverySiteId) : null;
 
-                poMap.set(po.poNumber, {
+                poMap.set(groupKey, {
                     _id: po._id,
                     poNumber: po.poNumber,
                     _creationTime: po._creationTime,
@@ -513,18 +516,18 @@ export const getPOsForRequestNumber = query({
                 });
             }
 
-            const poGroup = poMap.get(po.poNumber);
+            const poGroup = poMap.get(groupKey);
+            const reqIdStr = po.requestId?.toString();
 
-            // If we have already processed a record for this Request ID in this PO group, 
-            // we should only keep the latest one.
-            // Since we didn't sort `allPos` by time before loop, we might process older first.
-            // Let's rely on sorting `allPos` first to ensure we process NEWEST first.
-            // But `allPos` is constructed from multiple queries.
-
-            // To be safe, let's skip if we already added this Request ID to this PO Group.
-            // BUT this requires processing in desc order.
-
-            // SIMPLE FIX: Just add it for now, but we need to sort `allPos` before the loop.
+            // Deduplication Check:
+            // Since allPos is sorted DESC by creation time, we only keep the FIRST (latest) 
+            // record we encounter for each Request ID within this PO group.
+            if (reqIdStr) {
+                if (poGroup.processedRequestIds.has(reqIdStr)) {
+                    continue; // Skip older record for this request
+                }
+                poGroup.processedRequestIds.add(reqIdStr);
+            }
 
             poGroup.items.push({
                 ...po,
@@ -1091,3 +1094,18 @@ export const rejectDirectPOByRequest = mutation({
         }
     },
 });
+
+/**
+ * Get a single PO ID by PO Number (for linking)
+ */
+export const getPOIdByNumber = query({
+    args: { poNumber: v.string() },
+    handler: async (ctx, args) => {
+        const po = await ctx.db
+            .query("purchaseOrders")
+            .withIndex("by_po_number", (q) => q.eq("poNumber", args.poNumber))
+            .first();
+        return po?._id;
+    },
+});
+

@@ -57,6 +57,7 @@ export interface DirectPOInitialData {
         itemDescription: string;
         description?: string;
         quantity: number;
+        originalQuantity?: number; // Add originalQuantity
         unit: string;
         unitPrice: number;
         discountPercent?: number; // Add discountPercent
@@ -113,8 +114,8 @@ export function DirectPODialog({ open, onOpenChange, initialData, mode = "standa
     const createDirectPO = useMutation(api.purchaseOrders.createDirectPO);
     const inventoryItems = useQuery(api.inventory.getAllInventoryItems);
     const vendors = useQuery(api.vendors.getAllVendors);
+
     const sites = useQuery(api.sites.getAllSites, {});
-    const allReadyRequests = useQuery(api.requests.getPurchaseRequestsByStatus, {});
 
     const [isLoading, setIsLoading] = useState(false);
     const [showVendorDialog, setShowVendorDialog] = useState(false);
@@ -170,6 +171,7 @@ export function DirectPODialog({ open, onOpenChange, initialData, mode = "standa
             itemSearchQuery: "",
             hsnCode: "",
             quantity: 0,
+            originalQuantity: 0,
             unit: "pcs",
             unitPrice: 0,
             perUnitBasis: 1,
@@ -319,6 +321,7 @@ export function DirectPODialog({ open, onOpenChange, initialData, mode = "standa
                         itemSearchQuery: cleanName,
                         hsnCode: item.hsnCode || (matchingInvItem as any)?.hsnSacCode || "",
                         quantity: item.quantity,
+                        originalQuantity: item.originalQuantity || item.quantity,
                         unit: item.unit || matchingInvItem?.unit || "pcs",
                         unitPrice: item.unitPrice,
                         perUnitBasis: 1, // Default to 1
@@ -357,6 +360,7 @@ export function DirectPODialog({ open, onOpenChange, initialData, mode = "standa
             itemSearchQuery: "",
             hsnCode: "",
             quantity: 0,
+            originalQuantity: 0,
             unit: "pcs",
             unitPrice: 0,
             perUnitBasis: 1,
@@ -391,6 +395,7 @@ export function DirectPODialog({ open, onOpenChange, initialData, mode = "standa
                 itemSearchQuery: "",
                 hsnCode: "",
                 quantity: 0,
+                originalQuantity: 0,
                 unit: "pcs",
                 unitPrice: 0,
                 perUnitBasis: 1,
@@ -993,7 +998,7 @@ export function DirectPODialog({ open, onOpenChange, initialData, mode = "standa
                                                             }}
                                                         >
                                                             <Plus className="h-3.5 w-3.5 mr-2" />
-                                                            Use "{item.itemSearchQuery || item.itemDescription}" as New Item
+                                                            Use &quot;{item.itemSearchQuery || item.itemDescription}&quot; as New Item
                                                         </Button>
                                                     </div>
                                                 </div>
@@ -1014,8 +1019,15 @@ export function DirectPODialog({ open, onOpenChange, initialData, mode = "standa
 
                                     {/* Row 2: Qty, Unit, Price, HSN */}
                                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                                        <div className="space-y-1.5">
-                                            <Label className="text-sm">Quantity *</Label>
+                                        <div className="space-y-1.5 relative">
+                                            <div className="flex justify-between items-center">
+                                                <Label className="text-sm">Quantity *</Label>
+                                                {(item.originalQuantity && item.quantity > item.originalQuantity) ? (
+                                                    <span className="text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded font-medium">
+                                                        +{(item.quantity - item.originalQuantity).toFixed(2).replace(/\.00$/, '')} Extra
+                                                    </span>
+                                                ) : null}
+                                            </div>
                                             <Input type="number" min="0" step="0.01" value={item.quantity || ""} onChange={(e) => handleItemChange(index, 'quantity', parseFloat(e.target.value) || 0)} className="h-9" />
                                         </div>
                                         <div className="space-y-1.5 relative">

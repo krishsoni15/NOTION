@@ -846,10 +846,21 @@ export function RequestsTable({
                 {showBadges && (
                   <div className="flex flex-wrap items-center gap-2 pt-2">
                     {item.isUrgent && (
-                      <Badge variant="destructive" className="h-6 px-2.5 text-xs font-black gap-1.5 shadow-md shadow-red-500/20 border-red-400">
-                        <AlertCircle className="h-3.5 w-3.5" />
+                      <Badge variant="destructive" className="h-5 px-2 text-[9px] font-black gap-1.5 shadow-md shadow-red-500/10 border-red-400/50">
+                        <AlertCircle className="h-3 w-3" />
                         URGENT
                       </Badge>
+                    )}
+                    {getStatusBadge(item.status)}
+                    {onConfirmDelivery && ["out_for_delivery", "delivery_processing", "delivery_stage"].includes(item.status) && (
+                      <Button
+                        size="sm"
+                        onClick={(e) => { e.stopPropagation(); onConfirmDelivery(item._id); }}
+                        className="h-7 px-3 text-[10px] font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm border border-emerald-500 animate-pulse ml-auto"
+                      >
+                        <CheckCircle2 className="h-3 w-3 mr-1" />
+                        Confirm Delivery
+                      </Button>
                     )}
                     {userRole === "manager" && item.status === "cc_pending" && onOpenCC && (
                       <Button

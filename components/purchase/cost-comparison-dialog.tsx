@@ -372,8 +372,12 @@ export function CostComparisonDialog({
       toast.success("Quote added");
     }
 
-    // Save immediately
-    handleSave(true, newQuotes);
+    // Update quantity to buy if this is the first quote or if it's different (user intention)
+    // We assume the user wants to buy the amount they are quoting for.
+    setQuantityToBuy(amount);
+
+    // Save immediately with new quantity
+    handleSave(true, newQuotes, amount);
 
     // Reset form
     setSelectedVendorId("");
@@ -460,8 +464,9 @@ export function CostComparisonDialog({
   };
 
   // Save cost comparison (silent mode for auto-save, accepts quotes parameter for immediate save)
-  const handleSave = async (silent: boolean = false, quotesToSave?: VendorQuote[]) => {
+  const handleSave = async (silent: boolean = false, quotesToSave?: VendorQuote[], purchaseQuantityOverride?: number) => {
     const quotes = quotesToSave || vendorQuotes;
+    const qtyToBuy = purchaseQuantityOverride !== undefined ? purchaseQuantityOverride : quantityToBuy;
 
     setIsSaving(true);
     try {
@@ -469,7 +474,7 @@ export function CostComparisonDialog({
         requestId: activeRequestId,
         vendorQuotes: quotes,
         isDirectDelivery,
-        purchaseQuantity: quantityToBuy,
+        purchaseQuantity: qtyToBuy,
         inventoryFulfillmentQuantity: quantityFromInventory,
       });
       if (!silent) toast.success("Cost comparison saved");
@@ -519,11 +524,8 @@ export function CostComparisonDialog({
     }
   };
 
-  // Calculate total
-  const calculateTotal = (unitPrice: number) => {
-    if (!request) return 0;
-    return unitPrice * request.quantity;
-  };
+
+
 
   // Calculate price after discount
   const calculatePriceAfterDiscount = (unitPrice: number, discountPercent?: number) => {
@@ -537,7 +539,6 @@ export function CostComparisonDialog({
     return priceAfterDiscount * (gstPercent / 100);
   };
 
-  // Calculate final price with discount and GST
   const calculateFinalPrice = (unitPrice: number, discountPercent?: number, gstPercent?: number) => {
     const priceAfterDiscount = calculatePriceAfterDiscount(unitPrice, discountPercent);
     const gstAmount = calculateGstAmount(priceAfterDiscount, gstPercent);
@@ -549,9 +550,6 @@ export function CostComparisonDialog({
     const finalUnitPrice = calculateFinalPrice(quote.unitPrice, quote.discountPercent, quote.gstPercent);
     return finalUnitPrice * quantity;
   };
-
-  // Helper for determining best price (memoized calculation for render)
-  const calculatedTotals = vendorQuotes.map(q => calculateQuoteTotal(q, request?.quantity || 0));
 
 
   // Item edit handlers
@@ -1158,16 +1156,16 @@ export function CostComparisonDialog({
                       <div className="flex flex-col">
                         <span className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">To Buy</span>
                         <span className="font-medium text-blue-600 dark:text-blue-400">
-                          {existingCC?.purchaseQuantity || quantityToBuy || vendorQuotes[0]?.amount || request.quantity} {request.unit}
+                          {quantityToBuy || vendorQuotes[0]?.amount || request.quantity} {request.unit}
                         </span>
                       </div>
-                      {((existingCC?.purchaseQuantity || quantityToBuy || vendorQuotes[0]?.amount || 0) > request.quantity) && (
+                      {((quantityToBuy || vendorQuotes[0]?.amount || 0) > request.quantity) && (
                         <>
                           <div className="h-8 w-px bg-border/60"></div>
                           <div className="flex flex-col">
                             <span className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Extra → Inventory</span>
                             <span className="font-bold text-green-600 dark:text-green-400">
-                              +{((existingCC?.purchaseQuantity || quantityToBuy || vendorQuotes[0]?.amount || 0) - request.quantity).toFixed(2).replace(/\.00$/, '')} {request.unit}
+                              +{((quantityToBuy || vendorQuotes[0]?.amount || 0) - request.quantity).toFixed(2).replace(/\.00$/, '')} {request.unit}
                             </span>
                           </div>
                         </>
@@ -1639,7 +1637,7 @@ export function CostComparisonDialog({
                             }`}
                         >
                           <Plus className="h-3 w-3 inline mr-1" />
-                          Create "{vendorSearchTerm}" as new vendor
+                          Create &quot;{vendorSearchTerm}&quot; as new vendor
                         </div>
                       ) : (
                         <div className="px-3 py-2 text-sm text-muted-foreground">
@@ -1718,7 +1716,7 @@ export function CostComparisonDialog({
                       </div>
                     ) : (
                       <div className="p-3 text-xs text-muted-foreground text-center italic">
-                        Use "{quoteUnit}" as custom unit
+                        Use &quot;{quoteUnit}&quot; as custom unit
                       </div>
                     )}
                   </div>
@@ -1925,7 +1923,7 @@ export function CostComparisonDialog({
               Inventory Information
             </DialogTitle>
             <DialogDescription>
-              Details for "{request?.itemName}"
+              Details for &quot;{request?.itemName}&quot;
             </DialogDescription>
           </DialogHeader>
 

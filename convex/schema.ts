@@ -371,7 +371,7 @@ export default defineSchema({
   // ============================================================================
   deliveries: defineTable({
     deliveryId: v.string(), // Auto-generated unique identifier (DC-XXXX)
-    poId: v.id("purchaseOrders"), // Linked purchase order
+    poId: v.optional(v.id("purchaseOrders")), // Linked purchase order (Optional for direct delivery)
     // Delivery Type
     deliveryType: v.union(
       v.literal("private"), // Internal/Private vehicle

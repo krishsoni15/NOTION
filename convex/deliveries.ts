@@ -26,7 +26,7 @@ const generateDeliveryId = async (ctx: any) => {
 
 export const createDelivery = mutation({
     args: {
-        poId: v.id("purchaseOrders"),
+        poId: v.optional(v.id("purchaseOrders")),
         // Request Items for this delivery (quantities)
         items: v.array(v.object({
             requestId: v.id("requests"),
@@ -203,11 +203,17 @@ export const getDeliveryWithItems = query({
         const delivery = await ctx.db.get(args.deliveryId);
         if (!delivery) return null;
 
-        // Get the PO details
-        const po = await ctx.db.get(delivery.poId);
+        // Get the PO details if available
+        let po = null;
+        let vendor = null;
 
-        // Get vendor details from PO
-        const vendor = po ? await ctx.db.get(po.vendorId) : null;
+        if (delivery.poId) {
+            po = await ctx.db.get(delivery.poId);
+            // Get vendor details from PO
+            if (po) {
+                vendor = await ctx.db.get(po.vendorId);
+            }
+        }
 
         // Get all requests linked to this delivery
         const allRequests = await ctx.db

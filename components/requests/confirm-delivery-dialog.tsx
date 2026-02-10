@@ -114,7 +114,10 @@ export function ConfirmDeliveryDialog({
     const handleConfirm = async () => {
         if (!requestId) return;
 
-
+        if (images.length === 0) {
+            toast.error("Please upload at least one proof of delivery photo.");
+            return;
+        }
 
         setIsSubmitting(true);
         setIsUploading(images.length > 0);
@@ -166,7 +169,7 @@ export function ConfirmDeliveryDialog({
                     <div className="space-y-4">
                         <div className="space-y-2">
                             <Label className="text-sm font-semibold">
-                                Proof of Delivery Photos <span className="text-muted-foreground font-normal">(Optional)</span>
+                                Proof of Delivery Photos <span className="text-destructive font-bold">(Required)</span>
                             </Label>
                             <div
                                 className="grid grid-cols-3 gap-3"

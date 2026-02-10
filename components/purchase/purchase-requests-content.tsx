@@ -467,7 +467,20 @@ export function PurchaseRequestsContent() {
     }
 
     // Map items
-    const items = requests.map(req => {
+    const items = await Promise.all(requests.map(async (req) => {
+      let quantity = req.quantity;
+
+      // Fetch Cost Comparison to get "purchaseQuantity" (Buffer/Extra) if available
+      // We try/catch to ensure one failure doesn't block the whole PO creation
+      try {
+        const cc = await convex.query(api.costComparisons.getCostComparisonByRequestId, { requestId: req._id });
+        if (cc && cc.purchaseQuantity) {
+          quantity = cc.purchaseQuantity;
+        }
+      } catch (e) {
+        console.error("Failed to fetch CC for request", req._id, e);
+      }
+
       let unitPrice = 0;
       let discountPercent = 0;
       let sgst = 0;
@@ -486,14 +499,15 @@ export function PurchaseRequestsContent() {
         requestId: req._id,
         itemDescription: req.itemName,
         description: req.description,
-        quantity: req.quantity,
+        quantity: quantity,
+        originalQuantity: req.quantity,
         unit: req.unit,
         unitPrice: unitPrice,
         discountPercent: discountPercent,
         sgst: sgst,
         cgst: cgst,
       };
-    });
+    }));
 
     // Fetch vendor details if we have a vendor ID
     let vendorDetails = undefined;
@@ -815,6 +829,7 @@ export function PurchaseRequestsContent() {
         requestId={selectedRequestId}
         onCheck={handleCheck}
         onCreatePO={handleCreateBulkPO}
+        onOpenCC={setCCRequestId}
       />
 
       {ccRequestId && (

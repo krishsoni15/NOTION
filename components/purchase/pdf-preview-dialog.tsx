@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
+import { Id } from "@/convex/_generated/dataModel";
 import {
     Dialog,
     DialogContent,
@@ -50,7 +51,11 @@ export function PDFPreviewDialog({
 
     const poData = useQuery(
         api.purchaseOrders.getPurchaseOrderDetails,
-        poNumber ? { poNumber, requestId: requestId as any, requestIds: requestIds as any } : "skip"
+        poNumber ? {
+            poNumber,
+            requestId: (requestId || undefined) as Id<"requests"> | undefined,
+            requestIds: (requestIds || undefined) as Id<"requests">[] | undefined
+        } : "skip"
     );
 
     const [zoomLevel, setZoomLevel] = useState(1);

@@ -346,7 +346,9 @@ export const getPurchaseRequestsByStatus = query({
         v.literal("pending_po"),
         v.literal("rejected_po"),
         v.literal("ready_for_delivery"),
-        v.literal("delivery_stage")
+        v.literal("delivery_stage"),
+        v.literal("delivery_processing"),
+        v.literal("out_for_delivery")
       )
     ),
   },
@@ -406,7 +408,9 @@ export const getPurchaseRequestsByStatus = query({
         "delivery_stage",
         "delivered",
         "sign_pending",
-        "sign_rejected"
+        "sign_rejected",
+        "delivery_processing",
+        "out_for_delivery"
       ]);
 
       const activeRequestNumbers = new Set<string>();
@@ -484,11 +488,30 @@ export const getPurchaseRequestsByStatus = query({
         // Fetch related Purchase Order linkage
         let poId: Id<"purchaseOrders"> | null = null;
         let poNumber: string | null = null;
-        if (["pending_po", "ready_for_delivery", "delivery_stage", "delivered", "sign_pending", "sign_rejected"].includes(request.status)) {
-          const po = await ctx.db
+        if (["pending_po", "ready_for_delivery", "delivery_stage", "delivery_processing", "out_for_delivery", "delivered", "sign_pending", "sign_rejected"].includes(request.status)) {
+          let po = await ctx.db
             .query("purchaseOrders")
             .withIndex("by_request_id", (q) => q.eq("requestId", request._id))
             .first();
+
+          // Fallback: If not found (e.g. split item), check siblings by requestNumber
+          if (!po) {
+            const siblings = await ctx.db.query("requests")
+              .withIndex("by_request_number", (q) => q.eq("requestNumber", request.requestNumber))
+              .collect();
+
+            for (const sibling of siblings) {
+              if (sibling._id === request._id) continue;
+              const siblingPO = await ctx.db.query("purchaseOrders")
+                .withIndex("by_request_id", (q) => q.eq("requestId", sibling._id))
+                .first();
+              if (siblingPO) {
+                po = siblingPO;
+                break;
+              }
+            }
+          }
+
           if (po) {
             poId = po._id;
             poNumber = po.poNumber;
@@ -1819,7 +1842,7 @@ export const updatePurchaseRequestStatus = mutation({
     const currentStatus = request.status;
     const allowedStatuses = validTransitions[currentStatus] || [];
 
-    if (!allowedStatuses.includes(args.status)) {
+    if (!allowedStatuses.includes(args.status) && args.status !== currentStatus) {
       throw new Error(`Invalid status transition from ${currentStatus} to ${args.status}`);
     }
 

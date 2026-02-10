@@ -1331,7 +1331,7 @@ export function PurchaseRequestGroupCard({
                           {/* Ready for Delivery / PO Actions */}
 
                           {/* Check/Split Button - Consistent with Table View */}
-                          {onCheck && ["pending", "approved", "recheck"].includes(item.status) && (
+                          {onCheck && ["approved", "recheck"].includes(item.status) && (
                             <Button size="sm" onClick={() => onCheck(item._id)} className="h-7 text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 text-white flex-1 sm:flex-none shadow-sm">
                               <Sparkles className="h-3.5 w-3.5 mr-1.5" /> Check/Split
                             </Button>
@@ -1414,7 +1414,7 @@ export function PurchaseRequestGroupCard({
                           )}
 
                           {/* View PDF Button */}
-                          {onViewPDF && item.poNumber && ["sign_pending", "sign_rejected", "ordered", "pending_po", "direct_po", "ready_for_delivery", "out_for_delivery", "delivery_processing", "delivery_stage", "delivered"].includes(item.status) && (
+                          {onViewPDF && item.poNumber && ["ordered", "direct_po", "ready_for_delivery", "out_for_delivery", "delivery_processing", "delivery_stage", "delivered"].includes(item.status) && (
                             <Button
                               size="sm"
                               onClick={() => onViewPDF(item.poNumber!, item._id)}

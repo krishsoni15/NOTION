@@ -237,10 +237,11 @@ const getStatusBadge = (status: string) => {
           Delivered
         </Badge>
       );
+    case "out_for_delivery":
     case "delivery_processing":
     case "delivery_stage":
       return (
-        <Badge variant="outline" className="bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-950 dark:text-orange-300 dark:border-orange-800 text-xs">
+        <Badge variant="outline" className="bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-950 dark:text-sky-300 dark:border-sky-800 text-xs">
           Out for Delivery
         </Badge>
       );
@@ -491,7 +492,6 @@ export function PurchaseRequestGroupCard({
   // Vendor queries
   const vendors = useQuery(api.vendors.getAllVendors);
   const updateRequestDetails = useMutation(api.requests.updateRequestDetails);
-  const confirmDeliveryMutation = useMutation(api.deliveries.confirmDelivery);
 
   // Collect all unique item names from items
   const uniqueItemNames = useMemo(() => {
@@ -622,17 +622,6 @@ export function PurchaseRequestGroupCard({
     setSelectedItems(newSelected);
   };
 
-  // Handle confirm delivery
-  const handleConfirmDelivery = async (requestId: Id<"requests">) => {
-    try {
-      await confirmDeliveryMutation({ requestId });
-      toast.success("Delivery confirmed successfully");
-      setShowConfirmDelivery(null);
-    } catch (error) {
-      console.error("Failed to confirm delivery:", error);
-      toast.error("Failed to confirm delivery");
-    }
-  };
 
   // Handle select all
   const toggleSelectAll = () => {
@@ -1389,7 +1378,8 @@ export function PurchaseRequestGroupCard({
                             <Button
                               size="sm"
                               onClick={() => {
-                                setShowReadyForDeliveryConfirm(item._id);
+                                setSelectedDCItems(new Set([item._id]));
+                                setShowMultiDCDialog(true);
                               }}
                               className="h-7 text-xs font-semibold bg-blue-600 hover:bg-blue-700 text-white flex-1 sm:flex-none shadow-sm"
                             >

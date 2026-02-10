@@ -62,6 +62,7 @@ import { DirectPODialog, type DirectPOInitialData } from "@/components/purchase/
 import { BulkDeliveryDialog } from "@/components/purchase/bulk-delivery-dialog";
 import { CreateDCMultiDialog } from "@/components/purchase/create-dc-multi-dialog";
 import { ViewDCDialog } from "@/components/purchase/view-dc-dialog";
+import { ConfirmDeliveryDialog } from "@/components/requests/confirm-delivery-dialog";
 import type { Id } from "@/convex/_generated/dataModel";
 
 interface RequestDetailsDialogProps {
@@ -132,7 +133,6 @@ export function RequestDetailsDialog({
   const rejectDirectPO = useMutation(api.purchaseOrders.rejectDirectPOByRequest);
   const approveDirectPOById = useMutation(api.purchaseOrders.approveDirectPO);
   const rejectDirectPOById = useMutation(api.purchaseOrders.rejectDirectPO);
-  const confirmDeliveryMutation = useMutation(api.deliveries.confirmDelivery);
 
   // Fetch pending POs for grouping
   const pendingPOs = useQuery(
@@ -187,6 +187,7 @@ export function RequestDetailsDialog({
   const [bulkDeliveryData, setBulkDeliveryData] = useState<{ items: any[]; vendorName: string; poNumber: string } | null>(null);
   const [selectedDCItems, setSelectedDCItems] = useState<Set<Id<"requests">>>(new Set());
   const [showBulkDCDialog, setShowBulkDCDialog] = useState(false);
+  const [showConfirmDelivery, setShowConfirmDelivery] = useState<Id<"requests"> | null>(null);
   const [viewDCId, setViewDCId] = useState<Id<"deliveries"> | null>(null);
   // View mode with responsive default and cookie persistence
   const [viewMode, setViewMode] = useState<"table" | "card">("card"); // Default to card for mobile-first
@@ -559,7 +560,7 @@ export function RequestDetailsDialog({
           requestId: itemId,
           status: "delivery_stage",
         });
-        toast.success("Item sent to Delivery Stage");
+        toast.success("Item sent to Out for Delivery");
       } else if (intents.includes("split") || (intents.includes("direct_po") && intents.includes("direct_delivery"))) {
         await updateStatus({
           requestId: itemId,
@@ -1125,6 +1126,8 @@ export function RequestDetailsDialog({
       pending_po: { label: "Pending PO", color: "bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-900/40 dark:text-orange-400 dark:border-orange-800", dot: "bg-orange-500", icon: ShoppingCart, border: "border-orange-500" },
       ready_for_delivery: { label: "Ready for Delivery", color: "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/40 dark:text-emerald-400 dark:border-emerald-800", dot: "bg-emerald-500", icon: Package, border: "border-emerald-500" },
       out_for_delivery: { label: "Out for Delivery", color: "bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-900/40 dark:text-orange-400 dark:border-orange-800", dot: "bg-orange-500 animate-pulse", icon: Truck, border: "border-orange-500" },
+      delivery_stage: { label: "Out for Delivery", color: "bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-900/40 dark:text-sky-400 dark:border-sky-800", dot: "bg-sky-500 animate-pulse", icon: Truck, border: "border-sky-500" },
+      delivery_processing: { label: "Out for Delivery", color: "bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-900/40 dark:text-sky-400 dark:border-sky-800", dot: "bg-sky-500 animate-pulse", icon: Truck, border: "border-sky-500" },
       delivered: { label: "Delivered", color: "bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-900/40 dark:text-sky-400 dark:border-sky-800", dot: "bg-sky-500", icon: CheckCircle, border: "border-sky-500" },
     };
 
@@ -1500,14 +1503,9 @@ export function RequestDetailsDialog({
             <Button
               variant="default"
               size="sm"
-              onClick={async (e) => {
+              onClick={(e) => {
                 e.stopPropagation();
-                try {
-                  await confirmDeliveryMutation({ requestId: item._id });
-                  toast.success("Item marked as delivered");
-                } catch (error) {
-                  toast.error("Failed to confirm delivery");
-                }
+                setShowConfirmDelivery(item._id);
               }}
               className="bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 text-white font-semibold shadow-sm"
             >
@@ -3496,7 +3494,7 @@ export function RequestDetailsDialog({
                                   Confirm Direct Delivery
                                 </h3>
                                 <p className="text-sm text-gray-600 dark:text-gray-300 mt-1">
-                                  Send {selectedItemsForAction.size > 0 ? selectedItemsForAction.size : 'all'} items directly to Delivery Stage from Inventory?
+                                  Send {selectedItemsForAction.size > 0 ? selectedItemsForAction.size : 'all'} items directly to Out for Delivery from Inventory?
                                 </p>
                               </div>
                             </div>
@@ -3515,7 +3513,7 @@ export function RequestDetailsDialog({
                                     setShowDirectDeliveryConfirm(false);
                                     setSelectedItemsForAction(new Set());
                                     onOpenChange(false);
-                                    toast.success(`${itemsToProcess.length} items sent to Delivery Stage`);
+                                    toast.success(`${itemsToProcess.length} items sent to Out for Delivery`);
                                   } catch (error: any) {
                                     toast.error(error.message || "Failed to process Direct Delivery");
                                   }
@@ -3957,7 +3955,7 @@ export function RequestDetailsDialog({
                   Confirm Item Delivery
                 </DialogTitle>
                 <DialogDescription className="text-sm text-gray-600 dark:text-gray-300 mt-1">
-                  Send this individual item directly to Delivery Stage from Inventory?
+                  Send this individual item directly to Out for Delivery from Inventory?
                 </DialogDescription>
               </div>
             </div>
@@ -3971,7 +3969,7 @@ export function RequestDetailsDialog({
                       status: "delivery_stage", // Maps to ready_for_cc + directAction: delivery
                     });
                     setShowItemDirectDeliveryConfirm(null);
-                    toast.success("Item sent to Delivery Stage");
+                    toast.success("Item sent to Out for Delivery");
                   } catch (error: any) {
                     toast.error(error.message || "Failed to process item");
                   }
@@ -4357,12 +4355,17 @@ export function RequestDetailsDialog({
       />
 
       {/* View DC Dialog */}
+      <ConfirmDeliveryDialog
+        open={!!showConfirmDelivery}
+        onOpenChange={(open) => !open && setShowConfirmDelivery(null)}
+        requestId={showConfirmDelivery}
+      />
+
       <ViewDCDialog
         open={viewDCId !== null}
         onOpenChange={(open) => !open && setViewDCId(null)}
         deliveryId={viewDCId}
       />
-
     </div >
   );
 }

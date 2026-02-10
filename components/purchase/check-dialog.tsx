@@ -889,7 +889,7 @@ export function CheckDialog({
                 inventoryQuantity: quantityFromInventory,
             });
 
-            toast.success(`${quantityFromInventory} items moved to Delivery Stage. Please continue with the remaining ${quantityToBuy} items.`);
+            toast.success(`${quantityFromInventory} items moved to Out for Delivery. Please continue with the remaining ${quantityToBuy} items.`);
 
             // Refresh logic or update local state if needed (dialog might stay open for the remaining part)
             // Ideally, we re-fetch context or just reset quantities for the NEW remaining amount

@@ -217,7 +217,7 @@ export function PurchaseRequestsContent() {
   const handleDirectDelivery = async (requestId: Id<"requests">) => {
     try {
       await updatePurchaseStatus({ requestId, status: "ready_for_delivery" });
-      toast.success("Request moved to Delivery Stage");
+      toast.success("Request moved to Out for Delivery");
     } catch (error) {
       toast.error("Failed to update status");
     }

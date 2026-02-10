@@ -623,7 +623,7 @@ export function RequestsTable({
       if (status === "direct_po") return <Badge variant="outline" className="bg-orange-100/80 text-orange-800 border-orange-300 dark:bg-orange-900/60 dark:text-orange-100 gap-1.5 pl-1.5 pr-2.5 font-bold shadow-sm">Direct PO</Badge>;
       if (status === "ordered") return <Badge variant="outline" className="bg-emerald-100/80 text-emerald-800 border-emerald-300 dark:bg-emerald-900/60 dark:text-emerald-100 gap-1.5 pl-1.5 pr-2.5 font-bold shadow-sm">Ordered</Badge>;
       if (status === "partially_processed") return <Badge variant="outline" className="bg-yellow-100/80 text-yellow-800 border-yellow-300 dark:bg-yellow-900/60 dark:text-yellow-100 gap-1.5 pl-1.5 pr-2.5 font-bold shadow-sm">Partial</Badge>;
-      if (status === "delivery_stage" || status === "delivery_processing") return <Badge variant="outline" className="bg-sky-100/80 text-sky-800 border-sky-300 dark:bg-sky-900/60 dark:text-sky-100 gap-1.5 pl-1.5 pr-2.5 font-bold shadow-sm"><Truck className="h-3.5 w-3.5" />In Delivery</Badge>;
+      if (status === "delivery_stage" || status === "delivery_processing") return <Badge variant="outline" className="bg-sky-100/80 text-sky-800 border-sky-300 dark:bg-sky-900/60 dark:text-sky-100 gap-1.5 pl-1.5 pr-2.5 font-bold shadow-sm animate-pulse"><Truck className="h-3.5 w-3.5" />Out for Delivery</Badge>;
       if (status === "rejected_po" || status === "po_rejected") return <Badge variant="outline" className="bg-rose-100/80 text-rose-800 border-rose-300 dark:bg-rose-900/60 dark:text-rose-100 gap-1.5 pl-1.5 pr-2.5 font-bold shadow-sm">PO Rejected</Badge>;
 
       return <Badge variant="outline">{status}</Badge>;

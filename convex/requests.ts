@@ -2128,6 +2128,11 @@ export const confirmDelivery = mutation({
       throw new Error("Request not found");
     }
 
+    // If already delivered, just return success (idempotent)
+    if (request.status === "delivered") {
+      return;
+    }
+
     // Allow confirming if status is correct
     // Allow confirming from pending_po, delivery_processing, out_for_delivery, ready_for_delivery, delivery_stage
     const validStatuses = ["pending_po", "out_for_delivery", "delivery_processing", "delivery_stage", "ready_for_delivery"];

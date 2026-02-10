@@ -263,6 +263,11 @@ export const confirmDelivery = mutation({
             throw new Error("Request not found");
         }
 
+        // If already delivered, just return success
+        if (request.status === "delivered") {
+            return { success: true };
+        }
+
         // Allow confirming from pending_po, delivery_processing, out_for_delivery, ready_for_delivery, delivery_stage
         if (!["pending_po", "delivery_processing", "out_for_delivery", "ready_for_delivery", "delivery_stage"].includes(request.status)) {
             throw new Error(`Request is not in a deliverable state: ${request.status}`);

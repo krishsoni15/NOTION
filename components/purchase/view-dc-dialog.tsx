@@ -203,6 +203,37 @@ export function ViewDCDialog({ open, onOpenChange, deliveryId }: ViewDCDialogPro
                                                                 {item.description}
                                                             </p>
                                                         )}
+                                                        {item.deliveryNotes && (
+                                                            <div className="mt-2 p-2 bg-amber-50/50 dark:bg-amber-900/10 rounded-md text-xs border border-amber-200/50 dark:border-amber-800/30">
+                                                                <span className="font-semibold text-amber-700 dark:text-amber-400 block mb-0.5 text-[10px] uppercase tracking-wide">Delivery Note</span>
+                                                                <p className="text-amber-900 dark:text-amber-100">{item.deliveryNotes}</p>
+                                                            </div>
+                                                        )}
+
+                                                        {/* Photos */}
+                                                        {item.deliveryPhotos && item.deliveryPhotos.length > 0 && (
+                                                            <div className="mt-2 space-y-2">
+                                                                <span className="font-semibold text-muted-foreground block text-[10px] uppercase tracking-wide flex items-center gap-1.5">
+                                                                    <Camera className="h-3 w-3" />
+                                                                    Proof of Delivery
+                                                                </span>
+                                                                <div className="grid grid-cols-3 gap-2">
+                                                                    {item.deliveryPhotos.map((photo, idx) => (
+                                                                        <div
+                                                                            key={idx}
+                                                                            className="aspect-square rounded-md overflow-hidden border border-border cursor-pointer hover:ring-2 hover:ring-primary/50 transition-all"
+                                                                            onClick={() => window.open(photo.imageUrl, '_blank')}
+                                                                        >
+                                                                            <img
+                                                                                src={photo.imageUrl}
+                                                                                alt={`Proof ${idx + 1}`}
+                                                                                className="w-full h-full object-cover"
+                                                                            />
+                                                                        </div>
+                                                                    ))}
+                                                                </div>
+                                                            </div>
+                                                        )}
                                                     </div>
                                                 </div>
 
@@ -244,39 +275,7 @@ export function ViewDCDialog({ open, onOpenChange, deliveryId }: ViewDCDialogPro
                                 </div>
                             </div>
 
-                            {/* Display Delivery Confirmation Photos if available */}
-                            {deliveryData.items.some(item => item.deliveryPhotos && item.deliveryPhotos.length > 0) && (
-                                <div className="space-y-3">
-                                    <h3 className="font-bold text-sm flex items-center gap-2 text-muted-foreground uppercase tracking-wider">
-                                        <Camera className="h-4 w-4" />
-                                        Item Delivery Photos
-                                    </h3>
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                        {deliveryData.items.map(item =>
-                                            item.deliveryPhotos && item.deliveryPhotos.length > 0 && (
-                                                <div key={item._id} className="space-y-2">
-                                                    <p className="text-xs font-medium truncate">{item.itemName}</p>
-                                                    <div className="grid grid-cols-3 gap-2">
-                                                        {item.deliveryPhotos.map((photo, idx) => (
-                                                            <div
-                                                                key={idx}
-                                                                className="aspect-square rounded-md overflow-hidden border border-border cursor-pointer hover:ring-2 hover:ring-primary/50 transition-all"
-                                                                onClick={() => window.open(photo.imageUrl, '_blank')}
-                                                            >
-                                                                <img
-                                                                    src={photo.imageUrl}
-                                                                    alt={`${item.itemName} proof ${idx + 1}`}
-                                                                    className="w-full h-full object-cover"
-                                                                />
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                </div>
-                                            )
-                                        )}
-                                    </div>
-                                </div>
-                            )}
+
 
                             {/* Delivery Party Information */}
                             <div className="space-y-3">

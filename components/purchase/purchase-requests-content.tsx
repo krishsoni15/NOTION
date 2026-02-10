@@ -16,14 +16,15 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandSeparator } from "@/components/ui/command";
-import { Check } from "lucide-react";
+import { Check, CheckCircle } from "lucide-react";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { RequestDetailsDialog } from "@/components/requests/request-details-dialog";
 import { ItemInfoDialog } from "@/components/requests/item-info-dialog";
 import { LocationInfoDialog } from "@/components/locations/location-info-dialog";
 import { toast } from "sonner";
 import Link from "next/link";
 import type { Id } from "@/convex/_generated/dataModel";
-import { Clock, FileText, ShoppingCart, Truck, Search, Filter, LayoutGrid, Table as TableIcon, Eye, AlertCircle, FileText as FileTextIcon, Edit, Zap, CheckCircle, XCircle } from "lucide-react";
+import { Clock, FileText, ShoppingCart, Truck, Search, Filter, LayoutGrid, Table as TableIcon, Eye, AlertCircle, FileText as FileTextIcon, Edit, Zap, XCircle } from "lucide-react";
 import { RequestCardWithCC } from "./request-card-with-cc";
 import { PurchaseRequestGroupCard } from "./purchase-request-group-card";
 import { CostComparisonDialog } from "./cost-comparison-dialog";
@@ -34,6 +35,7 @@ import { CheckDialog } from "./check-dialog";
 import { useViewMode } from "@/hooks/use-view-mode";
 import { RequestsTable } from "@/components/requests/requests-table";
 import { PDFPreviewDialog } from "./pdf-preview-dialog";
+import { ConfirmDeliveryDialog } from "@/components/requests/confirm-delivery-dialog";
 import { PaginationControls } from "@/components/ui/pagination-controls";
 import { Table2, X } from "lucide-react";
 
@@ -86,23 +88,28 @@ export function PurchaseRequestsContent() {
   const [directPOMode, setDirectPOMode] = useState<"standard" | "direct">("standard");
   const [directPOInitialData, setDirectPOInitialData] = useState<DirectPOInitialData | null>(null);
   const [pdfPreviewPoNumber, setPdfPreviewPoNumber] = useState<string | null>(null);
+  const [pdfPreviewRequestId, setPdfPreviewRequestId] = useState<string | null>(null);
 
   // Pagination State
   const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('purchaseRequestsPageSize');
-      return saved ? Number(saved) : 10;
-    }
-    return 10;
-  });
+  const [pageSize, setPageSize] = useState(10);
+  const [isHydrated, setIsHydrated] = useState(false);
 
-  // Save page size
+  // Load page size from localStorage after hydration (client-side only)
   useEffect(() => {
-    if (typeof window !== 'undefined') {
+    setIsHydrated(true);
+    const saved = localStorage.getItem('purchaseRequestsPageSize');
+    if (saved) {
+      setPageSize(Number(saved));
+    }
+  }, []);
+
+  // Save page size to localStorage
+  useEffect(() => {
+    if (isHydrated) {
       localStorage.setItem('purchaseRequestsPageSize', pageSize.toString());
     }
-  }, [pageSize]);
+  }, [pageSize, isHydrated]);
 
   // Reset page on filter change
   useEffect(() => {
@@ -196,6 +203,7 @@ export function PurchaseRequestsContent() {
 
   const directToPO = useMutation(api.requests.directToPO);
   const updatePurchaseStatus = useMutation(api.requests.updatePurchaseRequestStatus);
+  const [showConfirmDelivery, setShowConfirmDelivery] = useState<Id<"requests"> | null>(null);
 
   const handleDirectPO = async (requestId: Id<"requests">) => {
     try {
@@ -233,7 +241,7 @@ export function PurchaseRequestsContent() {
     let rejectedPO = null;
 
     try {
-      const allPOs = await convex.query(api.purchaseOrders.getDirectPurchaseOrders);
+      const allPOs = await convex.query(api.purchaseOrders.getAllPurchaseOrders);
       const request = allRequests?.find(r => r._id === requestId);
 
       // Sort POs by creation time to get the latest rejection
@@ -367,7 +375,7 @@ export function PurchaseRequestsContent() {
     // Try to find existing rejected PO for these requests to restore full data
     let rejectedPO = null;
     try {
-      const allPOs = await convex.query(api.purchaseOrders.getDirectPurchaseOrders);
+      const allPOs = await convex.query(api.purchaseOrders.getAllPurchaseOrders);
       // Sort POs by creation time to get the latest rejection
       const sortedPOs = allPOs?.slice().sort((a: any, b: any) => b._creationTime - a._creationTime);
 
@@ -733,7 +741,8 @@ export function PurchaseRequestsContent() {
             onCheck={handleCheck}
             onCreatePO={handleCreatePO}
             onMoveToCC={handleMoveToCC}
-            onViewPDF={setPdfPreviewPoNumber}
+            onConfirmDelivery={setShowConfirmDelivery}
+            onViewPDF={(poNumber, requestId) => { setPdfPreviewPoNumber(poNumber); setPdfPreviewRequestId(requestId); }}
             showCreator={true}
           />
         ) : (
@@ -773,7 +782,7 @@ export function PurchaseRequestsContent() {
                   onCheck={handleCheck}
                   onCreatePO={handleCreatePO}
                   onCreateBulkPO={handleCreateBulkPO}
-                  onViewPDF={setPdfPreviewPoNumber}
+                  onViewPDF={(poNumber, requestId) => { setPdfPreviewPoNumber(poNumber); setPdfPreviewRequestId(requestId); }}
                 />
               );
             })}
@@ -804,6 +813,7 @@ export function PurchaseRequestsContent() {
           }
         }}
         requestId={selectedRequestId}
+        onCheck={handleCheck}
         onCreatePO={handleCreateBulkPO}
       />
 
@@ -826,6 +836,12 @@ export function PurchaseRequestsContent() {
           requestId={checkRequestId}
         />
       )}
+
+      <ConfirmDeliveryDialog
+        open={!!showConfirmDelivery}
+        onOpenChange={(open) => !open && setShowConfirmDelivery(null)}
+        requestId={showConfirmDelivery}
+      />
 
       <ItemInfoDialog
         open={!!selectedItemName}
@@ -855,8 +871,9 @@ export function PurchaseRequestsContent() {
 
       <PDFPreviewDialog
         open={!!pdfPreviewPoNumber}
-        onOpenChange={(open) => !open && setPdfPreviewPoNumber(null)}
+        onOpenChange={(open) => { if (!open) { setPdfPreviewPoNumber(null); setPdfPreviewRequestId(null); } }}
         poNumber={pdfPreviewPoNumber}
+        requestId={pdfPreviewRequestId}
       />
     </>
   );

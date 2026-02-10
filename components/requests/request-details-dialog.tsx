@@ -45,7 +45,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Separator } from "@/components/ui/separator";
-import { AlertCircle, CheckCircle, XCircle, Package, ShoppingCart, MapPin, PackageX, Sparkles, FileText, PieChart, LayoutGrid, List, Edit, Image as ImageIcon, Calendar, Clock, Check, Send, NotebookPen, Loader2, Truck, Pencil, GitFork, Building2, User, RefreshCw } from "lucide-react";
+import { AlertCircle, CheckCircle, XCircle, Package, ShoppingCart, MapPin, PackageX, Sparkles, FileText, PieChart, LayoutGrid, List, Edit, Image as ImageIcon, Calendar, Clock, Check, Send, NotebookPen, Loader2, Truck, Pencil, GitFork, Building2, User, RefreshCw, Eye } from "lucide-react";
 import { useUserRole } from "@/hooks/use-user-role";
 import { ROLES } from "@/lib/auth/roles";
 import { CompactImageGallery } from "@/components/ui/image-gallery";
@@ -61,6 +61,7 @@ import { ExpandableText } from "@/components/ui/expandable-text";
 import { DirectPODialog, type DirectPOInitialData } from "@/components/purchase/direct-po-dialog";
 import { BulkDeliveryDialog } from "@/components/purchase/bulk-delivery-dialog";
 import { CreateDCMultiDialog } from "@/components/purchase/create-dc-multi-dialog";
+import { ViewDCDialog } from "@/components/purchase/view-dc-dialog";
 import type { Id } from "@/convex/_generated/dataModel";
 
 interface RequestDetailsDialogProps {
@@ -167,6 +168,8 @@ export function RequestDetailsDialog({
   const [selectedItemName, setSelectedItemName] = useState<string | null>(null);
   const [selectedSiteId, setSelectedSiteId] = useState<Id<"sites"> | null>(null);
   const [pdfPreviewPoNumber, setPdfPreviewPoNumber] = useState<string | null>(null);
+  const [pdfPreviewRequestId, setPdfPreviewRequestId] = useState<string | null>(null);
+  const [pdfPreviewRequestIds, setPdfPreviewRequestIds] = useState<string[] | null>(null);
   const [selectedItemsForAction, setSelectedItemsForAction] = useState<Set<Id<"requests">>>(new Set());
   const [itemActions, setItemActions] = useState<Record<Id<"requests">, "approve" | "reject" | "direct_po" | null>>({});
   const [itemIntents, setItemIntents] = useState<Record<Id<"requests">, string[]>>({});
@@ -184,6 +187,7 @@ export function RequestDetailsDialog({
   const [bulkDeliveryData, setBulkDeliveryData] = useState<{ items: any[]; vendorName: string; poNumber: string } | null>(null);
   const [selectedDCItems, setSelectedDCItems] = useState<Set<Id<"requests">>>(new Set());
   const [showBulkDCDialog, setShowBulkDCDialog] = useState(false);
+  const [viewDCId, setViewDCId] = useState<Id<"deliveries"> | null>(null);
   // View mode with responsive default and cookie persistence
   const [viewMode, setViewMode] = useState<"table" | "card">("card"); // Default to card for mobile-first
   const [viewModeInitialized, setViewModeInitialized] = useState(false);
@@ -418,6 +422,48 @@ export function RequestDetailsDialog({
   // Manager permissions based on pending items
   const canApprove = isManager && (pendingItems.length > 0 || signPendingItems.length > 0 || selectedItemsForAction.size > 0);
   const canReject = isManager && (pendingItems.length > 0 || signPendingItems.length > 0 || selectedItemsForAction.size > 0);
+
+  // Helper function to calculate delivery tracking data for an item
+  // This finds related items (same itemName) that are in delivery/delivered states
+  const getDeliveryTrackingData = (itemName: string, currentQuantity: number, unit: string) => {
+    if (!allRequests) return { alreadyDelivered: 0, originalRequested: currentQuantity };
+
+    // Find all items with the same itemName
+    const relatedItems = allRequests.filter(
+      r => r.itemName.toLowerCase() === itemName.toLowerCase()
+    );
+
+    // Calculate already delivered (items in delivery stages)
+    const deliveryStatuses = ["ready_for_delivery", "delivery_processing", "delivery_stage", "delivered"];
+    const deliveredItems = relatedItems.filter(r => deliveryStatuses.includes(r.status));
+    const alreadyDelivered = deliveredItems.reduce((sum, item) => sum + item.quantity, 0);
+
+    // Calculate total original requested (sum of all related items)
+    const originalRequested = relatedItems.reduce((sum, item) => sum + item.quantity, 0);
+
+    return { alreadyDelivered, originalRequested };
+  };
+
+  // Enhanced function to prepare bulk delivery items with tracking data
+  const prepareBulkDeliveryItems = (poItems: any[]) => {
+    return poItems.map((po: any) => {
+      const itemName = po.itemName || po.itemDescription?.split('\n')[0] || "Item";
+      const requestedQuantity = po.requestQuantity || po.quantity;
+      const unit = po.requestUnit || po.unit;
+      const trackingData = getDeliveryTrackingData(itemName, requestedQuantity, unit);
+
+      return {
+        requestId: po.requestId,
+        itemName: itemName,
+        requestedQuantity: requestedQuantity,
+        unit: unit,
+        poQuantity: po.quantity || po.requestQuantity,
+        itemOrder: po.itemOrder,
+        alreadyDelivered: trackingData.alreadyDelivered,
+        originalRequested: trackingData.originalRequested,
+      };
+    });
+  };
 
   // Check if all items in the request have the same status
   const allItemsHaveSameStatus = allRequests && allRequests.length > 0
@@ -1242,34 +1288,137 @@ export function RequestDetailsDialog({
       return false;
     };
 
-    // For ready_for_po items, don't show action buttons - manager has already given permissions
+    // For ready_for_po items, show Create PO button
     if (item.status === "ready_for_po") {
-      return null;
-    }
-
-    // Special handling for Pending PO: Show Available button ONLY (and PDF if available)
-    if (item.status === "pending_po") {
-      const poNumber = requestToPONumber.get(item._id);
       return (
         <div className={cn("flex items-center gap-2", isCard ? "w-full" : "")}>
           <Button
             size="sm"
             onClick={(e) => {
               e.stopPropagation();
-              setEditQuantityItem({
-                id: item._id,
-                quantity: item.quantity,
-                name: item.itemName,
-                unit: item.unit
-              });
+              if (onCreatePO) onCreatePO([item._id]);
             }}
             className={cn(
-              "bg-emerald-600 hover:bg-emerald-700 text-white font-semibold shadow-sm flex-1",
-              isCard ? "w-full" : "w-auto"
+              "bg-emerald-600 hover:bg-emerald-700 text-white font-semibold shadow-sm",
+              isCard ? "flex-1" : ""
             )}
           >
-            <CheckCircle className="h-4 w-4 mr-2" /> Available
+            <ShoppingCart className="h-4 w-4 mr-2" /> Create PO
           </Button>
+        </div>
+      );
+    }
+
+    // For ready_for_cc items, show Create CC button (Purchase Officer only)
+    if (isPurchaseOfficer && item.status === "ready_for_cc") {
+      return (
+        <div className={cn("flex items-center gap-2", isCard ? "w-full" : "")}>
+          <Button
+            size="sm"
+            onClick={(e) => {
+              e.stopPropagation();
+              if (onOpenCC) onOpenCC(item._id);
+            }}
+            className={cn(
+              "bg-purple-600 hover:bg-purple-700 text-white font-semibold shadow-sm",
+              isCard ? "flex-1" : ""
+            )}
+          >
+            <FileText className="h-4 w-4 mr-2" /> Create CC
+          </Button>
+        </div>
+      );
+    }
+
+    // For cc_pending items, show Review CC button (Manager only)
+    if (isManager && item.status === "cc_pending") {
+      return (
+        <div className={cn("flex items-center gap-2", isCard ? "w-full" : "")}>
+          <Button
+            size="sm"
+            onClick={(e) => {
+              e.stopPropagation();
+              if (onOpenCC) onOpenCC(item._id);
+            }}
+            className={cn(
+              "bg-purple-600 hover:bg-purple-700 text-white font-semibold shadow-sm",
+              isCard ? "flex-1" : ""
+            )}
+          >
+            <CheckCircle className="h-4 w-4 mr-2" /> Review CC
+          </Button>
+        </div>
+      );
+    }
+
+    // For cc_rejected items, show Resubmit CC button (Purchase Officer only)
+    if (isPurchaseOfficer && item.status === "cc_rejected") {
+      return (
+        <div className={cn("flex items-center gap-2", isCard ? "w-full" : "")}>
+          <Button
+            size="sm"
+            onClick={(e) => {
+              e.stopPropagation();
+              if (onOpenCC) onOpenCC(item._id);
+            }}
+            className={cn(
+              "bg-rose-600 hover:bg-rose-700 text-white font-semibold shadow-sm",
+              isCard ? "flex-1" : ""
+            )}
+          >
+            <RefreshCw className="h-4 w-4 mr-2" /> Resubmit CC
+          </Button>
+        </div>
+      );
+    }
+
+    // For approved/recheck items, show Check/Split button (Purchase Officer only)
+    if (isPurchaseOfficer && ["approved", "recheck"].includes(item.status)) {
+      return (
+        <div className={cn("flex items-center gap-2", isCard ? "w-full" : "")}>
+          <Button
+            size="sm"
+            onClick={(e) => {
+              e.stopPropagation();
+              if (onCheck) onCheck(item._id);
+            }}
+            className={cn(
+              "bg-indigo-600 hover:bg-indigo-700 text-white font-semibold shadow-sm",
+              isCard ? "w-full" : ""
+            )}
+          >
+            <Sparkles className="h-4 w-4 mr-2" /> Check/Split
+          </Button>
+        </div>
+      );
+    }
+
+    // Special handling for Pending PO: Show Available button ONLY (and PDF if available)
+    // Available button is only for Purchase Officers, not Managers
+    if (item.status === "pending_po") {
+      const poNumber = requestToPONumber.get(item._id);
+      return (
+        <div className={cn("flex items-center gap-2", isCard ? "w-full" : "")}>
+          {isPurchaseOfficer && (
+            <Button
+              size="sm"
+              onClick={(e) => {
+                e.stopPropagation();
+                setEditQuantityItem({
+                  id: item._id,
+                  quantity: item.quantity,
+                  name: item.itemName,
+                  unit: item.unit
+                });
+              }}
+              className={cn(
+                "bg-emerald-600 hover:bg-emerald-700 text-white font-semibold shadow-sm flex-1",
+                isCard ? "w-full" : "w-auto"
+              )}
+            >
+              <CheckCircle className="h-4 w-4 mr-2" /> Available
+            </Button>
+          )}
           {poNumber && (
             <Button
               size="sm"
@@ -1302,8 +1451,8 @@ export function RequestDetailsDialog({
               setShowBulkDCDialog(true);
             }}
             className={cn(
-              "bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-semibold shadow-sm",
-              isCard ? "flex-1" : "flex-1"
+              "bg-blue-600 hover:bg-blue-700 text-white font-semibold shadow-sm",
+              isCard ? "flex-1" : ""
             )}
           >
             <Truck className="h-4 w-4 mr-2" /> Create DC
@@ -1332,6 +1481,20 @@ export function RequestDetailsDialog({
       const poNumber = requestToPONumber.get(item._id);
       return (
         <div className={cn("flex items-center gap-2", isCard ? "w-full justify-end" : "justify-end")}>
+          {/* View DC Button - For items with deliveryId */}
+          {item.deliveryId && (
+            <Button
+              size="sm"
+              onClick={(e) => {
+                e.stopPropagation();
+                setViewDCId(item.deliveryId!);
+              }}
+              className="bg-sky-600 hover:bg-sky-700 text-white font-semibold shadow-sm"
+            >
+              <Eye className="h-4 w-4 mr-1.5" />
+              View DC
+            </Button>
+          )}
           {/* Show Confirm Delivered button for out_for_delivery/delivery_stage items */}
           {(item.status === "out_for_delivery" || item.status === "delivery_stage") && (
             <Button
@@ -1635,8 +1798,10 @@ export function RequestDetailsDialog({
       <BatchProcessDialogHelper />
       <PDFPreviewDialog
         open={!!pdfPreviewPoNumber}
-        onOpenChange={(open) => !open && setPdfPreviewPoNumber(null)}
+        onOpenChange={(open) => { if (!open) { setPdfPreviewPoNumber(null); setPdfPreviewRequestId(null); setPdfPreviewRequestIds(null); } }}
         poNumber={pdfPreviewPoNumber}
+        requestId={pdfPreviewRequestId}
+        requestIds={pdfPreviewRequestIds}
       />
 
       <Dialog
@@ -1698,31 +1863,87 @@ export function RequestDetailsDialog({
           {/* Toolbar / Actions Bar */}
           <div className="px-6 py-2 flex items-center justify-between border-t bg-muted/20">
             <div className="flex items-center gap-2">
-              {/* Batch Selection Counter */}
+              {/* Select All For PO */}
+              {isPurchaseOfficer && (() => {
+                const eligibleForPO = allRequests?.filter(i => ["ready_for_po", "direct_po", "sign_rejected"].includes(i.status)) || [];
+                if (eligibleForPO.length === 0) return null;
+                const allSelected = eligibleForPO.every(i => selectedItemsForAction.has(i._id));
+
+                if (!allSelected) {
+                  return (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        const newSet = new Set(selectedItemsForAction);
+                        eligibleForPO.forEach(i => newSet.add(i._id));
+                        setSelectedItemsForAction(newSet);
+                      }}
+                      className="h-7 text-xs border-emerald-200 text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800"
+                    >
+                      <CheckCircle className="h-3 w-3 mr-1.5" /> Select All PO
+                    </Button>
+                  );
+                }
+                return null;
+              })()}
+
+              {/* Batch Selection Counter (PO) */}
               {selectedItemsForAction.size > 0 && (
-                <div className="flex items-center gap-2 ml-4 animate-in fade-in slide-in-from-left-2">
-                  <span className="text-xs font-medium bg-primary/10 text-primary px-2.5 py-1 rounded-full border border-primary/20">
-                    {selectedItemsForAction.size} Selected
+                <div className="flex items-center gap-2 animate-in fade-in slide-in-from-left-2">
+                  <span className="text-xs font-medium bg-emerald-100 text-emerald-700 px-2.5 py-1 rounded-full border border-emerald-200">
+                    {selectedItemsForAction.size} for PO
                   </span>
-                  <Button variant="ghost" size="sm" onClick={deselectAll} className="h-7 text-xs hover:bg-destructive/10 hover:text-destructive">
-                    Unselect All
+                  <Button variant="ghost" size="sm" onClick={() => setSelectedItemsForAction(new Set())} className="h-7 text-xs hover:bg-destructive/10 hover:text-destructive p-1.5 h-6 w-6 rounded-full">
+                    <XCircle className="h-4 w-4" />
                   </Button>
                 </div>
               )}
 
+              {/* Spacer */}
+              {(selectedItemsForAction.size > 0 || (allRequests?.some(i => ["ready_for_po", "direct_po", "sign_rejected"].includes(i.status)) && isPurchaseOfficer)) &&
+                (selectedDCItems.size > 0 || allRequests?.some(i => ["ready_for_delivery"].includes(i.status))) && (
+                  <div className="h-4 w-px bg-border mx-2" />
+                )}
+
+              {/* Select All For DC */}
+              {(() => {
+                const eligibleForDC = allRequests?.filter(i => ["ready_for_delivery"].includes(i.status)) || [];
+                if (eligibleForDC.length === 0) return null;
+                const allSelected = eligibleForDC.every(i => selectedDCItems.has(i._id));
+
+                if (!allSelected) {
+                  return (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        const newSet = new Set(selectedDCItems);
+                        eligibleForDC.forEach(i => newSet.add(i._id));
+                        setSelectedDCItems(newSet);
+                      }}
+                      className="h-7 text-xs border-green-200 text-green-700 hover:bg-green-50 hover:text-green-800"
+                    >
+                      <Truck className="h-3 w-3 mr-1.5" /> Select All DC
+                    </Button>
+                  );
+                }
+                return null;
+              })()}
+
               {/* DC Selection Counter */}
               {selectedDCItems.size > 0 && (
-                <div className="flex items-center gap-2 ml-4 animate-in fade-in slide-in-from-left-2">
-                  <span className="text-xs font-medium bg-green-600/10 text-green-700 px-2.5 py-1 rounded-full border border-green-600/20">
+                <div className="flex items-center gap-2 animate-in fade-in slide-in-from-left-2">
+                  <span className="text-xs font-medium bg-green-100 text-green-700 px-2.5 py-1 rounded-full border border-green-200">
                     {selectedDCItems.size} for DC
                   </span>
                   <Button
                     variant="ghost"
                     size="sm"
                     onClick={() => setSelectedDCItems(new Set())}
-                    className="h-7 text-xs hover:bg-destructive/10 hover:text-destructive"
+                    className="h-7 text-xs hover:bg-destructive/10 hover:text-destructive p-1.5 h-6 w-6 rounded-full"
                   >
-                    Clear DC Selection
+                    <XCircle className="h-4 w-4" />
                   </Button>
                 </div>
               )}
@@ -1733,36 +1954,38 @@ export function RequestDetailsDialog({
               {isPurchaseOfficer && selectedItemsForAction.size > 0 && (() => {
                 const selectedReadyForPO = allRequests?.filter(item =>
                   selectedItemsForAction.has(item._id) &&
-                  ["direct_po", "ready_for_po"].includes(item.status)
+                  ["direct_po", "ready_for_po", "sign_rejected"].includes(item.status)
                 ) || [];
+
                 if (selectedReadyForPO.length === 0) return null;
+
                 return (
                   <Button
                     variant="default"
                     size="sm"
-                    className="h-9 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 shadow-md"
+                    className="h-9 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 shadow-md animate-in zoom-in-95 duration-200"
                     onClick={() => {
-                      setDirectPOInitialData({
-                        requestNumber: request?.requestNumber,
-                        deliverySiteId: request?.site?._id,
-                        deliverySiteName: request?.site?.name,
-                        items: selectedReadyForPO.map(item => ({
-                          requestId: item._id,
-                          itemDescription: item.itemName,
-                          description: item.description,
-                          quantity: item.quantity,
-                          unit: item.unit,
-                          unitPrice: 0
-                        }))
-                      });
-                      setShowDirectPODialog(true);
+                      // Group check could happen here or in the dialog
+                      const firstVendor = selectedReadyForPO[0].selectedVendorId;
+                      const mixedVendors = selectedReadyForPO.some(i => i.selectedVendorId !== firstVendor);
+
+                      if (mixedVendors) {
+                        toast.warning("Selected items have different vendors. Using vendor from first item.");
+                      }
+
+                      // Call the bulk PO creation handler passed from props or defined locally
+                      // Assuming onCreatePO handles array of IDs
+                      if (onCreatePO) {
+                        onCreatePO(selectedReadyForPO.map(i => i._id));
+                      }
                     }}
                   >
                     <ShoppingCart className="h-4 w-4 mr-1.5" />
-                    Create PO ({selectedReadyForPO.length} items)
+                    Create PO ({selectedReadyForPO.length})
                   </Button>
                 );
               })()}
+
 
               {/* Create DC for Selected Items */}
               {selectedDCItems.size > 0 && (
@@ -2004,10 +2227,11 @@ export function RequestDetailsDialog({
                           <TableHeader>
                             <TableRow className="bg-muted/40 hover:bg-muted/40 border-b">
                               <TableHead className="w-[40px] text-center p-2"></TableHead>
+
                               <TableHead className="min-w-[300px] font-bold text-xs uppercase tracking-wider text-muted-foreground">Item Details</TableHead>
                               <TableHead className="font-bold text-xs uppercase tracking-wider text-muted-foreground">Quantity</TableHead>
                               <TableHead className="w-[140px] font-bold text-xs uppercase tracking-wider text-muted-foreground">Status</TableHead>
-                              {isManager && (pendingItems.length > 0 || signPendingItems.length > 0 || (allRequests && allRequests.some(i => canManagerModifyStatus(i.status)))) || (isPurchaseOfficer && (allRequests && allRequests.some(i => ["pending_po", "direct_po", "ready_for_po"].includes(i.status)))) ? (
+                              {isManager && (pendingItems.length > 0 || signPendingItems.length > 0 || (allRequests && allRequests.some(i => canManagerModifyStatus(i.status)))) || (isPurchaseOfficer && (allRequests && allRequests.some(i => ["pending_po", "direct_po", "ready_for_po", "ready_for_delivery", "recheck", "approved", "ready_for_cc", "cc_rejected"].includes(i.status)))) ? (
                                 <TableHead className="min-w-[300px] text-right font-bold text-xs uppercase tracking-wider text-muted-foreground">Actions</TableHead>
                               ) : (
                                 <TableHead className="hidden"></TableHead>
@@ -2108,39 +2332,34 @@ export function RequestDetailsDialog({
                                       "p-4 flex flex-col justify-center gap-2 min-w-[160px]",
                                       "bg-orange-100/20 dark:bg-orange-950/20"
                                     )}>
-                                      {/* Available button - opens delivery dialog for all PO items */}
-                                      <Button
-                                        size="sm"
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          // Prepare bulk delivery data with all items from this vendor's PO
-                                          const bulkItems = group.items.map((po: any) => ({
-                                            requestId: po.requestId,
-                                            itemName: po.itemName || po.itemDescription?.split('\n')[0] || "Item",
-                                            requestedQuantity: po.requestQuantity || po.quantity,
-                                            unit: po.requestUnit || po.unit,
-                                            poQuantity: po.quantity || po.requestQuantity,
-                                            itemOrder: po.itemOrder
-                                          }));
+                                      {/* Available button - opens delivery dialog for all PO items - Purchase Officer Only */}
+                                      {isPurchaseOfficer && (
+                                        <Button
+                                          size="sm"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            // Prepare bulk delivery data with all items from this vendor's PO (with tracking)
+                                            const bulkItems = prepareBulkDeliveryItems(group.items);
 
-                                          setBulkDeliveryData({
-                                            items: bulkItems,
-                                            vendorName: group.vendor.companyName,
-                                            poNumber: group.items[0].poNumber
-                                          });
-                                        }}
-                                        className={cn(
-                                          "w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold shadow-sm"
-                                        )}
-                                      >
-                                        <CheckCircle className="h-3.5 w-3.5 mr-2" /> Available
-                                      </Button>
+                                            setBulkDeliveryData({
+                                              items: bulkItems,
+                                              vendorName: group.vendor.companyName,
+                                              poNumber: group.items[0].poNumber
+                                            });
+                                          }}
+                                          className={cn(
+                                            "w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold shadow-sm"
+                                          )}
+                                        >
+                                          <CheckCircle className="h-3.5 w-3.5 mr-2" /> Available
+                                        </Button>
+                                      )}
                                       {group.items[0].poNumber && (
                                         <Button
                                           variant="outline"
                                           size="sm"
                                           className={cn("text-xs h-8 w-full bg-background")}
-                                          onClick={() => setPdfPreviewPoNumber(group.items[0].poNumber)}
+                                          onClick={() => { setPdfPreviewPoNumber(group.items[0].poNumber); setPdfPreviewRequestIds(group.items.map((i: any) => i._id)); }}
                                         >
                                           <FileText className="h-3.5 w-3.5 mr-1.5" />
                                           View PDF
@@ -2305,7 +2524,7 @@ export function RequestDetailsDialog({
                                         variant="outline"
                                         size="sm"
                                         className={cn("text-xs h-8", isManager ? "w-full" : "w-full bg-background")}
-                                        onClick={() => setPdfPreviewPoNumber(group.items[0].poNumber)}
+                                        onClick={() => { setPdfPreviewPoNumber(group.items[0].poNumber); setPdfPreviewRequestIds(group.items.map((i: any) => i._id)); }}
                                       >
                                         <FileText className="h-3.5 w-3.5 mr-1.5" />
                                         View PDF
@@ -2368,15 +2587,31 @@ export function RequestDetailsDialog({
                                           {/* Selection Checkbox */}
                                           <TableCell className="p-2 text-center w-[45px] relative rounded-l-lg overflow-hidden">
                                             <div className="flex items-center justify-center h-full w-full">
-                                              {((isManager && item.status === "pending") || (isPurchaseOfficer && ["pending_po", "direct_po", "ready_for_po", "ready_for_delivery"].includes(item.status))) && (
+                                              {((isManager && item.status === "pending") || (isPurchaseOfficer && ["pending_po", "direct_po", "ready_for_po", "ready_for_delivery", "sign_rejected"].includes(item.status))) && (
                                                 <Checkbox
-                                                  checked={isSelected}
-                                                  onCheckedChange={() => toggleItemSelection(item._id)}
-                                                  className="h-4 w-4 relative z-10"
+                                                  checked={item.status === "ready_for_delivery" ? selectedDCItems.has(item._id) : selectedItemsForAction.has(item._id)}
+                                                  onCheckedChange={() => {
+                                                    if (item.status === "ready_for_delivery") {
+                                                      const newSet = new Set(selectedDCItems);
+                                                      if (newSet.has(item._id)) {
+                                                        newSet.delete(item._id);
+                                                      } else {
+                                                        newSet.add(item._id);
+                                                      }
+                                                      setSelectedDCItems(newSet);
+                                                    } else {
+                                                      toggleItemSelection(item._id);
+                                                    }
+                                                  }}
+                                                  className={cn(
+                                                    "h-4 w-4 relative z-10",
+                                                    item.status === "ready_for_delivery" && "border-green-500 data-[state=checked]:bg-green-600 data-[state=checked]:border-green-600"
+                                                  )}
                                                 />
                                               )}
                                             </div>
                                           </TableCell>
+
 
                                           <TableCell className="py-3">
                                             <div className="flex items-start gap-3">
@@ -2447,7 +2682,7 @@ export function RequestDetailsDialog({
                                               {getStatusBadge(item.status)}
                                             </div>
                                           </TableCell>
-                                          {(isManager && (isPending || item.status === "sign_pending" || item.status === "cc_pending" || canManagerModifyStatus(item.status))) || (isPurchaseOfficer && ["pending_po", "direct_po", "ready_for_po", "ready_for_delivery"].includes(item.status)) ? (
+                                          {(isManager && (isPending || item.status === "sign_pending" || item.status === "cc_pending" || canManagerModifyStatus(item.status))) || (isPurchaseOfficer && ["pending_po", "direct_po", "ready_for_po", "ready_for_delivery", "recheck", "approved", "ready_for_cc", "cc_rejected", "out_for_delivery", "delivery_processing", "delivery_stage", "delivered"].includes(item.status)) ? (
                                             <TableCell className="text-right p-4 align-middle rounded-r-lg overflow-hidden">
                                               <div className="flex items-center justify-end gap-3 min-w-[300px]">
                                                 {item.status === "sign_pending" ? (
@@ -2482,7 +2717,15 @@ export function RequestDetailsDialog({
                                                     )}
                                                   </div>
                                                 ) : item.status === "sign_rejected" ? (
-                                                  null
+                                                  isPurchaseOfficer && onCreatePO && (
+                                                    <Button
+                                                      size="sm"
+                                                      className="h-9 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-semibold shadow-lg shadow-blue-500/30 hover:shadow-blue-500/50 transition-all hover:scale-105"
+                                                      onClick={(e) => { e.stopPropagation(); onCreatePO([item._id]); }}
+                                                    >
+                                                      <RefreshCw className="h-4 w-4 mr-1.5" /> Resubmit PO
+                                                    </Button>
+                                                  )
                                                 ) : item.status === "cc_pending" ? (
                                                   onOpenCC && (
                                                     <Button
@@ -2497,25 +2740,6 @@ export function RequestDetailsDialog({
                                                 ) : (
                                                   <div className="flex items-center gap-3">
                                                     <RenderActionSegments item={item} />
-                                                    {isPurchaseOfficer && ["direct_po", "ready_for_po"].includes(item.status) && (
-                                                      <Button
-                                                        variant="default"
-                                                        size="sm"
-                                                        className="h-9 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600"
-                                                        onClick={(e) => {
-                                                          e.stopPropagation();
-                                                          setDirectPOInitialData({
-                                                            requestNumber: request?.requestNumber,
-                                                            deliverySiteId: request?.site?._id,
-                                                            deliverySiteName: request?.site?.name,
-                                                            items: [{ requestId: item._id, itemDescription: item.itemName, description: item.description, quantity: item.quantity, unit: item.unit, unitPrice: 0 }]
-                                                          });
-                                                          setShowDirectPODialog(true);
-                                                        }}
-                                                      >
-                                                        <ShoppingCart className="h-4 w-4 mr-1.5" /> Create PO
-                                                      </Button>
-                                                    )}
                                                   </div>
                                                 )}
                                               </div>
@@ -2613,35 +2837,30 @@ export function RequestDetailsDialog({
                                 ))}
                               </div>
                               <div className="p-3 mt-auto border-t bg-muted/20 flex items-center gap-2">
-                                <Button
-                                  size="sm"
-                                  className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    // Prepare bulk delivery data with all items from this vendor's PO
-                                    const bulkItems = group.items.map((po: any) => ({
-                                      requestId: po.requestId,
-                                      itemName: po.itemName || po.itemDescription?.split('\n')[0] || "Item",
-                                      requestedQuantity: po.requestQuantity || po.quantity,
-                                      unit: po.requestUnit || po.unit,
-                                      poQuantity: po.quantity || po.requestQuantity,
-                                      itemOrder: po.itemOrder
-                                    }));
+                                {isPurchaseOfficer && (
+                                  <Button
+                                    size="sm"
+                                    className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      // Prepare bulk delivery data with all items from this vendor's PO (with tracking)
+                                      const bulkItems = prepareBulkDeliveryItems(group.items);
 
-                                    setBulkDeliveryData({
-                                      items: bulkItems,
-                                      vendorName: group.vendor.companyName,
-                                      poNumber: group.poNumber
-                                    });
-                                  }}
-                                >
-                                  <CheckCircle className="h-4 w-4 mr-1" /> Available
-                                </Button>
+                                      setBulkDeliveryData({
+                                        items: bulkItems,
+                                        vendorName: group.vendor.companyName,
+                                        poNumber: group.poNumber
+                                      });
+                                    }}
+                                  >
+                                    <CheckCircle className="h-4 w-4 mr-1" /> Available
+                                  </Button>
+                                )}
                                 <Button
                                   variant="outline"
                                   size="sm"
                                   className="px-2"
-                                  onClick={() => setPdfPreviewPoNumber(group.poNumber)}
+                                  onClick={() => { setPdfPreviewPoNumber(group.poNumber); setPdfPreviewRequestIds(group.items.map((i: any) => i.requestId)); }}
                                 >
                                   <FileText className="h-4 w-4" />
                                 </Button>
@@ -2679,46 +2898,100 @@ export function RequestDetailsDialog({
                                 ))}
                               </div>
                               <div className="p-3 mt-auto border-t bg-muted/20 flex items-center gap-2">
-                                <Button
-                                  size="sm"
-                                  className="flex-1 bg-amber-600 hover:bg-amber-700 text-white"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    const poIds = group.items.map((i: any) => i._id); // Assuming we approve all items in PO? No, approveDirectPOById takes poId.
-                                    // Actually approveDirectPOById takes poId (purchaseOrder ID).
-                                    // The `group` is NOT a purchaseOrder row. It's a constructed object.
-                                    // But `group.items` contains the purchaseOrder rows.
-                                    // Wait, approveDirectPOById takes `poId`.
-                                    // If we are signing the whole PO, we just need to approve the items? 
-                                    // Or does the backend handle it?
-                                    // approveDirectPO (mutation) takes `poId`.
-                                    // Since multiple items share `poNumber` but have different `_id` (purchaseOrders table row ID), 
-                                    // we need to approve EACH ROW.
-                                    // So passing all IDs is correct.
-                                    setShowSignPendingApproveConfirm({ type: 'po_batch', ids: poIds } as any);
-                                  }}
-                                >
-                                  Sign PO
-                                </Button>
+                                {isManager && (
+                                  <Button
+                                    size="sm"
+                                    className="flex-1 bg-amber-600 hover:bg-amber-700 text-white"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      const poIds = group.items.map((i: any) => i._id);
+                                      setShowSignPendingApproveConfirm({ type: 'po_batch', ids: poIds } as any);
+                                    }}
+                                  >
+                                    Sign PO
+                                  </Button>
+                                )}
                                 <Button
                                   variant="outline"
                                   size="sm"
-                                  className="px-2"
-                                  onClick={() => setPdfPreviewPoNumber(group.poNumber)}
+                                  className={isManager ? "px-2" : "flex-1"}
+                                  onClick={() => { setPdfPreviewPoNumber(group.poNumber); setPdfPreviewRequestIds(group.items.map((i: any) => i.requestId)); }}
                                 >
                                   <FileText className="h-4 w-4" />
+                                  {!isManager && <span className="ml-1.5">View PDF</span>}
                                 </Button>
+                                {isManager && (
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="px-2 border-red-200 text-red-600 hover:bg-red-50"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      const poIds = group.items.map((i: any) => i._id);
+                                      setShowRejectionInput({ type: 'po_batch', ids: poIds } as any);
+                                    }}
+                                  >
+                                    <XCircle className="h-4 w-4" />
+                                  </Button>
+                                )}
+                              </div>
+                            </div>
+                          ))}
+                          {/* Sign Rejected PO Groups - Vendor-wise (Card View) */}
+                          {pendingPOs && pendingPOs.filter((p: any) => p.status === "sign_rejected").map((group: any) => (
+                            <div key={`card-rejected-${group.poNumber}`} className="flex flex-col border rounded-xl bg-card overflow-hidden shadow-sm hover:shadow-md transition-shadow ring-1 ring-red-500/20">
+                              <div className="p-4 bg-red-50 dark:bg-red-950/20 border-b flex items-center gap-3">
+                                <div className="h-10 w-10 rounded-full bg-white dark:bg-red-900/40 flex items-center justify-center shadow-sm text-red-600">
+                                  <Building2 className="h-5 w-5" />
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <h3 className="font-bold text-foreground truncate">{group.vendor?.companyName || "Unknown Vendor"}</h3>
+                                  <div className="text-xs text-muted-foreground flex items-center gap-2">
+                                    <span className="flex items-center gap-1 text-red-600"><XCircle className="h-3 w-3" /> Sign Rejected</span>
+                                    <span>•</span>
+                                    <span className="font-mono">PO: {group.poNumber}</span>
+                                  </div>
+                                </div>
+                                <div className="text-right">
+                                  <div className="text-sm font-bold">₹{group.totalAmount.toLocaleString()}</div>
+                                </div>
+                              </div>
+                              <div className="p-3 bg-muted/10 space-y-2">
+                                {group.items.map((po: any, idx: number) => (
+                                  <div key={po._id} className="flex items-center gap-2.5 text-sm p-2 rounded-lg bg-background/60 border border-border/50 hover:bg-background/80 transition-colors">
+                                    <span className="text-xs font-black font-mono bg-gradient-to-r from-purple-500 to-indigo-500 text-white px-2 py-1 rounded-lg shadow-sm min-w-[28px] text-center">
+                                      #{po.itemOrder || (idx + 1)}
+                                    </span>
+                                    <Badge variant="secondary" className="h-5 text-[10px] px-1.5">{po.requestQuantity || po.quantity} {po.requestUnit || po.unit}</Badge>
+                                    <span className="truncate flex-1 font-semibold">{po.itemName || po.itemDescription?.split('\n')[0]}</span>
+                                    <span className="font-mono text-xs font-bold text-green-600 dark:text-green-400">₹{po.totalAmount?.toLocaleString() || 0}</span>
+                                  </div>
+                                ))}
+                              </div>
+                              <div className="p-3 mt-auto border-t bg-muted/20 flex items-center gap-2">
+                                {isPurchaseOfficer && onCreatePO && (
+                                  <Button
+                                    size="sm"
+                                    className="flex-1 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-semibold shadow-lg shadow-blue-500/30 hover:shadow-blue-500/50 transition-all"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      const requestIds = group.items.map((i: any) => i.requestId);
+                                      if (requestIds.length > 0) {
+                                        onCreatePO(requestIds);
+                                      }
+                                    }}
+                                  >
+                                    <RefreshCw className="h-4 w-4 mr-1.5" /> Resubmit PO ({group.items.length} items)
+                                  </Button>
+                                )}
                                 <Button
                                   variant="outline"
                                   size="sm"
-                                  className="px-2 border-red-200 text-red-600 hover:bg-red-50"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    const poIds = group.items.map((i: any) => i._id);
-                                    setShowRejectionInput({ type: 'po_batch', ids: poIds } as any);
-                                  }}
+                                  className={isPurchaseOfficer ? "px-3" : "flex-1"}
+                                  onClick={() => { setPdfPreviewPoNumber(group.poNumber); setPdfPreviewRequestIds(group.items.map((i: any) => i.requestId)); }}
                                 >
-                                  <XCircle className="h-4 w-4" />
+                                  <FileText className="h-4 w-4" />
+                                  {!isPurchaseOfficer && <span className="ml-1.5">View PDF</span>}
                                 </Button>
                               </div>
                             </div>
@@ -2747,7 +3020,12 @@ export function RequestDetailsDialog({
                                 group.status === "ordered" &&
                                 group.items.some((i: any) => i.requestId === item._id)
                               );
-                              if (itemPOGroup || itemPendingPOGroup) return null; // Rendered in group card
+                              // Also check if item is part of a sign_rejected PO group
+                              const itemRejectedPOGroup = pendingPOs?.find((group: any) =>
+                                group.status === "sign_rejected" &&
+                                group.items.some((i: any) => i.requestId === item._id)
+                              );
+                              if (itemPOGroup || itemPendingPOGroup || itemRejectedPOGroup) return null; // Rendered in group card
 
                               return (
                                 <div
@@ -2924,7 +3202,27 @@ export function RequestDetailsDialog({
                                   )}
 
                                   {/* Actions Footer for Purchase Officer (Card View) */}
-                                  {isPurchaseOfficer && ["pending_po", "ready_for_delivery", "delivery_stage", "delivered"].includes(item.status) && (
+                                  {isPurchaseOfficer && ["pending_po", "ready_for_delivery", "delivery_stage", "delivered", "ready_for_po", "approved", "recheck", "ready_for_cc", "cc_rejected", "out_for_delivery", "delivery_processing"].includes(item.status) && (
+                                    <div className="p-4 border-t bg-muted/5 w-full">
+                                      <RenderActionSegments item={item} isCard />
+                                    </div>
+                                  )}
+
+                                  {/* Resubmit PO Footer for Purchase Officer (Card View) - Sign Rejected */}
+                                  {isPurchaseOfficer && item.status === "sign_rejected" && onCreatePO && (
+                                    <div className="p-4 border-t bg-muted/5 w-full">
+                                      <Button
+                                        size="sm"
+                                        className="w-full h-10 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-semibold shadow-lg shadow-blue-500/30 hover:shadow-blue-500/50 transition-all hover:scale-[1.02] border-0"
+                                        onClick={(e) => { e.stopPropagation(); onCreatePO([item._id]); }}
+                                      >
+                                        <RefreshCw className="h-4 w-4 mr-2" /> Resubmit PO
+                                      </Button>
+                                    </div>
+                                  )}
+
+                                  {/* Actions Footer for Manager (Card View) - Review CC */}
+                                  {isManager && item.status === "cc_pending" && (
                                     <div className="p-4 border-t bg-muted/5 w-full">
                                       <RenderActionSegments item={item} isCard />
                                     </div>
@@ -4056,6 +4354,13 @@ export function RequestDetailsDialog({
           // Get PO number from first selected item
           requestToPONumber.get(Array.from(selectedDCItems)[0] || "")
         }
+      />
+
+      {/* View DC Dialog */}
+      <ViewDCDialog
+        open={viewDCId !== null}
+        onOpenChange={(open) => !open && setViewDCId(null)}
+        deliveryId={viewDCId}
       />
 
     </div >

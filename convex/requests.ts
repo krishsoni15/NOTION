@@ -1963,7 +1963,7 @@ export const markReadyForDelivery = mutation({
         const newDeliveryTotalAmount = originalTotalAmount * deliveryRatio;
         const newRemainingTotalAmount = originalTotalAmount * remainingRatio;
 
-        // Create new PO for delivery part
+        // Create new PO for delivery part (linked to the new delivery request)
         const { _id: poId, _creationTime: poCreation, ...poData } = po;
 
         await ctx.db.insert("purchaseOrders", {
@@ -1976,7 +1976,7 @@ export const markReadyForDelivery = mutation({
           createdAt: now,
         });
 
-        // Update original PO with remaining amount and quantity
+        // Update original PO with remaining quantity (this is allowed for splits)
         await ctx.db.patch(po._id, {
           quantity: remainingQuantity,
           totalAmount: newRemainingTotalAmount,
@@ -2129,10 +2129,10 @@ export const confirmDelivery = mutation({
     }
 
     // Allow confirming if status is correct
-    // Allow confirming if status is correct
-    const validStatuses = ["out_for_delivery", "delivery_processing", "delivery_stage"];
+    // Allow confirming from pending_po, delivery_processing, out_for_delivery, ready_for_delivery, delivery_stage
+    const validStatuses = ["pending_po", "out_for_delivery", "delivery_processing", "delivery_stage", "ready_for_delivery"];
     if (!validStatuses.includes(request.status)) {
-      throw new Error("Request is not in a delivery stage");
+      throw new Error(`Request is not in a delivery stage: ${request.status}`);
     }
 
     const now = Date.now();

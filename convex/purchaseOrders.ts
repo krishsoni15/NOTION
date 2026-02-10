@@ -144,19 +144,38 @@ export const getDirectPurchaseOrders = query({
 
 /**
  * Get PO details by PO Number (for PDF generation)
+ * Optionally filter by requestId to show only a single item's PO
  */
 export const getPurchaseOrderDetails = query({
-    args: { poNumber: v.string() },
+    args: {
+        poNumber: v.string(),
+        requestId: v.optional(v.id("requests")), // Optional: filter to single item
+        requestIds: v.optional(v.array(v.id("requests"))), // Optional: filter to multiple items
+    },
     handler: async (ctx, args) => {
         const currentUser = await getCurrentUser(ctx);
 
         // Allow authenticated users to view POs (might be site engineer seeing their site's PO, or manager/purchaser)
         if (!currentUser) throw new Error("Unauthorized");
 
-        const pos = await ctx.db
+        let pos = await ctx.db
             .query("purchaseOrders")
             .withIndex("by_po_number", (q) => q.eq("poNumber", args.poNumber))
             .collect();
+
+        if (pos.length === 0) {
+            return null;
+        }
+
+        // Filter logic:
+        // 1. If requestId (singular) is provided, filter to just that item
+        // 2. If requestIds (plural) is provided, filter to any of those items
+        if (args.requestId) {
+            pos = pos.filter(po => po.requestId === args.requestId);
+        } else if (args.requestIds && args.requestIds.length > 0) {
+            // Convert to Set for faster lookup if needed, but array.includes is fine for small lists
+            pos = pos.filter(po => po.requestId && args.requestIds!.includes(po.requestId));
+        }
 
         if (pos.length === 0) {
             return null;
@@ -168,8 +187,10 @@ export const getPurchaseOrderDetails = query({
         const site = firstPO.deliverySiteId ? await ctx.db.get(firstPO.deliverySiteId) : null;
         const creator = await ctx.db.get(firstPO.createdBy);
 
-        // Fetch approver if approved
-        const approver = firstPO.approvedBy ? await ctx.db.get(firstPO.approvedBy) : null;
+        // Fetch approver if approved (only for actual signed/ordered POs)
+        // Don't show signature for pending or rejected POs
+        const isSignedApproved = firstPO.status === "ordered" || firstPO.status === "delivered";
+        const approver = (isSignedApproved && firstPO.approvedBy) ? await ctx.db.get(firstPO.approvedBy) : null;
 
         // Deduplicate items logic
         // 1. Group by requestId to handle exact record duplicates (re-submissions)
@@ -578,8 +599,10 @@ export const createDirectPO = mutation({
             throw new Error("Site not found or inactive");
         }
 
-        // Generate Request Number / PO Number (Shared Sequence) if not provided
-        const idNumber = args.existingRequestNumber || await generateRequestNumber(ctx);
+        // Always generate a NEW unique PO number for each PO creation
+        // The existingRequestNumber is kept for reference/linking but not used as PO number
+        // This ensures each PO has a unique number and PDF shows only items from that specific PO
+        const poNumber = await generateRequestNumber(ctx);
         const now = Date.now();
         const results = [];
 
@@ -601,14 +624,22 @@ export const createDirectPO = mutation({
                 const existingRequest = await ctx.db.get(requestId);
                 if (!existingRequest) throw new Error(`Request ${requestId} not found`);
 
-                // Keep the existing request ID, just update status and details if needed
+                // PROTECTION: Cannot modify requests that are already signed/approved
+                const signedStatuses = ["pending_po", "ordered", "ready_for_delivery", "out_for_delivery", "delivery_processing", "delivery_stage", "delivered"];
+                if (signedStatuses.includes(existingRequest.status)) {
+                    throw new Error(`Cannot modify request - PO has already been signed and approved. Status: ${existingRequest.status}`);
+                }
+
+                // Only allow modification of sign_pending and sign_rejected requests
+                if (!["sign_pending", "sign_rejected", "ready_for_po", "direct_po"].includes(existingRequest.status)) {
+                    throw new Error(`Request is in an invalid status for PO modification: ${existingRequest.status}`);
+                }
+
+                // Keep the existing request ID, just update status and details
                 await ctx.db.patch(requestId, {
                     status: "sign_pending",
                     directAction: "po",
                     updatedAt: now,
-                    // We typically don't change item description/qty of origin request here? 
-                    // But Direct PO form allows editing. If edited, we should probably update the request too 
-                    // to match the PO.
                     itemName: item.itemDescription.split('\n')[0],
                     description: item.itemDescription,
                     quantity: item.quantity,
@@ -617,7 +648,7 @@ export const createDirectPO = mutation({
             } else {
                 // 1. Create Request Record (to maintain ID continuity and appear in Requests board)
                 requestId = await ctx.db.insert("requests", {
-                    requestNumber: idNumber,
+                    requestNumber: poNumber,
                     createdBy: currentUser._id,
                     siteId: args.deliverySiteId,
                     itemName: item.itemDescription.split('\n')[0], // Use first line as title
@@ -658,7 +689,7 @@ export const createDirectPO = mutation({
                 // Update existing PO record instead of creating a duplicate
                 await ctx.db.patch(existingRejectedPO._id, {
                     // Update all fields that might have changed
-                    poNumber: idNumber, // Ensure number matches (should be same)
+                    poNumber: poNumber, // Use new unique PO number
                     deliverySiteId: args.deliverySiteId,
                     vendorId: args.vendorId,
                     itemDescription: item.itemDescription,
@@ -685,7 +716,7 @@ export const createDirectPO = mutation({
             } else {
                 // Create new PO record
                 poId = await ctx.db.insert("purchaseOrders", {
-                    poNumber: idNumber,
+                    poNumber: poNumber,
                     requestId: requestId!, // We know we have it now
                     deliverySiteId: args.deliverySiteId,
                     vendorId: args.vendorId,

@@ -229,7 +229,7 @@ export const upsertCostComparison = mutation({
       throw new Error("Request not found");
     }
 
-    const allowedStatuses = ["approved", "ready_for_cc", "cc_pending", "recheck", "pending"];
+    const allowedStatuses = ["approved", "ready_for_cc", "cc_pending", "cc_rejected", "recheck", "pending"];
     if (!allowedStatuses.includes(request.status)) {
       throw new Error(`Request must be in one of the following statuses: ${allowedStatuses.join(", ")}`);
     }

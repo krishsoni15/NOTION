@@ -62,8 +62,11 @@ export async function uploadImage(
     }
 
     const result = await new Promise<UploadResult>((resolve, reject) => {
-      cloudinary.uploader.upload_stream(
-        uploadOptions,
+      const uploadStream = cloudinary.uploader.upload_stream(
+        {
+          ...uploadOptions,
+          timeout: 120000, // 120 seconds timeout for large files like PDFs
+        },
         (error, result) => {
           if (error) {
             console.error('Cloudinary upload error:', error);
@@ -74,7 +77,8 @@ export async function uploadImage(
             reject(new Error('Upload failed - no result'));
           }
         }
-      ).end(fileBuffer);
+      );
+      uploadStream.end(fileBuffer);
     });
 
     return {

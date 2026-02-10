@@ -32,12 +32,16 @@ interface PDFPreviewDialogProps {
     open: boolean;
     onOpenChange: (open: boolean) => void;
     poNumber: string | null;
+    requestId?: string | null; // Optional: filter to single item
+    requestIds?: string[] | null; // Optional: filter to multiple items
 }
 
 export function PDFPreviewDialog({
     open,
     onOpenChange,
     poNumber,
+    requestId,
+    requestIds,
 }: PDFPreviewDialogProps) {
     const [isDownloading, setIsDownloading] = useState(false);
     const [isPrinting, setIsPrinting] = useState(false);
@@ -46,7 +50,7 @@ export function PDFPreviewDialog({
 
     const poData = useQuery(
         api.purchaseOrders.getPurchaseOrderDetails,
-        poNumber ? { poNumber } : "skip"
+        poNumber ? { poNumber, requestId: requestId as any, requestIds: requestIds as any } : "skip"
     );
 
     const [zoomLevel, setZoomLevel] = useState(1);

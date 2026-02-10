@@ -8,6 +8,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
 import { uploadImage, generateImageKey } from "@/lib/cloudinary/client";
 
+// Allow longer execution time for large file uploads (PDFs, etc.)
+export const maxDuration = 60; // 60 seconds
+
 export async function POST(request: NextRequest) {
     try {
         // Check authentication

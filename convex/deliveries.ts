@@ -182,9 +182,80 @@ export const getDeliveryById = query({
     },
 });
 
+// Get all items (requests) linked to a specific delivery
+export const getDeliveryItems = query({
+    args: { deliveryId: v.id("deliveries") },
+    handler: async (ctx, args) => {
+        // Query all requests that have this deliveryId
+        const items = await ctx.db
+            .query("requests")
+            .collect();
+
+        // Filter by deliveryId (since there's no index for it)
+        return items.filter(item => item.deliveryId === args.deliveryId);
+    },
+});
+
+// Get full delivery details with items
+export const getDeliveryWithItems = query({
+    args: { deliveryId: v.id("deliveries") },
+    handler: async (ctx, args) => {
+        const delivery = await ctx.db.get(args.deliveryId);
+        if (!delivery) return null;
+
+        // Get the PO details
+        const po = await ctx.db.get(delivery.poId);
+
+        // Get vendor details from PO
+        const vendor = po ? await ctx.db.get(po.vendorId) : null;
+
+        // Get all requests linked to this delivery
+        const allRequests = await ctx.db
+            .query("requests")
+            .collect();
+
+        const items = allRequests
+            .filter(item => item.deliveryId === args.deliveryId)
+            .map(item => ({
+                _id: item._id,
+                itemName: item.itemName,
+                quantity: item.quantity,
+                unit: item.unit,
+                description: item.description,
+                status: item.status,
+                deliveryPhotos: item.deliveryPhotos,
+                deliveryNotes: item.deliveryNotes,
+            }));
+
+        // Get creator details
+        const creator = await ctx.db.get(delivery.createdBy);
+
+        return {
+            ...delivery,
+            items,
+            po: po ? {
+                poNumber: po.poNumber,
+                vendorId: po.vendorId,
+            } : null,
+            vendor: vendor ? {
+                companyName: vendor.companyName,
+                contactName: vendor.contactName,
+                phone: vendor.phone,
+            } : null,
+            creator: creator ? {
+                fullName: creator.fullName,
+            } : null,
+        };
+    },
+});
+
 export const confirmDelivery = mutation({
     args: {
         requestId: v.id("requests"),
+        deliveryPhotos: v.optional(v.array(v.object({
+            imageUrl: v.string(),
+            imageKey: v.string(),
+        }))),
     },
     handler: async (ctx, args) => {
         const request = await ctx.db.get(args.requestId);
@@ -192,14 +263,15 @@ export const confirmDelivery = mutation({
             throw new Error("Request not found");
         }
 
-        // Allow confirming from pending_po or delivery_processing status
-        if (!["pending_po", "delivery_processing", "out_for_delivery"].includes(request.status)) {
-            throw new Error("Request is not in a deliverable state");
+        // Allow confirming from pending_po, delivery_processing, out_for_delivery, ready_for_delivery, delivery_stage
+        if (!["pending_po", "delivery_processing", "out_for_delivery", "ready_for_delivery", "delivery_stage"].includes(request.status)) {
+            throw new Error(`Request is not in a deliverable state: ${request.status}`);
         }
 
         // Update status to delivered
         await ctx.db.patch(args.requestId, {
             status: "delivered",
+            deliveryPhotos: args.deliveryPhotos,
             updatedAt: Date.now(),
         });
 

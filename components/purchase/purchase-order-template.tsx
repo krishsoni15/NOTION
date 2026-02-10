@@ -302,27 +302,27 @@ export function PurchaseOrderTemplate({ data }: { data: POData }) {
                 </div>
 
                 {/* Notes & Signature */}
-                <div className="flex border border-[#000000] text-[10px] min-h-[80px]">
+                <div className="flex border border-[#000000] text-[10px]" style={{ minHeight: '80px' }}>
                     <div className="w-[60%] border-r border-[#000000] p-2">
                         <div className="font-bold mb-1">Notes :</div>
                         <div className="uppercase">{data.site?.name}</div>
                         {data.creator?.role === "purchase_officer" && <div className="mt-2" style={{ color: '#6b7280', fontSize: '8px' }}>Created by: {data.creator.fullName}</div>}
                     </div>
-                    <div className="w-[40%] flex flex-col justify-between p-2 text-center">
+                    <div className="w-[40%] flex flex-col p-2 text-center" style={{ position: 'relative' }}>
                         <div className="font-bold text-[9px]">For, NOTION ELECTRONICS PVT LTD</div>
-                        <div className="h-12 flex flex-col items-center justify-center">
-                            {/* Signature Image or Text */}
+                        <div className="flex-1 flex flex-col items-center justify-center" style={{ minHeight: '40px', maxHeight: '50px', overflow: 'hidden' }}>
+                            {/* Signature Image or Text - Only shown for approved POs */}
                             {data.approver?.signatureUrl ? (
                                 <img
                                     src={data.approver.signatureUrl}
                                     alt="Signature"
-                                    className="max-h-10 max-w-[120px] object-contain"
+                                    style={{ maxHeight: '40px', maxWidth: '120px', objectFit: 'contain' }}
                                 />
                             ) : data.approver ? (
                                 <div className="font-script text-lg">{data.approver.fullName}</div>
                             ) : null}
                             {data.approver && (
-                                <div className="text-[8px] text-[#4b5563]">{data.approver.fullName}</div>
+                                <div className="text-[8px]" style={{ color: '#4b5563' }}>{data.approver.fullName}</div>
                             )}
                         </div>
                         <div className="font-bold border-t border-[#000000] pt-1">Authorised Signatory</div>

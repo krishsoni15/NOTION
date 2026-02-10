@@ -155,8 +155,28 @@ export function MessageList({ messages, currentUserId, otherUserId, className }:
   };
 
   const handleFileClick = (url: string, name: string, type?: string) => {
-    // Always open in new tab to leverage browser's native viewer (more reliable than embed)
-    window.open(url, '_blank');
+    // For PDFs on Cloudinary (raw resources), add fl_attachment:false to allow inline viewing
+    let viewUrl = url;
+    if (type === 'application/pdf' && url.includes('cloudinary.com') && url.includes('/raw/upload/')) {
+      // Insert fl_attachment:false after /raw/upload/ to enable inline PDF viewing
+      viewUrl = url.replace('/raw/upload/', '/raw/upload/fl_attachment:false/');
+    }
+    window.open(viewUrl, '_blank');
+  };
+
+  const handleFileDownload = (url: string, name: string) => {
+    // Determine target URL - use our proxy for proper headers
+    const downloadUrl = `/api/download?url=${encodeURIComponent(url)}&filename=${encodeURIComponent(name)}`;
+
+    // Create a temporary anchor to trigger proper download
+    const link = document.createElement('a');
+    link.href = downloadUrl;
+    link.download = name;
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   // Group messages for grid display
@@ -370,29 +390,35 @@ export function MessageList({ messages, currentUserId, otherUserId, className }:
                       )}
 
                       {/* File Render */}
+                      {/* File Render */}
                       {firstMessage.fileUrl && (
-                        <div
-                          className="flex items-center gap-3 p-3 w-[240px] bg-card border border-border/50 rounded-xl cursor-pointer hover:bg-muted/50 transition-colors shadow-sm group"
-                          onClick={() => handleFileClick(firstMessage.fileUrl!, firstMessage.fileName || "Document", firstMessage.fileType)}
-                        >
-                          <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0 text-primary">
-                            {firstMessage.fileType === 'application/pdf' ? <Eye className="h-5 w-5" /> : <FileText className="h-5 w-5" />}
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium truncate text-foreground leading-none mb-1">{firstMessage.fileName || "Document"}</p>
-                            <p className="text-[10px] text-muted-foreground">{firstMessage.fileSize ? (firstMessage.fileSize / 1024).toFixed(1) + ' KB' : 'Unknown size'} • {firstMessage.fileType ? firstMessage.fileType.split('/')[1].toUpperCase() : 'FILE'}</p>
+                        <div className="flex items-center w-[240px] bg-card border border-border/50 rounded-xl shadow-sm transition-all hover:shadow-md group overflow-hidden cursor-pointer">
+                          <div
+                            onClick={() => setPreviewPdf({ url: firstMessage.fileUrl!, name: firstMessage.fileName || "Document" })}
+                            className="flex-1 flex items-center gap-3 p-3 hover:bg-muted/50 transition-colors min-w-0"
+                            title="View Document"
+                          >
+                            <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0 text-primary">
+                              {firstMessage.fileType === 'application/pdf' ? <Eye className="h-5 w-5" /> : <FileText className="h-5 w-5" />}
+                            </div>
+                            <div className="flex-1 min-w-0 text-left">
+                              <p className="text-sm font-medium truncate text-foreground leading-none mb-1">{firstMessage.fileName || "Document"}</p>
+                              <p className="text-[10px] text-muted-foreground">{firstMessage.fileSize ? (firstMessage.fileSize / 1024).toFixed(1) + ' KB' : 'Unknown size'} • {firstMessage.fileType ? firstMessage.fileType.split('/')[1].toUpperCase() : 'FILE'}</p>
+                            </div>
                           </div>
 
-                          {/* Download Button (stop propagation to avoid triggering preview) */}
-                          <div
-                            className="h-8 w-8 rounded-full hover:bg-background/80 flex items-center justify-center transition-colors text-muted-foreground hover:text-foreground"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              window.open(firstMessage.fileUrl, '_blank');
-                            }}
-                            title="Download"
-                          >
-                            <Download className="h-4 w-4" />
+                          {/* Download Button */}
+                          <div className="pr-3 pl-1 self-center">
+                            <div
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleFileDownload(firstMessage.fileUrl!, firstMessage.fileName || 'Document');
+                              }}
+                              className="flex h-8 w-8 rounded-full hover:bg-muted/80 items-center justify-center transition-colors text-muted-foreground hover:text-foreground shrink-0 cursor-pointer"
+                              title="Download"
+                            >
+                              <Download className="h-4 w-4" />
+                            </div>
                           </div>
                         </div>
                       )}
@@ -450,7 +476,7 @@ export function MessageList({ messages, currentUserId, otherUserId, className }:
 
       {/* PDF Preview Dialog */}
       <Dialog open={!!previewPdf} onOpenChange={(open) => !open && setPreviewPdf(null)}>
-        <DialogContent className="max-w-4xl h-[90vh] p-0 flex flex-col gap-0">
+        <DialogContent className="max-w-4xl h-[90vh] p-0 flex flex-col gap-0 bg-background">
           <DialogHeader className="px-4 py-3 border-b flex flex-row items-center justify-between bg-muted/20">
             <DialogTitle className="text-base font-medium truncate pr-8 flex-1">
               {previewPdf?.name || "Document Preview"}
@@ -460,7 +486,7 @@ export function MessageList({ messages, currentUserId, otherUserId, className }:
                 variant="ghost"
                 size="icon"
                 className="h-8 w-8 text-muted-foreground"
-                onClick={() => window.open(previewPdf?.url, '_blank')}
+                onClick={() => previewPdf && window.open(previewPdf.url, '_blank')}
                 title="Download"
               >
                 <Download className="h-4 w-4" />
@@ -475,31 +501,13 @@ export function MessageList({ messages, currentUserId, otherUserId, className }:
               </Button>
             </div>
           </DialogHeader>
-          <div className="flex-1 bg-muted/50 w-full overflow-hidden relative">
+          <div className="flex-1 bg-muted/10 w-full overflow-hidden relative">
             {previewPdf && (
-              <object
-                data={previewPdf.url}
-                type="application/pdf"
-                className="w-full h-full"
-              >
-                <div className="flex flex-col items-center justify-center h-full gap-4 text-center p-6 bg-background">
-                  <div className="rounded-full bg-muted p-4">
-                    <FileText className="h-8 w-8 text-muted-foreground" />
-                  </div>
-                  <div className="space-y-2">
-                    <p className="font-medium text-foreground">Unable to preview PDF</p>
-                    <p className="text-sm text-muted-foreground max-w-xs mx-auto">
-                      Your browser might not support embedding PDFs, or the file is strict about cross-origin embedding.
-                    </p>
-                  </div>
-                  <Button
-                    variant="outline"
-                    onClick={() => window.open(previewPdf.url, '_blank')}
-                  >
-                    Download PDF
-                  </Button>
-                </div>
-              </object>
+              <iframe
+                src={`https://docs.google.com/gview?url=${encodeURIComponent(previewPdf.url)}&embedded=true`}
+                className="w-full h-full border-none"
+                title="PDF Preview"
+              />
             )}
           </div>
         </DialogContent>

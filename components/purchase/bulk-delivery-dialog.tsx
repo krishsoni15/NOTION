@@ -9,17 +9,19 @@ import { Badge } from "@/components/ui/badge";
 import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { toast } from "sonner";
-import { CheckCircle, Package, Loader2, Truck } from "lucide-react";
+import { CheckCircle, Package, Loader2, Truck, TrendingDown, TrendingUp } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Id } from "@/convex/_generated/dataModel";
 
 interface BulkDeliveryItem {
     requestId: Id<"requests">;
     itemName: string;
-    requestedQuantity: number;
+    requestedQuantity: number; // Current request quantity (remaining to deliver)
     unit: string;
-    poQuantity: number;
+    poQuantity: number; // Original PO quantity
     itemOrder?: number;
+    alreadyDelivered?: number; // Already delivered from previous deliveries
+    originalRequested?: number; // Original requested quantity (before any splits)
 }
 
 interface BulkDeliveryDialogProps {
@@ -107,8 +109,10 @@ export function BulkDeliveryDialog({
         }
     };
 
-    // Calculate totals
-    const totalRequested = items.reduce((sum, item) => sum + item.requestedQuantity, 0);
+    // Calculate totals with delivery tracking
+    const totalOriginalRequested = items.reduce((sum, item) => sum + (item.originalRequested || item.poQuantity || item.requestedQuantity), 0);
+    const totalAlreadyDelivered = items.reduce((sum, item) => sum + (item.alreadyDelivered || 0), 0);
+    const totalRemaining = items.reduce((sum, item) => sum + item.requestedQuantity, 0);
     const totalToDeliver = Object.values(deliveryQuantities).reduce((sum, qty) => sum + qty, 0);
 
     return (
@@ -125,14 +129,26 @@ export function BulkDeliveryDialog({
                 </DialogHeader>
 
                 <div className="space-y-4 py-4">
-                    {/* Summary Stats */}
-                    <div className="grid grid-cols-2 gap-4 p-4 bg-muted/30 rounded-lg border">
+                    {/* Summary Stats - Enhanced with delivery tracking */}
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 p-4 bg-muted/30 rounded-lg border">
                         <div className="text-center">
-                            <div className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Total Requested</div>
-                            <div className="text-lg font-bold">{totalRequested}</div>
+                            <div className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">Total Requested</div>
+                            <div className="text-lg font-bold">{totalOriginalRequested}</div>
                         </div>
                         <div className="text-center">
-                            <div className="text-xs text-muted-foreground uppercase tracking-wider mb-1">To Deliver</div>
+                            <div className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1 flex items-center justify-center gap-1">
+                                <TrendingDown className="h-3 w-3 text-blue-500" /> Already Delivered
+                            </div>
+                            <div className="text-lg font-bold text-blue-600">{totalAlreadyDelivered}</div>
+                        </div>
+                        <div className="text-center">
+                            <div className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">Remaining</div>
+                            <div className="text-lg font-bold text-orange-600">{totalRemaining}</div>
+                        </div>
+                        <div className="text-center">
+                            <div className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1 flex items-center justify-center gap-1">
+                                <TrendingUp className="h-3 w-3 text-emerald-500" /> To Deliver Now
+                            </div>
                             <div className="text-lg font-bold text-emerald-600">{totalToDeliver}</div>
                         </div>
                     </div>
@@ -167,9 +183,22 @@ export function BulkDeliveryDialog({
                                         <div className="flex-1 min-w-0">
                                             <h4 className="font-semibold text-base mb-2 truncate">{item.itemName}</h4>
 
-                                            <div className="mb-3">
-                                                <Label className="text-xs text-muted-foreground">Requested Quantity</Label>
-                                                <div className="text-lg font-bold text-blue-600">{item.requestedQuantity} {item.unit}</div>
+                                            {/* Delivery Breakdown */}
+                                            <div className="grid grid-cols-3 gap-2 mb-3 p-2 bg-muted/40 rounded-md">
+                                                <div>
+                                                    <Label className="text-[10px] text-muted-foreground uppercase">Total Requested</Label>
+                                                    <div className="text-sm font-bold">{item.originalRequested || item.poQuantity || item.requestedQuantity} {item.unit}</div>
+                                                </div>
+                                                {(item.alreadyDelivered !== undefined && item.alreadyDelivered > 0) && (
+                                                    <div>
+                                                        <Label className="text-[10px] text-blue-600 uppercase">Already Delivered</Label>
+                                                        <div className="text-sm font-bold text-blue-600">{item.alreadyDelivered} {item.unit}</div>
+                                                    </div>
+                                                )}
+                                                <div>
+                                                    <Label className="text-[10px] text-orange-600 uppercase">Remaining</Label>
+                                                    <div className="text-sm font-bold text-orange-600">{item.requestedQuantity} {item.unit}</div>
+                                                </div>
                                             </div>
 
                                             {/* Quantity Input */}
@@ -236,7 +265,7 @@ export function BulkDeliveryDialog({
 
                     <div className="flex items-center gap-3">
                         <div className="text-sm text-muted-foreground">
-                            Delivering <span className="font-bold text-emerald-600">{totalToDeliver}</span> / {totalRequested} requested
+                            Delivering <span className="font-bold text-emerald-600">{totalToDeliver}</span> / {totalRemaining} remaining
                         </div>
                         <Button
                             onClick={handleSubmit}

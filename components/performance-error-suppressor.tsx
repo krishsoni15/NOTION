@@ -18,7 +18,8 @@ export function PerformanceErrorSuppressor() {
       const errorMessage = args[0]?.toString() || "";
       if (
         errorMessage.includes("Failed to execute 'measure' on 'Performance'") ||
-        errorMessage.includes("cannot have a negative time stamp")
+        errorMessage.includes("cannot have a negative time stamp") ||
+        errorMessage.includes("Failed to connect to MetaMask")
       ) {
         // Suppress this specific error
         return;
@@ -31,7 +32,8 @@ export function PerformanceErrorSuppressor() {
     const handleError = (event: ErrorEvent) => {
       if (
         event.message?.includes("Failed to execute 'measure' on 'Performance'") ||
-        event.message?.includes("cannot have a negative time stamp")
+        event.message?.includes("cannot have a negative time stamp") ||
+        event.message?.includes("Failed to connect to MetaMask")
       ) {
         event.preventDefault();
         return false;

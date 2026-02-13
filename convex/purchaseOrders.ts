@@ -795,6 +795,24 @@ export const createDirectPO = mutation({
             itemOrder++;
         }
 
+        // GRN Log for each created PO
+        for (const poId of results) {
+            const po = await ctx.db.get(poId);
+            if (po && po.requestId) {
+                const request = await ctx.db.get(po.requestId);
+                if (request) {
+                    await ctx.db.insert("request_notes", {
+                        requestNumber: request.requestNumber,
+                        userId: currentUser._id,
+                        role: currentUser.role,
+                        status: "sign_pending",
+                        content: `Purchase Order created (PO#: ${po.poNumber}). Vendor selected. Awaiting Manager signature.`,
+                        createdAt: now,
+                    });
+                }
+            }
+        }
+
         return results[0];
     },
 });
@@ -842,6 +860,24 @@ export const updatePOStatus = mutation({
                 status: reqStatus as any,
                 updatedAt: Date.now()
             });
+
+            // GRN Log
+            const request = await ctx.db.get(po.requestId);
+            if (request) {
+                const statusLabels: Record<string, string> = {
+                    ordered: "PO marked as Ordered",
+                    delivered: "PO marked as Delivered",
+                    cancelled: "PO Cancelled",
+                };
+                await ctx.db.insert("request_notes", {
+                    requestNumber: request.requestNumber,
+                    userId: currentUser._id,
+                    role: currentUser.role,
+                    status: reqStatus,
+                    content: `${statusLabels[args.status] || args.status} (PO#: ${po.poNumber})`,
+                    createdAt: Date.now(),
+                });
+            }
         }
 
         return args.poId;
@@ -882,6 +918,19 @@ export const cancelPO = mutation({
                 status: "rejected",
                 updatedAt: Date.now()
             });
+
+            // GRN Log
+            const request = await ctx.db.get(po.requestId);
+            if (request) {
+                await ctx.db.insert("request_notes", {
+                    requestNumber: request.requestNumber,
+                    userId: currentUser._id,
+                    role: currentUser.role,
+                    status: "rejected",
+                    content: `PO Cancelled (PO#: ${po.poNumber}). Request status set to Rejected.`,
+                    createdAt: Date.now(),
+                });
+            }
         }
 
         return args.poId;
@@ -925,6 +974,19 @@ export const approveDirectPO = mutation({
                 approvedAt: now,
                 updatedAt: now,
             });
+
+            // GRN Log
+            const request = await ctx.db.get(po.requestId);
+            if (request) {
+                await ctx.db.insert("request_notes", {
+                    requestNumber: request.requestNumber,
+                    userId: currentUser._id,
+                    role: currentUser.role,
+                    status: "pending_po",
+                    content: `PO Digitally Signed & Approved by Manager (PO#: ${po.poNumber}). Status → Pending PO.`,
+                    createdAt: now,
+                });
+            }
         }
     },
 });
@@ -1030,6 +1092,19 @@ export const approveDirectPOByRequest = mutation({
             approvedAt: now,
             updatedAt: now,
         });
+
+        // AUDIT LOG: PO Signed
+        const request = await ctx.db.get(args.requestId);
+        if (request) {
+            await ctx.db.insert("request_notes", {
+                requestNumber: request.requestNumber,
+                userId: currentUser._id,
+                role: currentUser.role,
+                status: "pending_po",
+                content: `PO Digitally Signed by Manager for Request. Status → Pending PO.`,
+                createdAt: now,
+            });
+        }
     },
 });
 

@@ -160,6 +160,21 @@ export const createDelivery = mutation({
             }
         }
 
+        // GRN Log for each item in the delivery
+        for (const item of items) {
+            const request = await ctx.db.get(item.requestId);
+            if (request) {
+                await ctx.db.insert("request_notes", {
+                    requestNumber: request.requestNumber,
+                    userId: officer._id,
+                    role: officer.role,
+                    status: "out_for_delivery",
+                    content: `Delivery Challan created (${deliveryIdStr}). ${item.quantity} ${request.unit || 'units'} dispatched via ${args.deliveryType} transport. Vehicle: ${args.vehicleNumber || 'N/A'}.`,
+                    createdAt: now,
+                });
+            }
+        }
+
         return deliveryId;
     },
 });
@@ -285,6 +300,25 @@ export const confirmDelivery = mutation({
             deliveryPhotos: args.deliveryPhotos,
             updatedAt: Date.now(),
         });
+
+        // GRN Log
+        const user = await ctx.auth.getUserIdentity();
+        if (user) {
+            const dbUser = await ctx.db
+                .query("users")
+                .withIndex("by_clerk_user_id", (q) => q.eq("clerkUserId", user.subject))
+                .first();
+            if (dbUser) {
+                await ctx.db.insert("request_notes", {
+                    requestNumber: request.requestNumber,
+                    userId: dbUser._id,
+                    role: dbUser.role,
+                    status: "delivered",
+                    content: `Delivery confirmed${args.deliveryPhotos?.length ? ` with ${args.deliveryPhotos.length} photo(s)` : ''}. Item received at site.`,
+                    createdAt: Date.now(),
+                });
+            }
+        }
 
         return { success: true };
     },

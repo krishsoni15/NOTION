@@ -316,6 +316,16 @@ export const submitCostComparison = mutation({
         status: "cc_pending",
         updatedAt: now,
       });
+
+      // GRN Log
+      await ctx.db.insert("request_notes", {
+        requestNumber: request.requestNumber,
+        userId: currentUser._id,
+        role: currentUser.role,
+        status: "cc_pending",
+        content: `Cost Comparison submitted for Manager review (${costComparison.vendorQuotes.length} vendor quote(s)).`,
+        createdAt: now,
+      });
     }
 
     return { success: true };
@@ -385,19 +395,17 @@ export const reviewCostComparison = mutation({
         updatedAt: now,
       });
 
-      // Add approval note to timeline if provided
-      if (args.notes && args.notes.trim()) {
-        const request = await ctx.db.get(args.requestId);
-        if (request) {
-          await ctx.db.insert("request_notes", {
-            requestNumber: request.requestNumber,
-            userId: currentUser._id,
-            role: currentUser.role,
-            status: "cc_approved",
-            content: `CC Approved: ${args.notes.trim()}`,
-            createdAt: now,
-          });
-        }
+      // Add approval note to timeline
+      const request = await ctx.db.get(args.requestId);
+      if (request) {
+        await ctx.db.insert("request_notes", {
+          requestNumber: request.requestNumber,
+          userId: currentUser._id,
+          role: currentUser.role,
+          status: "cc_approved",
+          content: `CC Approved. Vendor selected. Status → Ready for PO.${args.notes ? ` Notes: ${args.notes.trim()}` : ''}`,
+          createdAt: now,
+        });
       }
     } else {
       // Reject - require notes
@@ -494,6 +502,19 @@ export const resubmitCostComparison = mutation({
       status: "cc_pending",
       updatedAt: now,
     });
+
+    // GRN Log
+    const request = await ctx.db.get(args.requestId);
+    if (request) {
+      await ctx.db.insert("request_notes", {
+        requestNumber: request.requestNumber,
+        userId: currentUser._id,
+        role: currentUser.role,
+        status: "cc_pending",
+        content: `Cost Comparison resubmitted after rejection (${args.vendorQuotes.length} vendor quote(s)). Awaiting Manager review.`,
+        createdAt: now,
+      });
+    }
 
     return { success: true };
   },

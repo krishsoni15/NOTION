@@ -440,6 +440,10 @@ export default defineSchema({
     userId: v.id("users"), // The author of the note
     role: v.string(), // Author's role at the time (e.g. site_engineer, manager)
     status: v.optional(v.string()), // Request status at the time of note (e.g. draft, pending)
+    type: v.optional(v.union(
+      v.literal("note"), // Manual user note
+      v.literal("log")   // System audit log
+    )),
     content: v.string(), // The note content
     createdAt: v.number(), // Timestamp
   })

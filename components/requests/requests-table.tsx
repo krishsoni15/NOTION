@@ -29,7 +29,7 @@ import {
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { ExpandableText } from "@/components/ui/expandable-text";
-import { Eye, AlertCircle, FileText, Edit, Trash2, Send, ChevronDown, ChevronUp, ChevronRight, MapPin, Package, PackageX, Sparkles, NotebookPen, LayoutGrid, Table as TableIcon, ShoppingCart, Truck, Clock, CheckCircle2, CheckCircle, XCircle, Loader2, Pencil, RefreshCw, PieChart } from "lucide-react";
+import { Eye, AlertCircle, FileText, Edit, Trash2, Send, ChevronDown, ChevronUp, ChevronRight, MapPin, Package, PackageX, Sparkles, NotebookPen, ScrollText, LayoutGrid, Table as TableIcon, ShoppingCart, Truck, Clock, CheckCircle2, CheckCircle, XCircle, Loader2, Pencil, RefreshCw, PieChart } from "lucide-react";
 import { CompactImageGallery } from "@/components/ui/image-gallery";
 import { LazyImage } from "@/components/ui/lazy-image";
 import { cn, normalizeSearchQuery, matchesAnySearchQuery } from "@/lib/utils";
@@ -39,6 +39,7 @@ import { UserInfoDialog } from "./user-info-dialog";
 import { ItemInfoDialog } from "./item-info-dialog";
 import { LocationInfoDialog } from "@/components/locations/location-info-dialog";
 import { NotesTimelineDialog } from "./notes-timeline-dialog";
+import { GRNAuditDialog } from "./grn-audit-dialog";
 import { PDFPreviewDialog } from "@/components/purchase/pdf-preview-dialog";
 import type { Id } from "@/convex/_generated/dataModel";
 import { EditPOQuantityDialog } from "@/components/purchase/edit-po-quantity-dialog";
@@ -262,6 +263,7 @@ export function RequestsTable({
   const [selectedSiteId, setSelectedSiteId] = useState<Id<"sites"> | null>(null);
 
   const [selectedRequestNumberForNotes, setSelectedRequestNumberForNotes] = useState<string | null>(null);
+  const [selectedRequestNumberForGRN, setSelectedRequestNumberForGRN] = useState<string | null>(null);
   const [pdfPreviewPoNumber, setPdfPreviewPoNumber] = useState<string | null>(null);
 
   // Confirmation Dialog States
@@ -1092,7 +1094,7 @@ export function RequestsTable({
                 </div>
 
                 <div className="flex flex-wrap items-center gap-1 sm:gap-1.5 pr-0 sm:pr-1 order-2 justify-end sm:justify-start ml-auto sm:ml-0">
-                  {/* Notes Button */}
+                  {/* Notes Button - Original */}
                   <Button
                     variant="ghost"
                     size="sm"
@@ -1106,6 +1108,18 @@ export function RequestsTable({
                         {items[0].notesCount}
                       </span>
                     )}
+                  </Button>
+
+                  {/* GRN Button - New */}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={(e) => { e.stopPropagation(); setSelectedRequestNumberForGRN(firstItem.requestNumber); }}
+                    className="h-8 px-2.5 gap-1.5 rounded-full text-muted-foreground hover:text-foreground hover:bg-white dark:hover:bg-slate-800 relative shadow-sm border border-transparent hover:border-border transition-all ml-1"
+                    title="View GRN Audit Trail"
+                  >
+                    <ScrollText className="h-4 w-4" />
+                    <span className="text-xs font-semibold">GRN</span>
                   </Button>
 
                   {/* Draft Actions */}
@@ -1464,6 +1478,33 @@ export function RequestsTable({
                         {/* Actions */}
                         <TableCell className="text-right py-4">
                           <div className="flex justify-end gap-1">
+                            {/* Notes Button */}
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={(e) => { e.stopPropagation(); setSelectedRequestNumberForNotes(firstItem.requestNumber); }}
+                              className="h-8 w-8 p-0 rounded-full text-muted-foreground hover:text-foreground hover:bg-slate-100 dark:hover:bg-slate-800 relative"
+                              title="View Notes"
+                            >
+                              <NotebookPen className="h-4 w-4" />
+                              {items[0].notesCount && items[0].notesCount > 0 && (
+                                <span className="absolute -top-1 -right-1 flex h-2.5 w-2.5 items-center justify-center rounded-full bg-destructive text-[7px] text-destructive-foreground ring-1 ring-background">
+                                  {items[0].notesCount}
+                                </span>
+                              )}
+                            </Button>
+
+                            {/* GRN Button */}
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={(e) => { e.stopPropagation(); setSelectedRequestNumberForGRN(firstItem.requestNumber); }}
+                              className="h-8 w-8 p-0 rounded-full text-muted-foreground hover:text-foreground hover:bg-slate-100 dark:hover:bg-slate-800"
+                              title="View GRN Audit Trail"
+                            >
+                              <ScrollText className="h-4 w-4" />
+                            </Button>
+
                             {firstItem.status === "draft" ? (
                               <>
                                 {onViewDetails && (
@@ -1930,6 +1971,19 @@ export function RequestsTable({
             open={!!selectedRequestNumberForNotes}
             onOpenChange={(open) => {
               if (!open) setSelectedRequestNumberForNotes(null);
+            }}
+          />
+        )
+      }
+
+      {/* GRN Audit Dialog */}
+      {
+        selectedRequestNumberForGRN && (
+          <GRNAuditDialog
+            requestNumber={selectedRequestNumberForGRN}
+            open={!!selectedRequestNumberForGRN}
+            onOpenChange={(open) => {
+              if (!open) setSelectedRequestNumberForGRN(null);
             }}
           />
         )

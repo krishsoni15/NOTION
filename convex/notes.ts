@@ -1,5 +1,76 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
+import { getAuthUserId } from "@convex-dev/auth/server";
+
+/**
+ * Get ALL GRN logs across all requests (for the GRN Logs page)
+ * Returns the most recent logs first, enriched with user details
+ */
+export const getAllGRNLogs = query({
+    args: {},
+    handler: async (ctx) => {
+        const userId = await getAuthUserId(ctx);
+        if (!userId) return [];
+
+        const currentUser = await ctx.db
+            .query("users")
+            .withIndex("by_clerk_user_id", (q: any) => q.eq("clerkUserId", userId))
+            .unique();
+
+        if (!currentUser) return [];
+
+        // Only managers and purchase officers can view all GRN logs
+        if (currentUser.role !== "manager" && currentUser.role !== "purchase_officer") {
+            // Site engineers see only their own request logs
+            // Get their requests first
+            const myRequests = await ctx.db
+                .query("requests")
+                .withIndex("by_created_by", (q) => q.eq("createdBy", currentUser._id))
+                .collect();
+
+            const myRequestNumbers = new Set(myRequests.map(r => r.requestNumber));
+
+            const allNotes = await ctx.db
+                .query("request_notes")
+                .withIndex("by_created_at")
+                .order("desc")
+                .collect();
+
+            const filtered = allNotes.filter(n => myRequestNumbers.has(n.requestNumber));
+            const limited = filtered.slice(0, 500);
+
+            return await Promise.all(
+                limited.map(async (note) => {
+                    const user = await ctx.db.get(note.userId);
+                    return {
+                        ...note,
+                        userName: user?.fullName || "Unknown User",
+                        userRole: user?.role || note.role,
+                    };
+                })
+            );
+        }
+
+        // Managers & POs see all logs
+        const allNotes = await ctx.db
+            .query("request_notes")
+            .withIndex("by_created_at")
+            .order("desc")
+            .take(500);
+
+        return await Promise.all(
+            allNotes.map(async (note) => {
+                const user = await ctx.db.get(note.userId);
+                return {
+                    ...note,
+                    type: note.type || "note", // Default to note if undefined (backward compatibility)
+                    userName: user?.fullName || "Unknown User",
+                    userRole: user?.role || note.role,
+                };
+            })
+        );
+    },
+});
 
 export const getNotes = query({
     args: { requestNumber: v.string() },
@@ -18,6 +89,7 @@ export const getNotes = query({
                 const user = await ctx.db.get(note.userId);
                 return {
                     ...note,
+                    type: note.type || "note", // Default to note
                     userName: user?.fullName || "Unknown User",
                     userRole: user?.role || note.role,
                 };
@@ -54,6 +126,7 @@ export const addNote = mutation({
             userId: user._id,
             role: user.role,
             status: request?.status,
+            type: "note",
             content: args.content,
             createdAt: Date.now(),
         });

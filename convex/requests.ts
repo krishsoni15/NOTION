@@ -1131,6 +1131,16 @@ export const saveMultipleMaterialRequestsAsDraft = mutation({
       });
     }
 
+    // AUDIT LOG: Draft Created
+    await ctx.db.insert("request_notes", {
+      requestNumber,
+      userId: currentUser._id,
+      role: currentUser.role,
+      status: "draft",
+      content: `Draft created with ${args.items.length} item(s).`,
+      createdAt: now,
+    });
+
     return { requestIds, requestNumber };
   },
 });
@@ -1225,6 +1235,9 @@ export const updateRequestStatus = mutation({
 
     await ctx.db.patch(args.requestId, updates);
 
+
+
+    return { success: true };
     // Add rejection note to timeline
     if (args.status === "rejected" && args.rejectionReason) {
       // Check if a similar note was just added to avoid duplicates if multiple calls happen quickly
@@ -1326,6 +1339,24 @@ export const bulkUpdateRequestStatus = mutation({
 
         await ctx.db.patch(requestId, updates);
         processedRequestNumbers.add(request.requestNumber);
+
+        // AUDIT LOG: Bulk Action (Individual)
+        let logContent = "";
+        if (args.status === "approved") logContent = "Bulk Approved by Manager.";
+        else if (args.status === "direct_po") logContent = "Bulk Marked for Direct PO.";
+        else if (args.status === "delivery_stage") logContent = "Bulk Marked for Delivery Stage.";
+        else if (args.status === "recheck") logContent = "Bulk Sent for Recheck.";
+
+        if (logContent) {
+          await ctx.db.insert("request_notes", {
+            requestNumber: request.requestNumber,
+            userId: currentUser._id,
+            role: currentUser.role,
+            status: newStatus,
+            content: logContent,
+            createdAt: now,
+          });
+        }
       })
     );
 
@@ -1438,6 +1469,9 @@ export const sendDraftRequest = mutation({
         content: note.content,
         createdAt: note.createdAt,
       });
+
+      // Delete the old note to prevent it from showing up in future drafts if draft ID is reused
+      await ctx.db.delete(note._id);
     }
 
     // Create order note if provided and not a duplicate of the latest draft note
@@ -1455,6 +1489,16 @@ export const sendDraftRequest = mutation({
         createdAt: now,
       });
     }
+
+    // AUDIT LOG: Request Sent
+    await ctx.db.insert("request_notes", {
+      requestNumber: newRequestNumber, // Log against the NEW number
+      userId: currentUser._id,
+      role: currentUser.role,
+      status: "pending",
+      content: `Request submitted (converted from Draft ${args.requestNumber} to Pending).`,
+      createdAt: now,
+    });
 
     return { success: true, requestNumber: newRequestNumber };
   },
@@ -1489,6 +1533,16 @@ export const deleteDraftRequest = mutation({
     const allDrafts = requests.every((req) => req.status === "draft" && req.createdBy === currentUser._id);
     if (!allDrafts) {
       throw new Error("Unauthorized: You can only delete your own drafts");
+    }
+
+    // Delete all linked request_notes to prevent history pollution when ID is reused
+    const draftNotes = await ctx.db
+      .query("request_notes")
+      .withIndex("by_request_number", (q) => q.eq("requestNumber", args.requestNumber))
+      .collect();
+
+    for (const note of draftNotes) {
+      await ctx.db.delete(note._id);
     }
 
     // Delete all requests
@@ -1577,6 +1631,25 @@ export const updateDraftRequest = mutation({
     }
 
     // Create new requests with same draft number
+    // Check for existing partial draft - append to it if exists, OR if reusing the number, ensure it's clean
+    const existingRequests = await ctx.db
+      .query("requests")
+      .withIndex("by_request_number", (q) => q.eq("requestNumber", requestNumber))
+      .collect();
+
+    if (existingRequests.length === 0) {
+      // This is a NEW draft (or reused ID after deletion).
+      // Ensure no orphaned notes exist from previous usage of this ID.
+      const orphanedNotes = await ctx.db
+        .query("request_notes")
+        .withIndex("by_request_number", (q) => q.eq("requestNumber", requestNumber))
+        .collect();
+
+      for (const note of orphanedNotes) {
+        await ctx.db.delete(note._id);
+      }
+    }
+
     const requestIds: Id<"requests">[] = [];
     for (let i = 0; i < args.items.length; i++) {
       const item = args.items[i];
@@ -1696,6 +1769,16 @@ export const markDelivery = mutation({
       updatedAt: now,
     });
 
+    // GRN Log
+    await ctx.db.insert("request_notes", {
+      requestNumber: request.requestNumber,
+      userId: currentUser._id,
+      role: currentUser.role,
+      status: "delivered",
+      content: `Delivery confirmed by Site Engineer. ${inventoryItem ? `Inventory stock updated for ${request.itemName} (+${request.quantity} ${request.unit || 'units'})` : `New inventory item created: ${request.itemName}`}`,
+      createdAt: now,
+    });
+
     return { success: true };
   },
 });
@@ -1727,9 +1810,20 @@ export const directToPO = mutation({
       throw new Error("Can only use direct to PO for approved requests ready for cost comparison or recheck");
     }
 
+    const now = Date.now();
     await ctx.db.patch(args.requestId, {
       status: "ready_for_po",
-      updatedAt: Date.now(),
+      updatedAt: now,
+    });
+
+    // GRN Log
+    await ctx.db.insert("request_notes", {
+      requestNumber: request.requestNumber,
+      userId: currentUser._id,
+      role: currentUser.role,
+      status: "ready_for_po",
+      content: `Direct to PO: Skipped cost comparison. Item moved to Ready for PO.`,
+      createdAt: now,
     });
 
     return { success: true };
@@ -1792,6 +1886,47 @@ export const updateRequestDetails = mutation({
 
     await ctx.db.patch(args.requestId, updates);
 
+    await ctx.db.patch(args.requestId, updates);
+
+    // AUDIT LOG: Status Change
+    let logContent = "";
+    if (args.status === "approved") logContent = "Request Approved by Manager. Moved to Recheck/Cost Comparison.";
+    else if (args.status === "direct_po") logContent = "Marked for Direct PO by Manager.";
+    else if (args.status === "delivery_stage") logContent = "Marked for Delivery Stage by Manager.";
+    else if (args.status === "ready_for_po") logContent = "Marked as Ready for PO by Purchase Officer.";
+    else if (args.status === "recheck") logContent = "Sent for Recheck.";
+
+    if (logContent) {
+      await ctx.db.insert("request_notes", {
+        requestNumber: request.requestNumber,
+        userId: currentUser._id,
+        role: currentUser.role,
+        status: newStatus,
+        content: logContent,
+        createdAt: now,
+      });
+    }
+
+    // AUDIT LOG: Details Updated matches...
+    const changes = [];
+    if (args.quantity !== undefined && args.quantity !== request.quantity) changes.push(`Quantity: ${request.quantity} -> ${args.quantity}`);
+    if (args.unit !== undefined && args.unit !== request.unit) changes.push(`Unit: ${request.unit} -> ${args.unit}`);
+    if (args.itemName !== undefined && args.itemName !== request.itemName) changes.push(`Item Name: ${request.itemName} -> ${args.itemName}`);
+    if (args.description !== undefined && args.description !== request.description) changes.push(`Description updated`);
+    if (args.isSplitApproved !== undefined) changes.push(`Split Approval: ${args.isSplitApproved ? 'Approved' : 'Revoked'}`);
+    if (args.directAction !== undefined) changes.push(`Action Trigger: ${args.directAction}`);
+
+    if (changes.length > 0) {
+      await ctx.db.insert("request_notes", {
+        requestNumber: request.requestNumber,
+        userId: currentUser._id,
+        role: currentUser.role,
+        status: request.status,
+        content: `Request details updated: ${changes.join(", ")}`,
+        createdAt: Date.now(),
+      });
+    }
+
     return { success: true };
   },
 });
@@ -1853,6 +1988,28 @@ export const updatePurchaseRequestStatus = mutation({
       updatedAt: now,
     });
 
+    // GRN Log
+    const statusLabels: Record<string, string> = {
+      ready_for_cc: "Ready for Cost Comparison",
+      cc_pending: "CC Submitted for Review",
+      cc_approved: "CC Approved",
+      cc_rejected: "CC Rejected",
+      ready_for_po: "Ready for Purchase Order",
+      pending_po: "PO Ordered",
+      rejected_po: "PO Rejected",
+      ready_for_delivery: "Ready for Delivery",
+      delivered: "Delivered",
+      recheck: "Sent for Recheck",
+    };
+    await ctx.db.insert("request_notes", {
+      requestNumber: request.requestNumber,
+      userId: currentUser._id,
+      role: currentUser.role,
+      status: args.status,
+      content: `Status changed: ${currentStatus} → ${statusLabels[args.status] || args.status}`,
+      createdAt: now,
+    });
+
     return { success: true };
   },
 });
@@ -1909,9 +2066,20 @@ export const splitAndDeliverInventory = mutation({
     });
 
     // 3. Update original request (remaining quantity)
+    const remainingQty = request.quantity - args.inventoryQuantity;
     await ctx.db.patch(request._id, {
-      quantity: request.quantity - args.inventoryQuantity,
+      quantity: remainingQty,
       updatedAt: now,
+    });
+
+    // GRN Log
+    await ctx.db.insert("request_notes", {
+      requestNumber: request.requestNumber,
+      userId: currentUser._id,
+      role: currentUser.role,
+      status: request.status,
+      content: `Split & Deliver: ${args.inventoryQuantity} ${request.unit || 'units'} from inventory (stock deducted), ${remainingQty} ${request.unit || 'units'} remaining for purchase.`,
+      createdAt: now,
     });
 
     return { deliveryRequestId };
@@ -2014,6 +2182,18 @@ export const markReadyForDelivery = mutation({
         updatedAt: now,
       });
     }
+
+    // GRN Log
+    await ctx.db.insert("request_notes", {
+      requestNumber: request.requestNumber,
+      userId: currentUser._id,
+      role: currentUser.role,
+      status: "ready_for_delivery",
+      content: isSplit
+        ? `Partial delivery: ${args.deliveryQuantity} ${request.unit || 'units'} marked ready for delivery. ${remainingQuantity} ${request.unit || 'units'} remaining on PO.`
+        : `Full quantity (${args.deliveryQuantity} ${request.unit || 'units'}) marked ready for delivery.`,
+      createdAt: now,
+    });
   },
 });
 

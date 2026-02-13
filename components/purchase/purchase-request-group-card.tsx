@@ -15,7 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { AlertCircle, Eye, FileText, MapPin, Search, X, Sparkles, Building, Plus, Save, Edit, Check, Truck, Package, PackageX, NotebookPen, ShoppingCart, ChevronDown, ChevronRight, CheckCircle, PieChart, RotateCw, CheckSquare, Square } from "lucide-react";
+import { AlertCircle, Eye, FileText, MapPin, Search, X, Sparkles, Building, Plus, Save, Edit, Check, Truck, Package, PackageX, NotebookPen, ScrollText, ShoppingCart, ChevronDown, ChevronRight, CheckCircle, PieChart, RotateCw, CheckSquare, Square } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { CompactImageGallery } from "@/components/ui/image-gallery";
 import { UserProfile } from "@/components/chat/user-profile";
@@ -26,6 +26,7 @@ import { useUserPresence } from "@/hooks/use-presence";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { NotesTimelineDialog } from "@/components/requests/notes-timeline-dialog";
+import { GRNAuditDialog } from "@/components/requests/grn-audit-dialog";
 import { CreateDeliveryDialog } from "@/components/purchase/create-delivery-dialog";
 import { CreateDCMultiDialog } from "@/components/purchase/create-dc-multi-dialog";
 import { EditPOQuantityDialog } from "@/components/purchase/edit-po-quantity-dialog";
@@ -582,6 +583,7 @@ export function PurchaseRequestGroupCard({
   const [editingItemId, setEditingItemId] = useState<Id<"requests"> | null>(null);
   const [itemsWithVendor, setItemsWithVendor] = useState<ItemWithVendor[]>([]);
   const [isNotesOpen, setIsNotesOpen] = useState(false);
+  const [isGRNOpen, setIsGRNOpen] = useState(false);
   const [vendorSearchQuery, setVendorSearchQuery] = useState("");
   const [isExpanded, setIsExpanded] = useState(false);
   const [showReadyForCCConfirm, setShowReadyForCCConfirm] = useState<Id<"requests"> | null>(null);
@@ -910,6 +912,17 @@ export function PurchaseRequestGroupCard({
                 {firstItem.notesCount}
               </span>
             )}
+          </Button>
+
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setIsGRNOpen(true)}
+            className="relative h-8 px-2.5 gap-1.5 rounded-md hover:bg-muted border border-transparent hover:border-border text-muted-foreground hover:text-foreground"
+            title="View GRN Audit Trail"
+          >
+            <ScrollText className="h-4 w-4" />
+            <span className="text-xs font-semibold">GRN</span>
           </Button>
 
 
@@ -1531,6 +1544,13 @@ export function PurchaseRequestGroupCard({
         requestNumber={requestNumber}
         open={isNotesOpen}
         onOpenChange={setIsNotesOpen}
+      />
+
+      {/* GRN Audit Trail Dialog */}
+      <GRNAuditDialog
+        requestNumber={requestNumber}
+        open={isGRNOpen}
+        onOpenChange={setIsGRNOpen}
       />
 
       {

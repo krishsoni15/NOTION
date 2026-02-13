@@ -22,6 +22,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Building2,
+  ScrollText,
 } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
@@ -58,6 +59,12 @@ const navigationItems: NavigationItem[] = [
     label: "Inventory",
     href: "/dashboard/inventory",
     icon: Warehouse,
+    roles: [ROLES.SITE_ENGINEER],
+  },
+  {
+    label: "GRN Logs",
+    href: "/dashboard/grn-logs",
+    icon: ScrollText,
     roles: [ROLES.SITE_ENGINEER],
   },
 
@@ -98,6 +105,12 @@ const navigationItems: NavigationItem[] = [
     icon: Building2,
     roles: [ROLES.MANAGER],
   },
+  {
+    label: "GRN Logs",
+    href: "/dashboard/grn-logs",
+    icon: ScrollText,
+    roles: [ROLES.MANAGER],
+  },
 
   // Purchase Officer - Logical sequence: Dashboard → Requests → Inventory → Vendors
   {
@@ -122,6 +135,12 @@ const navigationItems: NavigationItem[] = [
     label: "Vendors",
     href: "/dashboard/vendors",
     icon: Store,
+    roles: [ROLES.PURCHASE_OFFICER],
+  },
+  {
+    label: "GRN Logs",
+    href: "/dashboard/grn-logs",
+    icon: ScrollText,
     roles: [ROLES.PURCHASE_OFFICER],
   },
 ];

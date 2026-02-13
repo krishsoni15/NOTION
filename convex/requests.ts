@@ -1235,15 +1235,12 @@ export const updateRequestStatus = mutation({
 
     await ctx.db.patch(args.requestId, updates);
 
-
-
-    return { success: true };
     // Add rejection note to timeline
     if (args.status === "rejected" && args.rejectionReason) {
       // Check if a similar note was just added to avoid duplicates if multiple calls happen quickly
       const recentNotes = await ctx.db
         .query("request_notes")
-        .withIndex("by_request_number", (q) => q.eq("requestNumber", request.requestNumber))
+        .withIndex("by_request_number", (q) => q.eq("requestNumber", request!.requestNumber))
         .order("desc")
         .take(1);
 
@@ -1630,26 +1627,6 @@ export const updateDraftRequest = mutation({
       await ctx.db.delete(request._id);
     }
 
-    // Create new requests with same draft number
-    // Check for existing partial draft - append to it if exists, OR if reusing the number, ensure it's clean
-    const existingRequests = await ctx.db
-      .query("requests")
-      .withIndex("by_request_number", (q) => q.eq("requestNumber", requestNumber))
-      .collect();
-
-    if (existingRequests.length === 0) {
-      // This is a NEW draft (or reused ID after deletion).
-      // Ensure no orphaned notes exist from previous usage of this ID.
-      const orphanedNotes = await ctx.db
-        .query("request_notes")
-        .withIndex("by_request_number", (q) => q.eq("requestNumber", requestNumber))
-        .collect();
-
-      for (const note of orphanedNotes) {
-        await ctx.db.delete(note._id);
-      }
-    }
-
     const requestIds: Id<"requests">[] = [];
     for (let i = 0; i < args.items.length; i++) {
       const item = args.items[i];
@@ -1886,26 +1863,7 @@ export const updateRequestDetails = mutation({
 
     await ctx.db.patch(args.requestId, updates);
 
-    await ctx.db.patch(args.requestId, updates);
 
-    // AUDIT LOG: Status Change
-    let logContent = "";
-    if (args.status === "approved") logContent = "Request Approved by Manager. Moved to Recheck/Cost Comparison.";
-    else if (args.status === "direct_po") logContent = "Marked for Direct PO by Manager.";
-    else if (args.status === "delivery_stage") logContent = "Marked for Delivery Stage by Manager.";
-    else if (args.status === "ready_for_po") logContent = "Marked as Ready for PO by Purchase Officer.";
-    else if (args.status === "recheck") logContent = "Sent for Recheck.";
-
-    if (logContent) {
-      await ctx.db.insert("request_notes", {
-        requestNumber: request.requestNumber,
-        userId: currentUser._id,
-        role: currentUser.role,
-        status: newStatus,
-        content: logContent,
-        createdAt: now,
-      });
-    }
 
     // AUDIT LOG: Details Updated matches...
     const changes = [];

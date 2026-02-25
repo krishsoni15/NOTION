@@ -909,10 +909,10 @@ export const createMaterialRequest = mutation({
  */
 export const createMultipleMaterialRequests = mutation({
   args: {
-    siteId: v.id("sites"),
     requiredBy: v.number(),
     items: v.array(
       v.object({
+        siteId: v.id("sites"),
         itemName: v.string(),
         description: v.string(),
         quantity: v.number(),
@@ -937,19 +937,6 @@ export const createMultipleMaterialRequests = mutation({
     // Only site engineers can create requests
     if (currentUser.role !== "site_engineer") {
       throw new Error("Unauthorized: Only site engineers can create requests");
-    }
-
-    // Verify site exists and is assigned to user
-    const site = await ctx.db.get(args.siteId);
-    if (!site || !site.isActive) {
-      throw new Error("Site not found or inactive");
-    }
-
-    if (
-      !currentUser.assignedSites ||
-      !currentUser.assignedSites.includes(args.siteId)
-    ) {
-      throw new Error("Unauthorized: Site not assigned to you");
     }
 
     if (args.items.length === 0) {
@@ -982,10 +969,23 @@ export const createMultipleMaterialRequests = mutation({
     // Create all requests with the same request number
     for (let i = 0; i < args.items.length; i++) {
       const item = args.items[i];
+
+      // Verify each item's site exists and is assigned to user
+      const site = await ctx.db.get(item.siteId);
+      if (!site || !site.isActive) {
+        throw new Error(`Item ${i + 1}: Site not found or inactive`);
+      }
+      if (
+        !currentUser.assignedSites ||
+        !currentUser.assignedSites.includes(item.siteId)
+      ) {
+        throw new Error(`Item ${i + 1}: Site not assigned to you`);
+      }
+
       const requestId = await ctx.db.insert("requests", {
         requestNumber,
         createdBy: currentUser._id,
-        siteId: args.siteId,
+        siteId: item.siteId,
         itemName: item.itemName,
         description: item.description,
         specsBrand: undefined,
@@ -1024,10 +1024,10 @@ export const createMultipleMaterialRequests = mutation({
  */
 export const saveMultipleMaterialRequestsAsDraft = mutation({
   args: {
-    siteId: v.id("sites"),
     requiredBy: v.number(),
     items: v.array(
       v.object({
+        siteId: v.id("sites"),
         itemName: v.string(),
         description: v.string(),
         quantity: v.number(),
@@ -1044,7 +1044,7 @@ export const saveMultipleMaterialRequestsAsDraft = mutation({
         ),
       })
     ),
-    orderNote: v.optional(v.string()), // Added orderNote
+    orderNote: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const currentUser = await getCurrentUser(ctx);
@@ -1052,19 +1052,6 @@ export const saveMultipleMaterialRequestsAsDraft = mutation({
     // Only site engineers can save drafts
     if (currentUser.role !== "site_engineer") {
       throw new Error("Unauthorized: Only site engineers can save drafts");
-    }
-
-    // Verify site exists and is assigned to user
-    const site = await ctx.db.get(args.siteId);
-    if (!site || !site.isActive) {
-      throw new Error("Site not found or inactive");
-    }
-
-    if (
-      !currentUser.assignedSites ||
-      !currentUser.assignedSites.includes(args.siteId)
-    ) {
-      throw new Error("Unauthorized: Site not assigned to you");
     }
 
     if (args.items.length === 0) {
@@ -1098,10 +1085,23 @@ export const saveMultipleMaterialRequestsAsDraft = mutation({
     // Create all requests with draft status
     for (let i = 0; i < args.items.length; i++) {
       const item = args.items[i];
+
+      // Verify each item's site exists and is assigned to user
+      const site = await ctx.db.get(item.siteId);
+      if (!site || !site.isActive) {
+        throw new Error(`Item ${i + 1}: Site not found or inactive`);
+      }
+      if (
+        !currentUser.assignedSites ||
+        !currentUser.assignedSites.includes(item.siteId)
+      ) {
+        throw new Error(`Item ${i + 1}: Site not assigned to you`);
+      }
+
       const requestId = await ctx.db.insert("requests", {
         requestNumber,
         createdBy: currentUser._id,
-        siteId: args.siteId,
+        siteId: item.siteId,
         itemName: item.itemName,
         description: item.description,
         specsBrand: undefined,
@@ -1110,7 +1110,7 @@ export const saveMultipleMaterialRequestsAsDraft = mutation({
         requiredBy: args.requiredBy,
         isUrgent: item.isUrgent,
         photos: item.photos,
-        itemOrder: i + 1, // Sequential order: 1, 2, 3...
+        itemOrder: i + 1,
         status: "draft",
         notes: item.notes,
         createdAt: now,
@@ -1556,11 +1556,11 @@ export const deleteDraftRequest = mutation({
  */
 export const updateDraftRequest = mutation({
   args: {
-    requestNumber: v.string(), // Draft request number
-    siteId: v.id("sites"),
+    requestNumber: v.string(),
     requiredBy: v.number(),
     items: v.array(
       v.object({
+        siteId: v.id("sites"),
         itemName: v.string(),
         description: v.string(),
         quantity: v.number(),
@@ -1577,7 +1577,7 @@ export const updateDraftRequest = mutation({
         ),
       })
     ),
-    orderNote: v.optional(v.string()), // Added orderNote
+    orderNote: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const currentUser = await getCurrentUser(ctx);
@@ -1603,19 +1603,6 @@ export const updateDraftRequest = mutation({
       throw new Error("Unauthorized: You can only update your own drafts");
     }
 
-    // Verify site exists and is assigned to user
-    const site = await ctx.db.get(args.siteId);
-    if (!site || !site.isActive) {
-      throw new Error("Site not found or inactive");
-    }
-
-    if (
-      !currentUser.assignedSites ||
-      !currentUser.assignedSites.includes(args.siteId)
-    ) {
-      throw new Error("Unauthorized: Site not assigned to you");
-    }
-
     if (args.items.length === 0) {
       throw new Error("At least one item is required");
     }
@@ -1630,10 +1617,23 @@ export const updateDraftRequest = mutation({
     const requestIds: Id<"requests">[] = [];
     for (let i = 0; i < args.items.length; i++) {
       const item = args.items[i];
+
+      // Verify each item's site exists and is assigned to user
+      const site = await ctx.db.get(item.siteId);
+      if (!site || !site.isActive) {
+        throw new Error(`Item ${i + 1}: Site not found or inactive`);
+      }
+      if (
+        !currentUser.assignedSites ||
+        !currentUser.assignedSites.includes(item.siteId)
+      ) {
+        throw new Error(`Item ${i + 1}: Site not assigned to you`);
+      }
+
       const requestId = await ctx.db.insert("requests", {
-        requestNumber: args.requestNumber, // Keep same draft number
+        requestNumber: args.requestNumber,
         createdBy: currentUser._id,
-        siteId: args.siteId,
+        siteId: item.siteId,
         itemName: item.itemName,
         description: item.description,
         specsBrand: undefined,
@@ -1642,10 +1642,10 @@ export const updateDraftRequest = mutation({
         requiredBy: args.requiredBy,
         isUrgent: item.isUrgent,
         photos: item.photos,
-        itemOrder: i + 1, // Sequential order: 1, 2, 3...
+        itemOrder: i + 1,
         status: "draft",
         notes: item.notes,
-        createdAt: existingRequests[0].createdAt, // Keep original creation time
+        createdAt: existingRequests[0].createdAt,
         updatedAt: now,
       });
       requestIds.push(requestId);

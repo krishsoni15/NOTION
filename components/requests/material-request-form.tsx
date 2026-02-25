@@ -86,6 +86,7 @@ interface MaterialRequestFormProps {
 
 interface RequestItem {
   id: string;
+  siteId: string; // Per-item site location
   itemName: string;
   itemSearchQuery: string;
   description: string;
@@ -131,8 +132,8 @@ export function MaterialRequestForm({
   const [cameraOpen, setCameraOpen] = useState<{ itemId: string; open: boolean }>({ itemId: "", open: false });
   const [uploadingItemId, setUploadingItemId] = useState<string | null>(null);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
-  const [siteDropdownOpen, setSiteDropdownOpen] = useState(false);
-  const [siteSearchQuery, setSiteSearchQuery] = useState("");
+  const [siteDropdownOpen, setSiteDropdownOpen] = useState<{ [itemId: string]: boolean }>({});
+  const [siteSearchQuery, setSiteSearchQuery] = useState<{ [itemId: string]: string }>({});
   const [dragOverItemId, setDragOverItemId] = useState<string | null>(null);
   const [dateError, setDateError] = useState<string | null>(null);
   const [openSiteInfoPopover, setOpenSiteInfoPopover] = useState<string | null>(null);
@@ -145,27 +146,17 @@ export function MaterialRequestForm({
   // State for Item Info Dialog
   const [expandedItemName, setExpandedItemName] = useState<string | null>(null);
 
-  // Shared form data
+  // Shared form data (no more siteId here - moved to per-item)
   const [sharedFormData, setSharedFormData] = useState({
-    siteId: "" as Id<"sites"> | "",
     requiredBy: null as Date | null,
     orderNote: "",
   });
-
-  // Update search query when site is selected to show site name
-  useEffect(() => {
-    if (sharedFormData.siteId && !siteSearchQuery) {
-      const selectedSite = assignedSites?.find((s) => s?._id === sharedFormData.siteId);
-      if (selectedSite) {
-        setSiteSearchQuery(selectedSite.name);
-      }
-    }
-  }, [sharedFormData.siteId, assignedSites, siteSearchQuery]);
 
   // Items array
   const [items, setItems] = useState<RequestItem[]>([
     {
       id: "1",
+      siteId: "",
       itemName: "",
       itemSearchQuery: "",
       description: "",
@@ -204,7 +195,6 @@ export function MaterialRequestForm({
       if (filteredRequests.length > 0) {
         const firstRequest = filteredRequests[0];
         setSharedFormData({
-          siteId: firstRequest.siteId,
           requiredBy: new Date(firstRequest.requiredBy),
           orderNote: "",
         });
@@ -220,7 +210,8 @@ export function MaterialRequestForm({
           .map((req, index) => {
             const quantityInput = `${req.quantity} ${req.unit}`;
             return {
-              id: `${index + 1}`, // Sequential IDs: 1, 2, 3...
+              id: `${index + 1}`,
+              siteId: req.siteId,
               itemName: req.itemName,
               itemSearchQuery: req.itemName,
               description: req.description,
@@ -246,6 +237,7 @@ export function MaterialRequestForm({
 
         setItems(sortedRequestItems.length > 0 ? sortedRequestItems : [{
           id: "1",
+          siteId: "",
           itemName: "",
           itemSearchQuery: "",
           description: "",
@@ -268,13 +260,13 @@ export function MaterialRequestForm({
   useEffect(() => {
     if (!open) {
       setSharedFormData({
-        siteId: "" as Id<"sites"> | "",
         requiredBy: null,
         orderNote: "",
       });
       setItems([
         {
           id: "1",
+          siteId: "",
           itemName: "",
           itemSearchQuery: "",
           description: "",
@@ -292,8 +284,8 @@ export function MaterialRequestForm({
       ]);
       setError("");
       setShowConfirmDialog(false);
-      setSiteDropdownOpen(false);
-      setSiteSearchQuery("");
+      setSiteDropdownOpen({});
+      setSiteSearchQuery({});
     }
   }, [open]);
 
@@ -483,8 +475,11 @@ export function MaterialRequestForm({
     const newId = `${maxId + 1}`;
 
     setItems((prev) => {
+      // Copy siteId from last item for convenience
+      const lastItemSiteId = prev.length > 0 ? prev[prev.length - 1].siteId : "";
       const newItem = {
         id: newId,
+        siteId: lastItemSiteId,
         itemName: "",
         itemSearchQuery: "",
         description: "",
@@ -720,9 +715,6 @@ export function MaterialRequestForm({
   // Comprehensive validation - checks all fields
   const isFormValid = (): boolean => {
     // Check shared fields
-    if (!sharedFormData.siteId || sharedFormData.siteId === "") {
-      return false;
-    }
     if (!sharedFormData.requiredBy || !(sharedFormData.requiredBy instanceof Date)) {
       return false;
     }
@@ -734,6 +726,11 @@ export function MaterialRequestForm({
 
     // Validate each item
     for (const item of items) {
+      // Site location validation
+      if (!item.siteId || item.siteId === "") {
+        return false;
+      }
+
       // Item name validation
       const trimmedItemName = item.itemName.trim();
       if (!trimmedItemName || trimmedItemName.length === 0) {
@@ -828,9 +825,6 @@ export function MaterialRequestForm({
 
   // Get validation error message
   const getValidationError = (): string | null => {
-    if (!sharedFormData.siteId || sharedFormData.siteId === "") {
-      return "Please select a site location";
-    }
     if (!sharedFormData.requiredBy || !(sharedFormData.requiredBy instanceof Date)) {
       return "Please select a required date";
     }
@@ -851,6 +845,11 @@ export function MaterialRequestForm({
     for (let i = 0; i < items.length; i++) {
       const item = items[i];
       const itemNum = i + 1;
+
+      // Site location validation
+      if (!item.siteId || item.siteId === "") {
+        return `Item ${itemNum}: Please select a site location`;
+      }
 
       // Item name validation
       const trimmedItemName = item.itemName.trim();
@@ -948,11 +947,7 @@ export function MaterialRequestForm({
     e.preventDefault();
     setError("");
 
-    // Basic validation for draft (site and date required)
-    if (!sharedFormData.siteId || sharedFormData.siteId === "") {
-      setError("Please select a site location");
-      return;
-    }
+    // Basic validation for draft (date required)
     if (!sharedFormData.requiredBy || !(sharedFormData.requiredBy instanceof Date)) {
       setError("Please select a required date");
       return;
@@ -962,14 +957,14 @@ export function MaterialRequestForm({
       return;
     }
 
-    // Check if at least one item has name and quantity
+    // Check if at least one item has site, name and quantity
     const hasValidItem = items.some((item) => {
       const trimmedItemName = item.itemName.trim();
-      return trimmedItemName.length > 0 && item.quantity > 0 && item.unit.trim().length > 0;
+      return item.siteId && trimmedItemName.length > 0 && item.quantity > 0 && item.unit.trim().length > 0;
     });
 
     if (!hasValidItem) {
-      setError("Please add at least one item with name, quantity, and unit");
+      setError("Please add at least one item with site location, name, quantity, and unit");
       return;
     }
 
@@ -992,6 +987,7 @@ export function MaterialRequestForm({
             }
           }
           return {
+            siteId: (item.siteId || items[0].siteId) as Id<"sites">,
             itemName: item.itemName.trim() || "Draft Item",
             description: item.description.trim() || "Draft description",
             quantity: item.quantity || 1,
@@ -1008,7 +1004,6 @@ export function MaterialRequestForm({
         // Update existing draft
         const result = await updateDraft({
           requestNumber: draftRequestNumber,
-          siteId: sharedFormData.siteId as Id<"sites">,
           requiredBy: sharedFormData.requiredBy!.getTime(),
           items: itemsWithPhotos,
           orderNote: sharedFormData.orderNote,
@@ -1020,7 +1015,6 @@ export function MaterialRequestForm({
       } else {
         // Create new draft
         const result = await saveAsDraft({
-          siteId: sharedFormData.siteId as Id<"sites">,
           requiredBy: sharedFormData.requiredBy!.getTime(),
           items: itemsWithPhotos,
           orderNote: sharedFormData.orderNote,
@@ -1080,6 +1074,7 @@ export function MaterialRequestForm({
             }
           }
           return {
+            siteId: item.siteId as Id<"sites">,
             itemName: item.itemName.trim(),
             description: item.description.trim() || "",
             quantity: item.quantity,
@@ -1096,7 +1091,6 @@ export function MaterialRequestForm({
         // First update the draft
         await updateDraft({
           requestNumber: draftRequestNumber,
-          siteId: sharedFormData.siteId as Id<"sites">,
           requiredBy: sharedFormData.requiredBy!.getTime(),
           items: itemsWithPhotos,
         });
@@ -1113,7 +1107,6 @@ export function MaterialRequestForm({
       } else {
         // Create all requests with the same request number
         const result = await createMultipleRequests({
-          siteId: sharedFormData.siteId as Id<"sites">,
           requiredBy: sharedFormData.requiredBy!.getTime(),
           items: itemsWithPhotos,
           orderNote: sharedFormData.orderNote,
@@ -1270,341 +1263,40 @@ export function MaterialRequestForm({
                   <h3 className="text-sm sm:text-base font-bold text-foreground">Request Details</h3>
                 </div>
 
-                {/* Two Column Layout for Desktop: Site Location and Required By */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5 lg:gap-6">
-                  {/* Site Location */}
-                  <div className="space-y-2 sm:space-y-2.5">
-                    <Label htmlFor="siteId" className="text-xs sm:text-sm font-semibold flex items-center gap-1.5">
-                      <MapPin className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground" />
-                      Site Location <span className="text-destructive">*</span>
-                    </Label>
-                    <Popover
-                      open={siteDropdownOpen}
-                      onOpenChange={(open) => {
-                        setSiteDropdownOpen(open);
-                        if (!open) {
-                          // Close info popover when site dropdown closes
-                          setOpenSiteInfoPopover(null);
-                        }
-                      }}
-                      modal={false}
-                    >
-                      <PopoverTrigger asChild>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          id="siteId"
-                          disabled={isLoading}
-                          className="w-full h-10 sm:h-11 text-sm border-2 hover:border-primary/30 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all duration-200 justify-between font-normal bg-background"
-                        >
-                          <div className="flex items-center gap-2 flex-1 min-w-0">
-                            {sharedFormData.siteId ? (
-                              <>
-                                <Building2 className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                                <span className="truncate text-left">
-                                  {assignedSites?.find((s) => s?._id === sharedFormData.siteId)?.name || "Selected site"}
-                                </span>
-                              </>
-                            ) : (
-                              <span className="text-muted-foreground">Select site location</span>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-1 shrink-0">
-                            {sharedFormData.siteId && (
-                              <div
-                                role="button"
-                                tabIndex={0}
-                                onClick={(e) => {
-                                  e.preventDefault();
-                                  e.stopPropagation();
-                                  setSharedFormData((prev) => ({ ...prev, siteId: "" as Id<"sites"> | "" }));
-                                  setSiteSearchQuery("");
-                                }}
-                                onKeyDown={(e) => {
-                                  if (e.key === "Enter" || e.key === " ") {
-                                    e.preventDefault();
-                                    e.stopPropagation();
-                                    setSharedFormData((prev) => ({ ...prev, siteId: "" as Id<"sites"> | "" }));
-                                    setSiteSearchQuery("");
-                                  }
-                                }}
-                                className="p-1 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/20"
-                                aria-label="Clear selection"
-                              >
-                                <X className="h-3.5 w-3.5" />
-                              </div>
-                            )}
-                            <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${siteDropdownOpen ? "rotate-180" : ""}`} />
-                          </div>
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent
-                        className="w-[var(--radix-popover-trigger-width)] p-0 z-[100]"
-                        align="start"
-                        sideOffset={4}
-                        onOpenAutoFocus={(e) => e.preventDefault()}
-                      >
-                        <div className="p-3 border-b bg-muted/30">
-                          <div className="relative">
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                            <Input
-                              type="text"
-                              placeholder="Search sites..."
-                              value={siteSearchQuery}
-                              onChange={(e) => setSiteSearchQuery(e.target.value)}
-                              onFocus={(e) => e.stopPropagation()}
-                              className="pl-9 h-9 text-sm"
-                              autoFocus
-                            />
-                          </div>
-                        </div>
-                        <div className="max-h-[300px] overflow-y-auto">
-                          {!assignedSites ? (
-                            <div className="p-4 text-center text-sm text-muted-foreground">
-                              Loading sites...
-                            </div>
-                          ) : (() => {
-                            const filteredSites = assignedSites
-                              .filter((site): site is NonNullable<typeof site> => site !== null)
-                              .filter((site) => {
-                                const normalizedQuery = normalizeSearchQuery(siteSearchQuery);
-                                if (!normalizedQuery) return true;
-                                return matchesAnySearchQuery(
-                                  [site.name, site.code, site.address, site.description].filter(Boolean) as string[],
-                                  normalizedQuery
-                                );
-                              });
-
-                            return filteredSites.length === 0 ? (
-                              <div className="p-4 text-center text-sm text-muted-foreground">
-                                {siteSearchQuery ? "No sites found" : "No sites assigned"}
-                              </div>
-                            ) : (
-                              <div className="p-1">
-                                {filteredSites.map((site) => {
-                                  const isSelected = sharedFormData.siteId === site._id;
-                                  return (
-                                    <div key={site._id} className="relative group">
-                                      <button
-                                        type="button"
-                                        onClick={(e) => {
-                                          e.preventDefault();
-                                          e.stopPropagation();
-                                          setSharedFormData((prev) => ({ ...prev, siteId: site._id }));
-                                          setSiteSearchQuery("");
-                                          setSiteDropdownOpen(false);
-                                        }}
-                                        className={`w-full flex items-center gap-2 px-3 py-2.5 rounded-md text-sm text-left transition-all ${isSelected
-                                          ? "bg-primary/10 hover:bg-primary/15 border border-primary/20"
-                                          : "hover:bg-accent pr-12"
-                                          }`}
-                                      >
-                                        <div
-                                          className={`h-4 w-4 rounded border flex items-center justify-center shrink-0 transition-all ${isSelected
-                                            ? "bg-primary border-primary"
-                                            : "border-input group-hover:border-primary/50"
-                                            }`}
-                                        >
-                                          {isSelected && (
-                                            <Check className="h-3 w-3 text-primary-foreground" />
-                                          )}
-                                        </div>
-                                        <div className="flex-1 min-w-0">
-                                          <div className="font-medium truncate flex items-center gap-1.5">
-                                            <Building2 className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                                            {site.name}
-                                          </div>
-                                          {site.code && (
-                                            <div className="text-xs text-muted-foreground mt-0.5">
-                                              Code: {site.code}
-                                            </div>
-                                          )}
-                                          {site.address && (
-                                            <div className="flex items-center gap-1 mt-0.5">
-                                              <div className="text-xs text-muted-foreground truncate flex-1">
-                                                {site.address}
-                                              </div>
-                                              <div
-                                                onClick={(e) => {
-                                                  e.stopPropagation();
-                                                  const encodedAddress = encodeURIComponent(site.address || '');
-                                                  const mapUrl = `https://www.google.com/maps/search/?api=1&query=${encodedAddress}`;
-                                                  window.open(mapUrl, '_blank');
-                                                }}
-                                                className="text-muted-foreground hover:text-primary transition-colors p-1 rounded-full hover:bg-muted/50 shrink-0 border border-muted-foreground/20 hover:border-primary/40 cursor-pointer"
-                                                title="Open in Maps"
-                                              >
-                                                <MapPin className="h-2.5 w-2.5" />
-                                              </div>
-                                            </div>
-                                          )}
-                                        </div>
-                                      </button>
-                                      <div
-                                        className="absolute right-2 top-1/2 -translate-y-1/2 shrink-0 z-10"
-                                        onMouseDown={(e) => e.stopPropagation()}
-                                        onClick={(e) => e.stopPropagation()}
-                                      >
-                                        <Popover
-                                          open={openSiteInfoPopover === site._id}
-                                          onOpenChange={(open) => {
-                                            if (open) {
-                                              setOpenSiteInfoPopover(site._id);
-                                            } else {
-                                              setOpenSiteInfoPopover(null);
-                                            }
-                                          }}
-                                        >
-                                          <PopoverTrigger asChild>
-                                            <button
-                                              type="button"
-                                              onMouseDown={(e) => {
-                                                e.preventDefault();
-                                                e.stopPropagation();
-                                              }}
-                                              onClick={(e) => {
-                                                e.preventDefault();
-                                                e.stopPropagation();
-                                                setOpenSiteInfoPopover(openSiteInfoPopover === site._id ? null : site._id);
-                                              }}
-                                              className="inline-flex items-center justify-center h-7 w-7 rounded-md hover:bg-primary/10 active:bg-primary/20 cursor-pointer transition-colors focus:outline-none focus:ring-2 focus:ring-primary/20 touch-manipulation"
-                                              aria-label="View site details"
-                                            >
-                                              <Info className="h-4 w-4 text-primary" />
-                                            </button>
-                                          </PopoverTrigger>
-                                          <PopoverContent
-                                            className="w-80 sm:w-96 p-5 z-[200]"
-                                            align="end"
-                                            side="left"
-                                            onPointerDownOutside={(e) => {
-                                              const target = e.target as HTMLElement;
-                                              // Don't close if clicking inside the site dropdown
-                                              if (target.closest('[role="dialog"]') || target.closest('[data-radix-popper-content-wrapper]')) {
-                                                e.preventDefault();
-                                              }
-                                            }}
-                                            onInteractOutside={(e) => {
-                                              // Prevent closing when clicking outside if it's within the site dropdown
-                                              const target = e.target as HTMLElement;
-                                              if (target.closest('[data-radix-popover-content]')) {
-                                                e.preventDefault();
-                                              }
-                                            }}
-                                          >
-                                            <div className="space-y-4">
-                                              <div className="flex items-center gap-3 pb-3 border-b-2 border-border">
-                                                <div className="p-2.5 rounded-lg bg-gradient-to-br from-primary/20 to-primary/10">
-                                                  <Building2 className="h-6 w-6 text-primary" />
-                                                </div>
-                                                <div className="flex-1">
-                                                  <h4 className="font-bold text-base">{site.name}</h4>
-                                                  {site.code && (
-                                                    <p className="text-xs text-muted-foreground mt-0.5">Site Code: {site.code}</p>
-                                                  )}
-                                                </div>
-                                              </div>
-                                              <div className="space-y-3">
-                                                {site.code && (
-                                                  <div className="flex items-start gap-3 p-3 rounded-lg bg-muted/50 border">
-                                                    <Hash className="h-5 w-5 text-primary shrink-0 mt-0.5" />
-                                                    <div className="flex-1 min-w-0">
-                                                      <p className="text-xs font-semibold text-muted-foreground mb-1.5 uppercase tracking-wide">Site Code</p>
-                                                      <p className="text-sm font-medium">{site.code}</p>
-                                                    </div>
-                                                  </div>
-                                                )}
-                                                {site.address ? (
-                                                  <div className="flex items-start gap-3 p-3 rounded-lg bg-muted/50 border">
-                                                    <MapPin className="h-5 w-5 text-primary shrink-0 mt-0.5" />
-                                                    <div className="flex-1 min-w-0">
-                                                      <p className="text-xs font-semibold text-muted-foreground mb-1.5 uppercase tracking-wide">Address</p>
-                                                      <div className="flex items-center gap-2">
-                                                        <p className="text-sm font-medium break-words flex-1">{site.address}</p>
-                                                        <button
-                                                          onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            const encodedAddress = encodeURIComponent(site.address || '');
-                                                            const mapUrl = `https://www.google.com/maps/search/?api=1&query=${encodedAddress}`;
-                                                            window.open(mapUrl, '_blank');
-                                                          }}
-                                                          className="text-primary hover:text-primary/80 hover:bg-primary/10 rounded-full p-2 transition-colors shrink-0 border border-primary/20 hover:border-primary/40"
-                                                          title="Open in Maps"
-                                                        >
-                                                          <MapPin className="h-3.5 w-3.5" />
-                                                        </button>
-                                                      </div>
-                                                    </div>
-                                                  </div>
-                                                ) : (
-                                                  <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/30 border border-dashed">
-                                                    <MapPin className="h-5 w-5 text-muted-foreground shrink-0" />
-                                                    <p className="text-xs text-muted-foreground italic">No address provided</p>
-                                                  </div>
-                                                )}
-                                                {site.description ? (
-                                                  <div className="flex items-start gap-3 p-3 rounded-lg bg-muted/50 border">
-                                                    <Info className="h-5 w-5 text-primary shrink-0 mt-0.5" />
-                                                    <div className="flex-1 min-w-0">
-                                                      <p className="text-xs font-semibold text-muted-foreground mb-1.5 uppercase tracking-wide">Description</p>
-                                                      <p className="text-sm font-medium break-words">{site.description}</p>
-                                                    </div>
-                                                  </div>
-                                                ) : null}
-                                              </div>
-                                            </div>
-                                          </PopoverContent>
-                                        </Popover>
-                                      </div>
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            );
-                          })()}
-                        </div>
-                      </PopoverContent>
-                    </Popover>
-                  </div>
-
-                  {/* Required By Date */}
-                  <div className="space-y-2 sm:space-y-2.5">
-                    <Label className="text-xs sm:text-sm font-semibold flex items-center gap-1.5">
-                      <Calendar className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground" />
-                      Required By <span className="text-destructive">*</span>
-                    </Label>
-                    <DatePicker
-                      value={sharedFormData.requiredBy}
-                      onChange={(date) => {
-                        setSharedFormData((prev) => ({ ...prev, requiredBy: date }));
-
-                        // Real-time validation for past dates
-                        if (date) {
-                          const today = new Date();
-                          today.setHours(0, 0, 0, 0);
-                          const selectedDate = new Date(date);
-                          selectedDate.setHours(0, 0, 0, 0);
-
-                          if (selectedDate < today) {
-                            setDateError("Required date cannot be in the past");
-                          } else {
-                            setDateError(null);
-                          }
+                {/* Required By - Single field since site moved to items */}
+                <div className="space-y-2 sm:space-y-2.5">
+                  <Label className="text-xs sm:text-sm font-semibold flex items-center gap-1.5">
+                    <Calendar className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground" />
+                    Required By <span className="text-destructive">*</span>
+                  </Label>
+                  <DatePicker
+                    value={sharedFormData.requiredBy}
+                    onChange={(date) => {
+                      setSharedFormData((prev) => ({ ...prev, requiredBy: date }));
+                      if (date) {
+                        const today = new Date();
+                        today.setHours(0, 0, 0, 0);
+                        const selectedDate = new Date(date);
+                        selectedDate.setHours(0, 0, 0, 0);
+                        if (selectedDate < today) {
+                          setDateError("Required date cannot be in the past");
                         } else {
                           setDateError(null);
                         }
-                      }}
-                      placeholder="DD/MM/YYYY"
-                      disabled={isLoading}
-                      error={!!dateError}
-                    />
-                    {dateError && (
-                      <p className="text-xs text-destructive flex items-center gap-1.5 mt-1">
-                        <AlertCircle className="h-3 w-3 shrink-0" />
-                        {dateError}
-                      </p>
-                    )}
-                  </div>
+                      } else {
+                        setDateError(null);
+                      }
+                    }}
+                    placeholder="DD/MM/YYYY"
+                    disabled={isLoading}
+                    error={!!dateError}
+                  />
+                  {dateError && (
+                    <p className="text-xs text-destructive flex items-center gap-1.5 mt-1">
+                      <AlertCircle className="h-3 w-3 shrink-0" />
+                      {dateError}
+                    </p>
+                  )}
                 </div>
               </div>
 
@@ -2025,6 +1717,171 @@ export function MaterialRequestForm({
 
                         </div>
 
+                        {/* Per-Item Site Location */}
+                        <div className="space-y-2 sm:space-y-2.5">
+                          <Label className="text-xs sm:text-sm font-semibold flex items-center gap-1.5">
+                            <MapPin className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground" />
+                            Site Location <span className="text-destructive">*</span>
+                          </Label>
+                          <Popover
+                            open={siteDropdownOpen[item.id] || false}
+                            onOpenChange={(open) => {
+                              setSiteDropdownOpen(prev => ({ ...prev, [item.id]: open }));
+                              if (!open) {
+                                setOpenSiteInfoPopover(null);
+                              }
+                            }}
+                            modal={false}
+                          >
+                            <PopoverTrigger asChild>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                disabled={isLoading}
+                                className="w-full h-10 sm:h-11 text-sm border-2 hover:border-primary/30 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all duration-200 justify-between font-normal bg-background"
+                              >
+                                <div className="flex items-center gap-2 flex-1 min-w-0">
+                                  {item.siteId ? (
+                                    <>
+                                      <Building2 className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                                      <span className="truncate text-left">
+                                        {assignedSites?.find((s) => s?._id === item.siteId)?.name || "Selected site"}
+                                      </span>
+                                    </>
+                                  ) : (
+                                    <span className="text-muted-foreground">Select site location</span>
+                                  )}
+                                </div>
+                                <div className="flex items-center gap-1 shrink-0">
+                                  {item.siteId && (
+                                    <div
+                                      role="button"
+                                      tabIndex={0}
+                                      onClick={(e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        updateItem(item.id, { siteId: "" });
+                                        setSiteSearchQuery(prev => ({ ...prev, [item.id]: "" }));
+                                      }}
+                                      onKeyDown={(e) => {
+                                        if (e.key === "Enter" || e.key === " ") {
+                                          e.preventDefault();
+                                          e.stopPropagation();
+                                          updateItem(item.id, { siteId: "" });
+                                          setSiteSearchQuery(prev => ({ ...prev, [item.id]: "" }));
+                                        }
+                                      }}
+                                      className="p-1 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/20"
+                                      aria-label="Clear selection"
+                                    >
+                                      <X className="h-3.5 w-3.5" />
+                                    </div>
+                                  )}
+                                  <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${siteDropdownOpen[item.id] ? "rotate-180" : ""}`} />
+                                </div>
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent
+                              className="w-[var(--radix-popover-trigger-width)] p-0 z-[100]"
+                              align="start"
+                              sideOffset={4}
+                              onOpenAutoFocus={(e) => e.preventDefault()}
+                            >
+                              <div className="p-3 border-b bg-muted/30">
+                                <div className="relative">
+                                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                                  <Input
+                                    type="text"
+                                    placeholder="Search sites..."
+                                    value={siteSearchQuery[item.id] || ""}
+                                    onChange={(e) => setSiteSearchQuery(prev => ({ ...prev, [item.id]: e.target.value }))}
+                                    onFocus={(e) => e.stopPropagation()}
+                                    className="pl-9 h-9 text-sm"
+                                    autoFocus
+                                  />
+                                </div>
+                              </div>
+                              <div className="max-h-[300px] overflow-y-auto">
+                                {!assignedSites ? (
+                                  <div className="p-4 text-center text-sm text-muted-foreground">
+                                    Loading sites...
+                                  </div>
+                                ) : (() => {
+                                  const filteredSites = assignedSites
+                                    .filter((site): site is NonNullable<typeof site> => site !== null)
+                                    .filter((site) => {
+                                      const normalizedQuery = normalizeSearchQuery(siteSearchQuery[item.id] || "");
+                                      if (!normalizedQuery) return true;
+                                      return matchesAnySearchQuery(
+                                        [site.name, site.code, site.address, site.description].filter(Boolean) as string[],
+                                        normalizedQuery
+                                      );
+                                    });
+
+                                  return filteredSites.length === 0 ? (
+                                    <div className="p-4 text-center text-sm text-muted-foreground">
+                                      {siteSearchQuery[item.id] ? "No sites found" : "No sites assigned"}
+                                    </div>
+                                  ) : (
+                                    <div className="p-1">
+                                      {filteredSites.map((site) => {
+                                        const isSelected = item.siteId === site._id;
+                                        return (
+                                          <div key={site._id} className="relative group">
+                                            <button
+                                              type="button"
+                                              onClick={(e) => {
+                                                e.preventDefault();
+                                                e.stopPropagation();
+                                                updateItem(item.id, { siteId: site._id });
+                                                setSiteSearchQuery(prev => ({ ...prev, [item.id]: "" }));
+                                                setSiteDropdownOpen(prev => ({ ...prev, [item.id]: false }));
+                                              }}
+                                              className={`w-full flex items-center gap-2 px-3 py-2.5 rounded-md text-sm text-left transition-all ${isSelected
+                                                ? "bg-primary/10 hover:bg-primary/15 border border-primary/20"
+                                                : "hover:bg-accent pr-12"
+                                                }`}
+                                            >
+                                              <div
+                                                className={`h-4 w-4 rounded border flex items-center justify-center shrink-0 transition-all ${isSelected
+                                                  ? "bg-primary border-primary"
+                                                  : "border-input group-hover:border-primary/50"
+                                                  }`}
+                                              >
+                                                {isSelected && (
+                                                  <Check className="h-3 w-3 text-primary-foreground" />
+                                                )}
+                                              </div>
+                                              <div className="flex-1 min-w-0">
+                                                <div className="font-medium truncate flex items-center gap-1.5">
+                                                  <Building2 className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                                                  {site.name}
+                                                </div>
+                                                {site.code && (
+                                                  <div className="text-xs text-muted-foreground mt-0.5">
+                                                    Code: {site.code}
+                                                  </div>
+                                                )}
+                                                {site.address && (
+                                                  <div className="flex items-center gap-1 mt-0.5">
+                                                    <div className="text-xs text-muted-foreground truncate flex-1">
+                                                      {site.address}
+                                                    </div>
+                                                  </div>
+                                                )}
+                                              </div>
+                                            </button>
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  );
+                                })()}
+                              </div>
+                            </PopoverContent>
+                          </Popover>
+                        </div>
+
                         {/* Photo Upload - Compact with Drag and Drop (Desktop Only) */}
                         <div className="space-y-2.5 sm:space-y-3">
                           <Label className="text-xs sm:text-sm font-semibold flex items-center gap-1.5">
@@ -2251,9 +2108,9 @@ export function MaterialRequestForm({
                   type="button"
                   variant="outline"
                   onClick={handleSaveDraft}
-                  disabled={isLoading || isUploading || !sharedFormData.siteId || !sharedFormData.requiredBy}
+                  disabled={isLoading || isUploading || !sharedFormData.requiredBy}
                   className="w-full sm:w-auto order-2 sm:order-2 h-10 sm:h-11 text-sm font-semibold border-2 bg-background text-foreground hover:bg-secondary hover:text-secondary-foreground hover:border-secondary hover:scale-105 active:scale-95 focus:ring-2 focus:ring-secondary/20 transition-all duration-200"
-                  title={!sharedFormData.siteId || !sharedFormData.requiredBy ? "Please select site and date to save" : draftRequestNumber ? "Update draft" : "Save as draft"}
+                  title={!sharedFormData.requiredBy ? "Please select a date to save" : draftRequestNumber ? "Update draft" : "Save as draft"}
                 >
                   {isLoading || isUploading ? (
                     <span className="flex items-center gap-2">
@@ -2289,8 +2146,8 @@ export function MaterialRequestForm({
                   )}
                 </Button>
               </DialogFooter>
-            </form>
-          </div>
+            </form >
+          </div >
         </DialogContent >
       </Dialog >
 
@@ -2316,9 +2173,12 @@ export function MaterialRequestForm({
                 <div className="flex items-start gap-3">
                   <MapPin className="h-5 w-5 text-primary shrink-0 mt-0.5" />
                   <div>
-                    <p className="text-xs font-semibold text-muted-foreground mb-1">Site Location</p>
+                    <p className="text-xs font-semibold text-muted-foreground mb-1">Site Location(s)</p>
                     <p className="text-sm font-medium">
-                      {assignedSites?.find((s) => s?._id === sharedFormData.siteId)?.name || "Selected site"}
+                      {(() => {
+                        const uniqueSiteIds = [...new Set(items.map(i => i.siteId).filter(Boolean))];
+                        return uniqueSiteIds.map(sId => assignedSites?.find((s) => s?._id === sId)?.name || "Unknown").join(", ") || "Not selected";
+                      })()}
                     </p>
                   </div>
                 </div>

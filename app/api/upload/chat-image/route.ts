@@ -1,12 +1,12 @@
 /**
  * Chat Image Upload API Route
  *
- * Handles image uploads for chat messages to Cloudinary.
+ * Handles image uploads for chat messages to Cloudflare R2.
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
-import { uploadImage, generateImageKey } from "@/lib/cloudinary/client";
+import { uploadImage, generateImageKey } from "@/lib/r2/client";
 
 export async function POST(request: NextRequest) {
   try {
@@ -47,14 +47,11 @@ export async function POST(request: NextRequest) {
     // Generate unique public ID for chat images
     const publicId = generateImageKey(`chat-${userId}`, file.name);
 
-    // Upload to Cloudinary
+    // Upload to R2
     try {
       const { url, key } = await uploadImage(buffer, publicId, {
         folder: 'notion-chat-images',
-        quality: 'auto',
-        transformation: [
-          { width: 800, height: 800, crop: 'limit' }
-        ],
+        contentType: file.type,
       });
 
       if (!url || !key) {
@@ -67,7 +64,7 @@ export async function POST(request: NextRequest) {
         imageKey: key,
       });
     } catch (uploadError) {
-      console.error("Cloudinary upload error:", uploadError);
+      console.error("R2 upload error:", uploadError);
       throw uploadError;
     }
   } catch (error) {

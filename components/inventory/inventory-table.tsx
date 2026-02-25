@@ -140,7 +140,7 @@ export function InventoryTable({ items, viewMode = "table", onRefresh }: Invento
 
     setLoadingItemId(deletingItem._id);
     try {
-      // Delete all images from Cloudinary first
+      // Delete all images from R2 first
       if (deletingItem.images && deletingItem.images.length > 0) {
         for (const img of deletingItem.images) {
           try {
@@ -166,7 +166,7 @@ export function InventoryTable({ items, viewMode = "table", onRefresh }: Invento
   const handleRemoveImage = async (itemId: string, imageKey: string) => {
     setRemovingImageKey(imageKey);
     try {
-      // Delete from Cloudinary
+      // Delete from R2
       await fetch(`/api/delete/image?key=${encodeURIComponent(imageKey)}`, {
         method: "DELETE",
       });

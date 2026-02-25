@@ -107,7 +107,7 @@ export function CreateDeliveryDialog({
 
         setIsSubmitting(true);
         try {
-            // Upload photos to Cloudinary
+            // Upload photos to R2
             let loadingPhotoData = null;
             let invoicePhotoData = null;
 

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { uploadImage } from "@/lib/cloudinary/client";
+import { uploadImage } from "@/lib/r2/client";
 
 export async function POST(request: NextRequest) {
     try {
@@ -14,11 +14,11 @@ export async function POST(request: NextRequest) {
         const bytes = await file.arrayBuffer();
         const buffer = Buffer.from(bytes);
 
-        // Upload to Cloudinary using shared client
+        // Upload to R2 using shared client
         // Using "delivery-challans" folder as originally requested
         const { url, key } = await uploadImage(buffer, undefined, {
             folder: "delivery-challans",
-            resourceType: "auto",
+            contentType: file.type,
         });
 
         return NextResponse.json({

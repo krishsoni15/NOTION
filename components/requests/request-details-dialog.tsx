@@ -57,6 +57,7 @@ import { LocationInfoDialog } from "@/components/locations/location-info-dialog"
 import { NotesTimelineDialog } from "./notes-timeline-dialog";
 import { PDFPreviewDialog } from "@/components/purchase/pdf-preview-dialog";
 import { EditPOQuantityDialog } from "@/components/purchase/edit-po-quantity-dialog";
+import { SplitPOQuantityDialog } from "@/components/purchase/split-po-quantity-dialog";
 import { ExpandableText } from "@/components/ui/expandable-text";
 import { DirectPODialog, type DirectPOInitialData } from "@/components/purchase/direct-po-dialog";
 import { BulkDeliveryDialog } from "@/components/purchase/bulk-delivery-dialog";
@@ -142,7 +143,9 @@ export function RequestDetailsDialog({
 
   // Fetch latest note for this request
   const notes = useQuery(api.notes.getNotes, request?.requestNumber ? { requestNumber: request.requestNumber } : "skip");
-  const latestNote = notes && notes.length > 0 ? notes[0] : null;
+  // Only show manually typed notes (type === "note") in the preview, not system-generated logs
+  const manualNotes = notes?.filter(n => n.type === "note") || [];
+  const latestNote = manualNotes.length > 0 ? manualNotes[0] : null;
 
   // Create a lookup map: requestId -> poNumber (from all PO groups)
   const requestToPONumber = useMemo(() => {
@@ -184,6 +187,7 @@ export function RequestDetailsDialog({
   const [showNotesTimeline, setShowNotesTimeline] = useState(false);
   const [showSignPendingApproveConfirm, setShowSignPendingApproveConfirm] = useState<Id<"requests"> | boolean | null>(null);
   const [editQuantityItem, setEditQuantityItem] = useState<{ id: Id<"requests">; quantity: number; name: string; unit: string } | null>(null);
+  const [splitPOQuantityItem, setSplitPOQuantityItem] = useState<{ id: Id<"requests">; quantity: number; name: string; unit: string } | null>(null);
   const [bulkDeliveryData, setBulkDeliveryData] = useState<{ items: any[]; vendorName: string; poNumber: string } | null>(null);
   const [selectedDCItems, setSelectedDCItems] = useState<Set<Id<"requests">>>(new Set());
   const [showBulkDCDialog, setShowBulkDCDialog] = useState(false);
@@ -1420,6 +1424,25 @@ export function RequestDetailsDialog({
               )}
             >
               <CheckCircle className="h-4 w-4 mr-2" /> Available
+            </Button>
+          )}
+          {(isPurchaseOfficer || isManager) && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={(e) => {
+                e.stopPropagation();
+                setSplitPOQuantityItem({
+                  id: item._id,
+                  quantity: item.quantity,
+                  name: item.itemName,
+                  unit: item.unit
+                });
+              }}
+              className="px-3 border-orange-200 text-orange-600 hover:bg-orange-50 dark:border-orange-800 dark:text-orange-400 dark:hover:bg-orange-950/30"
+              title="Edit PO Quantity (vendor can't supply full amount)"
+            >
+              <Pencil className="h-4 w-4" />
             </Button>
           )}
           {poNumber && (
@@ -4313,6 +4336,19 @@ export function RequestDetailsDialog({
         onSuccess={() => {
           setEditQuantityItem(null);
           // Data will refresh automatically via Convex reactivity
+        }}
+      />
+
+      {/* Split PO Quantity Dialog (vendor can't supply full amount) */}
+      <SplitPOQuantityDialog
+        open={!!splitPOQuantityItem}
+        onOpenChange={(open) => !open && setSplitPOQuantityItem(null)}
+        requestId={splitPOQuantityItem?.id || null}
+        currentQuantity={splitPOQuantityItem?.quantity || 0}
+        itemName={splitPOQuantityItem?.name || ""}
+        unit={splitPOQuantityItem?.unit || ""}
+        onSuccess={() => {
+          setSplitPOQuantityItem(null);
         }}
       />
 

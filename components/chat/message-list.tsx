@@ -155,13 +155,8 @@ export function MessageList({ messages, currentUserId, otherUserId, className }:
   };
 
   const handleFileClick = (url: string, name: string, type?: string) => {
-    // For PDFs on Cloudinary (raw resources), add fl_attachment:false to allow inline viewing
-    let viewUrl = url;
-    if (type === 'application/pdf' && url.includes('cloudinary.com') && url.includes('/raw/upload/')) {
-      // Insert fl_attachment:false after /raw/upload/ to enable inline PDF viewing
-      viewUrl = url.replace('/raw/upload/', '/raw/upload/fl_attachment:false/');
-    }
-    window.open(viewUrl, '_blank');
+    // R2 serves files directly — no special URL transformation needed
+    window.open(url, '_blank');
   };
 
   const handleFileDownload = (url: string, name: string) => {

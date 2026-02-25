@@ -53,12 +53,12 @@ export default defineSchema({
     isUrgent: v.boolean(), // Urgent flag
     // Backward compatibility: support both old photo field and new photos array
     photo: v.optional(v.object({
-      imageUrl: v.string(), // Cloudinary public URL
-      imageKey: v.string(), // Cloudinary public ID for deletion/updates
+      imageUrl: v.string(), // R2 public URL
+      imageKey: v.string(), // R2 object key for deletion/updates
     })), // Legacy single photo support
     photos: v.optional(v.array(v.object({
-      imageUrl: v.string(), // Cloudinary public URL
-      imageKey: v.string(), // Cloudinary public ID for deletion/updates
+      imageUrl: v.string(), // R2 public URL
+      imageKey: v.string(), // R2 object key for deletion/updates
     }))), // Array of photos (supports multiple photos per item) // Photo attachment
     itemOrder: v.optional(v.number()), // Order of item within the request (1, 2, 3...)
     status: v.union(
@@ -233,8 +233,8 @@ export default defineSchema({
     conversationId: v.id("conversations"),
     senderId: v.id("users"),
     content: v.string(),
-    imageUrl: v.optional(v.string()), // Cloudinary image URL for image messages
-    imageKey: v.optional(v.string()), // Cloudinary image key for deletion
+    imageUrl: v.optional(v.string()), // R2 image URL for image messages
+    imageKey: v.optional(v.string()), // R2 image key for deletion
     fileUrl: v.optional(v.string()), // URL for generic files (pdf, docx, etc)
     fileKey: v.optional(v.string()), // Storage key
     fileName: v.optional(v.string()), // Original filename

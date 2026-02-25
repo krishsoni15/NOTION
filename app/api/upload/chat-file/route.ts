@@ -1,12 +1,12 @@
 /**
  * Chat File Upload API Route
  *
- * Handles generic file uploads (PDF, DOCX, etc.) for chat messages to Cloudinary.
+ * Handles generic file uploads (PDF, DOCX, etc.) for chat messages to Cloudflare R2.
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@clerk/nextjs/server";
-import { uploadImage, generateImageKey } from "@/lib/cloudinary/client";
+import { uploadImage, generateImageKey } from "@/lib/r2/client";
 
 // Allow longer execution time for large file uploads (PDFs, etc.)
 export const maxDuration = 60; // 60 seconds
@@ -47,13 +47,11 @@ export async function POST(request: NextRequest) {
         const isImage = file.type.startsWith("image/");
         const resourceType = isImage ? "image" : "raw";
 
-        // Upload to Cloudinary
+        // Upload to R2
         try {
             const { url, key } = await uploadImage(buffer, publicId, {
                 folder: 'notion-chat-files',
-                resourceType: resourceType,
-                // @ts-ignore - access_mode is now supported via spread, ignoring strict typing for now
-                access_mode: 'public'
+                contentType: file.type,
             });
 
             if (!url || !key) {
@@ -69,7 +67,7 @@ export async function POST(request: NextRequest) {
                 fileSize: file.size,
             });
         } catch (uploadError) {
-            console.error("Cloudinary upload error:", uploadError);
+            console.error("R2 upload error:", uploadError);
             throw uploadError;
         }
     } catch (error) {

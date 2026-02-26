@@ -8,7 +8,7 @@
 
 import { useState, useEffect } from "react";
 import { useMutation, useQuery } from "convex/react";
-import { useUser } from "@clerk/nextjs";
+import { useAuth } from "@/app/providers/auth-provider";
 import { LocationInfoDialog } from "@/components/locations/location-info-dialog";
 import { api } from "@/convex/_generated/api";
 import {
@@ -70,7 +70,7 @@ interface UserTableProps {
 const ITEMS_PER_PAGE = 10;
 
 export function UserTable({ users, viewMode = "table" }: UserTableProps) {
-  const { user: clerkUser } = useUser();
+  const { user: authUser } = useAuth();
   const disableUser = useMutation(api.users.disableUser);
   const enableUser = useMutation(api.users.enableUser);
   const deleteUser = useMutation(api.users.deleteUser);
@@ -162,7 +162,7 @@ export function UserTable({ users, viewMode = "table" }: UserTableProps) {
   };
 
   const UserActions = ({ user }: { user: Doc<"users"> }) => {
-    const isCurrentUser = user.clerkUserId === clerkUser?.id;
+    const isCurrentUser = user.clerkUserId === authUser?.userId;
 
     return (
       <DropdownMenu>
@@ -222,7 +222,7 @@ export function UserTable({ users, viewMode = "table" }: UserTableProps) {
   };
 
   const UserCard = ({ user }: { user: Doc<"users"> }) => {
-    const isCurrentUser = user.clerkUserId === clerkUser?.id;
+    const isCurrentUser = user.clerkUserId === authUser?.userId;
     const isOnline = userPresence?.[user._id]?.isOnline ?? false;
 
     return (
@@ -402,7 +402,7 @@ export function UserTable({ users, viewMode = "table" }: UserTableProps) {
               </TableHeader>
               <TableBody>
                 {paginatedUsers.map((user, index) => {
-                  const isCurrentUser = user.clerkUserId === clerkUser?.id;
+                  const isCurrentUser = user.clerkUserId === authUser?.userId;
 
                   return (
                     <TableRow

@@ -5,16 +5,19 @@
  */
 
 import { redirect } from "next/navigation";
-import { auth } from "@clerk/nextjs/server";
+import { cookies } from "next/headers";
+import { verifyToken } from "@/lib/auth/jwt";
 
 export default async function RootPage() {
-  const { userId } = await auth();
+  const cookieStore = await cookies();
+  const token = cookieStore.get("auth_token")?.value;
 
-  if (userId) {
-    // User is authenticated, redirect to dashboard
-    redirect("/dashboard");
-  } else {
-    // User is not authenticated, redirect to login
-    redirect("/login");
+  if (token) {
+    const user = await verifyToken(token);
+    if (user) {
+      redirect("/dashboard");
+    }
   }
+
+  redirect("/login");
 }

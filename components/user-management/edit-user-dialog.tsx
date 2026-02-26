@@ -9,7 +9,7 @@
 
 import { useState, useEffect } from "react";
 import { useMutation } from "convex/react";
-import { useUser } from "@clerk/nextjs";
+import { useAuth } from "@/app/providers/auth-provider";
 import { api } from "@/convex/_generated/api";
 import {
   Dialog,
@@ -53,7 +53,7 @@ export function EditUserDialog({ open, onOpenChange, user }: EditUserDialogProps
   const updateUser = useMutation(api.users.updateUser);
 
   const generateUploadUrl = useMutation(api.users.generateSignatureUploadUrl);
-  const { user: clerkUser } = useUser();
+  const { user: authUser } = useAuth();
 
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -61,7 +61,7 @@ export function EditUserDialog({ open, onOpenChange, user }: EditUserDialogProps
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   // Check if editing yourself
-  const isEditingSelf = user?.clerkUserId === clerkUser?.id;
+  const isEditingSelf = user?.clerkUserId === authUser?.userId;
 
   // Image upload state
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
@@ -237,21 +237,10 @@ export function EditUserDialog({ open, onOpenChange, user }: EditUserDialogProps
         }
       }
 
-      // Update user in Convex
-      await updateUser({
-        userId: user._id,
-        fullName: formData.fullName,
-        phoneNumber: formData.phoneNumber,
-        address: formData.address,
-        role: formData.role as Role,
-        assignedSites: formData.assignedSites,
-        profileImage,
-        profileImageKey,
-        signatureStorageId,
-      });
+      // If password is provided, get it hashed first via the API
+      let newPasswordHash: string | undefined = undefined;
 
-      // If password is provided, update it
-      if (formData.password && formData.password.length >= 8) {
+      if (formData.password && formData.password.length >= 6) {
         if (isEditingSelf) {
           // For self: use change-password API with current password
           const response = await fetch("/api/auth/change-password", {
@@ -267,6 +256,8 @@ export function EditUserDialog({ open, onOpenChange, user }: EditUserDialogProps
             const errorData = await response.json();
             throw new Error(errorData.error || "Failed to change password");
           }
+          const data = await response.json();
+          newPasswordHash = data.passwordHash;
         } else {
           // For others: use admin API (no current password needed)
           const response = await fetch("/api/admin/update-user-password", {
@@ -282,8 +273,24 @@ export function EditUserDialog({ open, onOpenChange, user }: EditUserDialogProps
             const errorData = await response.json();
             throw new Error(errorData.error || "Failed to update password");
           }
+          const data = await response.json();
+          newPasswordHash = data.passwordHash;
         }
       }
+
+      // Update user in Convex
+      await updateUser({
+        userId: user._id,
+        fullName: formData.fullName,
+        phoneNumber: formData.phoneNumber,
+        address: formData.address,
+        role: formData.role as Role,
+        assignedSites: formData.assignedSites,
+        profileImage,
+        profileImageKey,
+        signatureStorageId,
+        passwordHash: newPasswordHash,
+      });
 
       toast.success(isEditingSelf ? "Profile updated successfully!" : "User updated successfully!");
       onOpenChange(false);

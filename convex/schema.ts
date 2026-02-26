@@ -12,9 +12,10 @@ export default defineSchema({
   // Users Table
   // ============================================================================
   users: defineTable({
-    clerkUserId: v.string(), // Clerk user ID (unique)
+    clerkUserId: v.string(), // Auth user ID (unique) - used as JWT subject
     username: v.string(), // Username for login (unique)
     fullName: v.string(),
+    passwordHash: v.optional(v.string()), // bcrypt password hash
     phoneNumber: v.string(),
     address: v.string(),
     role: v.union(

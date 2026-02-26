@@ -9,7 +9,7 @@ import { cn } from "@/lib/utils";
  */
 
 import { useState } from "react";
-import { useUser } from "@clerk/nextjs";
+import { useAuth } from "@/app/providers/auth-provider";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import {
@@ -31,16 +31,16 @@ import { User, Lock, Shield, MapPin, Camera, Pen } from "lucide-react";
 import { UserAvatar } from "@/components/user-management/user-avatar";
 
 export function ProfileContent() {
-  const { user, isLoaded } = useUser();
+  const { user: authUser, isLoading, isAuthenticated } = useAuth();
   const convexUser = useQuery(
     api.users.getUserByClerkId,
-    isLoaded && user ? { clerkUserId: user.id } : "skip"
+    isAuthenticated && authUser ? { clerkUserId: authUser.userId } : "skip"
   );
 
   // All hooks must be called before any conditional returns
   const [signatureDialogOpen, setSignatureDialogOpen] = useState(false);
 
-  if (!isLoaded || !user) {
+  if (isLoading || !authUser) {
     return (
       <div className="space-y-4">
         <Card>
@@ -56,7 +56,7 @@ export function ProfileContent() {
     );
   }
 
-  const displayName = convexUser?.fullName || user.username || "User";
+  const displayName = convexUser?.fullName || authUser.name || "User";
   const initials = displayName
     .split(" ")
     .map(n => n[0])
@@ -110,7 +110,7 @@ export function ProfileContent() {
             <div className="flex-1 text-center sm:text-left space-y-2 mb-2">
               <div>
                 <h2 className="text-3xl font-bold tracking-tight">{displayName}</h2>
-                <p className="text-muted-foreground font-medium">@{user.username}</p>
+                <p className="text-muted-foreground font-medium">@{authUser.username}</p>
               </div>
 
               <div className="flex flex-wrap gap-2 justify-center sm:justify-start">
@@ -163,7 +163,7 @@ export function ProfileContent() {
               {/* Show editable form for all users on their own profile */}
               <PersonalInfoForm
                 convexUser={convexUser}
-                clerkUserId={user.id}
+                clerkUserId={authUser.userId}
               />
 
               {/* Admin Info Message */}

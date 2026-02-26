@@ -1,76 +1,54 @@
 /**
- * Get User Role Helpers
- * 
- * Server-side utilities to fetch the current user's role.
+ * Get User Role Helpers - Custom Auth
+ * Server-side utilities to fetch the current user's role from JWT cookie
  */
 
-import { auth, currentUser } from "@clerk/nextjs/server";
-import { isClerkAPIResponseError } from "@clerk/nextjs/errors";
+import { cookies } from "next/headers";
+import { verifyToken } from "./jwt";
 import { Role, isValidRole } from "./roles";
 
 /**
- * Get the current user's role from Clerk metadata
- * Server-side only
+ * Get the current user's role from JWT cookie (Server-side only)
  */
 export async function getUserRole(): Promise<Role | null> {
   try {
-    // Try to read the role directly from the session claims first to
-    // avoid an extra Clerk API request (and potential API errors)
-    const { sessionClaims, userId } = await auth();
-    const claimsRole =
-      (sessionClaims?.metadata as Record<string, unknown> | undefined)?.role ??
-      (sessionClaims?.publicMetadata as Record<string, unknown> | undefined)
-        ?.role;
+    const cookieStore = await cookies();
+    const token = cookieStore.get("auth_token")?.value;
+    if (!token) return null;
 
-    if (claimsRole && isValidRole(String(claimsRole))) {
-      return claimsRole as Role;
+    const payload = await verifyToken(token);
+    if (!payload) return null;
+
+    const role = payload.role;
+    if (role && isValidRole(role)) {
+      return role as Role;
     }
 
-    // Fallback to fetching the full user from Clerk
-    if (!userId) {
-      return null;
-    }
-
-    const user = await currentUser();
-    if (!user) {
-      return null;
-    }
-
-    const role = user.publicMetadata?.role as string | undefined;
-    if (!role || !isValidRole(role)) {
-      return null;
-    }
-
-    return role;
+    return null;
   } catch (error) {
-    if (isClerkAPIResponseError(error)) {
-      console.error("Failed to fetch Clerk user", {
-        code: error.code,
-        status: error.status,
-        message: error.message,
-        traceId: error.clerkTraceId,
-        errors: error.errors,
-      });
-    } else {
-      console.error("Unexpected error while fetching user role", error);
-    }
-    // Gracefully fall back to no role so callers can redirect to login
+    console.error("Error getting user role:", error);
     return null;
   }
 }
 
 /**
- * Get the current user's Clerk ID
- * Server-side only
+ * Get the current user's auth ID (Server-side only)
  */
 export async function getUserClerkId(): Promise<string | null> {
-  const { userId } = await auth();
-  return userId;
+  try {
+    const cookieStore = await cookies();
+    const token = cookieStore.get("auth_token")?.value;
+    if (!token) return null;
+
+    const payload = await verifyToken(token);
+    return payload?.userId || null;
+  } catch {
+    return null;
+  }
 }
 
 /**
- * Check if the current user has a specific role
- * Server-side only
+ * Check if the current user has a specific role (Server-side only)
  */
 export async function hasRole(requiredRole: Role): Promise<boolean> {
   const role = await getUserRole();
@@ -78,11 +56,9 @@ export async function hasRole(requiredRole: Role): Promise<boolean> {
 }
 
 /**
- * Check if the current user is authenticated
- * Server-side only
+ * Check if the current user is authenticated (Server-side only)
  */
 export async function isAuthenticated(): Promise<boolean> {
-  const { userId } = await auth();
+  const userId = await getUserClerkId();
   return !!userId;
 }
-

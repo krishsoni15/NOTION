@@ -5,7 +5,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@clerk/nextjs/server";
+import { getAuthUser } from "@/lib/auth/server";
 import { uploadImage, generateImageKey } from "@/lib/r2/client";
 
 // Allow longer execution time for large file uploads (PDFs, etc.)
@@ -14,8 +14,8 @@ export const maxDuration = 60; // 60 seconds
 export async function POST(request: NextRequest) {
     try {
         // Check authentication
-        const { userId } = await auth();
-        if (!userId) {
+        const authUser = await getAuthUser();
+        if (!authUser) {
             return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
 
@@ -40,7 +40,7 @@ export async function POST(request: NextRequest) {
         const buffer = Buffer.from(arrayBuffer);
 
         // Generate unique public ID (using existing helper but for generic files)
-        const publicId = generateImageKey(`chat-file-${userId}`, file.name);
+        const publicId = generateImageKey(`chat-file-${authUser.userId}`, file.name);
 
         // Determine resource type: 'image' for images, 'raw' for everything else (PDFs, docs)
         // This ensures PDFs are stored as downloadable files, not converted to images

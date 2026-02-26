@@ -1,14 +1,12 @@
-// Clerk Authentication Configuration
-// This tells Convex to accept and verify Clerk JWTs
-
+/**
+ * Convex Auth Configuration
+ * Points to our custom OIDC provider (served from Convex HTTP actions)
+ */
 export default {
   providers: [
     {
-      // Your Clerk domain
-      domain: "https://polished-clam-96.clerk.accounts.dev",
-      // Application ID that matches the JWT template
+      domain: process.env.CONVEX_SITE_URL || "https://rosy-peacock-841.convex.site",
       applicationID: "convex",
     },
   ],
 };
-

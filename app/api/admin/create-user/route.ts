@@ -1,23 +1,31 @@
 /**
  * Admin API: Create User
  * 
- * Creates a user in Clerk with username/password authentication.
+ * Creates a user with hashed password in our custom auth system.
  * Only accessible by authenticated managers.
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@clerk/nextjs/server";
-import { clerkClient } from "@clerk/nextjs/server";
+import { getAuthUser } from "@/lib/auth/server";
+import { hashPassword } from "@/lib/auth/password";
 
 export async function POST(request: NextRequest) {
   try {
     // Check authentication
-    const { userId } = await auth();
-    
-    if (!userId) {
+    const authUser = await getAuthUser();
+
+    if (!authUser) {
       return NextResponse.json(
         { error: "Unauthorized" },
         { status: 401 }
+      );
+    }
+
+    // Only managers can create users
+    if (authUser.role !== "manager") {
+      return NextResponse.json(
+        { error: "Forbidden: Only managers can create users" },
+        { status: 403 }
       );
     }
 
@@ -40,40 +48,25 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Create user in Clerk
-    const client = await clerkClient();
-    const user = await client.users.createUser({
-      username,
-      password,
-      publicMetadata: {
-        role,
-      },
-      skipPasswordChecks: true, // Allow any password without restrictions
-    });
+    // Hash the password
+    const passwordHash = await hashPassword(password);
+
+    // Generate a unique auth user ID
+    const clerkUserId = `usr_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
 
     return NextResponse.json({
-      clerkUserId: user.id,
+      clerkUserId,
+      passwordHash,
       success: true,
     });
   } catch (error: any) {
     console.error("Error creating user:", error);
-    
-    // Extract detailed error message from Clerk
-    let errorMessage = "Failed to create user";
-    
-    if (error?.errors && Array.isArray(error.errors) && error.errors.length > 0) {
-      // Clerk API errors format: { errors: [{ message: "..." }] }
-      errorMessage = error.errors.map((e: any) => e.message || e.longMessage).join(", ");
-    } else if (error?.message) {
-      errorMessage = error.message;
-    } else if (error?.clerkError) {
-      errorMessage = JSON.stringify(error.clerkError);
-    }
-    
+
+    const errorMessage = error?.message || "Failed to create user";
+
     return NextResponse.json(
       { error: errorMessage },
       { status: 500 }
     );
   }
 }
-

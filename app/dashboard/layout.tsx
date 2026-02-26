@@ -7,7 +7,8 @@
 
 import { ReactNode } from "react";
 import { redirect } from "next/navigation";
-import { auth } from "@clerk/nextjs/server";
+import { cookies } from "next/headers";
+import { verifyToken } from "@/lib/auth/jwt";
 import { SidebarProvider } from "@/components/layout/sidebar-provider";
 import { SidebarWrapper } from "@/components/layout/sidebar-wrapper";
 import { Header } from "@/components/layout/header";
@@ -18,14 +19,20 @@ import { getUserRole } from "@/lib/auth/get-user-role";
 import { UserSync } from "@/components/auth/user-sync";
 
 
-// Mark as dynamic since we use auth() which requires headers()
+// Mark as dynamic since we use cookies() which requires headers()
 export const dynamic = 'force-dynamic';
 
 export default async function DashboardLayout({ children }: { children: ReactNode }) {
-  // Check authentication
-  const { userId } = await auth();
+  // Check authentication via JWT cookie
+  const cookieStore = await cookies();
+  const token = cookieStore.get("auth_token")?.value;
 
-  if (!userId) {
+  if (!token) {
+    redirect("/login");
+  }
+
+  const user = await verifyToken(token);
+  if (!user) {
     redirect("/login");
   }
 
@@ -55,4 +62,3 @@ export default async function DashboardLayout({ children }: { children: ReactNod
     </ChatWidthProvider>
   );
 }
-

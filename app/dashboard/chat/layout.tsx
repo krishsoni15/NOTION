@@ -6,26 +6,30 @@
 
 import { ReactNode } from "react";
 import { redirect } from "next/navigation";
-import { auth } from "@clerk/nextjs/server";
+import { cookies } from "next/headers";
+import { verifyToken } from "@/lib/auth/jwt";
 import { Header } from "@/components/layout/header";
 import { ChatWidthProvider } from "@/components/chat/chat-width-provider";
 import { ReminderScheduler } from "@/components/sticky-notes/reminder-scheduler";
 import { getUserRole } from "@/lib/auth/get-user-role";
 
-// Mark as dynamic since we use auth() which requires headers()
+// Mark as dynamic since we use cookies()
 export const dynamic = 'force-dynamic';
 
 export default async function ChatLayout({ children }: { children: ReactNode }) {
-  // Check authentication
-  const { userId } = await auth();
+  const cookieStore = await cookies();
+  const token = cookieStore.get("auth_token")?.value;
 
-  if (!userId) {
+  if (!token) {
     redirect("/login");
   }
 
-  // Get user role
-  const role = await getUserRole();
+  const user = await verifyToken(token);
+  if (!user) {
+    redirect("/login");
+  }
 
+  const role = await getUserRole();
   if (!role) {
     redirect("/login");
   }
@@ -45,4 +49,3 @@ export default async function ChatLayout({ children }: { children: ReactNode }) 
     </ChatWidthProvider>
   );
 }
-

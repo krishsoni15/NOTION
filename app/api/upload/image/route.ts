@@ -5,14 +5,14 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { auth } from "@clerk/nextjs/server";
+import { getAuthUser } from "@/lib/auth/server";
 import { uploadImage, generateImageKey } from "@/lib/r2/client";
 
 export async function POST(request: NextRequest) {
   try {
     // Check authentication
-    const { userId } = await auth();
-    if (!userId) {
+    const authUser = await getAuthUser();
+    if (!authUser) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 

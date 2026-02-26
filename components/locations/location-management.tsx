@@ -8,7 +8,7 @@
 
 import { useState, useMemo, useEffect } from "react";
 import { useQuery } from "convex/react";
-import { useAuth } from "@clerk/nextjs";
+import { useAuth } from "@/app/providers/auth-provider";
 import { api } from "@/convex/_generated/api";
 import { normalizeSearchQuery, matchesAnySearchQuery } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -40,13 +40,13 @@ export function LocationManagement() {
   const { viewMode, toggleViewMode } = useViewMode("location-view-mode");
   const [refreshKey, setRefreshKey] = useState(0);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const { isLoaded, isSignedIn } = useAuth();
+  const { isAuthenticated } = useAuth();
 
 
   // Onlyfetch sites if user is signed in
   const locations = useQuery(
     api.sites.getAllSites,
-    isLoaded && isSignedIn ? { includeInactive: true } : "skip"
+    isAuthenticated ? { includeInactive: true } : "skip"
   );
 
   // Pagination State

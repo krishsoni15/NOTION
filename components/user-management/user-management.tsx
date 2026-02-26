@@ -8,7 +8,7 @@
 
 import { useState, useMemo, useEffect } from "react";
 import { useQuery } from "convex/react";
-import { useAuth } from "@clerk/nextjs";
+import { useAuth } from "@/app/providers/auth-provider";
 import { api } from "@/convex/_generated/api";
 import { normalizeSearchQuery, matchesAnySearchQuery } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -41,13 +41,13 @@ export function UserManagement() {
   const { viewMode, toggleViewMode } = useViewMode("user-view-mode");
   const [refreshKey, setRefreshKey] = useState(0);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const { isLoaded, isSignedIn } = useAuth();
+  const { isAuthenticated } = useAuth();
 
 
   // Only fetch users if user is signed in
   const users = useQuery(
     api.users.getAllUsers,
-    isLoaded && isSignedIn ? {} : "skip"
+    isAuthenticated ? {} : "skip"
   );
 
   // Pagination State

@@ -2,13 +2,11 @@
 
 /**
  * Custom User Menu
- * 
- * Custom dropdown menu for user profile (replaces Clerk's UserButton).
- * Built with shadcn components for full control.
+ * Dropdown menu for user profile using custom auth.
  */
 
 import { useState, useEffect } from "react";
-import { useUser, useClerk } from "@clerk/nextjs";
+import { useAuth } from "@/app/providers/auth-provider";
 import { useRouter } from "next/navigation";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
@@ -20,7 +18,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { UserAvatar } from "@/components/user-management/user-avatar";
 import { Button } from "@/components/ui/button";
 import {
@@ -29,7 +26,6 @@ import {
   Settings,
   ChevronDown,
   Shield,
-  Mail,
   Phone,
   Maximize
 } from "lucide-react";
@@ -37,8 +33,7 @@ import { ROLE_LABELS } from "@/lib/auth/roles";
 
 
 export function UserMenu() {
-  const { user, isLoaded } = useUser();
-  const clerk = useClerk();
+  const { user: authUser, isAuthenticated, logout } = useAuth();
   const router = useRouter();
   const setOffline = useMutation(api.presence.setOffline);
   const [isMounted, setIsMounted] = useState(false);
@@ -51,16 +46,15 @@ export function UserMenu() {
   // Get user data from Convex (includes role)
   const convexUser = useQuery(
     api.users.getUserByClerkId,
-    isLoaded && user ? { clerkUserId: user.id } : "skip"
+    isAuthenticated && authUser ? { clerkUserId: authUser.userId } : "skip"
   );
 
-  if (!isMounted || !isLoaded || !user) {
+  if (!isMounted || !isAuthenticated || !authUser) {
     return (
       <div className="h-9 w-9 rounded-full bg-muted animate-pulse" />
     );
   }
 
-  // Get user initials for avatar fallback
   const getInitials = (name: string) => {
     return name
       .split(" ")
@@ -70,20 +64,18 @@ export function UserMenu() {
       .slice(0, 2);
   };
 
-  const displayName = convexUser?.fullName || user.username || "User";
+  const displayName = convexUser?.fullName || authUser.name || "User";
   const initials = getInitials(displayName);
   const role = convexUser?.role;
 
-
-
   const handleSignOut = async () => {
+    setIsLoading(true);
     try {
       await setOffline();
     } catch (error) {
       console.warn("Failed to set offline status:", error);
     }
-
-    await clerk.signOut();
+    await logout();
     router.push("/login");
   };
 
@@ -115,7 +107,6 @@ export function UserMenu() {
         align="end"
         sideOffset={8}
       >
-        {/* User Info Header */}
         <DropdownMenuLabel className="font-normal p-0">
           <div className="flex flex-col space-y-2 py-2 px-1">
             <div className="flex items-center gap-3">
@@ -130,11 +121,10 @@ export function UserMenu() {
               </div>
               <div className="flex flex-col">
                 <p className="text-sm font-semibold leading-none">{displayName}</p>
-                <p className="text-xs text-muted-foreground mt-1">@{user.username}</p>
+                <p className="text-xs text-muted-foreground mt-1">@{authUser.username}</p>
               </div>
             </div>
 
-            {/* Role Badge */}
             {role && (
               <div className="flex items-center gap-2 px-2 py-1.5 bg-primary/10 rounded-md">
                 <Shield className="h-3.5 w-3.5 text-primary" />
@@ -148,65 +138,41 @@ export function UserMenu() {
 
         <DropdownMenuSeparator />
 
-        {/* Additional User Info */}
-        {convexUser && (
+        {convexUser && convexUser.phoneNumber && (
           <>
-            {convexUser.phoneNumber && (
-              <DropdownMenuItem className="cursor-default focus:bg-transparent hover:bg-transparent">
-                <Phone className="mr-2 h-4 w-4 text-muted-foreground" />
-                <span className="text-xs text-muted-foreground">{convexUser.phoneNumber}</span>
-              </DropdownMenuItem>
-            )}
-
-            {user.primaryEmailAddress && (
-              <DropdownMenuItem className="cursor-default focus:bg-transparent hover:bg-transparent">
-                <Mail className="mr-2 h-4 w-4 text-muted-foreground" />
-                <span className="text-xs text-muted-foreground">{user.primaryEmailAddress.emailAddress}</span>
-              </DropdownMenuItem>
-            )}
-
+            <DropdownMenuItem className="cursor-default focus:bg-transparent hover:bg-transparent">
+              <Phone className="mr-2 h-4 w-4 text-muted-foreground" />
+              <span className="text-xs text-muted-foreground">{convexUser.phoneNumber}</span>
+            </DropdownMenuItem>
             <DropdownMenuSeparator />
           </>
         )}
 
-
-
-        {/* Profile Action */}
         <DropdownMenuItem onClick={() => router.push("/dashboard/profile")}>
           <User className="mr-2 h-4 w-4" />
           <span>My Profile</span>
         </DropdownMenuItem>
 
-        {/* Settings Action */}
         <DropdownMenuItem onClick={() => router.push("/dashboard/settings")}>
           <Settings className="mr-2 h-4 w-4" />
           <span>Settings</span>
         </DropdownMenuItem>
 
-        {/* Full Screen Action */}
         <DropdownMenuItem
           onClick={() => {
             if (!document.fullscreenElement) {
-              document.documentElement.requestFullscreen().catch((e) => {
-                console.error(`Error attempting to enable fullscreen mode: ${e.message} (${e.name})`);
-              });
+              document.documentElement.requestFullscreen().catch(console.error);
             } else {
-              if (document.exitFullscreen) {
-                document.exitFullscreen();
-              }
+              document.exitFullscreen();
             }
           }}
         >
-          <Settings className="mr-2 h-4 w-4 hidden" /> {/* Hidden spacer or use a real icon */}
           <Maximize className="mr-2 h-4 w-4" />
           <span>Full Screen</span>
         </DropdownMenuItem>
 
         <DropdownMenuSeparator />
 
-
-
-        {/* Sign Out */}
         <DropdownMenuItem
           onClick={handleSignOut}
           className="text-destructive focus:text-destructive focus:bg-destructive/10"
@@ -215,10 +181,7 @@ export function UserMenu() {
           <LogOut className="mr-2 h-4 w-4" />
           <span>Sign Out</span>
         </DropdownMenuItem>
-
-
       </DropdownMenuContent>
     </DropdownMenu>
   );
 }
-

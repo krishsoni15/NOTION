@@ -6,7 +6,8 @@
  */
 
 import { redirect } from "next/navigation";
-import { auth } from "@clerk/nextjs/server";
+import { cookies } from "next/headers";
+import { verifyToken } from "@/lib/auth/jwt";
 import { LoginForm } from "@/components/auth/login-form";
 
 export default async function LoginPage({
@@ -14,17 +15,18 @@ export default async function LoginPage({
 }: {
   searchParams: Promise<{ disabled?: string; error?: string; mode?: string }>;
 }) {
-  // Await searchParams as it's now a Promise in Next.js
   const params = await searchParams;
 
   // If user is already authenticated, redirect to dashboard
-  // UNLESS they're adding another account (mode=add-account)
-  const { userId } = await auth();
+  const cookieStore = await cookies();
+  const token = cookieStore.get("auth_token")?.value;
 
-  if (userId && params?.mode !== "add-account") {
-    redirect("/dashboard");
+  if (token) {
+    const user = await verifyToken(token);
+    if (user && params?.mode !== "add-account") {
+      redirect("/dashboard");
+    }
   }
 
   return <LoginForm disabled={params?.disabled === "true"} />;
 }
-

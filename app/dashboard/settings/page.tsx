@@ -2,20 +2,13 @@
  * Settings Page
  * 
  * Application settings including theme preferences.
+ * Auth check is handled by dashboard layout.
  */
 
-import { auth } from "@clerk/nextjs/server";
-import { redirect } from "next/navigation";
 import { ThemeSettings } from "@/components/profile/theme-settings";
 import { Settings } from "lucide-react";
 
 export default async function SettingsPage() {
-  const { userId } = await auth();
-
-  if (!userId) {
-    redirect("/login");
-  }
-
   return (
     <div className="container max-w-4xl py-8">
       <div className="mb-8">
@@ -38,4 +31,3 @@ export default async function SettingsPage() {
     </div>
   );
 }
-

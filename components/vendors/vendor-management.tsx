@@ -8,7 +8,7 @@
 
 import { useState, useMemo, useEffect } from "react";
 import { useQuery } from "convex/react";
-import { useAuth } from "@clerk/nextjs";
+import { useAuth } from "@/app/providers/auth-provider";
 import { api } from "@/convex/_generated/api";
 import { normalizeSearchQuery, matchesAnySearchQuery } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -43,7 +43,7 @@ export function VendorManagement({ showTableOnly = false }: VendorManagementProp
   const { viewMode, toggleViewMode } = useViewMode("vendor-view-mode");
   const [refreshKey, setRefreshKey] = useState(0);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const { isLoaded, isSignedIn } = useAuth();
+  const { isAuthenticated } = useAuth();
   const userRole = useUserRole();
 
   const canCreate = userRole === ROLES.PURCHASE_OFFICER;
@@ -53,7 +53,7 @@ export function VendorManagement({ showTableOnly = false }: VendorManagementProp
   // Only fetch vendors if user is signed in
   const vendors = useQuery(
     api.vendors.getAllVendors,
-    isLoaded && isSignedIn ? {} : "skip"
+    isAuthenticated ? {} : "skip"
   );
 
   // Pagination State

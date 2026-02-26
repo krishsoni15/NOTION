@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
-import { ClerkProvider } from "@clerk/nextjs";
 import { Geist, Geist_Mono } from "next/font/google";
 import "../styles/globals.css";
 import { ConvexClientProvider } from "./convex-provider";
+import { AuthProvider } from "./providers/auth-provider";
 import { ThemeInitializer } from "./theme-initializer";
 import { Providers } from "./providers";
 import { Toaster } from "@/components/ui/sonner";
@@ -21,7 +21,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "Notion App",
-  description: "Notion app with Convex and Clerk authentication",
+  description: "Notion app with secure custom authentication",
   icons: {
     icon: [
       { url: '/fav.svg', type: 'image/svg+xml' },
@@ -42,29 +42,19 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
         suppressHydrationWarning
       >
-        <ClerkProvider
-          signInUrl="/login"
-          signUpUrl="/login"
-          afterSignOutUrl="/login"
-          appearance={{
-            variables: {
-              colorPrimary: "#1F4E79",
-              borderRadius: "0.75rem",
-            },
-          }}
-        >
-          <ErrorBoundary>
-            <Providers>
-              <ThemeInitializer />
+        <ErrorBoundary>
+          <Providers>
+            <ThemeInitializer />
+            <AuthProvider>
               <ConvexClientProvider>
                 <PresenceProvider>
                   {children}
                 </PresenceProvider>
               </ConvexClientProvider>
-              <Toaster />
-            </Providers>
-          </ErrorBoundary>
-        </ClerkProvider>
+            </AuthProvider>
+            <Toaster />
+          </Providers>
+        </ErrorBoundary>
       </body>
     </html>
   );

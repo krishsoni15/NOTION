@@ -1,66 +1,42 @@
 /**
  * Delete User API (Manager Only)
  * 
- * Allows managers to delete users from Clerk.
+ * No-op since we no longer have Clerk.
+ * User deletion from Convex is handled by the Convex mutation directly.
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { auth, clerkClient } from "@clerk/nextjs/server";
+import { getAuthUser } from "@/lib/auth/server";
 
 export async function POST(request: NextRequest) {
   try {
-    // Check authentication
-    const { userId } = await auth();
-    
-    if (!userId) {
+    const authUser = await getAuthUser();
+
+    if (!authUser) {
       return NextResponse.json(
         { error: "Unauthorized" },
         { status: 401 }
       );
     }
 
-    // Get request body
-    const body = await request.json();
-    const { clerkUserId } = body;
-
-    if (!clerkUserId) {
+    if (authUser.role !== "manager") {
       return NextResponse.json(
-        { error: "Missing required fields" },
-        { status: 400 }
+        { error: "Forbidden" },
+        { status: 403 }
       );
     }
 
-    // Delete user from Clerk
-    const client = await clerkClient();
-    
-    try {
-      await client.users.deleteUser(clerkUserId);
-
-      return NextResponse.json({
-        success: true,
-        message: "User deleted successfully",
-      });
-    } catch (clerkError: any) {
-      console.error("Clerk error:", clerkError);
-      
-      // Extract error message
-      let errorMessage = "Failed to delete user";
-      if (clerkError?.errors && Array.isArray(clerkError.errors)) {
-        errorMessage = clerkError.errors.map((e: any) => e.message).join(", ");
-      }
-      
-      return NextResponse.json(
-        { error: errorMessage },
-        { status: 500 }
-      );
-    }
+    // User deletion is now handled entirely by Convex mutations
+    // This endpoint exists for backwards compatibility
+    return NextResponse.json({
+      success: true,
+      message: "User deleted successfully",
+    });
   } catch (error: any) {
     console.error("Error deleting user:", error);
-    const errorMessage = error instanceof Error ? error.message : "Failed to delete user";
     return NextResponse.json(
-      { error: errorMessage },
+      { error: "Failed to delete user" },
       { status: 500 }
     );
   }
 }
-

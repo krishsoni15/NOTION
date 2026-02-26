@@ -203,23 +203,44 @@ export function CreateUserDialog({ open, onOpenChange }: CreateUserDialogProps) 
         throw new Error(errorData.error || "Failed to create user in Clerk");
       }
 
-      const { clerkUserId } = await clerkResponse.json();
+      const { clerkUserId, passwordHash } = await clerkResponse.json();
 
       // Step 2: Create user in Convex with assigned sites
       const assignedSites = formData.role === ROLES.SITE_ENGINEER && formData.assignedSites.length > 0
         ? formData.assignedSites
         : undefined;
 
-      const userId = await createUser({
-        clerkUserId,
-        username: formData.username,
-        fullName: formData.fullName,
-        phoneNumber: formData.phoneNumber,
-        address: formData.address,
-        role: formData.role as Role,
-        assignedSites: assignedSites,
-        signatureStorageId: signatureStorageId,
-      });
+      let userId: any;
+      try {
+        userId = await createUser({
+          clerkUserId,
+          username: formData.username,
+          fullName: formData.fullName,
+          passwordHash,
+          phoneNumber: formData.phoneNumber,
+          address: formData.address,
+          role: formData.role as Role,
+          assignedSites: assignedSites,
+          signatureStorageId: signatureStorageId,
+        });
+      } catch (convexError) {
+        // Rollback: Delete the Clerk user since Convex creation failed
+        console.error("Convex user creation failed, rolling back Clerk user:", convexError);
+        try {
+          await fetch("/api/admin/delete-user", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ clerkUserId }),
+          });
+        } catch (rollbackError) {
+          console.error("Failed to rollback Clerk user:", rollbackError);
+        }
+        throw new Error(
+          convexError instanceof Error
+            ? `Failed to create user in database: ${convexError.message}`
+            : "Failed to create user in database. Please try again."
+        );
+      }
 
       // Step 3: Upload image if selected
       if (userId && selectedImage) {

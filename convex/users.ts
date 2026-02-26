@@ -59,6 +59,24 @@ export const getUserById = query({
 });
 
 /**
+ * List all usernames (no auth, for debug/setup only)
+ */
+export const listAllUsernames = query({
+  args: {},
+  handler: async (ctx) => {
+    const users = await ctx.db.query("users").collect();
+    return users.map(u => ({
+      id: u._id,
+      username: u.username,
+      role: u.role,
+      hasPassword: !!u.passwordHash,
+      clerkUserId: u.clerkUserId,
+      isActive: u.isActive,
+    }));
+  },
+});
+
+/**
  * Get user by username
  */
 export const getUserByUsername = query({
@@ -70,6 +88,32 @@ export const getUserByUsername = query({
       .unique();
 
     return user;
+  },
+});
+
+/**
+ * Get user by username for login (no auth required)
+ * Returns passwordHash for server-side verification
+ */
+export const getUserByUsernamePublic = query({
+  args: { username: v.string() },
+  handler: async (ctx, args) => {
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_username", (q) => q.eq("username", args.username))
+      .unique();
+
+    if (!user) return null;
+
+    return {
+      _id: user._id,
+      clerkUserId: user.clerkUserId,
+      username: user.username,
+      fullName: user.fullName,
+      passwordHash: user.passwordHash || null,
+      role: user.role,
+      isActive: user.isActive,
+    };
   },
 });
 
@@ -223,9 +267,10 @@ export const syncCurrentUser = mutation({
  */
 export const createUser = mutation({
   args: {
-    clerkUserId: v.string(),
+    clerkUserId: v.optional(v.string()),
     username: v.string(),
     fullName: v.string(),
+    passwordHash: v.optional(v.string()),
     phoneNumber: v.string(),
     address: v.string(),
     role: v.union(v.literal("site_engineer"), v.literal("manager"), v.literal("purchase_officer")),
@@ -236,6 +281,7 @@ export const createUser = mutation({
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
+    console.log("createUser: identity =", identity ? identity.subject : "null");
     if (!identity) {
       throw new Error("Not authenticated");
     }
@@ -245,6 +291,8 @@ export const createUser = mutation({
       .query("users")
       .withIndex("by_clerk_user_id", (q) => q.eq("clerkUserId", identity.subject))
       .unique();
+
+    console.log("createUser: currentUser =", currentUser ? { id: currentUser._id, role: currentUser.role } : "null");
 
     if (!currentUser) {
       throw new Error("User not found");
@@ -271,11 +319,14 @@ export const createUser = mutation({
       signatureUrl = await ctx.storage.getUrl(args.signatureStorageId);
     }
 
-    // Create user
+    // Create user - auto-generate auth ID if not provided
+    const authUserId = args.clerkUserId || `usr_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+    console.log("createUser: creating user", { username: args.username, role: args.role });
     const userId = await ctx.db.insert("users", {
-      clerkUserId: args.clerkUserId,
+      clerkUserId: authUserId,
       username: args.username,
       fullName: args.fullName,
+      passwordHash: args.passwordHash,
       phoneNumber: args.phoneNumber,
       address: args.address,
       role: args.role,
@@ -290,7 +341,8 @@ export const createUser = mutation({
       updatedAt: Date.now(),
     });
 
-    return userId;
+    console.log("createUser: success, userId =", userId);
+    return { userId, authUserId };
   },
 });
 
@@ -308,6 +360,7 @@ export const updateUser = mutation({
     isActive: v.optional(v.boolean()),
     profileImage: v.optional(v.string()),
     profileImageKey: v.optional(v.string()),
+    passwordHash: v.optional(v.string()),
     signatureStorageId: v.optional(v.id("_storage")),
   },
   handler: async (ctx, args) => {
@@ -357,6 +410,7 @@ export const updateUser = mutation({
       ...(args.isActive !== undefined && { isActive: args.isActive }),
       ...(args.profileImage !== undefined && { profileImage: args.profileImage }),
       ...(args.profileImageKey !== undefined && { profileImageKey: args.profileImageKey }),
+      ...(args.passwordHash !== undefined && { passwordHash: args.passwordHash }),
       ...(args.signatureStorageId && { signatureStorageId: args.signatureStorageId }),
       ...(signatureUrl && { signatureUrl: signatureUrl }),
       updatedAt: Date.now(),
@@ -455,6 +509,7 @@ export const updateProfile = mutation({
     address: v.string(),
     profileImage: v.optional(v.string()),
     profileImageKey: v.optional(v.string()),
+    passwordHash: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
@@ -484,6 +539,7 @@ export const updateProfile = mutation({
       address: args.address,
       ...(args.profileImage !== undefined && { profileImage: args.profileImage }),
       ...(args.profileImageKey !== undefined && { profileImageKey: args.profileImageKey }),
+      ...(args.passwordHash !== undefined && { passwordHash: args.passwordHash }),
       updatedAt: Date.now(),
     });
 
@@ -739,5 +795,67 @@ export const deleteSignature = mutation({
     });
 
     return { success: true };
+  },
+});
+
+/**
+ * Seed initial manager user (no auth required)
+ * If no users exist, creates a new manager.
+ * If users exist but none have passwords, updates the first manager with a password.
+ */
+export const seedManager = mutation({
+  args: {
+    username: v.string(),
+    fullName: v.string(),
+    passwordHash: v.string(),
+    phoneNumber: v.optional(v.string()),
+    address: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const existingUsers = await ctx.db.query("users").collect();
+
+    if (existingUsers.length === 0) {
+      // No users - create fresh
+      const authUserId = `usr_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+      const userId = await ctx.db.insert("users", {
+        clerkUserId: authUserId,
+        username: args.username,
+        fullName: args.fullName,
+        passwordHash: args.passwordHash,
+        phoneNumber: args.phoneNumber || "",
+        address: args.address || "",
+        role: "manager",
+        assignedSites: [],
+        isActive: true,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      });
+      console.log("seedManager: created new manager", { userId, username: args.username, authUserId });
+      return { userId, authUserId, action: "created" };
+    }
+
+    // Users exist - find a manager without a password and update it
+    const managerWithoutPw = existingUsers.find(u => u.role === "manager" && !u.passwordHash);
+
+    if (managerWithoutPw) {
+      // Update existing manager with password, username, and a new auth ID
+      const authUserId = `usr_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+      await ctx.db.patch(managerWithoutPw._id, {
+        username: args.username,
+        fullName: args.fullName,
+        passwordHash: args.passwordHash,
+        clerkUserId: authUserId,
+        updatedAt: Date.now(),
+      });
+      console.log("seedManager: updated existing manager with password", {
+        userId: managerWithoutPw._id,
+        oldUsername: managerWithoutPw.username,
+        newUsername: args.username,
+        authUserId,
+      });
+      return { userId: managerWithoutPw._id, authUserId, action: "updated" };
+    }
+
+    throw new Error("All existing managers already have passwords. Use the login page instead.");
   },
 });

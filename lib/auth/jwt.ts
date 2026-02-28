@@ -13,21 +13,37 @@ function getIssuer(): string {
 async function getPrivateKey() {
     const b64 = process.env.JWT_PRIVATE_KEY;
     if (!b64) throw new Error("JWT_PRIVATE_KEY not set");
-    const jwk: JWK = JSON.parse(Buffer.from(b64, "base64").toString());
+
+    // Cross-runtime base64 decode
+    const jsonStr = typeof Buffer !== "undefined"
+        ? Buffer.from(b64, "base64").toString("utf8")
+        : atob(b64);
+
+    const jwk: JWK = JSON.parse(jsonStr);
     return importJWK(jwk, "RS256");
 }
 
 async function getPublicKey() {
     const b64 = process.env.JWT_PUBLIC_KEY;
     if (!b64) throw new Error("JWT_PUBLIC_KEY not set");
-    const jwk: JWK = JSON.parse(Buffer.from(b64, "base64").toString());
+
+    const jsonStr = typeof Buffer !== "undefined"
+        ? Buffer.from(b64, "base64").toString("utf8")
+        : atob(b64);
+
+    const jwk: JWK = JSON.parse(jsonStr);
     return importJWK(jwk, "RS256");
 }
 
 export function getPublicJWK(): JWK {
     const b64 = process.env.JWT_PUBLIC_KEY;
     if (!b64) throw new Error("JWT_PUBLIC_KEY not set");
-    return JSON.parse(Buffer.from(b64, "base64").toString());
+
+    const jsonStr = typeof Buffer !== "undefined"
+        ? Buffer.from(b64, "base64").toString("utf8")
+        : atob(b64);
+
+    return JSON.parse(jsonStr);
 }
 
 export interface TokenPayload {
@@ -66,7 +82,8 @@ export async function verifyToken(token: string): Promise<TokenPayload | null> {
             name: (payload.name as string) || "",
             role: (payload.role as string) || "",
         };
-    } catch {
+    } catch (error) {
+        console.error("JWT Verify Error:", error);
         return null;
     }
 }

@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "dev:convex": "convex dev",
-    "dev:all": "concurrently \"npm run dev\" \"npm run dev:convex\"",
+    "dev:all": "NEXT_PUBLIC_CONVEX_URL=https://insightful-monitor-731.convex.cloud next dev",
     "build": "next build",
     "start": "next start",
     "lint": "eslint"
@@ -64,10 +64,12 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "baseline-browser-mapping": "^2.10.0",
     "concurrently": "^9.2.1",
     "eslint": "^9",
     "eslint-config-next": "16.0.10",
     "tailwindcss": "^4",
+    "tsx": "^4.21.0",
     "typescript": "^5",
     "vercel": "^50.1.3"
   }

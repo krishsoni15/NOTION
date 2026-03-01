@@ -7,6 +7,6 @@ export default {
     {
       domain: process.env.CONVEX_SITE_URL || "https://rosy-peacock-841.convex.site",
       applicationID: "convex",
-    },
+    }, // force jwks reload third time
   ],
 };

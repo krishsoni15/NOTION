@@ -8,7 +8,7 @@
 export default {
   providers: [
     {
-      domain: (process.env.CONVEX_SITE_URL || "https://rosy-vulture-342.convex.site") + "/auth-v2",
+      domain: (process.env.CONVEX_SITE_URL || "https://notion-auth.local") + "/auth-v2",
       applicationID: "notion-app-auth",
     },
   ],

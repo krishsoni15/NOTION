@@ -11,3 +11,4 @@ export default {
     },
   ],
 };
+// Cache bust: v2

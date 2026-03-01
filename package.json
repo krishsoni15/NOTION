@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "dev:convex": "convex dev",
-    "dev:all": "NEXT_PUBLIC_CONVEX_URL=https://insightful-monitor-731.convex.cloud next dev",
+    "dev:all": "concurrently \"npm run dev\" \"npm run dev:convex\"",
     "build": "next build",
     "start": "next start",
     "lint": "eslint"

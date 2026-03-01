@@ -60,7 +60,7 @@ export async function signToken(payload: TokenPayload): Promise<string> {
         nickname: payload.username,
         role: payload.role,
     })
-        .setProtectedHeader({ alg: "RS256", kid: "notion-1" })
+        .setProtectedHeader({ alg: "RS256", kid: "notion-client-1" })
         .setIssuer(getIssuer())
         .setSubject(payload.userId)
         .setAudience(JWT_AUDIENCE)

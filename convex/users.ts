@@ -19,6 +19,7 @@ export const getCurrentUser = query({
   args: {},
   handler: async (ctx) => {
     const identity = await ctx.auth.getUserIdentity();
+    console.log("getCurrentUser: identity =", identity);
     if (!identity) {
       return null;
     }
@@ -26,8 +27,9 @@ export const getCurrentUser = query({
     const user = await ctx.db
       .query("users")
       .withIndex("by_clerk_user_id", (q) => q.eq("clerkUserId", identity.subject))
-      .unique();
+      .first();
 
+    console.log("getCurrentUser: returning user =", user);
     return user;
   },
 });
@@ -845,6 +847,7 @@ export const seedManager = mutation({
         fullName: args.fullName,
         passwordHash: args.passwordHash,
         clerkUserId: authUserId,
+        isActive: true,
         updatedAt: Date.now(),
       });
       console.log("seedManager: updated existing manager with password", {
@@ -855,6 +858,7 @@ export const seedManager = mutation({
       });
       return { userId: managerWithoutPw._id, authUserId, action: "updated" };
     }
+
 
     throw new Error("All existing managers already have passwords. Use the login page instead.");
   },

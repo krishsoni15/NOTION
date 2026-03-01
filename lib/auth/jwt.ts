@@ -1,12 +1,16 @@
 /**
  * JWT Utilities - Custom Auth
  * Sign and verify JWT tokens using RSA256
+ * 
+ * Reads kid dynamically from the key itself so it works
+ * regardless of which key pair is in .env.local
  */
 import { importJWK, SignJWT, jwtVerify, type JWK } from "jose";
 
 const JWT_AUDIENCE = "convex";
 
 function getIssuer(): string {
+    // Derive issuer from NEXT_PUBLIC_CONVEX_URL (.cloud -> .site)
     const url = process.env.NEXT_PUBLIC_CONVEX_URL;
     if (url) {
         return url.replace(".cloud", ".site");
@@ -14,40 +18,36 @@ function getIssuer(): string {
     return process.env.CONVEX_SITE_URL || "https://notion-auth.local";
 }
 
-async function getPrivateKey() {
+function getPrivateJWK(): JWK {
     const b64 = process.env.JWT_PRIVATE_KEY;
     if (!b64) throw new Error("JWT_PRIVATE_KEY not set");
-
-    // Cross-runtime base64 decode
     const jsonStr = typeof Buffer !== "undefined"
         ? Buffer.from(b64, "base64").toString("utf8")
         : atob(b64);
+    return JSON.parse(jsonStr);
+}
 
-    const jwk: JWK = JSON.parse(jsonStr);
+function getPublicJWK_internal(): JWK {
+    const b64 = process.env.JWT_PUBLIC_KEY;
+    if (!b64) throw new Error("JWT_PUBLIC_KEY not set");
+    const jsonStr = typeof Buffer !== "undefined"
+        ? Buffer.from(b64, "base64").toString("utf8")
+        : atob(b64);
+    return JSON.parse(jsonStr);
+}
+
+async function getPrivateKey() {
+    const jwk = getPrivateJWK();
     return importJWK(jwk, "RS256");
 }
 
 async function getPublicKey() {
-    const b64 = process.env.JWT_PUBLIC_KEY;
-    if (!b64) throw new Error("JWT_PUBLIC_KEY not set");
-
-    const jsonStr = typeof Buffer !== "undefined"
-        ? Buffer.from(b64, "base64").toString("utf8")
-        : atob(b64);
-
-    const jwk: JWK = JSON.parse(jsonStr);
+    const jwk = getPublicJWK_internal();
     return importJWK(jwk, "RS256");
 }
 
 export function getPublicJWK(): JWK {
-    const b64 = process.env.JWT_PUBLIC_KEY;
-    if (!b64) throw new Error("JWT_PUBLIC_KEY not set");
-
-    const jsonStr = typeof Buffer !== "undefined"
-        ? Buffer.from(b64, "base64").toString("utf8")
-        : atob(b64);
-
-    return JSON.parse(jsonStr);
+    return getPublicJWK_internal();
 }
 
 export interface TokenPayload {
@@ -58,13 +58,16 @@ export interface TokenPayload {
 }
 
 export async function signToken(payload: TokenPayload): Promise<string> {
-    const key = await getPrivateKey();
+    const privateJwk = getPrivateJWK();
+    const kid = privateJwk.kid || "notion-client-1";
+    const key = await importJWK(privateJwk, "RS256");
+
     return new SignJWT({
         name: payload.name,
         nickname: payload.username,
         role: payload.role,
     })
-        .setProtectedHeader({ alg: "RS256", kid: "notion-1" })
+        .setProtectedHeader({ alg: "RS256", kid })
         .setIssuer(getIssuer())
         .setSubject(payload.userId)
         .setAudience(JWT_AUDIENCE)

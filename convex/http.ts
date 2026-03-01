@@ -1,6 +1,10 @@
 /**
  * Convex HTTP Router
  * Serves OIDC discovery and JWKS endpoints for custom JWT verification
+ * 
+ * IMPORTANT: The JWKS public key is read from the Convex environment variable
+ * JWT_PUBLIC_JWK. Set it via: npx convex env set JWT_PUBLIC_JWK '<json>'
+ * This ensures each deployment has the correct key without hardcoding.
  */
 
 import { httpRouter } from "convex/server";
@@ -38,30 +42,42 @@ http.route({
 });
 
 // JWKS endpoint - serves the public key for JWT verification
+// Reads from Convex env var JWT_PUBLIC_JWK (set via `npx convex env set`)
 http.route({
     path: "/.well-known/jwks.json",
     method: "GET",
     handler: httpAction(async () => {
-        // Public key JWK - this is PUBLIC and safe to expose
-        const jwks = {
-            keys: [
-                {
-                    "kty": "RSA",
-                    "n": "xmkM-tbV6dF23Jc42kepYLgiTDiDSgyv2J2qUYH1Sulhs7lmgLw8V8wms_McFU5Ou1yPRmnqoD6YZwYF0EseCOmzxUS1I-WG8DpoZKRkBtYNPrPi5IWHFoS9jbYc6Q_7C_T62x0COmAUcTSkUsMmfpe7mazYqyWgKJIXTLLOGKHllZE4Mlqmnwb-9h98KY_6gDcVSS5-gfzX0aRWHCaRGHyoP1meem9giB5aEJUpG1YoexXBDxZk4di3AOwPR6HK8EUuk6AOzXOf1LH6THxtih83zbqEoBmG0eKeq6TZ-g4Mn_MrJ89NC-96UBfTKhqrz16EhFtZIlfvuOywx6k93Q",
-                    "e": "AQAB",
-                    "kid": "notion-1",
-                    "alg": "RS256",
-                    "use": "sig"
-                }
-            ],
-        };
+        const pubKeyJson = process.env.JWT_PUBLIC_JWK;
 
-        return new Response(JSON.stringify(jwks), {
+        if (pubKeyJson) {
+            // Dynamic: read from Convex environment variable
+            try {
+                const jwk = JSON.parse(pubKeyJson);
+                // Ensure required fields
+                if (!jwk.alg) jwk.alg = "RS256";
+                if (!jwk.use) jwk.use = "sig";
+
+                const jwks = { keys: [jwk] };
+                return new Response(JSON.stringify(jwks), {
+                    status: 200,
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Access-Control-Allow-Origin": "*",
+                        "Cache-Control": "public, max-age=3600",
+                    },
+                });
+            } catch (e) {
+                console.error("Failed to parse JWT_PUBLIC_JWK:", e);
+            }
+        }
+
+        // Fallback: return empty keys (will cause auth to fail gracefully)
+        console.error("JWT_PUBLIC_JWK environment variable not set! Run: npx convex env set JWT_PUBLIC_JWK '<json>'");
+        return new Response(JSON.stringify({ keys: [] }), {
             status: 200,
             headers: {
                 "Content-Type": "application/json",
                 "Access-Control-Allow-Origin": "*",
-                "Cache-Control": "public, max-age=86400",
             },
         });
     }),

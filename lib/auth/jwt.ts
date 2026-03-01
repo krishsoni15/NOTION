@@ -7,6 +7,10 @@ import { importJWK, SignJWT, jwtVerify, type JWK } from "jose";
 const JWT_AUDIENCE = "convex";
 
 function getIssuer(): string {
+    const url = process.env.NEXT_PUBLIC_CONVEX_URL;
+    if (url) {
+        return url.replace(".cloud", ".site");
+    }
     return process.env.CONVEX_SITE_URL || "https://notion-auth.local";
 }
 

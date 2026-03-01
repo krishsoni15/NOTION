@@ -46,13 +46,13 @@ http.route({
         const jwks = {
             keys: [
                 {
-                    kty: "RSA",
-                    n: "xmkM-tbV6dF23Jc42kepYLgiTDiDSgyv2J2qUYH1Sulhs7lmgLw8V8wms_McFU5Ou1yPRmnqoD6YZwYF0EseCOmzxUS1I-WG8DpoZKRkBtYNPtPi5IWHFoS9jbYc6Q_7C_T62x0COmAUcTSkUsMmfpe7mazYqyWgKJIXTLLOGKHllZE4Mlqmnwb-9h98KY_6gDcVSS5-gfzX0aRWHCaRGHyoP1meem9giB5aEJUpG1YoexXBDxZk4di3AOwPR6HK8EUuk6AOzXOf1LH6THxtih83zbqEoBmG0eKeq6TZ-g4Mn_MrJ89NC-96UBfTKhqrz16EhFtZIlfvuOyx6k93QQ",
-                    e: "AQAB",
-                    kid: "notion-1",
-                    alg: "RS256",
-                    use: "sig",
-                },
+                    "kty": "RSA",
+                    "n": "xmkM-tbV6dF23Jc42kepYLgiTDiDSgyv2J2qUYH1Sulhs7lmgLw8V8wms_McFU5Ou1yPRmnqoD6YZwYF0EseCOmzxUS1I-WG8DpoZKRkBtYNPrPi5IWHFoS9jbYc6Q_7C_T62x0COmAUcTSkUsMmfpe7mazYqyWgKJIXTLLOGKHllZE4Mlqmnwb-9h98KY_6gDcVSS5-gfzX0aRWHCaRGHyoP1meem9giB5aEJUpG1YoexXBDxZk4di3AOwPR6HK8EUuk6AOzXOf1LH6THxtih83zbqEoBmG0eKeq6TZ-g4Mn_MrJ89NC-96UBfTKhqrz16EhFtZIlfvuOywx6k93Q",
+                    "e": "AQAB",
+                    "kid": "notion-1",
+                    "alg": "RS256",
+                    "use": "sig"
+                }
             ],
         };
 

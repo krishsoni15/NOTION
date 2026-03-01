@@ -35,11 +35,15 @@ const serveOIDCConfig = httpAction(async (_ctx, request) => {
 });
 
 const serveJWKS = httpAction(async () => {
-    const pubKeyJson = process.env.JWT_PUBLIC_JWK;
+    const pubKeyStr = process.env.JWT_PUBLIC_KEY || process.env.JWT_PUBLIC_JWK;
 
-    if (pubKeyJson) {
+    if (pubKeyStr) {
         try {
-            const jwk = JSON.parse(pubKeyJson);
+            const jsonStr = pubKeyStr.startsWith("eyJ")
+                ? (typeof Buffer !== "undefined" ? Buffer.from(pubKeyStr, "base64").toString("utf8") : atob(pubKeyStr))
+                : pubKeyStr;
+
+            const jwk = JSON.parse(jsonStr);
             if (!jwk.alg) jwk.alg = "RS256";
             if (!jwk.use) jwk.use = "sig";
 
@@ -53,7 +57,7 @@ const serveJWKS = httpAction(async () => {
                 },
             });
         } catch (e) {
-            console.error("Failed to parse JWT_PUBLIC_JWK:", e);
+            console.error("Failed to parse JWT_PUBLIC_KEY:", e);
         }
     }
 

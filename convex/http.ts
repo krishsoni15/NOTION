@@ -47,9 +47,9 @@ http.route({
             keys: [
                 {
                     kty: "RSA",
-                    n: "5kB57Pnd4TIssxVNIkG-sIY8g-RQRo1BSqu43tdnDlKsSbdWAN_w2b8M9lnlVxioUTUYKhSl4H_j-iGH9ZQmltZvisAkeYOyvrWdPwTxqjCgKnXXuAci7jb3slwSDz_MobYkkxItey0d_N1SUItQzn3y9Y9syQTXuLbe_PVZ67RJigpUT7pLebVADzyUbARmUQfeMDSkVce70FCXQ4Vt1FWlLaAFP0YHvwsn5OY84NUxxvL8VhepzALTCsKp5EYbJWCoFepuuZcJpfIEcakCfzUEZstp3V1OmKuBHz_bAXHpATJZkPdzD__aSQOVQVEFw-enjb1lGJhmxiz2y5-4FQ",
+                    n: "xmkM-tbV6dF23Jc42kepYLgiTDiDSgyv2J2qUYH1Sulhs7lmgLw8V8wms_McFU5Ou1yPRmnqoD6YZwYF0EseCOmzxUS1I-WG8DpoZKRkBtYNPtPi5IWHFoS9jbYc6Q_7C_T62x0COmAUcTSkUsMmfpe7mazYqyWgKJIXTLLOGKHllZE4Mlqmnwb-9h98KY_6gDcVSS5-gfzX0aRWHCaRGHyoP1meem9giB5aEJUpG1YoexXBDxZk4di3AOwPR6HK8EUuk6AOzXOf1LH6THxtih83zbqEoBmG0eKeq6TZ-g4Mn_MrJ89NC-96UBfTKhqrz16EhFtZIlfvuOyx6k93QQ",
                     e: "AQAB",
-                    kid: "notion-client-1",
+                    kid: "notion-1",
                     alg: "RS256",
                     use: "sig",
                 },

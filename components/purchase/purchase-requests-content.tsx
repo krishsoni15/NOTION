@@ -701,6 +701,26 @@ export function PurchaseRequestsContent() {
             </div>
 
             <Button
+              variant={filterStatus.length === 1 && filterStatus[0] === "pending_po" ? "default" : "outline"}
+              onClick={() => {
+                if (filterStatus.length === 1 && filterStatus[0] === "pending_po") {
+                  setFilterStatus([]);
+                } else {
+                  setFilterStatus(["pending_po"]);
+                }
+              }}
+              className={cn(
+                "h-9 sm:h-10 transition-all",
+                filterStatus.length === 1 && filterStatus[0] === "pending_po"
+                  ? "bg-amber-500 hover:bg-amber-600 text-white border-amber-500"
+                  : "border-amber-500/50 text-amber-600 hover:bg-amber-50 hover:text-amber-700 dark:hover:bg-amber-900/20"
+              )}
+            >
+              <Clock className="h-4 w-4 mr-2" />
+              Pending PO
+            </Button>
+
+            <Button
               onClick={handleOpenDirectPO}
               className="bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white shadow-lg hover:shadow-xl transition-all duration-200 h-9 sm:h-10 ml-auto"
             >

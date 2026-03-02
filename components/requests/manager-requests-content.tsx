@@ -18,7 +18,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Search, Filter, LayoutGrid, Table as TableIcon, Check, Package } from "lucide-react";
+import { Search, Filter, LayoutGrid, Table as TableIcon, Check, Package, Clock } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -500,6 +500,28 @@ export function ManagerRequestsContent() {
                                 </Command>
                             </PopoverContent>
                         </Popover>
+
+                        <Button
+                            variant={statusFilter.length === 1 && statusFilter[0] === "pending_po" ? "default" : "outline"}
+                            onClick={() => {
+                                if (statusFilter.length === 1 && statusFilter[0] === "pending_po") {
+                                    setStatusFilter([]);
+                                } else {
+                                    setStatusFilter(["pending_po"]);
+                                    setWorkFilter("all");
+                                    setCategoryFilter("all");
+                                }
+                            }}
+                            className={cn(
+                                "h-9 transition-all",
+                                statusFilter.length === 1 && statusFilter[0] === "pending_po"
+                                    ? "bg-amber-500 hover:bg-amber-600 text-white border-amber-500"
+                                    : "border-amber-500/50 text-amber-600 hover:bg-amber-50 hover:text-amber-700 dark:hover:bg-amber-900/20"
+                            )}
+                        >
+                            <Clock className="h-3.5 w-3.5 mr-2" />
+                            Pending PO ({getSmartStatusCount("pending_po")})
+                        </Button>
 
                         <div className="ml-auto flex items-center gap-2">
                             <Select value={sortBy} onValueChange={(v) => setSortBy(v as SortOption)}>

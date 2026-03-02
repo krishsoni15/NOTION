@@ -12,7 +12,9 @@ const http = httpRouter();
 
 const serveOIDCConfig = httpAction(async (_ctx, request) => {
     const url = new URL(request.url);
-    const baseUrl = `${url.protocol}//${url.host}/auth-v3`;
+    // Extract the base path (e.g. /auth-v2 or /auth-v3) exactly as requested
+    const basePath = url.pathname.replace("/.well-known/openid-configuration", "");
+    const baseUrl = `${url.protocol}//${url.host}${basePath}`;
 
     const config = {
         issuer: baseUrl,

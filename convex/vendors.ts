@@ -116,9 +116,9 @@ export const createVendor = mutation({
   handler: async (ctx, args) => {
     const currentUser = await getCurrentUser(ctx);
 
-    // Check if user is a Purchase Officer
-    if (currentUser.role !== "purchase_officer") {
-      throw new Error("Unauthorized: Only Purchase Officers can create vendors");
+    // Check if user is a Purchase Officer or Manager
+    if (currentUser.role !== "purchase_officer" && currentUser.role !== "manager") {
+      throw new Error("Unauthorized: Only Purchase Officers and Managers can create vendors");
     }
 
     // Validate GST number format (15 characters, alphanumeric)
@@ -167,9 +167,9 @@ export const updateVendor = mutation({
   handler: async (ctx, args) => {
     const currentUser = await getCurrentUser(ctx);
 
-    // Check if user is a Purchase Officer
-    if (currentUser.role !== "purchase_officer") {
-      throw new Error("Unauthorized: Only Purchase Officers can update vendors");
+    // Check if user is a Purchase Officer or Manager
+    if (currentUser.role !== "purchase_officer" && currentUser.role !== "manager") {
+      throw new Error("Unauthorized: Only Purchase Officers and Managers can update vendors");
     }
 
     const vendor = await ctx.db.get(args.vendorId);
@@ -301,9 +301,9 @@ export const deleteVendor = mutation({
   handler: async (ctx, args) => {
     const currentUser = await getCurrentUser(ctx);
 
-    // Check if user is a Purchase Officer
-    if (currentUser.role !== "purchase_officer") {
-      throw new Error("Unauthorized: Only Purchase Officers can delete vendors");
+    // Check if user is a Purchase Officer or Manager
+    if (currentUser.role !== "purchase_officer" && currentUser.role !== "manager") {
+      throw new Error("Unauthorized: Only Purchase Officers and Managers can delete vendors");
     }
 
     const vendor = await ctx.db.get(args.vendorId);

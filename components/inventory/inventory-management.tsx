@@ -67,7 +67,7 @@ export function InventoryManagement({ userRole }: InventoryManagementProps) {
     setCurrentPage(1);
   }, [searchQuery, sortBy]);
 
-  const canCreate = userRole === ROLES.PURCHASE_OFFICER;
+  const canCreate = userRole === ROLES.PURCHASE_OFFICER || userRole === ROLES.MANAGER;
 
   // Only fetch inventory if user is signed in
   const items = useQuery(

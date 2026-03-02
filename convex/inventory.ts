@@ -291,9 +291,9 @@ export const createInventoryItem = mutation({
   handler: async (ctx, args) => {
     const currentUser = await getCurrentUser(ctx);
 
-    // Check if user is a Purchase Officer
-    if (currentUser.role !== "purchase_officer") {
-      throw new Error("Unauthorized: Only Purchase Officers can create inventory items");
+    // Check if user is a Purchase Officer or Manager
+    if (currentUser.role !== "purchase_officer" && currentUser.role !== "manager") {
+      throw new Error("Unauthorized: Only Purchase Officers and Managers can create inventory items");
     }
 
     // Support both old vendorId and new vendorIds
@@ -363,9 +363,9 @@ export const updateInventoryItem = mutation({
   handler: async (ctx, args) => {
     const currentUser = await getCurrentUser(ctx);
 
-    // Check if user is a Purchase Officer
-    if (currentUser.role !== "purchase_officer") {
-      throw new Error("Unauthorized: Only Purchase Officers can update inventory items");
+    // Check if user is a Purchase Officer or Manager
+    if (currentUser.role !== "purchase_officer" && currentUser.role !== "manager") {
+      throw new Error("Unauthorized: Only Purchase Officers and Managers can update inventory items");
     }
 
     const item = await ctx.db.get(args.itemId);
@@ -415,9 +415,9 @@ export const linkVendorToItem = mutation({
   handler: async (ctx, args) => {
     const currentUser = await getCurrentUser(ctx);
 
-    // Check if user is a Purchase Officer
-    if (currentUser.role !== "purchase_officer") {
-      throw new Error("Unauthorized: Only Purchase Officers can link vendors to items");
+    // Check if user is a Purchase Officer or Manager
+    if (currentUser.role !== "purchase_officer" && currentUser.role !== "manager") {
+      throw new Error("Unauthorized: Only Purchase Officers and Managers can link vendors to items");
     }
 
     // Find the inventory item by name
@@ -458,9 +458,9 @@ export const deleteInventoryItem = mutation({
   handler: async (ctx, args) => {
     const currentUser = await getCurrentUser(ctx);
 
-    // Check if user is a Purchase Officer
-    if (currentUser.role !== "purchase_officer") {
-      throw new Error("Unauthorized: Only Purchase Officers can delete inventory items");
+    // Check if user is a Purchase Officer or Manager
+    if (currentUser.role !== "purchase_officer" && currentUser.role !== "manager") {
+      throw new Error("Unauthorized: Only Purchase Officers and Managers can delete inventory items");
     }
 
     const item = await ctx.db.get(args.itemId);
@@ -493,12 +493,13 @@ export const addImageToInventory = mutation({
   handler: async (ctx, args) => {
     const currentUser = await getCurrentUser(ctx);
 
-    // Check if user is Site Engineer or Purchase Officer
+    // Check if user is Site Engineer, Purchase Officer, or Manager
     if (
       currentUser.role !== "site_engineer" &&
-      currentUser.role !== "purchase_officer"
+      currentUser.role !== "purchase_officer" &&
+      currentUser.role !== "manager"
     ) {
-      throw new Error("Unauthorized: Only Site Engineers and Purchase Officers can add images");
+      throw new Error("Unauthorized: Only Site Engineers, Purchase Officers, and Managers can add images");
     }
 
     const item = await ctx.db.get(args.itemId);
@@ -534,9 +535,9 @@ export const removeImageFromInventory = mutation({
   handler: async (ctx, args) => {
     const currentUser = await getCurrentUser(ctx);
 
-    // Check if user is a Purchase Officer
-    if (currentUser.role !== "purchase_officer") {
-      throw new Error("Unauthorized: Only Purchase Officers can remove images");
+    // Check if user is a Purchase Officer or Manager
+    if (currentUser.role !== "purchase_officer" && currentUser.role !== "manager") {
+      throw new Error("Unauthorized: Only Purchase Officers and Managers can remove images");
     }
 
     const item = await ctx.db.get(args.itemId);
@@ -571,9 +572,9 @@ export const deductInventoryStock = mutation({
   handler: async (ctx, args) => {
     const currentUser = await getCurrentUser(ctx);
 
-    // Check if user is a Purchase Officer
-    if (currentUser.role !== "purchase_officer") {
-      throw new Error("Unauthorized: Only Purchase Officers can deduct inventory stock");
+    // Check if user is a Purchase Officer or Manager
+    if (currentUser.role !== "purchase_officer" && currentUser.role !== "manager") {
+      throw new Error("Unauthorized: Only Purchase Officers and Managers can deduct inventory stock");
     }
 
     if (args.quantity <= 0) {
@@ -614,9 +615,9 @@ export const deductInventoryStockByName = mutation({
   handler: async (ctx, args) => {
     const currentUser = await getCurrentUser(ctx);
 
-    // Check if user is a Purchase Officer
-    if (currentUser.role !== "purchase_officer") {
-      throw new Error("Unauthorized: Only Purchase Officers can deduct inventory stock");
+    // Check if user is a Purchase Officer or Manager
+    if (currentUser.role !== "purchase_officer" && currentUser.role !== "manager") {
+      throw new Error("Unauthorized: Only Purchase Officers and Managers can deduct inventory stock");
     }
 
     if (args.quantity <= 0) {

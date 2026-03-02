@@ -89,8 +89,8 @@ export function InventoryTable({ items, viewMode = "table", onRefresh }: Invento
   const [selectedVendorDetails, setSelectedVendorDetails] = useState<any>(null);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
 
-  const canPerformCRUD = userRole === ROLES.PURCHASE_OFFICER; // Only Purchase Officers can edit/delete
-  const canAddImages = userRole === ROLES.PURCHASE_OFFICER || userRole === ROLES.SITE_ENGINEER; // Purchase Officers and Site Engineers can add images
+  const canPerformCRUD = userRole === ROLES.PURCHASE_OFFICER || userRole === ROLES.MANAGER; // Only Purchase Officers and Managers can edit/delete
+  const canAddImages = userRole === ROLES.PURCHASE_OFFICER || userRole === ROLES.SITE_ENGINEER || userRole === ROLES.MANAGER; // Purchase Officers, Site Engineers, and Managers can add images
 
   const openImageSlider = (images: Array<{ imageUrl: string; imageKey: string }>, itemName: string, initialIndex: number = 0) => {
     setImageSliderImages(images);

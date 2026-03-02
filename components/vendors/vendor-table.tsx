@@ -74,8 +74,8 @@ export function VendorTable({ vendors, viewMode = "table" }: VendorTableProps) {
     deletingVendor ? { vendorId: deletingVendor._id } : "skip"
   );
 
-  const canPerformCRUD = userRole === ROLES.PURCHASE_OFFICER; // Only Purchase Officers can edit/delete
-  const canDelete = userRole === ROLES.PURCHASE_OFFICER; // Only Purchase Officers can delete
+  const canPerformCRUD = userRole === ROLES.PURCHASE_OFFICER || userRole === ROLES.MANAGER; // Only Purchase Officers and Managers can edit/delete
+  const canDelete = userRole === ROLES.PURCHASE_OFFICER || userRole === ROLES.MANAGER; // Only Purchase Officers and Managers can delete
 
   const handleOpenInMap = (address: string) => {
     const encodedAddress = encodeURIComponent(address);

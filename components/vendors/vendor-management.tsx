@@ -46,7 +46,7 @@ export function VendorManagement({ showTableOnly = false }: VendorManagementProp
   const { isAuthenticated } = useAuth();
   const userRole = useUserRole();
 
-  const canCreate = userRole === ROLES.PURCHASE_OFFICER;
+  const canCreate = userRole === ROLES.PURCHASE_OFFICER || userRole === ROLES.MANAGER;
 
 
 

@@ -22,8 +22,10 @@ import type * as notifications from "../notifications.js";
 import type * as presence from "../presence.js";
 import type * as purchaseOrders from "../purchaseOrders.js";
 import type * as requests from "../requests.js";
+import type * as setupUser from "../setupUser.js";
 import type * as sites from "../sites.js";
 import type * as stickyNotes from "../stickyNotes.js";
+import type * as testEnv from "../testEnv.js";
 import type * as users from "../users.js";
 import type * as vendors from "../vendors.js";
 
@@ -48,8 +50,10 @@ declare const fullApi: ApiFromModules<{
   presence: typeof presence;
   purchaseOrders: typeof purchaseOrders;
   requests: typeof requests;
+  setupUser: typeof setupUser;
   sites: typeof sites;
   stickyNotes: typeof stickyNotes;
+  testEnv: typeof testEnv;
   users: typeof users;
   vendors: typeof vendors;
 }>;

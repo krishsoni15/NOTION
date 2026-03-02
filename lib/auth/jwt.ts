@@ -12,12 +12,12 @@ const JWT_AUDIENCE = "notion-app-auth";
 
 function getIssuer(): string {
     // Derive issuer from NEXT_PUBLIC_CONVEX_URL (.cloud -> .site)
-    // Add /auth-v2 to explicitly bust the 1-hour Convex JWKS cache!
+    // Add /auth-v3 to explicitly bust the 1-hour Convex JWKS cache!
     const url = process.env.NEXT_PUBLIC_CONVEX_URL;
     if (url) {
-        return url.replace(".cloud", ".site") + "/auth-v2";
+        return url.replace(".cloud", ".site") + "/auth-v3";
     }
-    return (process.env.CONVEX_SITE_URL || "https://notion-auth.local") + "/auth-v2";
+    return (process.env.CONVEX_SITE_URL || "https://notion-auth.local") + "/auth-v3";
 }
 
 function getPrivateJWK(): JWK {

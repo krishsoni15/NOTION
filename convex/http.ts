@@ -12,7 +12,7 @@ const http = httpRouter();
 
 const serveOIDCConfig = httpAction(async (_ctx, request) => {
     const url = new URL(request.url);
-    const baseUrl = `${url.protocol}//${url.host}/auth-v2`;
+    const baseUrl = `${url.protocol}//${url.host}/auth-v3`;
 
     const config = {
         issuer: baseUrl,
@@ -71,10 +71,12 @@ const serveJWKS = httpAction(async () => {
 });
 
 // Cache busted paths
-http.route({ path: "/auth-v2/.well-known/openid-configuration", method: "GET", handler: serveOIDCConfig });
-http.route({ path: "/auth-v2/.well-known/jwks.json", method: "GET", handler: serveJWKS });
+http.route({ path: "/auth-v3/.well-known/openid-configuration", method: "GET", handler: serveOIDCConfig });
+http.route({ path: "/auth-v3/.well-known/jwks.json", method: "GET", handler: serveJWKS });
 
 // Original paths (for anything still using them)
+http.route({ path: "/auth-v2/.well-known/openid-configuration", method: "GET", handler: serveOIDCConfig });
+http.route({ path: "/auth-v2/.well-known/jwks.json", method: "GET", handler: serveJWKS });
 http.route({ path: "/.well-known/openid-configuration", method: "GET", handler: serveOIDCConfig });
 http.route({ path: "/.well-known/jwks.json", method: "GET", handler: serveJWKS });
 

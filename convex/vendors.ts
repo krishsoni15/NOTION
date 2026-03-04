@@ -108,7 +108,7 @@ export const createVendor = mutation({
   args: {
     companyName: v.string(),
     contactName: v.optional(v.string()),
-    email: v.string(),
+    email: v.optional(v.string()),
     phone: v.string(),
     gstNumber: v.string(),
     address: v.string(),
@@ -127,9 +127,9 @@ export const createVendor = mutation({
       throw new Error("Invalid GST number format. Expected format: 24AAAAA0000A1Z5");
     }
 
-    // Validate email format
+    // Validate email format (only if provided)
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(args.email)) {
+    if (args.email && !emailRegex.test(args.email)) {
       throw new Error("Invalid email format");
     }
 
@@ -137,7 +137,7 @@ export const createVendor = mutation({
     const vendorId = await ctx.db.insert("vendors", {
       companyName: args.companyName,
       contactName: args.contactName,
-      email: args.email,
+      email: args.email ?? "",
       phone: args.phone,
       gstNumber: args.gstNumber,
       address: args.address,
@@ -159,7 +159,7 @@ export const updateVendor = mutation({
     vendorId: v.id("vendors"),
     companyName: v.string(),
     contactName: v.optional(v.string()),
-    email: v.string(),
+    email: v.optional(v.string()),
     phone: v.string(),
     gstNumber: v.string(),
     address: v.string(),
@@ -183,16 +183,16 @@ export const updateVendor = mutation({
       throw new Error("Invalid GST number format. Expected format: 24AAAAA0000A1Z5");
     }
 
-    // Validate email format
+    // Validate email format (only if provided)
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(args.email)) {
+    if (args.email && !emailRegex.test(args.email)) {
       throw new Error("Invalid email format");
     }
 
     await ctx.db.patch(args.vendorId, {
       companyName: args.companyName,
       contactName: args.contactName,
-      email: args.email,
+      email: args.email ?? "",
       phone: args.phone,
       gstNumber: args.gstNumber,
       address: args.address,

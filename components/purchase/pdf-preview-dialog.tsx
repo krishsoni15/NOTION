@@ -66,9 +66,18 @@ export function PDFPreviewDialog({
     const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
     const [scrollStart, setScrollStart] = useState({ x: 0, y: 0 });
 
+    const calculateInitialZoom = () => {
+        if (typeof window === 'undefined') return 1;
+        const width = window.innerWidth;
+        if (width < 640) return 0.45;
+        if (width < 1024) return 0.65;
+        if (width < 1366) return 0.8;
+        return 1;
+    };
+
     // Reset zoom when dialog opens or PO changes
     useEffect(() => {
-        if (open) setZoomLevel(1);
+        if (open) setZoomLevel(calculateInitialZoom());
     }, [open, poNumber]);
 
     const handleDownload = async () => {
@@ -212,9 +221,9 @@ Notion Electronica Pvt. Ltd.`;
         }
     };
 
-    const handleZoomIn = () => setZoomLevel(prev => Math.min(3, prev + 0.2));
-    const handleZoomOut = () => setZoomLevel(prev => Math.max(0.5, prev - 0.2));
-    const handleResetZoom = () => setZoomLevel(1);
+    const handleZoomIn = () => setZoomLevel(prev => Math.min(3, prev + 0.1));
+    const handleZoomOut = () => setZoomLevel(prev => Math.max(0.3, prev - 0.1));
+    const handleResetZoom = () => setZoomLevel(calculateInitialZoom());
 
     // Drag handlers for panning
     const handleMouseDown = useCallback((e: React.MouseEvent) => {

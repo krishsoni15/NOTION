@@ -2399,23 +2399,6 @@ export function RequestDetailsDialog({
                                           >
                                             <CheckCircle className="h-3.5 w-3.5 mr-2" /> Available
                                           </Button>
-                                          <Button
-                                            size="sm"
-                                            onClick={(e) => {
-                                              e.stopPropagation();
-                                              const bulkItems = prepareBulkDeliveryItems(group.items);
-                                              setShowBulkDirectDeliveryConfirm({
-                                                items: bulkItems,
-                                                vendorName: group.vendor.companyName,
-                                                poNumber: group.items[0].poNumber
-                                              });
-                                            }}
-                                            className={cn(
-                                              "w-full bg-violet-600 hover:bg-violet-700 text-white font-semibold shadow-sm"
-                                            )}
-                                          >
-                                            <Truck className="h-3.5 w-3.5 mr-2" /> Direct Delivered
-                                          </Button>
                                         </div>
                                       )}
                                       {group.items[0].poNumber && (
@@ -2921,23 +2904,6 @@ export function RequestDetailsDialog({
                                     <FileText className="h-4 w-4" />
                                   </Button>
                                 </div>
-                                {isPurchaseOfficer && (
-                                  <Button
-                                    size="sm"
-                                    className="w-full bg-violet-600 hover:bg-violet-700 text-white font-semibold shadow-sm"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      const bulkItems = prepareBulkDeliveryItems(group.items);
-                                      setShowBulkDirectDeliveryConfirm({
-                                        items: bulkItems,
-                                        vendorName: group.vendor.companyName,
-                                        poNumber: group.poNumber
-                                      });
-                                    }}
-                                  >
-                                    <Truck className="h-4 w-4 mr-1" /> Direct Delivered
-                                  </Button>
-                                )}
                               </div>
                             </div>
                           ))}
@@ -4389,6 +4355,25 @@ export function RequestDetailsDialog({
         vendorName={bulkDeliveryData?.vendorName || ""}
         poNumber={bulkDeliveryData?.poNumber || ""}
         mode={bulkDeliveryData?.mode || "delivery"}
+        onDirectDelivery={async (quantities) => {
+          if (!bulkDeliveryData) return;
+          const items = bulkDeliveryData.items;
+          let deliveredCount = 0;
+          for (const item of items) {
+            const qty = quantities[item.requestId];
+            if (qty > 0) {
+              await markReadyForDelivery({
+                requestId: item.requestId,
+                deliveryQuantity: qty,
+                targetStatus: "delivered",
+              });
+              deliveredCount++;
+            }
+          }
+          if (deliveredCount > 0) {
+            toast.success(`Successfully marked ${deliveredCount} item(s) as directly delivered`);
+          }
+        }}
       />
 
       {/* Direct Delivery Confirmation Dialog */}

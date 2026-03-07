@@ -15,6 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { toast } from "sonner";
+import { BulkDeliveryDialog } from "@/components/purchase/bulk-delivery-dialog";
 import {
     Clock,
     Building2,
@@ -40,6 +41,10 @@ import {
     Table2,
     IndianRupee,
     CalendarRange,
+    Download,
+    CheckCircle,
+    Phone,
+    Mail,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
@@ -205,6 +210,14 @@ export function PendingPODialog({ onBack, onViewPO, onCreateDirectPO }: PendingP
     const updateLastTalkDate = useMutation(api.requests.updateLastTalkDate);
     const updateLastTalkText = useMutation(api.requests.updateLastTalkText);
     const updateCommittedDate = useMutation(api.requests.updateCommittedDate);
+    const markReadyForDelivery = useMutation(api.requests.markReadyForDelivery);
+
+    // Bulk delivery dialog state
+    const [bulkDeliveryData, setBulkDeliveryData] = useState<{
+        items: any[];
+        vendorName: string;
+        poNumber: string;
+    } | null>(null);
 
     const { viewMode, toggleViewMode } = useViewMode();
     const [search, setSearch] = useState("");
@@ -412,6 +425,80 @@ export function PendingPODialog({ onBack, onViewPO, onCreateDirectPO }: PendingP
         vendors?.find((v) => v._id === item?.selectedVendorId)?.companyName ?? null;
     const getVendorContact = (item: any) =>
         vendors?.find((v) => v._id === item?.selectedVendorId)?.contactName ?? null;
+    const getVendorFull = (item: any) =>
+        vendors?.find((v) => v._id === item?.selectedVendorId) ?? null;
+
+    /* ── Download XL ── */
+    const handleDownloadXL = () => {
+        try {
+            // Dynamically import xlsx to avoid SSR issues
+            const XLSX = require("xlsx");
+
+            const rows = filtered.map((group) => {
+                const vendorName = getVendorName(group.firstItem);
+                const vendorContact = getVendorContact(group.firstItem);
+                const poExpiry = poExpiryMap.get(group.firstItem._id as string);
+                const lastTalkDate = (group.firstItem as any)?.lastTalkDate;
+                const lastTalkText = (group.firstItem as any)?.lastTalkText;
+                const committedDate = (group.firstItem as any)?.committedDate;
+
+                return {
+                    "PO Number": group.poNumber ? `#${group.poNumber}` : "—",
+                    "Request Number": group.requestNumber,
+                    "Vendor": vendorName || "—",
+                    "Vendor Contact": vendorContact || "—",
+                    "Site": group.site?.name || "—",
+                    "Order Date": fmtDate(group.firstItem.createdAt),
+                    "Items Count": group.items.length,
+                    "Items": group.items.map(i => i.itemName).join(", "),
+                    "Total Amount (INR)": group.totalAmount || 0,
+                    "Last Talk Date": fmtDate(lastTalkDate),
+                    "Last Talk Notes": lastTalkText || "",
+                    "Committed Date": fmtDate(committedDate),
+                    "PO Expiry": fmtDate(poExpiry),
+                };
+            });
+
+            const ws = XLSX.utils.json_to_sheet(rows);
+
+            // Auto-size columns
+            const colWidths = Object.keys(rows[0] || {}).map(key => ({
+                wch: Math.max(key.length, ...rows.map(r => String((r as any)[key] || "").length)) + 2
+            }));
+            ws["!cols"] = colWidths;
+
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "Pending POs");
+
+            const today = new Date();
+            const dateStr = `${today.getDate()}-${today.getMonth() + 1}-${today.getFullYear()}`;
+            XLSX.writeFile(wb, `Pending_POs_${dateStr}.xlsx`);
+            toast.success(`Downloaded ${rows.length} PO group(s) as Excel`);
+        } catch (err) {
+            console.error("XL download failed:", err);
+            toast.error("Failed to download Excel");
+        }
+    };
+
+    /* ── Open Available (Bulk Delivery) Dialog ── */
+    const handleOpenAvailable = (group: any) => {
+        const vName = getVendorName(group.firstItem) || group.firstItem?.site?.name || "Unknown Vendor";
+        const bulkItems = group.items.map((item: any) => ({
+            requestId: item._id,
+            itemName: item.itemName,
+            requestedQuantity: item.quantity,
+            unit: item.unit,
+            poQuantity: item.quantity,
+            itemOrder: item.itemOrder,
+            alreadyDelivered: 0,
+            originalRequested: item.quantity,
+        }));
+        setBulkDeliveryData({
+            items: bulkItems,
+            vendorName: vName,
+            poNumber: group.poNumber || group.requestNumber,
+        });
+    };
 
     /* ── Render ── */
     return (
@@ -501,8 +588,17 @@ export function PendingPODialog({ onBack, onViewPO, onCreateDirectPO }: PendingP
                     Requests
                 </Button>
 
-                {/* Right side: Create PO */}
+                {/* Right side: Create PO + Download XL */}
                 <div className="flex items-center gap-2 ml-auto">
+                    <Button
+                        variant="outline"
+                        onClick={handleDownloadXL}
+                        className="h-9 sm:h-10 gap-1.5 border-emerald-500/50 text-emerald-600 hover:bg-emerald-50 hover:border-emerald-500 dark:text-emerald-400 dark:border-emerald-500/40 dark:hover:bg-emerald-900/20"
+                        title="Download all pending PO data as Excel"
+                    >
+                        <Download className="h-4 w-4" />
+                        Download XL
+                    </Button>
                     <Button
                         onClick={onCreateDirectPO}
                         className="bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white shadow-lg hover:shadow-xl transition-all duration-200 h-9 sm:h-10"
@@ -581,9 +677,14 @@ export function PendingPODialog({ onBack, onViewPO, onCreateDirectPO }: PendingP
                                             </div>
                                             <div className="flex items-center gap-2">
                                                 {poNumber && (
-                                                    <Button size="sm" variant="outline" onClick={() => onViewPO(poNumber, firstItem._id)} className="h-7 text-xs px-2.5 gap-1 border-blue-500/30 text-blue-500 hover:bg-blue-500/10 hover:border-blue-500">
-                                                        <Eye className="h-3 w-3" /> View PO
-                                                    </Button>
+                                                    <>
+                                                        <Button size="sm" variant="outline" onClick={() => onViewPO(poNumber, firstItem._id)} className="h-7 text-xs px-2.5 gap-1 border-blue-500/30 text-blue-500 hover:bg-blue-500/10 hover:border-blue-500">
+                                                            <Eye className="h-3 w-3" /> View PO
+                                                        </Button>
+                                                        <Button size="sm" variant="outline" onClick={() => handleOpenAvailable(group)} className="h-7 text-xs px-2.5 gap-1 border-emerald-500/30 text-emerald-600 hover:bg-emerald-500/10 hover:border-emerald-500">
+                                                            <CheckCircle className="h-3 w-3" /> Available
+                                                        </Button>
+                                                    </>
                                                 )}
                                             </div>
                                         </div>
@@ -594,10 +695,50 @@ export function PendingPODialog({ onBack, onViewPO, onCreateDirectPO }: PendingP
                                             <div className="col-span-2 sm:col-span-1">
                                                 <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-1 flex items-center gap-1"><Building2 className="h-3 w-3" />Vendor</p>
                                                 {vendorName ? (
-                                                    <>
-                                                        <p className="text-sm font-semibold">{vendorName}</p>
-                                                        {vendorContact && <p className="text-[10px] text-muted-foreground">{vendorContact}</p>}
-                                                    </>
+                                                    <Popover>
+                                                        <PopoverTrigger asChild>
+                                                            <div className="cursor-pointer hover:bg-muted/30 p-1 -ml-1 rounded transition-colors group">
+                                                                <p className="text-sm font-semibold group-hover:text-blue-500 transition-colors">{vendorName}</p>
+                                                                {vendorContact && <p className="text-[10px] text-muted-foreground group-hover:text-blue-500/80 transition-colors">{vendorContact}</p>}
+                                                            </div>
+                                                        </PopoverTrigger>
+                                                        <PopoverContent side="right" className="w-80 p-0 shadow-lg border-slate-200 dark:border-slate-800">
+                                                            <div className="p-4 bg-gradient-to-br from-slate-50 to-white dark:from-slate-900 dark:to-slate-950">
+                                                                <div className="flex items-start gap-3">
+                                                                    <div className="h-10 w-10 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center shrink-0">
+                                                                        <Building2 className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                                                                    </div>
+                                                                    <div>
+                                                                        <h4 className="font-semibold text-base leading-none mb-1">{vendorName}</h4>
+                                                                        {getVendorFull(firstItem)?.contactName && (
+                                                                            <p className="text-sm text-muted-foreground">{getVendorFull(firstItem)?.contactName}</p>
+                                                                        )}
+                                                                    </div>
+                                                                </div>
+
+                                                                <div className="mt-4 space-y-2.5 text-sm">
+                                                                    {getVendorFull(firstItem)?.phone && (
+                                                                        <div className="flex items-center gap-2.5 text-slate-600 dark:text-slate-300">
+                                                                            <Phone className="h-4 w-4 text-slate-400" />
+                                                                            <span>{getVendorFull(firstItem)?.phone}</span>
+                                                                        </div>
+                                                                    )}
+                                                                    {getVendorFull(firstItem)?.email && (
+                                                                        <div className="flex items-center gap-2.5 text-slate-600 dark:text-slate-300">
+                                                                            <Mail className="h-4 w-4 text-slate-400" />
+                                                                            <span className="break-all">{getVendorFull(firstItem)?.email}</span>
+                                                                        </div>
+                                                                    )}
+                                                                    {getVendorFull(firstItem)?.address && (
+                                                                        <div className="flex items-start gap-2.5 text-slate-600 dark:text-slate-300">
+                                                                            <MapPin className="h-4 w-4 text-slate-400 shrink-0 mt-0.5" />
+                                                                            <span className="leading-relaxed">{getVendorFull(firstItem)?.address}</span>
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                        </PopoverContent>
+                                                    </Popover>
                                                 ) : <p className="text-xs text-muted-foreground italic">No vendor</p>}
                                             </div>
 
@@ -644,7 +785,7 @@ export function PendingPODialog({ onBack, onViewPO, onCreateDirectPO }: PendingP
                         /* ── Table View (CRM-style) ── */
                         <div className="rounded-lg border overflow-hidden bg-card">
                             {/* thead */}
-                            <div className="grid grid-cols-[1.5fr_120px_120px_250px_130px_100px] bg-muted/40 border-b">
+                            <div className="grid grid-cols-[1.5fr_120px_120px_250px_130px_130px] bg-muted/40 border-b">
                                 {[
                                     { label: "Vendor", icon: Building2 },
                                     { label: "Order No", icon: Hash },
@@ -673,16 +814,56 @@ export function PendingPODialog({ onBack, onViewPO, onCreateDirectPO }: PendingP
 
                                     return (
                                         <div key={key} className="group hover:bg-muted/20 transition-colors border-b last:border-0 border-border">
-                                            <div className="grid grid-cols-[1.5fr_120px_120px_250px_130px_100px] items-center min-h-[64px]">
+                                            <div className="grid grid-cols-[1.5fr_120px_120px_250px_130px_130px] items-center min-h-[64px]">
 
                                                 {/* Vendor */}
                                                 <div className="px-3 py-2.5 border-r h-full flex flex-col justify-center min-w-0">
                                                     {vendorName ? (
-                                                        <>
-                                                            <p className="text-sm font-semibold truncate">{vendorName}</p>
-                                                            {vendorContact && <p className="text-[10px] text-muted-foreground truncate">{vendorContact}</p>}
-                                                        </>
-                                                    ) : <span className="text-xs text-muted-foreground italic">No vendor</span>}
+                                                        <Popover>
+                                                            <PopoverTrigger asChild>
+                                                                <div className="cursor-pointer hover:bg-muted/30 p-1 -ml-1 rounded transition-colors group">
+                                                                    <p className="text-sm font-semibold truncate group-hover:text-blue-500 transition-colors">{vendorName}</p>
+                                                                    {vendorContact && <p className="text-[10px] text-muted-foreground truncate group-hover:text-blue-500/80 transition-colors">{vendorContact}</p>}
+                                                                </div>
+                                                            </PopoverTrigger>
+                                                            <PopoverContent side="right" className="w-80 p-0 shadow-lg border-slate-200 dark:border-slate-800">
+                                                                <div className="p-4 bg-gradient-to-br from-slate-50 to-white dark:from-slate-900 dark:to-slate-950">
+                                                                    <div className="flex items-start gap-3">
+                                                                        <div className="h-10 w-10 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center shrink-0">
+                                                                            <Building2 className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                                                                        </div>
+                                                                        <div>
+                                                                            <h4 className="font-semibold text-base leading-none mb-1">{vendorName}</h4>
+                                                                            {getVendorFull(firstItem)?.contactName && (
+                                                                                <p className="text-sm text-muted-foreground">{getVendorFull(firstItem)?.contactName}</p>
+                                                                            )}
+                                                                        </div>
+                                                                    </div>
+
+                                                                    <div className="mt-4 space-y-2.5 text-sm">
+                                                                        {getVendorFull(firstItem)?.phone && (
+                                                                            <div className="flex items-center gap-2.5 text-slate-600 dark:text-slate-300">
+                                                                                <Phone className="h-4 w-4 text-slate-400" />
+                                                                                <span>{getVendorFull(firstItem)?.phone}</span>
+                                                                            </div>
+                                                                        )}
+                                                                        {getVendorFull(firstItem)?.email && (
+                                                                            <div className="flex items-center gap-2.5 text-slate-600 dark:text-slate-300">
+                                                                                <Mail className="h-4 w-4 text-slate-400" />
+                                                                                <span className="break-all">{getVendorFull(firstItem)?.email}</span>
+                                                                            </div>
+                                                                        )}
+                                                                        {getVendorFull(firstItem)?.address && (
+                                                                            <div className="flex items-start gap-2.5 text-slate-600 dark:text-slate-300">
+                                                                                <MapPin className="h-4 w-4 text-slate-400 shrink-0 mt-0.5" />
+                                                                                <span className="leading-relaxed">{getVendorFull(firstItem)?.address}</span>
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
+                                                                </div>
+                                                            </PopoverContent>
+                                                        </Popover>
+                                                    ) : <p className="text-[13px] text-muted-foreground italic">No vendor</p>}
                                                     {items.length > 1 && (
                                                         <Badge className="bg-blue-500/10 text-blue-500 border-blue-500/20 text-[9px] px-1.5 py-0 mt-1 gap-0.5 w-fit">
                                                             <Layers className="h-2.5 w-2.5" />{items.length} items
@@ -712,11 +893,16 @@ export function PendingPODialog({ onBack, onViewPO, onCreateDirectPO }: PendingP
                                                 </div>
 
                                                 {/* Actions */}
-                                                <div className="px-3 py-2.5 h-full flex items-center">
+                                                <div className="px-3 py-2.5 h-full flex flex-col justify-center gap-1.5">
                                                     {poNumber && (
-                                                        <Button size="sm" variant="outline" onClick={() => onViewPO(poNumber, firstItem._id)} className="h-7 text-xs px-2.5 gap-1 border-blue-500/30 text-blue-500 hover:bg-blue-500/10 hover:border-blue-500 w-full">
-                                                            <Eye className="h-3 w-3" /> View
-                                                        </Button>
+                                                        <>
+                                                            <Button size="sm" variant="outline" onClick={() => onViewPO(poNumber, firstItem._id)} className="h-7 text-xs px-2.5 gap-1 border-blue-500/30 text-blue-500 hover:bg-blue-500/10 hover:border-blue-500 w-full">
+                                                                <Eye className="h-3 w-3" /> View PO
+                                                            </Button>
+                                                            <Button size="sm" variant="outline" onClick={() => handleOpenAvailable(group)} className="h-7 text-xs px-2.5 gap-1 border-emerald-500/30 text-emerald-600 hover:bg-emerald-500/10 hover:border-emerald-500 w-full">
+                                                                <CheckCircle className="h-3 w-3" /> Available
+                                                            </Button>
+                                                        </>
                                                     )}
                                                 </div>
                                             </div>
@@ -750,6 +936,36 @@ export function PendingPODialog({ onBack, onViewPO, onCreateDirectPO }: PendingP
                         />
                     </div>
                 </>
+            )}
+
+            {/* Bulk Delivery Dialog */}
+            {bulkDeliveryData && (
+                <BulkDeliveryDialog
+                    open={!!bulkDeliveryData}
+                    onOpenChange={(open) => !open && setBulkDeliveryData(null)}
+                    items={bulkDeliveryData.items}
+                    vendorName={bulkDeliveryData.vendorName}
+                    poNumber={bulkDeliveryData.poNumber}
+                    mode={"delivery"} // Start with regular delivery
+                    onDirectDelivery={async (quantities) => {
+                        let deliveredCount = 0;
+                        for (const item of bulkDeliveryData.items) {
+                            const qty = quantities[item.requestId];
+                            if (qty > 0) {
+                                await markReadyForDelivery({
+                                    requestId: item.requestId,
+                                    deliveryQuantity: qty,
+                                    targetStatus: "delivered", // skip DC
+                                });
+                                deliveredCount++;
+                            }
+                        }
+                        if (deliveredCount > 0) {
+                            toast.success(`Successfully marked ${deliveredCount} item(s) as directly delivered`);
+                        }
+                        setBulkDeliveryData(null);
+                    }}
+                />
             )}
         </div>
     );

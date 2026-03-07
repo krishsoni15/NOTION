@@ -31,6 +31,7 @@ interface BulkDeliveryDialogProps {
     vendorName: string;
     poNumber: string;
     mode?: "delivery" | "direct_delivered";
+    onDirectDelivery?: (quantities: Record<string, number>) => Promise<void>;
 }
 
 export function BulkDeliveryDialog({
@@ -40,6 +41,7 @@ export function BulkDeliveryDialog({
     vendorName,
     poNumber,
     mode = "delivery",
+    onDirectDelivery,
 }: BulkDeliveryDialogProps) {
     // Initialize delivery quantities with REQUESTED quantities (auto-filled to requested, not PO)
     const [deliveryQuantities, setDeliveryQuantities] = useState<Record<string, number>>({});
@@ -56,6 +58,7 @@ export function BulkDeliveryDialog({
     }, [open, items]);
 
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [isDirectDelivering, setIsDirectDelivering] = useState(false);
     const markReadyForDelivery = useMutation(api.requests.markReadyForDelivery);
 
     const handleQuantityChange = (requestId: string, value: string) => {
@@ -262,36 +265,66 @@ export function BulkDeliveryDialog({
                 </div>
 
                 {/* Footer Actions */}
-                <div className="flex items-center justify-between gap-4 pt-4 border-t">
-                    <Button
-                        variant="outline"
-                        onClick={() => onOpenChange(false)}
-                        disabled={isSubmitting}
-                    >
-                        Cancel
-                    </Button>
-
-                    <div className="flex items-center gap-3">
-                        <div className="text-sm text-muted-foreground">
-                            Delivering <span className="font-bold text-emerald-600">{totalToDeliver}</span> / {totalRemaining} remaining
-                        </div>
+                <div className="flex flex-col gap-3 pt-4 border-t">
+                    <div className="text-sm text-muted-foreground text-center">
+                        Delivering <span className="font-bold text-emerald-600">{totalToDeliver}</span> / {totalRemaining} remaining
+                    </div>
+                    <div className="flex items-center gap-2">
                         <Button
-                            onClick={handleSubmit}
-                            disabled={isSubmitting || totalToDeliver === 0}
-                            className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-6"
+                            variant="outline"
+                            onClick={() => onOpenChange(false)}
+                            disabled={isSubmitting || isDirectDelivering}
+                            className="shrink-0"
                         >
-                            {isSubmitting ? (
-                                <>
-                                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                    Processing...
-                                </>
-                            ) : (
-                                <>
-                                    <CheckCircle className="h-4 w-4 mr-2" />
-                                    Confirm Delivery
-                                </>
-                            )}
+                            Cancel
                         </Button>
+                        <div className="flex items-center gap-2 flex-1 justify-end">
+                            {onDirectDelivery && (
+                                <Button
+                                    variant="outline"
+                                    onClick={async () => {
+                                        setIsDirectDelivering(true);
+                                        try {
+                                            await onDirectDelivery(deliveryQuantities);
+                                            onOpenChange(false);
+                                        } finally {
+                                            setIsDirectDelivering(false);
+                                        }
+                                    }}
+                                    disabled={isSubmitting || isDirectDelivering || totalToDeliver === 0}
+                                    className="border-violet-400 text-violet-700 hover:bg-violet-50 dark:border-violet-600 dark:text-violet-300 dark:hover:bg-violet-950/30 font-semibold"
+                                >
+                                    {isDirectDelivering ? (
+                                        <>
+                                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                            Processing...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Truck className="h-4 w-4 mr-2" />
+                                            Direct Delivered
+                                        </>
+                                    )}
+                                </Button>
+                            )}
+                            <Button
+                                onClick={handleSubmit}
+                                disabled={isSubmitting || isDirectDelivering || totalToDeliver === 0}
+                                className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-6"
+                            >
+                                {isSubmitting ? (
+                                    <>
+                                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                        Processing...
+                                    </>
+                                ) : (
+                                    <>
+                                        <CheckCircle className="h-4 w-4 mr-2" />
+                                        Confirm Delivery
+                                    </>
+                                )}
+                            </Button>
+                        </div>
                     </div>
                 </div>
             </DialogContent>

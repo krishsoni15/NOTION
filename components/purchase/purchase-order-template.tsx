@@ -187,7 +187,7 @@ export function PurchaseOrderTemplate({ data }: { data: POData }) {
     });
 
     return (
-        <div className="bg-white text-[#000000] font-sans text-xs" style={{ width: '210mm', minHeight: '297mm', padding: '10mm', margin: '0 auto', boxSizing: 'border-box' }}>
+        <div className="bg-white text-[#000000] font-sans text-xs" style={{ width: '210mm', padding: '10mm', margin: '0 auto', boxSizing: 'border-box' }}>
             {/* PO Content */}
             <div className="w-full bg-white">
 

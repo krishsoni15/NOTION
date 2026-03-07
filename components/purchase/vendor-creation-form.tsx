@@ -41,8 +41,8 @@ export function VendorCreationForm({ onVendorCreated, onCancel, itemName, initia
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!formData.companyName.trim() || !formData.email.trim() || !formData.gstNumber.trim()) {
-      toast.error("Please fill in all required fields");
+    if (!formData.companyName.trim()) {
+      toast.error("Company Name is required");
       return;
     }
 
@@ -118,7 +118,7 @@ export function VendorCreationForm({ onVendorCreated, onCancel, itemName, initia
 
           <div className="space-y-2">
             <Label htmlFor="email" className="text-sm font-medium">
-              Email *
+              Email
             </Label>
             <Input
               id="email"
@@ -126,7 +126,6 @@ export function VendorCreationForm({ onVendorCreated, onCancel, itemName, initia
               value={formData.email}
               onChange={(e) => handleInputChange("email", e.target.value)}
               placeholder="contact@company.com"
-              required
             />
           </div>
         </div>
@@ -146,14 +145,13 @@ export function VendorCreationForm({ onVendorCreated, onCancel, itemName, initia
 
           <div className="space-y-2">
             <Label htmlFor="gstNumber" className="text-sm font-medium">
-              GST Number *
+              GST Number
             </Label>
             <Input
               id="gstNumber"
               value={formData.gstNumber}
               onChange={(e) => handleInputChange("gstNumber", e.target.value)}
               placeholder="22AAAAA0000A1Z5"
-              required
             />
           </div>
         </div>

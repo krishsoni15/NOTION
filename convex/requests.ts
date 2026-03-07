@@ -1930,6 +1930,97 @@ export const updateRequestDetails = mutation({
   },
 });
 
+export const updateLastTalkDate = mutation({
+  args: {
+    requestId: v.id("requests"),
+    lastTalkDate: v.union(v.number(), v.null()),
+  },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new Error("Not authenticated");
+
+    const currentUser = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_user_id", (q: any) => q.eq("clerkUserId", userId))
+      .unique();
+
+    if (!currentUser) throw new Error("User not found");
+
+    if (currentUser.role !== "purchase_officer" && currentUser.role !== "manager") {
+      throw new Error("Only Purchase Officer or Manager can update last talk date");
+    }
+
+    const request = await ctx.db.get(args.requestId);
+    if (!request) {
+      throw new Error("Request not found");
+    }
+
+    await ctx.db.patch(args.requestId, {
+      lastTalkDate: args.lastTalkDate !== null ? args.lastTalkDate : undefined,
+    });
+  },
+});
+
+export const updateLastTalkText = mutation({
+  args: {
+    requestId: v.id("requests"),
+    lastTalkText: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new Error("Not authenticated");
+
+    const currentUser = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_user_id", (q: any) => q.eq("clerkUserId", userId))
+      .unique();
+
+    if (!currentUser) throw new Error("User not found");
+
+    if (currentUser.role !== "purchase_officer" && currentUser.role !== "manager") {
+      throw new Error("Only Purchase Officer or Manager can update last talk text");
+    }
+
+    const request = await ctx.db.get(args.requestId);
+    if (!request) {
+      throw new Error("Request not found");
+    }
+
+    await ctx.db.patch(args.requestId, {
+      lastTalkText: args.lastTalkText,
+    });
+  },
+});
+
+export const updateCommittedDate = mutation({
+  args: {
+    requestId: v.id("requests"),
+    committedDate: v.number(),
+  },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new Error("Not authenticated");
+
+    const currentUser = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_user_id", (q: any) => q.eq("clerkUserId", userId))
+      .unique();
+
+    if (!currentUser) throw new Error("User not found");
+
+    if (currentUser.role !== "purchase_officer" && currentUser.role !== "manager") {
+      throw new Error("Only Purchase Officer or Manager can update committed date");
+    }
+
+    const request = await ctx.db.get(args.requestId);
+    if (!request) throw new Error("Request not found");
+
+    await ctx.db.patch(args.requestId, {
+      committedDate: args.committedDate,
+    });
+  },
+});
+
 export const updatePurchaseRequestStatus = mutation({
   args: {
     requestId: v.id("requests"),
@@ -2094,6 +2185,7 @@ export const markReadyForDelivery = mutation({
   args: {
     requestId: v.id("requests"),
     deliveryQuantity: v.number(),
+    targetStatus: v.optional(v.union(v.literal("ready_for_delivery"), v.literal("delivered"))),
   },
   handler: async (ctx, args) => {
     const currentUser = await getCurrentUser(ctx);
@@ -2115,6 +2207,7 @@ export const markReadyForDelivery = mutation({
     const now = Date.now();
     const remainingQuantity = request.quantity - args.deliveryQuantity;
     const isSplit = remainingQuantity > 0;
+    const targetStatus = args.targetStatus || "ready_for_delivery";
 
     // Find linked PO (if any) to split/update
     const pos = await ctx.db
@@ -2133,7 +2226,7 @@ export const markReadyForDelivery = mutation({
       const newRequestId = await ctx.db.insert("requests", {
         ...requestData,
         quantity: args.deliveryQuantity,
-        status: "ready_for_delivery", // Moved to delivery
+        status: targetStatus, // Moved to delivery or delivered
         updatedAt: now,
         createdAt: now,
       });
@@ -2163,7 +2256,7 @@ export const markReadyForDelivery = mutation({
           requestId: newRequestId, // Link to new request
           quantity: args.deliveryQuantity,
           totalAmount: newDeliveryTotalAmount,
-          status: "ordered", // Link to new request which is ready for delivery
+          status: targetStatus === "delivered" ? "delivered" : "ordered",
           updatedAt: now,
           createdAt: now,
         });
@@ -2179,9 +2272,16 @@ export const markReadyForDelivery = mutation({
     } else {
       // FULL DELIVERY: SIMPLE STATUS UPDATE
       await ctx.db.patch(request._id, {
-        status: "ready_for_delivery",
+        status: targetStatus,
         updatedAt: now,
       });
+      // also update PO status to delivered if needed
+      if (po && targetStatus === "delivered") {
+        await ctx.db.patch(po._id, {
+          status: "delivered",
+          updatedAt: now,
+        });
+      }
     }
 
     // GRN Log
@@ -2189,11 +2289,11 @@ export const markReadyForDelivery = mutation({
       requestNumber: request.requestNumber,
       userId: currentUser._id,
       role: currentUser.role,
-      status: "ready_for_delivery",
+      status: targetStatus,
       type: "log",
       content: isSplit
-        ? `[Item #${request.itemOrder ?? 1}] Partial delivery: ${args.deliveryQuantity} ${request.unit || 'units'} marked ready for delivery. ${remainingQuantity} ${request.unit || 'units'} remaining on PO.`
-        : `[Item #${request.itemOrder ?? 1}] Full quantity (${args.deliveryQuantity} ${request.unit || 'units'}) marked ready for delivery.`,
+        ? `[Item #${request.itemOrder ?? 1}] Partial delivery: ${args.deliveryQuantity} ${request.unit || 'units'} marked ${targetStatus === 'delivered' ? 'directly delivered' : 'ready for delivery'}. ${remainingQuantity} ${request.unit || 'units'} remaining on PO.`
+        : `[Item #${request.itemOrder ?? 1}] Full quantity (${args.deliveryQuantity} ${request.unit || 'units'}) marked ${targetStatus === 'delivered' ? 'directly delivered' : 'ready for delivery'}.`,
       createdAt: now,
     });
   },

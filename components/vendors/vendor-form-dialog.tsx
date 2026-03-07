@@ -167,7 +167,7 @@ export function VendorFormDialog({
 
           <div className="space-y-1.5">
             <Label htmlFor="contactName" className="text-sm">
-              Contact Name *
+              Contact Name
             </Label>
             <Input
               id="contactName"
@@ -176,14 +176,13 @@ export function VendorFormDialog({
               onChange={(e) =>
                 setFormData({ ...formData, contactName: e.target.value })
               }
-              required
               disabled={isLoading}
               className="h-9"
             />
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="email" className="text-sm">Email *</Label>
+            <Label htmlFor="email" className="text-sm">Email</Label>
             <Input
               id="email"
               type="email"
@@ -192,7 +191,6 @@ export function VendorFormDialog({
               onChange={(e) =>
                 setFormData({ ...formData, email: e.target.value })
               }
-              required
               disabled={isLoading}
               className="h-9"
             />
@@ -215,7 +213,7 @@ export function VendorFormDialog({
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="gstNumber" className="text-sm">GST Number *</Label>
+            <Label htmlFor="gstNumber" className="text-sm">GST Number</Label>
             <Input
               id="gstNumber"
               placeholder="24AAAAA0000A1Z5"
@@ -223,8 +221,6 @@ export function VendorFormDialog({
               onChange={(e) =>
                 setFormData({ ...formData, gstNumber: e.target.value.toUpperCase() })
               }
-              required
-              disabled={isLoading}
               maxLength={15}
               className="h-9"
             />

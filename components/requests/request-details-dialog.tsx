@@ -188,7 +188,7 @@ export function RequestDetailsDialog({
   const [showSignPendingApproveConfirm, setShowSignPendingApproveConfirm] = useState<Id<"requests"> | boolean | null>(null);
   const [editQuantityItem, setEditQuantityItem] = useState<{ id: Id<"requests">; quantity: number; name: string; unit: string } | null>(null);
   const [splitPOQuantityItem, setSplitPOQuantityItem] = useState<{ id: Id<"requests">; quantity: number; name: string; unit: string } | null>(null);
-  const [bulkDeliveryData, setBulkDeliveryData] = useState<{ items: any[]; vendorName: string; poNumber: string } | null>(null);
+  const [bulkDeliveryData, setBulkDeliveryData] = useState<{ items: any[]; vendorName: string; poNumber: string; mode?: "delivery" | "direct_delivered" } | null>(null);
   const [selectedDCItems, setSelectedDCItems] = useState<Set<Id<"requests">>>(new Set());
   const [showBulkDCDialog, setShowBulkDCDialog] = useState(false);
   const [showConfirmDelivery, setShowConfirmDelivery] = useState<Id<"requests"> | null>(null);
@@ -2377,25 +2377,45 @@ export function RequestDetailsDialog({
                                     )}>
                                       {/* Available button - opens delivery dialog for all PO items - Purchase Officer Only */}
                                       {isPurchaseOfficer && (
-                                        <Button
-                                          size="sm"
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            // Prepare bulk delivery data with all items from this vendor's PO (with tracking)
-                                            const bulkItems = prepareBulkDeliveryItems(group.items);
+                                        <div className="flex flex-col gap-1.5 w-full">
+                                          <Button
+                                            size="sm"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              // Prepare bulk delivery data with all items from this vendor's PO (with tracking)
+                                              const bulkItems = prepareBulkDeliveryItems(group.items);
 
-                                            setBulkDeliveryData({
-                                              items: bulkItems,
-                                              vendorName: group.vendor.companyName,
-                                              poNumber: group.items[0].poNumber
-                                            });
-                                          }}
-                                          className={cn(
-                                            "w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold shadow-sm"
-                                          )}
-                                        >
-                                          <CheckCircle className="h-3.5 w-3.5 mr-2" /> Available
-                                        </Button>
+                                              setBulkDeliveryData({
+                                                items: bulkItems,
+                                                vendorName: group.vendor.companyName,
+                                                poNumber: group.items[0].poNumber
+                                              });
+                                            }}
+                                            className={cn(
+                                              "w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold shadow-sm"
+                                            )}
+                                          >
+                                            <CheckCircle className="h-3.5 w-3.5 mr-2" /> Available
+                                          </Button>
+                                          <Button
+                                            size="sm"
+                                            onClick={(e) => {
+                                              e.stopPropagation();
+                                              const bulkItems = prepareBulkDeliveryItems(group.items);
+                                              setBulkDeliveryData({
+                                                items: bulkItems,
+                                                vendorName: group.vendor.companyName,
+                                                poNumber: group.items[0].poNumber,
+                                                mode: "direct_delivered"
+                                              });
+                                            }}
+                                            className={cn(
+                                              "w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold shadow-sm"
+                                            )}
+                                          >
+                                            <Truck className="h-3.5 w-3.5 mr-2" /> Direct Delivered
+                                          </Button>
+                                        </div>
                                       )}
                                       {group.items[0].poNumber && (
                                         <Button
@@ -2870,34 +2890,54 @@ export function RequestDetailsDialog({
                                   </div>
                                 ))}
                               </div>
-                              <div className="p-3 mt-auto border-t bg-muted/20 flex items-center gap-2">
+                              <div className="p-3 mt-auto border-t bg-muted/20 flex flex-col gap-2">
+                                <div className="flex w-full items-center gap-2">
+                                  {isPurchaseOfficer && (
+                                    <Button
+                                      size="sm"
+                                      className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        // Prepare bulk delivery data with all items from this vendor's PO (with tracking)
+                                        const bulkItems = prepareBulkDeliveryItems(group.items);
+
+                                        setBulkDeliveryData({
+                                          items: bulkItems,
+                                          vendorName: group.vendor.companyName,
+                                          poNumber: group.poNumber
+                                        });
+                                      }}
+                                    >
+                                      <CheckCircle className="h-4 w-4 mr-1" /> Available
+                                    </Button>
+                                  )}
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="px-2"
+                                    onClick={() => { setPdfPreviewPoNumber(group.poNumber); setPdfPreviewRequestIds(group.items.map((i: any) => i.requestId)); }}
+                                  >
+                                    <FileText className="h-4 w-4" />
+                                  </Button>
+                                </div>
                                 {isPurchaseOfficer && (
                                   <Button
                                     size="sm"
-                                    className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white"
+                                    className="w-full bg-blue-600 hover:bg-blue-700 text-white"
                                     onClick={(e) => {
                                       e.stopPropagation();
-                                      // Prepare bulk delivery data with all items from this vendor's PO (with tracking)
                                       const bulkItems = prepareBulkDeliveryItems(group.items);
-
                                       setBulkDeliveryData({
                                         items: bulkItems,
                                         vendorName: group.vendor.companyName,
-                                        poNumber: group.poNumber
+                                        poNumber: group.poNumber,
+                                        mode: "direct_delivered"
                                       });
                                     }}
                                   >
-                                    <CheckCircle className="h-4 w-4 mr-1" /> Available
+                                    <Truck className="h-4 w-4 mr-1" /> Direct Delivered
                                   </Button>
                                 )}
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  className="px-2"
-                                  onClick={() => { setPdfPreviewPoNumber(group.poNumber); setPdfPreviewRequestIds(group.items.map((i: any) => i.requestId)); }}
-                                >
-                                  <FileText className="h-4 w-4" />
-                                </Button>
                               </div>
                             </div>
                           ))}
@@ -4342,13 +4382,13 @@ export function RequestDetailsDialog({
         }}
       />
 
-      {/* Bulk Delivery Dialog - for multiple items from same vendor PO */}
       <BulkDeliveryDialog
         open={!!bulkDeliveryData}
         onOpenChange={(open) => !open && setBulkDeliveryData(null)}
         items={bulkDeliveryData?.items || []}
         vendorName={bulkDeliveryData?.vendorName || ""}
         poNumber={bulkDeliveryData?.poNumber || ""}
+        mode={bulkDeliveryData?.mode || "delivery"}
       />
 
       {/* Direct PO Creation Dialog */}

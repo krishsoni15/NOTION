@@ -38,6 +38,7 @@ import { PDFPreviewDialog } from "./pdf-preview-dialog";
 import { ConfirmDeliveryDialog } from "@/components/requests/confirm-delivery-dialog";
 import { PaginationControls } from "@/components/ui/pagination-controls";
 import { Table2, X } from "lucide-react";
+import { PendingPODialog } from "./pending-po-dialog";
 
 // Enhanced status configuration with better visual hierarchy
 const statusConfig: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline"; icon: any; color: string }> = {
@@ -89,6 +90,7 @@ export function PurchaseRequestsContent() {
   const [directPOInitialData, setDirectPOInitialData] = useState<DirectPOInitialData | null>(null);
   const [pdfPreviewPoNumber, setPdfPreviewPoNumber] = useState<string | null>(null);
   const [pdfPreviewRequestId, setPdfPreviewRequestId] = useState<string | null>(null);
+  const [showPendingPODialog, setShowPendingPODialog] = useState(false);
 
   // Pagination State
   const [currentPage, setCurrentPage] = useState(1);
@@ -549,303 +551,327 @@ export function PurchaseRequestsContent() {
 
   return (
     <>
-      <div className="space-y-6">
-
-
-        {/* Controls: Search, View, Filter, Actions */}
-        <div className="space-y-3 sm:space-y-4 mb-4 sm:mb-6">
-          {/* Row 1: Search and View Toggle */}
-          <div className="flex gap-2">
-            <div className="relative flex-1 min-w-0">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Search by request number, item, site, or requester..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className={`pl-9 pr-9 h-9 sm:h-10 text-base w-full ${searchQuery.trim() ? 'ring-2 ring-blue-500/50 border-blue-500' : ''}`}
-              />
-              {searchQuery && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setSearchQuery("")}
-                  className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 p-0 hover:bg-muted"
-                  title="Clear search"
-                >
-                  <X className="h-3 w-3" />
-                </Button>
-              )}
-            </div>
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={toggleViewMode}
-              className="h-9 sm:h-10 w-9 sm:w-10 flex-shrink-0"
-              title={`Switch to ${viewMode === "card" ? "table" : "card"} view`}
-            >
-              {viewMode === "card" ? (
-                <Table2 className="h-4 w-4" />
-              ) : (
-                <LayoutGrid className="h-4 w-4" />
-              )}
-            </Button>
-          </div>
-
-          {/* Row 2: Status Filter and Action Buttons */}
-          <div className="flex gap-2 items-center">
-            {/* Status Filter */}
-            <div className="flex-1 sm:flex-none sm:w-[250px]">
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    role="combobox"
-                    className="w-full justify-between h-9 sm:h-10"
-                  >
-                    {filterStatus.length > 0
-                      ? `${filterStatus.length} selected`
-                      : "Filter by status"}
-                    <Filter className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-[400px] p-0" align="start">
-                  <Command>
-                    <CommandInput placeholder="Search status..." />
-                    <CommandList className="max-h-[600px] overflow-y-auto">
-                      <CommandEmpty>No status found.</CommandEmpty>
-                      <CommandGroup>
-                        <CommandItem
-                          onSelect={() => setFilterStatus([])}
-                          className="font-medium h-auto py-3 items-start"
-                        >
-                          <div
-                            className={cn(
-                              "mr-2 flex h-4 w-4 shrink-0 items-center justify-center rounded-sm border border-primary mt-0.5",
-                              filterStatus.length === 0
-                                ? "bg-primary text-primary-foreground"
-                                : "opacity-50 [&_svg]:invisible"
-                            )}
-                          >
-                            <Check className={cn("h-4 w-4")} />
-                          </div>
-                          <span className="flex-1 whitespace-normal break-words leading-tight">All Statuses</span>
-                        </CommandItem>
-                        {/* Draft (My Drafts) Special Case */}
-                        <CommandItem
-                          onSelect={() => {
-                            setFilterStatus((prev) =>
-                              prev.includes("draft")
-                                ? prev.filter((s) => s !== "draft")
-                                : [...prev, "draft"]
-                            );
-                          }}
-                          className={cn("h-auto py-3 items-start", colorMap.gray.bgHover)}
-                        >
-                          <div
-                            className={cn(
-                              "mr-2 flex h-4 w-4 shrink-0 items-center justify-center rounded-sm border mt-0.5",
-                              filterStatus.includes("draft")
-                                ? colorMap.gray.checkboxActive
-                                : cn(colorMap.gray.checkboxBorder, "opacity-50 [&_svg]:invisible")
-                            )}
-                          >
-                            <Check className={cn("h-4 w-4")} />
-                          </div>
-                          <span className={cn("flex-1 whitespace-normal break-words leading-tight", colorMap.gray.text)}>Draft (My Drafts)</span>
-                        </CommandItem>
-                        {Object.entries(statusConfig)
-                          .filter(([key]) => key !== "draft" && key !== "delivery_stage")
-                          .map(([key, config]) => (
-                            <CommandItem
-                              key={key}
-                              onSelect={() => {
-                                setFilterStatus((prev) =>
-                                  prev.includes(key)
-                                    ? prev.filter((s) => s !== key)
-                                    : [...prev, key]
-                                );
-                              }}
-                              className={cn("h-auto py-3 items-start", (colorMap[config.color] || colorMap.gray).bgHover)}
-                            >
-                              <div
-                                className={cn(
-                                  "mr-2 flex h-4 w-4 shrink-0 items-center justify-center rounded-sm border mt-0.5",
-                                  filterStatus.includes(key)
-                                    ? (colorMap[config.color] || colorMap.gray).checkboxActive
-                                    : cn((colorMap[config.color] || colorMap.gray).checkboxBorder, "opacity-50 [&_svg]:invisible")
-                                )}
-                              >
-                                <Check className={cn("h-4 w-4")} />
-                              </div>
-                              <span className={cn("flex-1 whitespace-normal break-words leading-tight", (colorMap[config.color] || colorMap.gray).text)}>{config.label}</span>
-                            </CommandItem>
-                          ))}
-                      </CommandGroup>
-                      {filterStatus.length > 0 && (
-                        <>
-                          <CommandSeparator />
-                          <CommandGroup>
-                            <CommandItem
-                              onSelect={() => setFilterStatus([])}
-                              className="justify-center text-center"
-                            >
-                              Clear filters
-                            </CommandItem>
-                          </CommandGroup>
-                        </>
-                      )}
-                    </CommandList>
-                  </Command>
-                </PopoverContent>
-              </Popover>
-            </div>
-
-            <Button
-              variant={filterStatus.length === 1 && filterStatus[0] === "pending_po" ? "default" : "outline"}
-              onClick={() => {
-                if (filterStatus.length === 1 && filterStatus[0] === "pending_po") {
-                  setFilterStatus([]);
-                } else {
-                  setFilterStatus(["pending_po"]);
-                }
-              }}
-              className={cn(
-                "h-9 sm:h-10 transition-all",
-                filterStatus.length === 1 && filterStatus[0] === "pending_po"
-                  ? "bg-amber-500 hover:bg-amber-600 text-white border-amber-500"
-                  : "border-amber-500/50 text-amber-600 hover:bg-amber-50 hover:text-amber-700 dark:hover:bg-amber-900/20"
-              )}
-            >
-              <Clock className="h-4 w-4 mr-2" />
-              Pending PO
-            </Button>
-
-            <Button
-              onClick={handleOpenDirectPO}
-              className="bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white shadow-lg hover:shadow-xl transition-all duration-200 h-9 sm:h-10 ml-auto"
-            >
-              <Zap className="h-4 w-4 mr-2" />
-              Create Direct PO
-            </Button>
-          </div>
-        </div>
-
-        {/* Pagination - Top */}
-        <div className="mb-3">
-          <PaginationControls
-            currentPage={currentPage}
-            totalPages={totalPages}
-            onPageChange={setCurrentPage}
-            pageSize={pageSize}
-            onPageSizeChange={setPageSize}
-            totalItems={totalItems}
-            pageSizeOptions={[10, 25, 50, 100]}
-            itemCount={paginatedRequests.length}
+      {/* ── Pending PO full-page view (replaces main table) ── */}
+      {showPendingPODialog && (
+        <div className="space-y-6">
+          <PendingPODialog
+            onBack={() => setShowPendingPODialog(false)}
+            onViewPO={(poNumber, requestId) => {
+              setPdfPreviewPoNumber(poNumber);
+              setPdfPreviewRequestId(requestId);
+            }}
+            onCreateDirectPO={() => {
+              setShowPendingPODialog(false);
+              handleOpenDirectPO();
+            }}
+          />
+          {/* Keep PDF preview dialog mounted */}
+          <PDFPreviewDialog
+            open={!!pdfPreviewPoNumber}
+            onOpenChange={(open) => { if (!open) { setPdfPreviewPoNumber(null); setPdfPreviewRequestId(null); } }}
+            poNumber={pdfPreviewPoNumber}
+            requestId={pdfPreviewRequestId}
+          />
+          <DirectPODialog
+            open={showDirectPODialog}
+            onOpenChange={(open) => {
+              setShowDirectPODialog(open);
+              if (!open) setDirectPOInitialData(null);
+            }}
+            initialData={directPOInitialData}
+            mode={directPOMode}
           />
         </div>
+      )}
 
-        {/* Requests Display */}
-        {filteredRequestGroups.length === 0 ? (
-          <Card>
-            <CardContent className="py-12">
-              <div className="text-center space-y-3">
-                <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-muted">
-                  <FileText className="h-6 w-6 text-muted-foreground" />
-                </div>
-                <div>
-                  <h3 className="font-semibold text-lg">No requests found</h3>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    {searchQuery
-                      ? "Try adjusting your search criteria"
-                      : "No requests found with current status filter"
-                    }
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        ) : viewMode === "table" ? (
-          <RequestsTable
-            requests={paginatedRequests as any}
-            viewMode="table"
-            onViewDetails={setSelectedRequestId}
-            onOpenCC={(requestId, requestIds) => setCCRequestId(requestId)}
-            onDirectPO={handleDirectPO}
-            onDirectDelivery={handleDirectDelivery}
-            onCheck={handleCheck}
-            onCreatePO={handleCreatePO}
-            onMoveToCC={handleMoveToCC}
-            onConfirmDelivery={setShowConfirmDelivery}
-            onViewPDF={(poNumber, requestId) => { setPdfPreviewPoNumber(poNumber); setPdfPreviewRequestId(requestId); }}
-            showCreator={true}
-          />
-        ) : (
-          <div className="space-y-8">
-            {paginatedGroups.map((group) => {
-              const { requestNumber, items, firstItem } = group;
-              const hasMultipleItems = items.length > 1;
+      {/* ── Normal requests view ── */}
+      {!showPendingPODialog && (
+        <div className="space-y-6">
 
-              // Determine overall status for the group
-              const allItemsHaveSameStatus = items.length > 0
-                ? items.every((item) => item.status === items[0].status)
-                : true;
 
-              const overallStatus = allItemsHaveSameStatus ? items[0].status : "partially_processed";
-              const statusInfo = statusConfig[overallStatus] || { label: overallStatus, variant: "outline", icon: FileText, color: "gray" };
-
-              // Count urgent items
-              const urgentCount = items.filter((item) => item.isUrgent && item.status !== "direct_po" && item.directAction !== "po").length;
-
-              return (
-                <PurchaseRequestGroupCard
-                  key={requestNumber}
-                  requestNumber={requestNumber}
-                  items={items as any}
-                  firstItem={firstItem as any}
-                  statusInfo={statusInfo}
-                  hasMultipleItems={hasMultipleItems}
-                  urgentCount={urgentCount}
-                  onViewDetails={setSelectedRequestId}
-                  onOpenCC={setCCRequestId}
-                  onSiteClick={setSelectedSiteId}
-                  onItemClick={setSelectedItemName}
-                  canEditVendor={true}
-                  onDirectPO={handleDirectPO}
-                  onDirectDelivery={handleDirectDelivery}
-                  onMoveToCC={handleMoveToCC}
-                  onCheck={handleCheck}
-                  onCreatePO={handleCreatePO}
-                  onCreateBulkPO={handleCreateBulkPO}
-                  onViewPDF={(poNumber, requestId) => { setPdfPreviewPoNumber(poNumber); setPdfPreviewRequestId(requestId); }}
+          {/* Controls: Search, View, Filter, Actions */}
+          <div className="space-y-3 sm:space-y-4 mb-4 sm:mb-6">
+            {/* Row 1: Search and View Toggle */}
+            <div className="flex gap-2">
+              <div className="relative flex-1 min-w-0">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search by request number, item, site, or requester..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className={`pl-9 pr-9 h-9 sm:h-10 text-base w-full ${searchQuery.trim() ? 'ring-2 ring-blue-500/50 border-blue-500' : ''}`}
                 />
-              );
-            })}
-          </div>
-        )}
+                {searchQuery && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setSearchQuery("")}
+                    className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7 p-0 hover:bg-muted"
+                    title="Clear search"
+                  >
+                    <X className="h-3 w-3" />
+                  </Button>
+                )}
+              </div>
+              <Button
+                variant="outline"
+                size="icon"
+                onClick={toggleViewMode}
+                className="h-9 sm:h-10 w-9 sm:w-10 flex-shrink-0"
+                title={`Switch to ${viewMode === "card" ? "table" : "card"} view`}
+              >
+                {viewMode === "card" ? (
+                  <Table2 className="h-4 w-4" />
+                ) : (
+                  <LayoutGrid className="h-4 w-4" />
+                )}
+              </Button>
+            </div>
 
-        {/* Pagination - Bottom */}
-        <div className="mt-4 border-t pt-4">
-          <PaginationControls
-            currentPage={currentPage}
-            totalPages={totalPages}
-            onPageChange={setCurrentPage}
-            pageSize={pageSize}
-            onPageSizeChange={setPageSize}
-            totalItems={totalItems}
-            pageSizeOptions={[10, 25, 50, 100]}
-            itemCount={paginatedRequests.length}
-          />
+            {/* Row 2: Status Filter and Action Buttons */}
+            <div className="flex gap-2 items-center">
+              {/* Status Filter */}
+              <div className="flex-1 sm:flex-none sm:w-[250px]">
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      role="combobox"
+                      className="w-full justify-between h-9 sm:h-10"
+                    >
+                      {filterStatus.length > 0
+                        ? `${filterStatus.length} selected`
+                        : "Filter by status"}
+                      <Filter className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-[400px] p-0" align="start">
+                    <Command>
+                      <CommandInput placeholder="Search status..." />
+                      <CommandList className="max-h-[600px] overflow-y-auto">
+                        <CommandEmpty>No status found.</CommandEmpty>
+                        <CommandGroup>
+                          <CommandItem
+                            onSelect={() => setFilterStatus([])}
+                            className="font-medium h-auto py-3 items-start"
+                          >
+                            <div
+                              className={cn(
+                                "mr-2 flex h-4 w-4 shrink-0 items-center justify-center rounded-sm border border-primary mt-0.5",
+                                filterStatus.length === 0
+                                  ? "bg-primary text-primary-foreground"
+                                  : "opacity-50 [&_svg]:invisible"
+                              )}
+                            >
+                              <Check className={cn("h-4 w-4")} />
+                            </div>
+                            <span className="flex-1 whitespace-normal break-words leading-tight">All Statuses</span>
+                          </CommandItem>
+                          {/* Draft (My Drafts) Special Case */}
+                          <CommandItem
+                            onSelect={() => {
+                              setFilterStatus((prev) =>
+                                prev.includes("draft")
+                                  ? prev.filter((s) => s !== "draft")
+                                  : [...prev, "draft"]
+                              );
+                            }}
+                            className={cn("h-auto py-3 items-start", colorMap.gray.bgHover)}
+                          >
+                            <div
+                              className={cn(
+                                "mr-2 flex h-4 w-4 shrink-0 items-center justify-center rounded-sm border mt-0.5",
+                                filterStatus.includes("draft")
+                                  ? colorMap.gray.checkboxActive
+                                  : cn(colorMap.gray.checkboxBorder, "opacity-50 [&_svg]:invisible")
+                              )}
+                            >
+                              <Check className={cn("h-4 w-4")} />
+                            </div>
+                            <span className={cn("flex-1 whitespace-normal break-words leading-tight", colorMap.gray.text)}>Draft (My Drafts)</span>
+                          </CommandItem>
+                          {Object.entries(statusConfig)
+                            .filter(([key]) => key !== "draft" && key !== "delivery_stage")
+                            .map(([key, config]) => (
+                              <CommandItem
+                                key={key}
+                                onSelect={() => {
+                                  setFilterStatus((prev) =>
+                                    prev.includes(key)
+                                      ? prev.filter((s) => s !== key)
+                                      : [...prev, key]
+                                  );
+                                }}
+                                className={cn("h-auto py-3 items-start", (colorMap[config.color] || colorMap.gray).bgHover)}
+                              >
+                                <div
+                                  className={cn(
+                                    "mr-2 flex h-4 w-4 shrink-0 items-center justify-center rounded-sm border mt-0.5",
+                                    filterStatus.includes(key)
+                                      ? (colorMap[config.color] || colorMap.gray).checkboxActive
+                                      : cn((colorMap[config.color] || colorMap.gray).checkboxBorder, "opacity-50 [&_svg]:invisible")
+                                  )}
+                                >
+                                  <Check className={cn("h-4 w-4")} />
+                                </div>
+                                <span className={cn("flex-1 whitespace-normal break-words leading-tight", (colorMap[config.color] || colorMap.gray).text)}>{config.label}</span>
+                              </CommandItem>
+                            ))}
+                        </CommandGroup>
+                        {filterStatus.length > 0 && (
+                          <>
+                            <CommandSeparator />
+                            <CommandGroup>
+                              <CommandItem
+                                onSelect={() => setFilterStatus([])}
+                                className="justify-center text-center"
+                              >
+                                Clear filters
+                              </CommandItem>
+                            </CommandGroup>
+                          </>
+                        )}
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+              </div>
+
+              <Button
+                variant="outline"
+                onClick={() => setShowPendingPODialog(true)}
+                className={cn(
+                  "h-9 sm:h-10 transition-all",
+                  "border-amber-500/60 text-amber-600 hover:bg-amber-50 hover:text-amber-700 hover:border-amber-500 dark:hover:bg-amber-900/20 dark:text-amber-400 dark:border-amber-500/50"
+                )}
+              >
+                <Clock className="h-4 w-4 mr-2" />
+                Pending PO
+              </Button>
+
+              <Button
+                onClick={handleOpenDirectPO}
+                className="bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white shadow-lg hover:shadow-xl transition-all duration-200 h-9 sm:h-10 ml-auto"
+              >
+                <Zap className="h-4 w-4 mr-2" />
+                Create Direct PO
+              </Button>
+            </div>
+          </div>
+
+          {/* Pagination - Top */}
+          <div className="mb-3">
+            <PaginationControls
+              currentPage={currentPage}
+              totalPages={totalPages}
+              onPageChange={setCurrentPage}
+              pageSize={pageSize}
+              onPageSizeChange={setPageSize}
+              totalItems={totalItems}
+              pageSizeOptions={[10, 25, 50, 100]}
+              itemCount={paginatedRequests.length}
+            />
+          </div>
+
+          {/* Requests Display */}
+          {filteredRequestGroups.length === 0 ? (
+            <Card>
+              <CardContent className="py-12">
+                <div className="text-center space-y-3">
+                  <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-muted">
+                    <FileText className="h-6 w-6 text-muted-foreground" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-lg">No requests found</h3>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      {searchQuery
+                        ? "Try adjusting your search criteria"
+                        : "No requests found with current status filter"
+                      }
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ) : viewMode === "table" ? (
+            <RequestsTable
+              requests={paginatedRequests as any}
+              viewMode="table"
+              onViewDetails={setSelectedRequestId}
+              onOpenCC={(requestId, requestIds) => setCCRequestId(requestId)}
+              onDirectPO={handleDirectPO}
+              onDirectDelivery={handleDirectDelivery}
+              onCheck={handleCheck}
+              onCreatePO={handleCreatePO}
+              onMoveToCC={handleMoveToCC}
+              onConfirmDelivery={setShowConfirmDelivery}
+              onViewPDF={(poNumber, requestId) => { setPdfPreviewPoNumber(poNumber); setPdfPreviewRequestId(requestId); }}
+              showCreator={true}
+            />
+          ) : (
+            <div className="space-y-8">
+              {paginatedGroups.map((group) => {
+                const { requestNumber, items, firstItem } = group;
+                const hasMultipleItems = items.length > 1;
+
+                // Determine overall status for the group
+                const allItemsHaveSameStatus = items.length > 0
+                  ? items.every((item) => item.status === items[0].status)
+                  : true;
+
+                const overallStatus = allItemsHaveSameStatus ? items[0].status : "partially_processed";
+                const statusInfo = statusConfig[overallStatus] || { label: overallStatus, variant: "outline", icon: FileText, color: "gray" };
+
+                // Count urgent items
+                const urgentCount = items.filter((item) => item.isUrgent && item.status !== "direct_po" && item.directAction !== "po").length;
+
+                return (
+                  <PurchaseRequestGroupCard
+                    key={requestNumber}
+                    requestNumber={requestNumber}
+                    items={items as any}
+                    firstItem={firstItem as any}
+                    statusInfo={statusInfo}
+                    hasMultipleItems={hasMultipleItems}
+                    urgentCount={urgentCount}
+                    onViewDetails={setSelectedRequestId}
+                    onOpenCC={setCCRequestId}
+                    onSiteClick={setSelectedSiteId}
+                    onItemClick={setSelectedItemName}
+                    canEditVendor={true}
+                    onDirectPO={handleDirectPO}
+                    onDirectDelivery={handleDirectDelivery}
+                    onMoveToCC={handleMoveToCC}
+                    onCheck={handleCheck}
+                    onCreatePO={handleCreatePO}
+                    onCreateBulkPO={handleCreateBulkPO}
+                    onViewPDF={(poNumber, requestId) => { setPdfPreviewPoNumber(poNumber); setPdfPreviewRequestId(requestId); }}
+                  />
+                );
+              })}
+            </div>
+          )}
+
+          {/* Pagination - Bottom */}
+          <div className="mt-4 border-t pt-4">
+            <PaginationControls
+              currentPage={currentPage}
+              totalPages={totalPages}
+              onPageChange={setCurrentPage}
+              pageSize={pageSize}
+              onPageSizeChange={setPageSize}
+              totalItems={totalItems}
+              pageSizeOptions={[10, 25, 50, 100]}
+              itemCount={paginatedRequests.length}
+            />
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Dialogs */}
       <RequestDetailsDialog
         open={!!selectedRequestId}
-        onOpenChange={(open) => {
-          if (!open) {
-            setSelectedRequestId(null);
-          }
-        }}
+        onOpenChange={(open) => { if (!open) setSelectedRequestId(null); }}
         requestId={selectedRequestId}
         onCheck={handleCheck}
         onCreatePO={handleCreateBulkPO}
@@ -855,11 +881,7 @@ export function PurchaseRequestsContent() {
       {ccRequestId && (
         <CostComparisonDialog
           open={!!ccRequestId}
-          onOpenChange={(open) => {
-            if (!open) {
-              setCCRequestId(null);
-            }
-          }}
+          onOpenChange={(open) => { if (!open) setCCRequestId(null); }}
           requestId={ccRequestId}
         />
       )}
@@ -913,5 +935,3 @@ export function PurchaseRequestsContent() {
     </>
   );
 }
-
-

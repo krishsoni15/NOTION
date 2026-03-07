@@ -27,6 +27,7 @@ interface Request {
   specsBrand?: string;
   isUrgent: boolean;
   status: string;
+  directAction?: "delivery" | "po" | "all" | "split_po" | "split_delivery" | "split_po_delivery";
   photo?: {
     imageUrl: string;
     imageKey: string;

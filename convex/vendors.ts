@@ -6,7 +6,7 @@
  * Manager can only view vendors.
  */
 
-import { v } from "convex/values";
+import { v, ConvexError } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { getAuthUserId } from "@convex-dev/auth/server";
 import type { Id } from "./_generated/dataModel";
@@ -15,7 +15,7 @@ import type { Id } from "./_generated/dataModel";
 async function getCurrentUser(ctx: any) {
   const userId = await getAuthUserId(ctx);
   if (!userId) {
-    throw new Error("Not authenticated");
+    throw new ConvexError("Not authenticated");
   }
 
   const user = await ctx.db
@@ -24,7 +24,7 @@ async function getCurrentUser(ctx: any) {
     .unique();
 
   if (!user) {
-    throw new Error("User not found");
+    throw new ConvexError("User not found");
   }
 
   return user;
@@ -82,12 +82,12 @@ export const getVendorById = query({
       currentUser.role !== "purchase_officer" &&
       currentUser.role !== "manager"
     ) {
-      throw new Error("Unauthorized");
+      throw new ConvexError("Unauthorized");
     }
 
     const vendor = await ctx.db.get(args.vendorId);
     if (!vendor || !vendor.isActive) {
-      throw new Error("Vendor not found");
+      throw new ConvexError("Vendor not found");
     }
 
     return vendor;
@@ -118,19 +118,20 @@ export const createVendor = mutation({
 
     // Check if user is a Purchase Officer or Manager
     if (currentUser.role !== "purchase_officer" && currentUser.role !== "manager") {
-      throw new Error("Unauthorized: Only Purchase Officers and Managers can create vendors");
+      throw new ConvexError("Unauthorized: Only Purchase Officers and Managers can create vendors");
     }
 
     // Validate GST number format (15 characters, alphanumeric)
+    // Relaxed GST check to allow empty/informal formats, or we just remove the regex
     const gstRegex = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
-    if (!gstRegex.test(args.gstNumber)) {
-      throw new Error("Invalid GST number format. Expected format: 24AAAAA0000A1Z5");
+    if (args.gstNumber && !gstRegex.test(args.gstNumber)) {
+      throw new ConvexError("Invalid GST number format. Expected format: 24AAAAA0000A1Z5");
     }
 
     // Validate email format (only if provided)
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (args.email && !emailRegex.test(args.email)) {
-      throw new Error("Invalid email format");
+      throw new ConvexError("Invalid email format");
     }
 
     const now = Date.now();
@@ -169,24 +170,24 @@ export const updateVendor = mutation({
 
     // Check if user is a Purchase Officer or Manager
     if (currentUser.role !== "purchase_officer" && currentUser.role !== "manager") {
-      throw new Error("Unauthorized: Only Purchase Officers and Managers can update vendors");
+      throw new ConvexError("Unauthorized: Only Purchase Officers and Managers can update vendors");
     }
 
     const vendor = await ctx.db.get(args.vendorId);
     if (!vendor || !vendor.isActive) {
-      throw new Error("Vendor not found");
+      throw new ConvexError("Vendor not found");
     }
 
     // Validate GST number format
     const gstRegex = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
-    if (!gstRegex.test(args.gstNumber)) {
-      throw new Error("Invalid GST number format. Expected format: 24AAAAA0000A1Z5");
+    if (args.gstNumber && !gstRegex.test(args.gstNumber)) {
+      throw new ConvexError("Invalid GST number format. Expected format: 24AAAAA0000A1Z5");
     }
 
     // Validate email format (only if provided)
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (args.email && !emailRegex.test(args.email)) {
-      throw new Error("Invalid email format");
+      throw new ConvexError("Invalid email format");
     }
 
     await ctx.db.patch(args.vendorId, {
@@ -249,7 +250,7 @@ export const getVendorPurchaseStats = query({
       currentUser.role !== "purchase_officer" &&
       currentUser.role !== "manager"
     ) {
-      throw new Error("Unauthorized");
+      throw new ConvexError("Unauthorized");
     }
 
     // Get all purchase orders for this vendor
@@ -303,12 +304,12 @@ export const deleteVendor = mutation({
 
     // Check if user is a Purchase Officer or Manager
     if (currentUser.role !== "purchase_officer" && currentUser.role !== "manager") {
-      throw new Error("Unauthorized: Only Purchase Officers and Managers can delete vendors");
+      throw new ConvexError("Unauthorized: Only Purchase Officers and Managers can delete vendors");
     }
 
     const vendor = await ctx.db.get(args.vendorId);
     if (!vendor) {
-      throw new Error("Vendor not found");
+      throw new ConvexError("Vendor not found");
     }
 
     // Check if vendor is used in inventory
@@ -326,7 +327,7 @@ export const deleteVendor = mutation({
     });
 
     if (usedInInventory.length > 0) {
-      throw new Error(
+      throw new ConvexError(
         `Cannot delete vendor: It is used in ${usedInInventory.length} inventory item(s). Please remove the vendor from inventory items first.`
       );
     }

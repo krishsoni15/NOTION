@@ -99,6 +99,9 @@ export default defineSchema({
       v.literal("split_po_delivery")
     )), // Flag for direct delivery/PO/split combinations
     isSplitApproved: v.optional(v.boolean()),
+    lastTalkDate: v.optional(v.number()), // For pending PO last talk date
+    lastTalkText: v.optional(v.string()), // Notes for last talk
+    committedDate: v.optional(v.number()), // Vendor committed delivery date (manually set)
 
     // Delivery Confirmation Details
     deliveryNotes: v.optional(v.string()), // Notes added by site engineer upon receipt

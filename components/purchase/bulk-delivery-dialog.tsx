@@ -30,6 +30,7 @@ interface BulkDeliveryDialogProps {
     items: BulkDeliveryItem[];
     vendorName: string;
     poNumber: string;
+    mode?: "delivery" | "direct_delivered";
 }
 
 export function BulkDeliveryDialog({
@@ -38,6 +39,7 @@ export function BulkDeliveryDialog({
     items,
     vendorName,
     poNumber,
+    mode = "delivery",
 }: BulkDeliveryDialogProps) {
     // Initialize delivery quantities with REQUESTED quantities (auto-filled to requested, not PO)
     const [deliveryQuantities, setDeliveryQuantities] = useState<Record<string, number>>({});
@@ -82,6 +84,7 @@ export function BulkDeliveryDialog({
                     await markReadyForDelivery({
                         requestId: item.requestId,
                         deliveryQuantity: deliveryQty,
+                        targetStatus: mode === "direct_delivered" ? "delivered" : "ready_for_delivery",
                     });
                     deliveredCount++;
                 } else {
@@ -90,7 +93,8 @@ export function BulkDeliveryDialog({
             }
 
             if (deliveredCount > 0) {
-                toast.success(`Successfully marked ${deliveredCount} item(s) for delivery${skippedCount > 0 ? ` (${skippedCount} skipped)` : ""}`);
+                const actionText = mode === "direct_delivered" ? "directly delivered" : "for delivery";
+                toast.success(`Successfully marked ${deliveredCount} item(s) ${actionText}${skippedCount > 0 ? ` (${skippedCount} skipped)` : ""}`);
             }
 
             onOpenChange(false);
@@ -120,11 +124,15 @@ export function BulkDeliveryDialog({
             <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                     <DialogTitle className="flex items-center gap-2 text-xl">
-                        <Truck className="h-5 w-5 text-emerald-600" />
-                        Bulk Delivery - {vendorName}
+                        {mode === "direct_delivered" ? (
+                            <CheckCircle className="h-5 w-5 text-emerald-600" />
+                        ) : (
+                            <Truck className="h-5 w-5 text-emerald-600" />
+                        )}
+                        {mode === "direct_delivered" ? "Direct Delivery" : "Bulk Delivery"} - {vendorName}
                     </DialogTitle>
                     <DialogDescription>
-                        Review and confirm delivery quantities for {items.length} item(s) from PO: <span className="font-mono font-semibold">{poNumber}</span>
+                        Review and confirm {mode === "direct_delivered" ? "direct delivery" : "delivery"} quantities for {items.length} item(s) from PO: <span className="font-mono font-semibold">{poNumber}</span>
                     </DialogDescription>
                 </DialogHeader>
 

@@ -1640,7 +1640,8 @@ export function RequestsTable({
                                     size="sm"
                                     onClick={(e) => {
                                       e.stopPropagation();
-                                      setDcDialogItems(readyItems.map(i => ({
+                                      const readyItemsToAssign = items.filter(i => i.status === "ready_for_delivery");
+                                      setDcDialogItems(readyItemsToAssign.map(i => ({
                                         requestId: i._id,
                                         itemName: i.itemName,
                                         quantity: i.quantity,

@@ -11,6 +11,7 @@ import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { MaterialRequestForm } from "@/components/requests/material-request-form";
 import { RequestsTable } from "@/components/requests/requests-table";
+import { CostComparisonDialog } from "@/components/purchase/cost-comparison-dialog";
 import { RequestDetailsDialog } from "@/components/requests/request-details-dialog";
 import { LocationInfoDialog } from "@/components/locations/location-info-dialog";
 import { Button } from "@/components/ui/button";
@@ -283,6 +284,11 @@ export function SiteRequestsContent() {
   const [debouncedSearchQuery, setDebouncedSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string[]>([]);
   const previousRequestsRef = useRef<typeof allRequests>(undefined);
+
+  // CC Dialog State
+  const [ccDialogOpen, setCcDialogOpen] = useState(false);
+  const [ccDialogRequestId, setCcDialogRequestId] = useState<Id<"requests"> | null>(null);
+  const [ccDialogRequestIds, setCcDialogRequestIds] = useState<Id<"requests">[]>([]);
 
   // Debounce search query for better performance
   useEffect(() => {
@@ -715,6 +721,11 @@ export function SiteRequestsContent() {
         onConfirmDelivery={handleConfirmDelivery}
         newlySentRequestNumbers={newlySentRequestNumbers}
         viewMode={viewMode}
+        onOpenCC={(id, ids) => {
+          setCcDialogRequestId(id);
+          setCcDialogRequestIds(ids || []);
+          setCcDialogOpen(true);
+        }}
       />
 
       <div className="mt-4 border-t pt-4">
@@ -749,6 +760,11 @@ export function SiteRequestsContent() {
           }
         }}
         requestId={selectedRequestId}
+        onOpenCC={(id, ids) => {
+          setCcDialogRequestId(id);
+          setCcDialogRequestIds(ids || []);
+          setCcDialogOpen(true);
+        }}
       />
 
       <LocationInfoDialog
@@ -886,6 +902,16 @@ export function SiteRequestsContent() {
         onOpenChange={(open) => !open && setConfirmDeliveryId(null)}
         requestId={confirmDeliveryId}
       />
+
+      {/* Cost Comparison Dialog (View Only for Site Engineer) */}
+      {ccDialogRequestId && (
+        <CostComparisonDialog
+          open={ccDialogOpen}
+          onOpenChange={setCcDialogOpen}
+          requestId={ccDialogRequestId}
+          requestIds={ccDialogRequestIds}
+        />
+      )}
     </>
   );
 }

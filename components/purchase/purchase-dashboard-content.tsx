@@ -158,7 +158,7 @@ export function PurchaseDashboardContent() {
                       <Badge variant="outline">
                         {request.quantity} {request.unit}
                       </Badge>
-                      {request.isUrgent && (
+                      {request.isUrgent && request.status !== "direct_po" && request.directAction !== "po" && (
                         <Badge variant="destructive">Urgent</Badge>
                       )}
                     </div>

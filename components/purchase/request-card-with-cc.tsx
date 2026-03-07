@@ -135,7 +135,7 @@ export function RequestCardWithCC({
               <StatusIcon className="h-3 w-3 mr-1" />
               {statusInfo.label}
             </Badge>
-            {request.isUrgent && (
+            {request.isUrgent && request.status !== "direct_po" && request.directAction !== "po" && (
               <Badge variant="destructive" className="text-xs flex-shrink-0">
                 <AlertCircle className="h-3 w-3 mr-1" />
                 Urgent
@@ -228,7 +228,7 @@ export function RequestCardWithCC({
           {/* Status badges on new line */}
           <div className="flex items-center justify-between pt-2 border-t mt-2">
             <div className="flex items-center gap-2">
-              {request.isUrgent && (
+              {request.isUrgent && request.status !== "direct_po" && request.directAction !== "po" && (
                 <Badge variant="destructive" className="text-xs flex-shrink-0">
                   <AlertCircle className="h-3 w-3 mr-1" />
                   Urgent

@@ -797,7 +797,7 @@ export function CostComparisonDialog({
     setTimeout(() => setShowItemNameSuggestions(false), 150);
   };
 
-  const canEdit = existingCC?.status === "draft" || existingCC?.status === "cc_rejected" || !existingCC;
+  const canEdit = userRole === ROLES.PURCHASE_OFFICER && (existingCC?.status === "draft" || existingCC?.status === "cc_rejected" || !existingCC);
   const isSubmitted = existingCC?.status === "cc_pending";
   const isManagerReview = isManager && isSubmitted;
 

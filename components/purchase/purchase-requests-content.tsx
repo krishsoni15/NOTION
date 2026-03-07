@@ -794,7 +794,7 @@ export function PurchaseRequestsContent() {
               const statusInfo = statusConfig[overallStatus] || { label: overallStatus, variant: "outline", icon: FileText, color: "gray" };
 
               // Count urgent items
-              const urgentCount = items.filter((item) => item.isUrgent).length;
+              const urgentCount = items.filter((item) => item.isUrgent && item.status !== "direct_po" && item.directAction !== "po").length;
 
               return (
                 <PurchaseRequestGroupCard

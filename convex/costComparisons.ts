@@ -348,7 +348,7 @@ export const submitCostComparison = mutation({
         role: currentUser.role,
         status: "cc_pending",
         type: "log",
-        content: `Cost Comparison submitted for Manager review (${costComparison.vendorQuotes.length} vendor quote(s)).`,
+        content: `[Item #${request.itemOrder ?? 1}] Cost Comparison submitted for Manager review (${costComparison.vendorQuotes.length} vendor quote(s)).`,
         createdAt: now,
       });
     }
@@ -429,7 +429,7 @@ export const reviewCostComparison = mutation({
           role: currentUser.role,
           status: "cc_approved",
           type: "log",
-          content: `CC Approved. Vendor selected. Status → Ready for PO.${args.notes ? ` Notes: ${args.notes.trim()}` : ''}`,
+          content: `[Item #${request.itemOrder ?? 1}] CC Approved. Vendor selected. Status → Ready for PO.${args.notes ? ` Notes: ${args.notes.trim()}` : ''}`,
           createdAt: now,
         });
       }
@@ -463,7 +463,7 @@ export const reviewCostComparison = mutation({
           role: currentUser.role,
           status: "cc_rejected",
           type: "log",
-          content: `CC Rejected: ${args.notes.trim()}`,
+          content: `[Item #${request.itemOrder ?? 1}] CC Rejected: ${args.notes.trim()}`,
           createdAt: now,
         });
       }
@@ -548,7 +548,7 @@ export const resubmitCostComparison = mutation({
         role: currentUser.role,
         status: "cc_pending",
         type: "log",
-        content: `Cost Comparison resubmitted after rejection (${args.vendorQuotes.length} vendor quote(s)). Awaiting Manager review.`,
+        content: `[Item #${request.itemOrder ?? 1}] Cost Comparison resubmitted after rejection (${args.vendorQuotes.length} vendor quote(s)). Awaiting Manager review.`,
         createdAt: now,
       });
     }
@@ -611,7 +611,7 @@ export const approveSplitFulfillment = mutation({
         role: currentUser.role,
         status: "split_approved",
         type: "log",
-        content: `Split Fulfillment Approved: ${args.notes || "Partial inventory approved"}`,
+        content: `[Item #${request.itemOrder ?? 1}] Split Fulfillment Approved: ${args.notes || "Partial inventory approved"}`,
         createdAt: now,
       });
 

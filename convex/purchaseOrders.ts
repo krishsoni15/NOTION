@@ -50,6 +50,27 @@ async function generateRequestNumber(ctx: any): Promise<string> {
     return nextNumber.toString().padStart(3, "0");
 }
 
+// Helper function to generate PO Number (separate sequence from Requests)
+async function generatePONumber(ctx: any): Promise<string> {
+    const allPOs = await ctx.db.query("purchaseOrders").collect();
+
+    // Find the highest existing PO number
+    let maxNumber = 0;
+    for (const po of allPOs) {
+        const numMatch = po.poNumber.match(/^(\d{3,})$/);
+        if (numMatch) {
+            const num = parseInt(numMatch[1], 10);
+            if (num > maxNumber) {
+                maxNumber = num;
+            }
+        }
+    }
+
+    // Generate next sequential number with leading zeros
+    const nextNumber = maxNumber + 1;
+    return nextNumber.toString().padStart(3, "0");
+}
+
 
 // ============================================================================
 // Queries
@@ -605,7 +626,8 @@ export const createDirectPO = mutation({
         // Always generate a NEW unique PO number for each PO creation
         // The existingRequestNumber is kept for reference/linking but not used as PO number
         // This ensures each PO has a unique number and PDF shows only items from that specific PO
-        const poNumber = await generateRequestNumber(ctx);
+        const poNumber = await generatePONumber(ctx);
+        const reqNumber = await generateRequestNumber(ctx);
         const now = Date.now();
         const results = [];
 
@@ -651,7 +673,7 @@ export const createDirectPO = mutation({
             } else {
                 // 1. Create Request Record (to maintain ID continuity and appear in Requests board)
                 requestId = await ctx.db.insert("requests", {
-                    requestNumber: poNumber,
+                    requestNumber: reqNumber,
                     createdBy: currentUser._id,
                     siteId: args.deliverySiteId,
                     itemName: item.itemDescription.split('\n')[0], // Use first line as title
@@ -807,7 +829,7 @@ export const createDirectPO = mutation({
                         role: currentUser.role,
                         status: "sign_pending",
                         type: "log",
-                        content: `Purchase Order created (PO#: ${po.poNumber}). Vendor selected. Awaiting Manager signature.`,
+                        content: `[Item #${request.itemOrder ?? 1}] Purchase Order created (PO#: ${po.poNumber}). Vendor selected. Awaiting Manager signature.`,
                         createdAt: now,
                     });
                 }
@@ -876,7 +898,7 @@ export const updatePOStatus = mutation({
                     role: currentUser.role,
                     status: reqStatus,
                     type: "log",
-                    content: `${statusLabels[args.status] || args.status} (PO#: ${po.poNumber})`,
+                    content: `[Item #${request.itemOrder ?? 1}] ${statusLabels[args.status] || args.status} (PO#: ${po.poNumber})`,
                     createdAt: Date.now(),
                 });
             }
@@ -930,7 +952,7 @@ export const cancelPO = mutation({
                     role: currentUser.role,
                     status: "rejected",
                     type: "log",
-                    content: `PO Cancelled (PO#: ${po.poNumber}). Request status set to Rejected.`,
+                    content: `[Item #${request.itemOrder ?? 1}] PO Cancelled (PO#: ${po.poNumber}). Request status set to Rejected.`,
                     createdAt: Date.now(),
                 });
             }
@@ -987,7 +1009,7 @@ export const approveDirectPO = mutation({
                     role: currentUser.role,
                     status: "pending_po",
                     type: "log",
-                    content: `PO Digitally Signed & Approved by Manager (PO#: ${po.poNumber}). Status → Pending PO.`,
+                    content: `[Item #${request.itemOrder ?? 1}] PO Digitally Signed & Approved by Manager (PO#: ${po.poNumber}). Status → Pending PO.`,
                     createdAt: now,
                 });
             }
@@ -1044,7 +1066,7 @@ export const rejectDirectPO = mutation({
                     role: currentUser.role,
                     status: "sign_rejected",
                     type: "log",
-                    content: `Digitally Rejected: ${args.reason}`,
+                    content: `[Item #${request.itemOrder ?? 1}] Digitally Rejected: ${args.reason}`,
                     createdAt: now,
                 });
             }
@@ -1107,7 +1129,7 @@ export const approveDirectPOByRequest = mutation({
                 role: currentUser.role,
                 status: "pending_po",
                 type: "log",
-                content: `PO Digitally Signed by Manager for Request. Status → Pending PO.`,
+                content: `[Item #${request.itemOrder ?? 1}] PO Digitally Signed by Manager for Request. Status → Pending PO.`,
                 createdAt: now,
             });
         }
@@ -1170,7 +1192,7 @@ export const rejectDirectPOByRequest = mutation({
                 role: currentUser.role,
                 status: "sign_rejected",
                 type: "log",
-                content: `Digitally Rejected: ${args.reason}`,
+                content: `[Item #${request.itemOrder ?? 1}] Digitally Rejected: ${args.reason}`,
                 createdAt: now,
             });
         }

@@ -29,7 +29,7 @@ import {
 } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { ExpandableText } from "@/components/ui/expandable-text";
-import { Eye, AlertCircle, FileText, Edit, Trash2, Send, ChevronDown, ChevronUp, ChevronRight, MapPin, Package, PackageX, Sparkles, NotebookPen, ScrollText, LayoutGrid, Table as TableIcon, ShoppingCart, Truck, Clock, CheckCircle2, CheckCircle, XCircle, Loader2, Pencil, RefreshCw, PieChart } from "lucide-react";
+import { Eye, AlertCircle, FileText, Edit, Trash2, Send, ChevronDown, ChevronUp, ChevronRight, MapPin, Package, PackageX, Sparkles, NotebookPen, ScrollText, LayoutGrid, Table as TableIcon, ShoppingCart, Truck, Clock, CheckCircle2, CheckCircle, XCircle, Loader2, Pencil, RefreshCw, PieChart, Layers, Search, X, Table2, Filter, Check, Plus, Calendar, AlertTriangle } from "lucide-react";
 import { CompactImageGallery } from "@/components/ui/image-gallery";
 import { LazyImage } from "@/components/ui/lazy-image";
 import { cn, normalizeSearchQuery, matchesAnySearchQuery } from "@/lib/utils";
@@ -711,7 +711,7 @@ export function RequestsTable({
           const isExpanded = alwaysExpanded || expandedGroups.has(requestNumber);
           const isNewlySent = newlySentRequestNumbers.has(requestNumber);
           const hasMultipleItems = items.length > 1;
-          const urgentCount = items.filter((item) => item.isUrgent).length;
+          const urgentCount = items.filter((item) => item.isUrgent && item.status !== "direct_po" && item.directAction !== "po").length;
           const reviewableItemsCount = items.filter((item) => ["pending", "sign_pending"].includes(item.status)).length;
 
           const allItemsHaveSameStatus = items.length > 0
@@ -847,10 +847,10 @@ export function RequestsTable({
 
                 {showBadges && (
                   <div className="flex flex-wrap items-center gap-2 pt-2">
-                    {item.isUrgent && (
-                      <Badge variant="destructive" className="h-5 px-2 text-[9px] font-black gap-1.5 shadow-md shadow-red-500/10 border-red-400/50">
+                    {item.isUrgent && item.status !== "direct_po" && item.directAction !== "po" && (
+                      <Badge variant="destructive" className="h-5 px-2 text-[9px] font-black gap-1.5 shadow-md shadow-red-500/10 border-red-400/50 uppercase">
                         <AlertCircle className="h-3 w-3" />
-                        URGENT
+                        Urgent
                       </Badge>
                     )}
                     {getStatusBadge(item.status)}
@@ -937,9 +937,9 @@ export function RequestsTable({
                       </div>
                     )}
                     {urgentCount > 0 && (
-                      <Badge variant="destructive" className="ml-2 h-7 px-3 text-xs font-black gap-1.5 shadow-md animate-pulse border-red-500">
+                      <Badge variant="destructive" className="ml-2 h-7 px-3 text-xs font-black gap-1.5 shadow-md animate-pulse border-red-500 uppercase">
                         <AlertCircle className="h-3.5 w-3.5" />
-                        URGENT: {urgentCount}/{items.length}
+                        {urgentCount === items.length ? "Urgent" : `Urgent (${urgentCount}/${items.length})`}
                       </Badge>
                     )}
                   </div>
@@ -1116,7 +1116,7 @@ export function RequestsTable({
                     size="sm"
                     onClick={(e) => { e.stopPropagation(); setSelectedRequestNumberForGRN(firstItem.requestNumber); }}
                     className="h-8 px-2.5 gap-1.5 rounded-full text-muted-foreground hover:text-foreground hover:bg-white dark:hover:bg-slate-800 relative shadow-sm border border-transparent hover:border-border transition-all ml-1"
-                    title="View GRN Audit Trail"
+                    title="View Request Logs"
                   >
                     <ScrollText className="h-4 w-4" />
                     <span className="text-xs font-semibold">GRN</span>
@@ -1191,17 +1191,17 @@ export function RequestsTable({
                     </Button>
                   )}
 
-                  {/* View PDF Button */}
-                  {onViewPDF && firstItem.poNumber && ["sign_pending", "sign_rejected", "ordered", "pending_po", "direct_po", "ready_for_delivery", "out_for_delivery", "delivery_processing", "delivery_stage", "delivered"].includes(firstItem.status as string) && (
+                  {/* PO View Button */}
+                  {onViewPDF && firstItem.poNumber && ["sign_pending", "sign_rejected", "pending_po", "ready_for_delivery"].includes(firstItem.status as string) && (
                     <Button
                       variant="outline"
                       size="sm"
                       onClick={(e) => { e.stopPropagation(); if (firstItem.poNumber) onViewPDF(firstItem.poNumber, firstItem._id); }}
                       className="h-8 px-3 text-xs font-bold border-slate-200 text-slate-700 hover:bg-slate-50 dark:border-slate-800 dark:text-slate-400 dark:hover:bg-slate-950 ml-1 shadow-sm"
-                      title="View PDF"
+                      title="PO View"
                     >
                       <FileText className="h-3.5 w-3.5 mr-1.5" />
-                      View PDF
+                      PO View
                     </Button>
                   )}
 
@@ -1266,7 +1266,7 @@ export function RequestsTable({
                   );
 
                   // Count urgent items
-                  const urgentCount = items.filter((item) => item.isUrgent).length;
+                  const urgentCount = items.filter((item) => item.isUrgent && item.status !== "direct_po" && item.directAction !== "po").length;
 
                   // Get status color for left border - VIBRANT & THICKER
                   const getStatusBorderColor = (status: string) => {
@@ -1394,9 +1394,9 @@ export function RequestsTable({
                               <span className="text-[10px] uppercase font-bold text-muted-foreground/80 tracking-wide">{items.length} items</span>
                             )}
                             {urgentCount > 0 && (
-                              <Badge variant="destructive" className="h-4 px-1.5 text-[10px] gap-0.5 animate-pulse">
+                              <Badge variant="destructive" className="h-4 px-1.5 text-[10px] gap-1 animate-pulse uppercase">
                                 <AlertCircle className="h-2.5 w-2.5" />
-                                {urgentCount}/{items.length}
+                                {urgentCount === items.length ? "Urgent" : `Urgent (${urgentCount}/${items.length})`}
                               </Badge>
                             )}
                           </div>
@@ -1500,7 +1500,7 @@ export function RequestsTable({
                               size="sm"
                               onClick={(e) => { e.stopPropagation(); setSelectedRequestNumberForGRN(firstItem.requestNumber); }}
                               className="h-8 w-8 p-0 rounded-full text-muted-foreground hover:text-foreground hover:bg-slate-100 dark:hover:bg-slate-800"
-                              title="View GRN Audit Trail"
+                              title="View Request Logs"
                             >
                               <ScrollText className="h-4 w-4" />
                             </Button>
@@ -1592,6 +1592,23 @@ export function RequestsTable({
                                     Resubmit CC
                                   </Button>
                                 )}
+                                {/* View CC Button - Collapsed Row */}
+                                {!isExpanded && items.some(i => ["cc_pending", "cc_approved", "cc_rejected", "ready_for_po"].includes(i.status as string)) && (
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="h-7 px-3 text-xs font-semibold shadow-sm border-purple-200 text-purple-700 hover:bg-purple-50 mr-1 dark:border-purple-800 dark:text-purple-400 dark:hover:bg-purple-900/30"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      const ccItem = items.find(i => ["cc_pending", "cc_approved", "cc_rejected", "ready_for_po"].includes(i.status as string));
+                                      if (ccItem) (onOpenCC || onCheck)?.(ccItem._id);
+                                    }}
+                                    title="View Cost Comparison"
+                                  >
+                                    <Layers className="h-3 w-3 mr-1.5" />
+                                    View CC
+                                  </Button>
+                                )}
                                 {/* View DC Button - Collapsed Row */}
                                 {!isExpanded && ["out_for_delivery", "delivery_processing", "delivery_stage", "delivered"].includes(firstItem.status) && firstItem.deliveryId && (
                                   <Button
@@ -1623,7 +1640,6 @@ export function RequestsTable({
                                     size="sm"
                                     onClick={(e) => {
                                       e.stopPropagation();
-                                      const readyItems = items.filter(i => i.status === "ready_for_delivery");
                                       setDcDialogItems(readyItems.map(i => ({
                                         requestId: i._id,
                                         itemName: i.itemName,
@@ -1655,16 +1671,16 @@ export function RequestsTable({
                                     {(firstItem.status as string) === "sign_rejected" ? "Resubmit PO" : "Create PO"}
                                   </Button>
                                 )}
-                                {onViewPDF && firstItem.poNumber && ["sign_pending", "sign_rejected", "ordered", "pending_po", "direct_po", "ready_for_delivery", "out_for_delivery", "delivery_processing", "delivery_stage", "delivered"].includes(firstItem.status as string) && (
+                                {onViewPDF && firstItem.poNumber && ["sign_pending", "sign_rejected", "pending_po", "ready_for_delivery"].includes(firstItem.status as string) && (
                                   <Button
                                     variant="outline"
                                     size="sm"
                                     className="h-7 px-2.5 text-xs font-bold border-slate-200 text-slate-700 hover:bg-slate-50 dark:border-slate-800 dark:text-slate-400 dark:hover:bg-slate-950 mr-1"
                                     onClick={(e) => { e.stopPropagation(); if (firstItem.poNumber) onViewPDF(firstItem.poNumber, firstItem._id); }}
-                                    title="View PDF"
+                                    title="PO View"
                                   >
                                     <FileText className="h-3 w-3 mr-1" />
-                                    PDF
+                                    PO View
                                   </Button>
                                 )}
                                 {onViewDetails && (
@@ -1753,9 +1769,9 @@ export function RequestsTable({
                                   </div>
 
                                   {/* Tags (Urgent Only) */}
-                                  <div className="flex flex-col gap-1.5 items-start">
-                                    {item.isUrgent && (
-                                      <Badge variant="destructive" className="h-5 px-2 text-[10px] gap-1 animate-pulse shadow-sm shadow-red-500/20">
+                                  <div className="flex flex-col gap-1.5 items-start mt-2 sm:mt-0">
+                                    {item.isUrgent && item.status !== "direct_po" && item.directAction !== "po" && (
+                                      <Badge variant="destructive" className="h-5 px-2 text-[10px] gap-1 animate-pulse shadow-sm shadow-red-500/20 uppercase">
                                         <AlertCircle className="h-3 w-3" />
                                         Urgent
                                       </Badge>
@@ -1799,10 +1815,10 @@ export function RequestsTable({
                                                   size="sm"
                                                   className="h-8 px-3 text-xs font-bold border-slate-200 text-slate-700 hover:bg-slate-50 dark:border-slate-800 dark:text-slate-400 dark:hover:bg-slate-950 ml-1 shadow-sm"
                                                   onClick={(e) => { e.stopPropagation(); onViewPDF(item.poNumber!, item._id); }}
-                                                  title="View PDF"
+                                                  title="PO View"
                                                 >
                                                   <FileText className="h-3.5 w-3.5 mr-1.5" />
-                                                  View PDF
+                                                  PO View
                                                 </Button>
                                               )}
                                             </>
@@ -1847,6 +1863,14 @@ export function RequestsTable({
                                                   <RefreshCw className="h-3.5 w-3.5 mr-2" /> Resubmit CC
                                                 </Button>
                                               )}
+
+                                              {/* View CC Button - Available anytime after CC is created */}
+                                              {["cc_pending", "cc_approved", "cc_rejected", "ready_for_po"].includes(item.status) &&
+                                                (onOpenCC || onCheck) && (
+                                                  <Button size="sm" variant="outline" onClick={(e) => { e.stopPropagation(); (onOpenCC || onCheck)?.(item._id); }} className="h-8 text-xs font-semibold shadow-sm flex-1 sm:flex-none px-4 border-purple-200 text-purple-700 hover:bg-purple-50 dark:border-purple-800 dark:text-purple-400 dark:hover:bg-purple-900/30">
+                                                    <Layers className="h-3.5 w-3.5 mr-2" /> View CC
+                                                  </Button>
+                                                )}
 
                                               {item.status === "ready_for_delivery" && userRole !== "manager" && (
                                                 <Button
@@ -1900,16 +1924,16 @@ export function RequestsTable({
                                               )}
 
                                               {/* PDF Button for all PO-related statuses */}
-                                              {onViewPDF && item.poNumber && ["sign_pending", "sign_rejected", "pending_po", "ready_for_delivery", "out_for_delivery", "delivery_processing", "delivery_stage", "delivered"].includes(item.status) && (
+                                              {onViewPDF && item.poNumber && ["sign_pending", "sign_rejected", "pending_po", "ready_for_delivery"].includes(item.status) && (
                                                 <Button
                                                   variant="outline"
                                                   size="sm"
                                                   className="h-8 px-3 text-xs font-bold border-slate-200 text-slate-700 hover:bg-slate-50 dark:border-slate-800 dark:text-slate-400 dark:hover:bg-slate-950 shadow-sm"
                                                   onClick={(e) => { e.stopPropagation(); onViewPDF(item.poNumber!, item._id); }}
-                                                  title="View PDF"
+                                                  title="PO View"
                                                 >
                                                   <FileText className="h-3.5 w-3.5 mr-1.5" />
-                                                  PDF
+                                                  PO View
                                                 </Button>
                                               )}
                                             </>
@@ -1985,6 +2009,11 @@ export function RequestsTable({
             onOpenChange={(open) => {
               if (!open) setSelectedRequestNumberForGRN(null);
             }}
+            requestId={requests?.find(r => r.requestNumber === selectedRequestNumberForGRN)?._id}
+            requestIds={requests?.filter(r => r.requestNumber === selectedRequestNumberForGRN).map(r => r._id) || []}
+            poNumber={requests?.find(r => r.requestNumber === selectedRequestNumberForGRN)?.poNumber}
+            onOpenCC={onOpenCC}
+            onViewPDF={onViewPDF}
           />
         )
       }

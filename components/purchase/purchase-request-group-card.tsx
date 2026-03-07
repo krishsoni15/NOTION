@@ -15,7 +15,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { AlertCircle, Eye, FileText, MapPin, Search, X, Sparkles, Building, Plus, Save, Edit, Check, Truck, Package, PackageX, NotebookPen, ScrollText, ShoppingCart, ChevronDown, ChevronRight, CheckCircle, PieChart, RotateCw, CheckSquare, Square } from "lucide-react";
+import { AlertCircle, Eye, FileText, MapPin, Search, X, Sparkles, Building, Plus, Save, Edit, Check, Truck, Package, PackageX, NotebookPen, ScrollText, ShoppingCart, ChevronDown, ChevronRight, CheckCircle, PieChart, RotateCw, CheckSquare, Square, Layers } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { CompactImageGallery } from "@/components/ui/image-gallery";
 import { UserProfile } from "@/components/chat/user-profile";
@@ -919,7 +919,7 @@ export function PurchaseRequestGroupCard({
             size="sm"
             onClick={() => setIsGRNOpen(true)}
             className="relative h-8 px-2.5 gap-1.5 rounded-md hover:bg-muted border border-transparent hover:border-border text-muted-foreground hover:text-foreground"
-            title="View GRN Audit Trail"
+            title="View Request Logs"
           >
             <ScrollText className="h-4 w-4" />
             <span className="text-xs font-semibold">GRN</span>
@@ -1275,10 +1275,10 @@ export function PurchaseRequestGroupCard({
                   {/* Actions Footer - Manager Style */}
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between pt-3 mt-3 border-t border-border/50 gap-3 sm:gap-0">
                     <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
-                      {item.isUrgent && (
-                        <Badge variant="destructive" className="text-[10px] px-2 py-0.5 h-5 gap-1 shadow-sm">
+                      {item.isUrgent && item.status !== "direct_po" && item.directAction !== "po" && (
+                        <Badge variant="destructive" className="text-[10px] px-2 py-0.5 h-5 gap-1 shadow-sm uppercase">
                           <AlertCircle className="h-3 w-3" />
-                          URGENT
+                          Urgent
                         </Badge>
                       )}
                       {(item.status === 'approved' || item.status === 'cc_approved') && (
@@ -1333,7 +1333,7 @@ export function PurchaseRequestGroupCard({
                               className="h-7 text-xs flex-1 sm:flex-none"
                               variant="outline"
                             >
-                              <FileText className="h-3.5 w-3.5 mr-1.5" /> View PDF
+                              <FileText className="h-3.5 w-3.5 mr-1.5" /> PO View
                             </Button>
                           )}
                         </>
@@ -1370,6 +1370,14 @@ export function PurchaseRequestGroupCard({
                               <RotateCw className="h-3.5 w-3.5 mr-1.5" /> Resubmit CC
                             </Button>
                           )}
+
+                          {/* View CC Button - Available anytime after CC is created */}
+                          {["cc_pending", "cc_approved", "cc_rejected", "ready_for_po"].includes(item.status) &&
+                            (onOpenCC || onCheck) && (
+                              <Button size="sm" variant="outline" onClick={(e) => { e.stopPropagation(); (onOpenCC || onCheck)?.(item._id); }} className="h-7 text-xs font-semibold shadow-sm flex-1 sm:flex-none border-purple-200 text-purple-700 hover:bg-purple-50 dark:border-purple-800 dark:text-purple-400 dark:hover:bg-purple-900/30">
+                                <Layers className="h-3.5 w-3.5 mr-1.5" /> View CC
+                              </Button>
+                            )}
 
 
 
@@ -1427,14 +1435,14 @@ export function PurchaseRequestGroupCard({
                           )}
 
                           {/* View PDF Button */}
-                          {onViewPDF && item.poNumber && ["ordered", "direct_po", "ready_for_delivery", "out_for_delivery", "delivery_processing", "delivery_stage", "delivered"].includes(item.status) && (
+                          {onViewPDF && item.poNumber && ["sign_pending", "sign_rejected", "pending_po", "ready_for_delivery"].includes(item.status) && (
                             <Button
                               size="sm"
                               onClick={() => onViewPDF(item.poNumber!, item._id)}
                               className="h-7 text-xs flex-1 sm:flex-none"
                               variant="outline"
                             >
-                              <FileText className="h-3.5 w-3.5 mr-1.5" /> View PDF
+                              <FileText className="h-3.5 w-3.5 mr-1.5" /> PO View
                             </Button>
                           )}
                         </>
@@ -1546,11 +1554,16 @@ export function PurchaseRequestGroupCard({
         onOpenChange={setIsNotesOpen}
       />
 
-      {/* GRN Audit Trail Dialog */}
+      {/* Request Logs Dialog */}
       <GRNAuditDialog
         requestNumber={requestNumber}
         open={isGRNOpen}
         onOpenChange={setIsGRNOpen}
+        requestId={firstItem._id}
+        requestIds={items.map((i) => i._id)}
+        poNumber={firstItem.poNumber}
+        onOpenCC={onOpenCC}
+        onViewPDF={onViewPDF}
       />
 
       {

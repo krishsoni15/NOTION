@@ -19,7 +19,7 @@ import { format } from "date-fns";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import {
-    ScrollText,
+    History,
     CheckCircle2,
     Clock,
     XCircle,
@@ -34,11 +34,17 @@ import {
     Shield,
     Layers,
 } from "lucide-react";
+import type { Id } from "@/convex/_generated/dataModel";
 
 interface GRNAuditDialogProps {
     requestNumber: string;
     open: boolean;
     onOpenChange: (open: boolean) => void;
+    requestId?: Id<"requests">;
+    requestIds?: Id<"requests">[];
+    poNumber?: string;
+    onOpenCC?: (requestId: Id<"requests">, requestIds?: Id<"requests">[]) => void;
+    onViewPDF?: (poNumber: string, requestId: Id<"requests">) => void;
 }
 
 // Status → color & icon mapping
@@ -80,8 +86,14 @@ export function GRNAuditDialog({
     requestNumber,
     open,
     onOpenChange,
+    requestId,
+    requestIds,
+    poNumber,
+    onOpenCC,
+    onViewPDF,
 }: GRNAuditDialogProps) {
     const auditLogs = useQuery(api.notes.getAuditLogs, { requestNumber });
+    const requestsList = useQuery(api.requests.getRequestsByRequestNumber, { requestNumber });
     const sortedLogs = auditLogs ?? [];
     const isLoading = auditLogs === undefined;
 
@@ -91,7 +103,7 @@ export function GRNAuditDialog({
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="max-w-xl md:max-w-2xl max-h-[90vh] flex flex-col p-0 gap-0 overflow-hidden rounded-2xl border-border/60">
-                <VisuallyHidden><DialogTitle>GRN Audit Trail #{requestNumber}</DialogTitle></VisuallyHidden>
+                <VisuallyHidden><DialogTitle>Request Logs #{requestNumber}</DialogTitle></VisuallyHidden>
 
                 {/* ── Header ── */}
                 <div className="relative px-6 pt-5 pb-4 border-b border-border/50 bg-gradient-to-br from-background via-background to-primary/5">
@@ -101,12 +113,12 @@ export function GRNAuditDialog({
                     <div className="relative flex items-start gap-3">
                         {/* Icon */}
                         <div className="flex-shrink-0 h-10 w-10 rounded-xl bg-primary/10 border border-primary/20 flex items-center justify-center">
-                            <ScrollText className="h-5 w-5 text-primary" />
+                            <History className="h-5 w-5 text-primary" />
                         </div>
 
                         <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 flex-wrap">
-                                <h2 className="text-base font-semibold tracking-tight">GRN Audit Trail</h2>
+                                <h2 className="text-base font-semibold tracking-tight">Request Logs</h2>
                                 <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-mono font-medium bg-muted/60 border border-border/50 text-muted-foreground">
                                     #{requestNumber}
                                 </span>
@@ -114,6 +126,18 @@ export function GRNAuditDialog({
                             <p className="text-[11px] text-muted-foreground mt-0.5">
                                 Full system processing history · creation → delivery
                             </p>
+
+                            {/* Items List */}
+                            {requestsList && requestsList.length > 0 && (
+                                <div className="mt-2.5 flex flex-wrap gap-1.5">
+                                    {requestsList.map((req, i) => (
+                                        <div key={req._id} className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded text-[11px] font-medium bg-background border border-border/50 shadow-sm transition-colors hover:border-primary/30">
+                                            <span className="text-[10px] font-black font-mono text-primary/80">#{req.itemOrder ?? (i + 1)}</span>
+                                            <span className="text-foreground/80 truncate max-w-[150px]">{req.itemName}</span>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
                         </div>
                     </div>
 
@@ -210,15 +234,37 @@ export function GRNAuditDialog({
                                                         {log.content}
                                                     </p>
 
-                                                    {/* Status badge */}
-                                                    {status && (
-                                                        <div className="flex items-center gap-1.5">
-                                                            <span className={cn("h-1.5 w-1.5 rounded-full flex-shrink-0", meta.dot)} />
-                                                            <span className={cn("text-[10px] font-medium capitalize", meta.color)}>
-                                                                {meta.label}
-                                                            </span>
+                                                    {/* Status badge & Action Buttons */}
+                                                    <div className="flex flex-wrap items-center justify-between gap-3 mt-1">
+                                                        {status && (
+                                                            <div className="flex items-center gap-1.5">
+                                                                <span className={cn("h-1.5 w-1.5 rounded-full flex-shrink-0", meta.dot)} />
+                                                                <span className={cn("text-[10px] font-medium capitalize", meta.color)}>
+                                                                    {meta.label}
+                                                                </span>
+                                                            </div>
+                                                        )}
+
+                                                        {/* Dynamic CC / PO Buttons */}
+                                                        <div className="flex items-center gap-2">
+                                                            {onOpenCC && ["cc_pending", "cc_approved", "cc_rejected", "ready_for_cc"].includes(status) && requestId && (
+                                                                <button
+                                                                    onClick={(e) => { e.stopPropagation(); onOpenCC(requestId, requestIds); }}
+                                                                    className="inline-flex items-center justify-center rounded-md text-[10px] font-bold border border-purple-200 bg-purple-50 text-purple-700 hover:bg-purple-100 dark:border-purple-800 dark:bg-purple-900/30 dark:text-purple-400 dark:hover:bg-purple-900/50 h-5 px-2 transition-colors shadow-sm"
+                                                                >
+                                                                    <Layers className="h-3 w-3 mr-1" /> View CC
+                                                                </button>
+                                                            )}
+                                                            {onViewPDF && ["ready_for_po", "direct_po", "sign_pending", "sign_rejected", "pending_po", "rejected_po", "ready_for_delivery", "out_for_delivery", "delivery_stage", "delivery_processing", "delivered", "ordered", "partially_processed"].includes(status) && poNumber && requestId && (
+                                                                <button
+                                                                    onClick={(e) => { e.stopPropagation(); onViewPDF(poNumber, requestId); }}
+                                                                    className="inline-flex items-center justify-center rounded-md text-[10px] font-bold border border-orange-200 bg-orange-50 text-orange-700 hover:bg-orange-100 dark:border-orange-800 dark:bg-orange-900/30 dark:text-orange-400 dark:hover:bg-orange-900/50 h-5 px-2 transition-colors shadow-sm"
+                                                                >
+                                                                    <FileText className="h-3 w-3 mr-1" /> View PDF
+                                                                </button>
+                                                            )}
                                                         </div>
-                                                    )}
+                                                    </div>
                                                 </div>
                                             </div>
                                         );
@@ -268,7 +314,7 @@ function EmptyState({ requestNumber }: { requestNumber: string }) {
             {/* Animated ring */}
             <div className="relative mb-5">
                 <div className="h-16 w-16 rounded-full bg-muted/40 border border-border/50 flex items-center justify-center">
-                    <ScrollText className="h-7 w-7 text-muted-foreground/40" />
+                    <History className="h-7 w-7 text-muted-foreground/40" />
                 </div>
                 <div className="absolute inset-0 rounded-full border border-primary/10 animate-ping" style={{ animationDuration: "3s" }} />
             </div>

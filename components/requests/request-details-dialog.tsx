@@ -45,7 +45,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Separator } from "@/components/ui/separator";
-import { AlertCircle, CheckCircle, XCircle, Package, ShoppingCart, MapPin, PackageX, Sparkles, FileText, PieChart, LayoutGrid, List, Edit, Image as ImageIcon, Calendar, Clock, Check, Send, NotebookPen, Loader2, Truck, Pencil, GitFork, Building2, User, RefreshCw, Eye } from "lucide-react";
+import { AlertCircle, CheckCircle, XCircle, Package, ShoppingCart, MapPin, PackageX, Sparkles, FileText, PieChart, LayoutGrid, List, Edit, Image as ImageIcon, Calendar, Clock, Check, Send, NotebookPen, Loader2, Truck, Pencil, GitFork, Building2, User, RefreshCw, Eye, Layers } from "lucide-react";
 import { useUserRole } from "@/hooks/use-user-role";
 import { ROLES } from "@/lib/auth/roles";
 import { CompactImageGallery } from "@/components/ui/image-gallery";
@@ -1298,20 +1298,26 @@ export function RequestDetailsDialog({
     // For ready_for_po items, show Create PO button
     if (item.status === "ready_for_po") {
       return (
-        <div className={cn("flex items-center gap-2", isCard ? "w-full" : "")}>
-          <Button
-            size="sm"
-            onClick={(e) => {
-              e.stopPropagation();
-              if (onCreatePO) onCreatePO([item._id]);
-            }}
-            className={cn(
-              "bg-emerald-600 hover:bg-emerald-700 text-white font-semibold shadow-sm",
-              isCard ? "flex-1" : ""
-            )}
-          >
-            <ShoppingCart className="h-4 w-4 mr-2" /> Create PO
-          </Button>
+        <div className={cn("flex gap-2", isCard ? "w-full flex-col" : "items-center")}>
+          {onCreatePO && (
+            <Button
+              size="sm"
+              onClick={(e) => {
+                e.stopPropagation();
+                if (onCreatePO) onCreatePO([item._id]);
+              }}
+              className={cn(
+                "bg-emerald-600 hover:bg-emerald-700 text-white font-semibold shadow-sm w-full"
+              )}
+            >
+              <ShoppingCart className="h-4 w-4 mr-2" /> Create PO
+            </Button>
+          )}
+          {(onOpenCC || onCheck) && (
+            <Button size="sm" variant="outline" onClick={(e) => { e.stopPropagation(); (onOpenCC || onCheck)?.(item._id); }} className={cn("h-9 border-purple-200 text-purple-700 hover:bg-purple-50 dark:border-purple-800 dark:text-purple-400 dark:hover:bg-purple-900/30", isCard ? "w-full" : "")}>
+              <Layers className="h-4 w-4 mr-1.5" /> View CC
+            </Button>
+          )}
         </div>
       );
     }
@@ -1337,44 +1343,56 @@ export function RequestDetailsDialog({
       );
     }
 
-    // For cc_pending items, show Review CC button (Manager only)
-    if (isManager && item.status === "cc_pending") {
+    // For cc_pending items
+    if (item.status === "cc_pending") {
       return (
-        <div className={cn("flex items-center gap-2", isCard ? "w-full" : "")}>
-          <Button
-            size="sm"
-            onClick={(e) => {
-              e.stopPropagation();
-              if (onOpenCC) onOpenCC(item._id);
-            }}
-            className={cn(
-              "bg-purple-600 hover:bg-purple-700 text-white font-semibold shadow-sm",
-              isCard ? "flex-1" : ""
-            )}
-          >
-            <CheckCircle className="h-4 w-4 mr-2" /> Review CC
-          </Button>
+        <div className={cn("flex gap-2", isCard ? "w-full flex-col" : "items-center")}>
+          {isManager && (
+            <Button
+              size="sm"
+              onClick={(e) => {
+                e.stopPropagation();
+                if (onOpenCC) onOpenCC(item._id);
+              }}
+              className={cn(
+                "bg-purple-600 hover:bg-purple-700 text-white font-semibold shadow-sm w-full"
+              )}
+            >
+              <CheckCircle className="h-4 w-4 mr-2" /> Review CC
+            </Button>
+          )}
+          {(onOpenCC || onCheck) && (
+            <Button size="sm" variant="outline" onClick={(e) => { e.stopPropagation(); (onOpenCC || onCheck)?.(item._id); }} className={cn("h-9 border-purple-200 text-purple-700 hover:bg-purple-50 dark:border-purple-800 dark:text-purple-400 dark:hover:bg-purple-900/30", isCard ? "w-full" : "")}>
+              <Layers className="h-4 w-4 mr-1.5" /> View CC
+            </Button>
+          )}
         </div>
       );
     }
 
-    // For cc_rejected items, show Resubmit CC button (Purchase Officer only)
-    if (isPurchaseOfficer && item.status === "cc_rejected") {
+    // For cc_rejected items
+    if (item.status === "cc_rejected") {
       return (
-        <div className={cn("flex items-center gap-2", isCard ? "w-full" : "")}>
-          <Button
-            size="sm"
-            onClick={(e) => {
-              e.stopPropagation();
-              if (onOpenCC) onOpenCC(item._id);
-            }}
-            className={cn(
-              "bg-rose-600 hover:bg-rose-700 text-white font-semibold shadow-sm",
-              isCard ? "flex-1" : ""
-            )}
-          >
-            <RefreshCw className="h-4 w-4 mr-2" /> Resubmit CC
-          </Button>
+        <div className={cn("flex gap-2", isCard ? "w-full flex-col" : "items-center")}>
+          {isPurchaseOfficer && (
+            <Button
+              size="sm"
+              onClick={(e) => {
+                e.stopPropagation();
+                if (onOpenCC) onOpenCC(item._id);
+              }}
+              className={cn(
+                "bg-rose-600 hover:bg-rose-700 text-white font-semibold shadow-sm w-full"
+              )}
+            >
+              <RefreshCw className="h-4 w-4 mr-2" /> Resubmit CC
+            </Button>
+          )}
+          {(onOpenCC || onCheck) && (
+            <Button size="sm" variant="outline" onClick={(e) => { e.stopPropagation(); (onOpenCC || onCheck)?.(item._id); }} className={cn("h-9 border-purple-200 text-purple-700 hover:bg-purple-50 dark:border-purple-800 dark:text-purple-400 dark:hover:bg-purple-900/30", isCard ? "w-full" : "")}>
+              <Layers className="h-4 w-4 mr-1.5" /> View CC
+            </Button>
+          )}
         </div>
       );
     }
@@ -1405,60 +1423,62 @@ export function RequestDetailsDialog({
     if (item.status === "pending_po") {
       const poNumber = requestToPONumber.get(item._id);
       return (
-        <div className={cn("flex items-center gap-2", isCard ? "w-full" : "")}>
-          {isPurchaseOfficer && (
-            <Button
-              size="sm"
-              onClick={(e) => {
-                e.stopPropagation();
-                setEditQuantityItem({
-                  id: item._id,
-                  quantity: item.quantity,
-                  name: item.itemName,
-                  unit: item.unit
-                });
-              }}
-              className={cn(
-                "bg-emerald-600 hover:bg-emerald-700 text-white font-semibold shadow-sm flex-1",
-                isCard ? "w-full" : "w-auto"
-              )}
-            >
-              <CheckCircle className="h-4 w-4 mr-2" /> Available
-            </Button>
-          )}
-          {(isPurchaseOfficer || isManager) && (
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={(e) => {
-                e.stopPropagation();
-                setSplitPOQuantityItem({
-                  id: item._id,
-                  quantity: item.quantity,
-                  name: item.itemName,
-                  unit: item.unit
-                });
-              }}
-              className="px-3 border-orange-200 text-orange-600 hover:bg-orange-50 dark:border-orange-800 dark:text-orange-400 dark:hover:bg-orange-950/30"
-              title="Edit PO Quantity (vendor can't supply full amount)"
-            >
-              <Pencil className="h-4 w-4" />
-            </Button>
-          )}
-          {poNumber && (
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={(e) => {
-                e.stopPropagation();
-                setPdfPreviewPoNumber(poNumber);
-              }}
-              className="px-3 border-slate-200 text-slate-600 hover:bg-slate-50"
-              title="View PDF"
-            >
-              <FileText className="h-4 w-4" />
-            </Button>
-          )}
+        <div className={cn("flex gap-2", isCard ? "w-full flex-col" : "items-center")}>
+          <div className="flex w-full gap-2">
+            {isPurchaseOfficer && (
+              <Button
+                size="sm"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setEditQuantityItem({
+                    id: item._id,
+                    quantity: item.quantity,
+                    name: item.itemName,
+                    unit: item.unit
+                  });
+                }}
+                className={cn(
+                  "bg-emerald-600 hover:bg-emerald-700 text-white font-semibold shadow-sm flex-1",
+                  isCard ? "w-full" : "w-auto"
+                )}
+              >
+                <CheckCircle className="h-4 w-4 mr-2" /> Available
+              </Button>
+            )}
+            {(isPurchaseOfficer || isManager) && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setSplitPOQuantityItem({
+                    id: item._id,
+                    quantity: item.quantity,
+                    name: item.itemName,
+                    unit: item.unit
+                  });
+                }}
+                className="px-3 border-orange-200 text-orange-600 hover:bg-orange-50 dark:border-orange-800 dark:text-orange-400 dark:hover:bg-orange-950/30"
+                title="Edit PO Quantity (vendor can't supply full amount)"
+              >
+                <Pencil className="h-4 w-4" />
+              </Button>
+            )}
+            {poNumber && ["sign_pending", "sign_rejected", "pending_po", "ready_for_delivery"].includes(item.status) && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setPdfPreviewPoNumber(poNumber);
+                }}
+                className="px-3 border-slate-200 text-slate-600 hover:bg-slate-50"
+                title="PO View"
+              >
+                <FileText className="h-4 w-4" />
+              </Button>
+            )}
+          </div>
         </div>
       );
     }
@@ -1483,7 +1503,7 @@ export function RequestDetailsDialog({
           >
             <Truck className="h-4 w-4 mr-2" /> Create DC
           </Button>
-          {poNumber && (
+          {poNumber && ["sign_pending", "sign_rejected", "pending_po", "ready_for_delivery"].includes(item.status) && (
             <Button
               variant="outline"
               size="sm"
@@ -1492,10 +1512,10 @@ export function RequestDetailsDialog({
                 setPdfPreviewPoNumber(poNumber);
               }}
               className="h-9 border-muted-foreground/20 hover:bg-muted/50"
-              title="View PDF"
+              title="PO View"
             >
               <FileText className="h-4 w-4 mr-1.5" />
-              View PDF
+              PO View
             </Button>
           )}
         </div>
@@ -1536,7 +1556,8 @@ export function RequestDetailsDialog({
               Confirm Delivered
             </Button>
           )}
-          {poNumber && (
+          {/* PO View removed for Delivery Stage & Delivered depending on requirements */}
+          {poNumber && ["sign_pending", "sign_rejected", "pending_po", "ready_for_delivery"].includes(item.status) && (
             <Button
               variant="outline"
               size="sm"
@@ -1545,10 +1566,10 @@ export function RequestDetailsDialog({
                 setPdfPreviewPoNumber(poNumber);
               }}
               className="h-9 border-muted-foreground/20 hover:bg-muted/50"
-              title="View PDF"
+              title="PO View"
             >
               <FileText className="h-4 w-4 mr-1.5" />
-              View PDF
+              PO View
             </Button>
           )}
         </div>
@@ -1855,12 +1876,13 @@ export function RequestDetailsDialog({
                   {/* Urgent Badge */}
                   {(() => {
                     if (!allRequests) return null;
-                    const urgentCount = allRequests.filter(i => i.isUrgent).length;
+                    const urgentCount = allRequests.filter(i => i.isUrgent && i.status !== "direct_po" && i.directAction !== "po").length;
                     const totalCount = allRequests.length;
                     if (urgentCount === 0) return null;
                     return (
-                      <Badge variant="destructive" className="animate-pulse shadow-sm">
-                        <AlertCircle className="h-3 w-3 mr-1" /> {urgentCount}/{totalCount} Urgent
+                      <Badge variant="destructive" className="animate-pulse shadow-sm uppercase px-2 py-0.5 text-[10px]">
+                        <AlertCircle className="h-3 w-3 mr-1" />
+                        {urgentCount === totalCount ? "Urgent" : `Urgent (${urgentCount}/${totalCount})`}
                       </Badge>
                     );
                   })()}
@@ -2383,7 +2405,7 @@ export function RequestDetailsDialog({
                                           onClick={() => { setPdfPreviewPoNumber(group.items[0].poNumber); setPdfPreviewRequestIds(group.items.map((i: any) => i.requestId)); }}
                                         >
                                           <FileText className="h-3.5 w-3.5 mr-1.5" />
-                                          View PDF
+                                          PO View
                                         </Button>
                                       )}
                                     </div>
@@ -2548,7 +2570,7 @@ export function RequestDetailsDialog({
                                         onClick={() => { setPdfPreviewPoNumber(group.items[0].poNumber); setPdfPreviewRequestIds(group.items.map((i: any) => i.requestId)); }}
                                       >
                                         <FileText className="h-3.5 w-3.5 mr-1.5" />
-                                        View PDF
+                                        PO View
                                       </Button>
                                     </div>
                                   </div>
@@ -2695,7 +2717,7 @@ export function RequestDetailsDialog({
                                           </TableCell>
                                           <TableCell className="py-3 align-top rounded-r-lg overflow-hidden">
                                             <div className="flex flex-col gap-1.5 items-start">
-                                              {item.isUrgent && (
+                                              {item.isUrgent && item.status !== "direct_po" && item.directAction !== "po" && (
                                                 <Badge variant="destructive" className="px-2 py-0.5 h-6 text-[10px] font-bold shadow-[0_0_15px_rgba(239,68,68,0.6)] animate-pulse mb-1.5 uppercase tracking-wider border-red-400 ring-1 ring-red-500/50">
                                                   Urgent
                                                 </Badge>
@@ -2704,8 +2726,8 @@ export function RequestDetailsDialog({
                                             </div>
                                           </TableCell>
                                           {(isManager && (isPending || item.status === "sign_pending" || item.status === "cc_pending" || canManagerModifyStatus(item.status))) ||
-                                            (isPurchaseOfficer && ["pending_po", "direct_po", "ready_for_po", "ready_for_delivery", "recheck", "approved", "ready_for_cc", "cc_rejected", "out_for_delivery", "delivery_processing", "delivery_stage", "delivered"].includes(item.status)) ||
-                                            (isSiteEngineer && ["out_for_delivery", "delivery_processing", "delivery_stage"].includes(item.status)) ? (
+                                            (isPurchaseOfficer && ["pending_po", "direct_po", "ready_for_po", "ready_for_delivery", "recheck", "approved", "ready_for_cc", "cc_pending", "cc_approved", "cc_rejected", "out_for_delivery", "delivery_processing", "delivery_stage", "delivered"].includes(item.status)) ||
+                                            (isSiteEngineer && ["cc_pending", "cc_rejected", "ready_for_po", "out_for_delivery", "delivery_processing", "delivery_stage"].includes(item.status)) ? (
                                             <TableCell className="text-right p-4 align-middle rounded-r-lg overflow-hidden">
                                               <div className="flex items-center justify-end gap-3 min-w-[300px]">
                                                 {item.status === "sign_pending" ? (
@@ -2747,17 +2769,6 @@ export function RequestDetailsDialog({
                                                       onClick={(e) => { e.stopPropagation(); onCreatePO([item._id]); }}
                                                     >
                                                       <RefreshCw className="h-4 w-4 mr-1.5" /> Resubmit PO
-                                                    </Button>
-                                                  )
-                                                ) : item.status === "cc_pending" ? (
-                                                  onOpenCC && (
-                                                    <Button
-                                                      variant="default"
-                                                      size="sm"
-                                                      onClick={(e) => { e.stopPropagation(); onOpenCC(item._id); }}
-                                                      className="h-9 bg-purple-600 hover:bg-purple-700 text-white border border-purple-500 shadow-sm transition-all hover:scale-105"
-                                                    >
-                                                      <CheckCircle className="h-4 w-4 mr-1.5" /> Review CC
                                                     </Button>
                                                   )
                                                 ) : (
@@ -2941,7 +2952,7 @@ export function RequestDetailsDialog({
                                   onClick={() => { setPdfPreviewPoNumber(group.poNumber); setPdfPreviewRequestIds(group.items.map((i: any) => i.requestId)); }}
                                 >
                                   <FileText className="h-4 w-4" />
-                                  {!isManager && <span className="ml-1.5">View PDF</span>}
+                                  {!isManager && <span className="ml-1.5">PO View</span>}
                                 </Button>
                                 {isManager && (
                                   <Button
@@ -3014,7 +3025,7 @@ export function RequestDetailsDialog({
                                   onClick={() => { setPdfPreviewPoNumber(group.poNumber); setPdfPreviewRequestIds(group.items.map((i: any) => i.requestId)); }}
                                 >
                                   <FileText className="h-4 w-4" />
-                                  {!isPurchaseOfficer && <span className="ml-1.5">View PDF</span>}
+                                  {!isPurchaseOfficer && <span className="ml-1.5">PO View</span>}
                                 </Button>
                               </div>
                             </div>
@@ -3137,7 +3148,7 @@ export function RequestDetailsDialog({
                                       <span className="text-[10px] font-bold uppercase text-muted-foreground tracking-widest leading-none">Current Status</span>
                                       <div className="flex flex-col items-end gap-1">
                                         {getStatusBadge(item.status)}
-                                        {item.isUrgent && <Badge variant="destructive" className="h-4 text-[9px] px-1 font-black uppercase tracking-widest animate-pulse border-none">Urgent</Badge>}
+                                        {item.isUrgent && item.status !== "direct_po" && item.directAction !== "po" && <Badge variant="destructive" className="h-4 text-[9px] px-1 font-black uppercase tracking-widest animate-pulse border-none">Urgent</Badge>}
                                       </div>
                                     </div>
                                   </div>
@@ -3159,8 +3170,8 @@ export function RequestDetailsDialog({
 
                                   {/* Actions Footer for Cards */}
                                   {((isManager && (isPending || item.status === "recheck" || item.status === "sign_pending" || item.status === "cc_pending" || item.status === "sign_rejected" || item.status === "rejected")) ||
-                                    (isPurchaseOfficer && ["pending_po", "direct_po", "ready_for_po", "ready_for_delivery", "recheck", "approved", "ready_for_cc", "cc_rejected", "out_for_delivery", "delivery_processing", "delivery_stage", "delivered"].includes(item.status)) ||
-                                    (isSiteEngineer && ["out_for_delivery", "delivery_processing", "delivery_stage"].includes(item.status))) && (
+                                    (isPurchaseOfficer && ["pending_po", "direct_po", "ready_for_po", "ready_for_delivery", "recheck", "approved", "ready_for_cc", "cc_pending", "cc_rejected", "out_for_delivery", "delivery_processing", "delivery_stage", "delivered"].includes(item.status)) ||
+                                    (isSiteEngineer && ["cc_pending", "cc_rejected", "ready_for_po", "out_for_delivery", "delivery_processing", "delivery_stage"].includes(item.status))) && (
                                       <div className={cn(
                                         "p-4 border-t bg-muted/5 w-full",
                                         (item.status === "sign_pending" || item.status === "sign_rejected") ? "grid grid-cols-2 gap-3" : "flex"
@@ -3209,16 +3220,7 @@ export function RequestDetailsDialog({
                                               </div>
                                             )}
 
-                                            {onOpenCC ? (
-                                              <Button
-                                                variant="outline"
-                                                size="sm"
-                                                onClick={(e) => { e.stopPropagation(); onOpenCC(item._id); }}
-                                                className="h-9 border-blue-200 text-blue-700 hover:bg-blue-50 w-full"
-                                              >
-                                                <FileText className="h-4 w-4 mr-1.5" /> View CC
-                                              </Button>
-                                            ) : null}
+                                            <RenderActionSegments item={item} isCard />
                                           </div>
                                         ) : (
                                           <RenderActionSegments item={item} isCard />
@@ -3226,12 +3228,6 @@ export function RequestDetailsDialog({
                                       </div>
                                     )}
 
-                                  {/* Actions Footer for Purchase Officer (Card View) */}
-                                  {isPurchaseOfficer && ["pending_po", "ready_for_delivery", "delivery_stage", "delivered", "ready_for_po", "approved", "recheck", "ready_for_cc", "cc_rejected", "out_for_delivery", "delivery_processing"].includes(item.status) && (
-                                    <div className="p-4 border-t bg-muted/5 w-full">
-                                      <RenderActionSegments item={item} isCard />
-                                    </div>
-                                  )}
 
                                   {/* Resubmit PO Footer for Purchase Officer (Card View) - Sign Rejected */}
                                   {isPurchaseOfficer && item.status === "sign_rejected" && onCreatePO && (
@@ -3246,12 +3242,6 @@ export function RequestDetailsDialog({
                                     </div>
                                   )}
 
-                                  {/* Actions Footer for Manager (Card View) - Review CC */}
-                                  {isManager && item.status === "cc_pending" && (
-                                    <div className="p-4 border-t bg-muted/5 w-full">
-                                      <RenderActionSegments item={item} isCard />
-                                    </div>
-                                  )}
 
                                   {/* Rejection Input Overlay - In-place Card Style */}
                                   {showItemRejectionInput === item._id && (
@@ -3303,8 +3293,8 @@ export function RequestDetailsDialog({
                     <div className="space-y-4">
                       <div className="p-4 border rounded-lg bg-card space-y-3">
                         <div className="flex items-center gap-2 mb-2">
-                          {request.isUrgent && (
-                            <Badge variant="destructive" className="text-xs">
+                          {request.isUrgent && request.status !== "direct_po" && request.directAction !== "po" && (
+                            <Badge variant="destructive" className="text-xs uppercase">
                               <AlertCircle className="h-3 w-3 mr-1" />
                               Urgent
                             </Badge>

@@ -21,6 +21,7 @@ import type { Id } from "@/convex/_generated/dataModel";
 export function ManagerOverviewContent() {
   const [selectedRequestId, setSelectedRequestId] = useState<Id<"requests"> | null>(null);
   const [ccRequestId, setCCRequestId] = useState<Id<"requests"> | null>(null);
+  const [ccRequestIds, setCcRequestIds] = useState<Id<"requests">[]>([]);
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
 
   const allRequests = useQuery(api.requests.getAllRequests);
@@ -89,7 +90,10 @@ export function ManagerOverviewContent() {
         <RequestsTable
           requests={filteredRequests as any}
           onViewDetails={(requestId) => setSelectedRequestId(requestId)}
-          onOpenCC={(requestId) => setCCRequestId(requestId)}
+          onOpenCC={(requestId, requestIds) => {
+            setCCRequestId(requestId);
+            setCcRequestIds(requestIds || []);
+          }}
           showCreator={true}
           viewMode="card"
         />
@@ -113,6 +117,7 @@ export function ManagerOverviewContent() {
           }
         }}
         requestId={ccRequestId!}
+        requestIds={ccRequestIds}
       />
     </>
   );

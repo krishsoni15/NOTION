@@ -485,7 +485,7 @@ export function DirectPODialog({ open, onOpenChange, initialData, mode = "standa
                 notes: commonData.notes || undefined,
                 items: formattedItems,
                 isDirect: poType === "direct",
-                isUrgent: poType === "direct",
+                isUrgent: false,
             });
             toast.success(`${poType === "direct" ? "Direct PO" : "Purchase Order"} generated successfully!`, {
                 description: "The PO is now pending approval.",

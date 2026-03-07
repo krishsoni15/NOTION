@@ -134,6 +134,7 @@ export function RequestDetailsDialog({
   const rejectDirectPO = useMutation(api.purchaseOrders.rejectDirectPOByRequest);
   const approveDirectPOById = useMutation(api.purchaseOrders.approveDirectPO);
   const rejectDirectPOById = useMutation(api.purchaseOrders.rejectDirectPO);
+  const markReadyForDelivery = useMutation(api.requests.markReadyForDelivery);
 
   // Fetch pending POs for grouping
   const pendingPOs = useQuery(
@@ -189,6 +190,7 @@ export function RequestDetailsDialog({
   const [editQuantityItem, setEditQuantityItem] = useState<{ id: Id<"requests">; quantity: number; name: string; unit: string } | null>(null);
   const [splitPOQuantityItem, setSplitPOQuantityItem] = useState<{ id: Id<"requests">; quantity: number; name: string; unit: string } | null>(null);
   const [bulkDeliveryData, setBulkDeliveryData] = useState<{ items: any[]; vendorName: string; poNumber: string; mode?: "delivery" | "direct_delivered" } | null>(null);
+  const [showBulkDirectDeliveryConfirm, setShowBulkDirectDeliveryConfirm] = useState<{ items: any[]; poNumber: string; vendorName: string } | null>(null);
   const [selectedDCItems, setSelectedDCItems] = useState<Set<Id<"requests">>>(new Set());
   const [showBulkDCDialog, setShowBulkDCDialog] = useState(false);
   const [showConfirmDelivery, setShowConfirmDelivery] = useState<Id<"requests"> | null>(null);
@@ -2402,15 +2404,14 @@ export function RequestDetailsDialog({
                                             onClick={(e) => {
                                               e.stopPropagation();
                                               const bulkItems = prepareBulkDeliveryItems(group.items);
-                                              setBulkDeliveryData({
+                                              setShowBulkDirectDeliveryConfirm({
                                                 items: bulkItems,
                                                 vendorName: group.vendor.companyName,
-                                                poNumber: group.items[0].poNumber,
-                                                mode: "direct_delivered"
+                                                poNumber: group.items[0].poNumber
                                               });
                                             }}
                                             className={cn(
-                                              "w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold shadow-sm"
+                                              "w-full bg-violet-600 hover:bg-violet-700 text-white font-semibold shadow-sm"
                                             )}
                                           >
                                             <Truck className="h-3.5 w-3.5 mr-2" /> Direct Delivered
@@ -2923,15 +2924,14 @@ export function RequestDetailsDialog({
                                 {isPurchaseOfficer && (
                                   <Button
                                     size="sm"
-                                    className="w-full bg-blue-600 hover:bg-blue-700 text-white"
+                                    className="w-full bg-violet-600 hover:bg-violet-700 text-white font-semibold shadow-sm"
                                     onClick={(e) => {
                                       e.stopPropagation();
                                       const bulkItems = prepareBulkDeliveryItems(group.items);
-                                      setBulkDeliveryData({
+                                      setShowBulkDirectDeliveryConfirm({
                                         items: bulkItems,
                                         vendorName: group.vendor.companyName,
-                                        poNumber: group.poNumber,
-                                        mode: "direct_delivered"
+                                        poNumber: group.poNumber
                                       });
                                     }}
                                   >
@@ -4390,6 +4390,65 @@ export function RequestDetailsDialog({
         poNumber={bulkDeliveryData?.poNumber || ""}
         mode={bulkDeliveryData?.mode || "delivery"}
       />
+
+      {/* Direct Delivery Confirmation Dialog */}
+      {showBulkDirectDeliveryConfirm && (
+        <Dialog open={!!showBulkDirectDeliveryConfirm} onOpenChange={(open) => !open && setShowBulkDirectDeliveryConfirm(null)}>
+          <DialogContent className="sm:max-w-md bg-white dark:bg-gray-900 border-gray-200 dark:border-gray-700">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="flex-shrink-0 w-12 h-12 bg-violet-100 dark:bg-violet-900/20 rounded-full flex items-center justify-center">
+                <Truck className="h-6 w-6 text-violet-600 dark:text-violet-400" />
+              </div>
+              <div>
+                <DialogTitle className="text-lg font-semibold text-gray-900 dark:text-white">
+                  Confirm Direct Delivery
+                </DialogTitle>
+                <DialogDescription className="text-sm text-gray-600 dark:text-gray-300 mt-1">
+                  Mark all {showBulkDirectDeliveryConfirm.items.length} item(s) from PO {showBulkDirectDeliveryConfirm.poNumber} as Delivered? This bypasses the Delivery Challan stage.
+                </DialogDescription>
+              </div>
+            </div>
+            <DialogFooter className="flex gap-3 sm:justify-start">
+              <Button
+                onClick={async () => {
+                  if (!showBulkDirectDeliveryConfirm) return;
+                  try {
+                    setIsLoading(true);
+                    let deliveredCount = 0;
+                    for (const item of showBulkDirectDeliveryConfirm.items) {
+                      await markReadyForDelivery({
+                        requestId: item.requestId,
+                        deliveryQuantity: item.requestedQuantity,
+                        targetStatus: "delivered",
+                      });
+                      deliveredCount++;
+                    }
+                    setShowBulkDirectDeliveryConfirm(null);
+                    toast.success(`Successfully marked ${deliveredCount} item(s) as directly delivered`);
+                  } catch (error: any) {
+                    toast.error(error.message || "Failed to process direct delivery");
+                  } finally {
+                    setIsLoading(false);
+                  }
+                }}
+                disabled={isLoading}
+                className="flex-1 bg-violet-600 hover:bg-violet-700 text-white"
+              >
+                <Truck className="h-4 w-4 mr-2" />
+                Confirm Delivery
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => setShowBulkDirectDeliveryConfirm(null)}
+                disabled={isLoading}
+                className="flex-1"
+              >
+                Cancel
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
 
       {/* Direct PO Creation Dialog */}
       <DirectPODialog

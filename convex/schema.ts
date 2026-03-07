@@ -488,5 +488,32 @@ export default defineSchema({
     .index("by_user_id", ["userId"])
     .index("by_is_read", ["isRead"])
     .index("by_created_at", ["createdAt"]),
+
+  // ============================================================================
+  // GRNs (Goods Receipt Notes) Table
+  // ============================================================================
+  grns: defineTable({
+    grnNumber: v.string(), // Auto-generated unique identifier
+    poId: v.id("purchaseOrders"), // Linked purchase order
+    invoiceNo: v.optional(v.string()), // Manual entry
+    invoiceDate: v.optional(v.number()), // Manual entry
+    receivedQuantity: v.number(), // Quantity received in this GRN
+    siteId: v.optional(v.id("sites")), // Delivery site
+    invoicePhoto: v.optional(v.object({
+      imageUrl: v.string(),
+      imageKey: v.string(),
+    })),
+    status: v.union(
+      v.literal("pending"),
+      v.literal("completed")
+    ),
+    createdBy: v.id("users"), // Site Engineer or person receiving
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_grn_number", ["grnNumber"])
+    .index("by_po_id", ["poId"])
+    .index("by_created_by", ["createdBy"])
+    .index("by_created_at", ["createdAt"]),
 });
 

@@ -1,0 +1,255 @@
+import { v } from "convex/values";
+import { mutation, query } from "./_generated/server";
+import { getAuthUserId } from "@convex-dev/auth/server";
+import type { Id } from "./_generated/dataModel";
+
+// Helper function to get current user
+async function getCurrentUser(ctx: any) {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) {
+        throw new Error("Not authenticated");
+    }
+
+    const user = await ctx.db
+        .query("users")
+        .withIndex("by_clerk_user_id", (q: any) => q.eq("clerkUserId", userId))
+        .unique();
+
+    if (!user) {
+        throw new Error("User not found");
+    }
+
+    return user;
+}
+
+// Helper function to generate GRN Number
+async function generateGRNNumber(ctx: any): Promise<string> {
+    const allGRNs = await ctx.db.query("grns").collect();
+
+    let maxNumber = 0;
+    for (const grn of allGRNs) {
+        // e.g., GRN-001
+        const numMatch = grn.grnNumber.match(/(\d+)$/);
+        if (numMatch) {
+            const num = parseInt(numMatch[1], 10);
+            if (num > maxNumber) {
+                maxNumber = num;
+            }
+        }
+    }
+    const nextNumber = maxNumber + 1;
+    return `GRN-${nextNumber.toString().padStart(4, "0")}`;
+}
+
+export const getPendingPOsForGRN = query({
+    args: {},
+    handler: async (ctx) => {
+        const userId = await getAuthUserId(ctx);
+        if (!userId) return null;
+
+        const currentUser = await ctx.db
+            .query("users")
+            .withIndex("by_clerk_user_id", (q: any) => q.eq("clerkUserId", userId))
+            .unique();
+
+        if (!currentUser || (currentUser.role !== "site_engineer" && currentUser.role !== "manager" && currentUser.role !== "purchase_officer")) {
+            return null;
+        }
+
+        // Get all ordered POs
+        const orderedPOs = await ctx.db
+            .query("purchaseOrders")
+            .withIndex("by_status", (q) => q.eq("status", "ordered"))
+            .collect();
+
+        const pendingPOs = [];
+
+        for (const po of orderedPOs) {
+            // Get all GRNs for this PO to calculate received quantity
+            const grns = await ctx.db
+                .query("grns")
+                .withIndex("by_po_id", (q) => q.eq("poId", po._id))
+                .collect();
+
+            const receivedQuantity = grns.reduce((sum, grn) => sum + grn.receivedQuantity, 0);
+            const remainingQuantity = po.quantity - receivedQuantity;
+
+            if (remainingQuantity > 0) {
+                const vendor = await ctx.db.get(po.vendorId);
+                const request = po.requestId ? await ctx.db.get(po.requestId) : null;
+                const site = po.deliverySiteId ? await ctx.db.get(po.deliverySiteId) : (request?.siteId ? await ctx.db.get(request.siteId) : null);
+
+                pendingPOs.push({
+                    ...po,
+                    vendor,
+                    request,
+                    site,
+                    receivedQuantity,
+                    remainingQuantity
+                });
+            }
+        }
+
+        return pendingPOs.sort((a, b) => b._creationTime - a._creationTime);
+    },
+});
+
+export const getAllGRNs = query({
+    args: {},
+    handler: async (ctx) => {
+        const userId = await getAuthUserId(ctx);
+        if (!userId) return null;
+
+        const currentUser = await ctx.db
+            .query("users")
+            .withIndex("by_clerk_user_id", (q: any) => q.eq("clerkUserId", userId))
+            .unique();
+
+        if (!currentUser || (currentUser.role !== "site_engineer" && currentUser.role !== "manager" && currentUser.role !== "purchase_officer")) {
+            return null;
+        }
+
+        const grns = await ctx.db.query("grns").order("desc").collect();
+
+        return Promise.all(
+            grns.map(async (grn) => {
+                const po = await ctx.db.get(grn.poId);
+                const vendor = po ? await ctx.db.get(po.vendorId) : null;
+                const site = grn.siteId ? await ctx.db.get(grn.siteId) : null;
+                const creator = await ctx.db.get(grn.createdBy);
+                const request = po?.requestId ? await ctx.db.get(po.requestId) : null;
+
+                return {
+                    ...grn,
+                    po,
+                    vendor,
+                    site,
+                    creator,
+                    request
+                };
+            })
+        );
+    },
+});
+
+export const createGRN = mutation({
+    args: {
+        poId: v.id("purchaseOrders"),
+        receivedQuantity: v.number(),
+        invoiceNo: v.optional(v.string()),
+        invoiceDate: v.optional(v.number()),
+        siteId: v.optional(v.id("sites")),
+        invoicePhoto: v.optional(v.object({
+            imageUrl: v.string(),
+            imageKey: v.string(),
+        })),
+    },
+    handler: async (ctx, args) => {
+        const currentUser = await getCurrentUser(ctx);
+
+        if (currentUser.role !== "site_engineer" && currentUser.role !== "manager" && currentUser.role !== "purchase_officer") {
+            throw new Error("Unauthorized");
+        }
+
+        const po = await ctx.db.get(args.poId);
+        if (!po) {
+            throw new Error("Purchase Order not found");
+        }
+
+        if (args.receivedQuantity <= 0) {
+            throw new Error("Received quantity must be greater than 0");
+        }
+
+        // Calculate current received
+        const existingGRNs = await ctx.db
+            .query("grns")
+            .withIndex("by_po_id", (q) => q.eq("poId", args.poId))
+            .collect();
+
+        const currentReceived = existingGRNs.reduce((sum, g) => sum + g.receivedQuantity, 0);
+
+        if (currentReceived + args.receivedQuantity > po.quantity) {
+            throw new Error(`Cannot receive more than PO quantity. Remaining: ${po.quantity - currentReceived}`);
+        }
+
+        const grnNumber = await generateGRNNumber(ctx);
+        const now = Date.now();
+
+        const grnId = await ctx.db.insert("grns", {
+            grnNumber,
+            poId: args.poId,
+            receivedQuantity: args.receivedQuantity,
+            invoiceNo: args.invoiceNo,
+            invoiceDate: args.invoiceDate,
+            siteId: args.siteId || po.deliverySiteId,
+            invoicePhoto: args.invoicePhoto,
+            status: "completed",
+            createdBy: currentUser._id,
+            createdAt: now,
+            updatedAt: now,
+        });
+
+        const newReceivedTotal = currentReceived + args.receivedQuantity;
+
+        // If fully received, update PO and Request status
+        if (newReceivedTotal >= po.quantity) {
+            await ctx.db.patch(args.poId, {
+                status: "delivered",
+                actualDeliveryDate: now,
+                updatedAt: now,
+            });
+
+            if (po.requestId) {
+                await ctx.db.patch(po.requestId, {
+                    status: "delivered",
+                    deliveryMarkedAt: now,
+                    updatedAt: now,
+                });
+            }
+        }
+
+        // Add to log
+        await ctx.db.insert("request_notes", {
+            requestNumber: (po.requestId ? (await ctx.db.get(po.requestId))?.requestNumber : po.poNumber) || "SYSTEM",
+            userId: currentUser._id,
+            role: currentUser.role,
+            type: "log",
+            content: `Created GRN ${grnNumber} for ${args.receivedQuantity} unit(s)`,
+            status: newReceivedTotal >= po.quantity ? "delivered" : "ordered",
+            createdAt: now,
+        });
+
+        return grnId;
+    },
+});
+
+export const updateGRN = mutation({
+    args: {
+        grnId: v.id("grns"),
+        invoiceNo: v.optional(v.string()),
+        invoiceDate: v.optional(v.number()),
+        invoicePhoto: v.optional(v.object({
+            imageUrl: v.string(),
+            imageKey: v.string(),
+        })),
+    },
+    handler: async (ctx, args) => {
+        const currentUser = await getCurrentUser(ctx);
+
+        if (currentUser.role !== "site_engineer" && currentUser.role !== "manager" && currentUser.role !== "purchase_officer") {
+            throw new Error("Unauthorized");
+        }
+
+        const grn = await ctx.db.get(args.grnId);
+        if (!grn) {
+            throw new Error("GRN not found");
+        }
+
+        const updates: any = { updatedAt: Date.now() };
+        if (args.invoiceNo !== undefined) updates.invoiceNo = args.invoiceNo;
+        if (args.invoiceDate !== undefined) updates.invoiceDate = args.invoiceDate;
+        if (args.invoicePhoto !== undefined) updates.invoicePhoto = args.invoicePhoto;
+
+        await ctx.db.patch(args.grnId, updates);
+    },
+});

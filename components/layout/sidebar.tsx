@@ -23,6 +23,7 @@ import {
   PanelLeftOpen,
   Building2,
   ScrollText,
+  Package,
 } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
@@ -42,7 +43,7 @@ interface NavigationItem {
 }
 
 const navigationItems: NavigationItem[] = [
-  // Site Engineer - Logical sequence: Dashboard → Requests → Inventory
+  // Site Engineer - Logical sequence: Dashboard → Requests → Inventory → GRN → Logs
   {
     label: "Dashboard",
     href: "/dashboard/site",
@@ -62,13 +63,19 @@ const navigationItems: NavigationItem[] = [
     roles: [ROLES.SITE_ENGINEER],
   },
   {
+    label: "GRN",
+    href: "/dashboard/grn",
+    icon: Package,
+    roles: [ROLES.SITE_ENGINEER],
+  },
+  {
     label: "Logs",
     href: "/dashboard/grn-logs",
     icon: ScrollText,
     roles: [ROLES.SITE_ENGINEER],
   },
 
-  // Manager - Logical sequence: Dashboard → Requests → Inventory → Vendors → Users → Sites
+  // Manager - Logical sequence: Dashboard → Requests → Inventory → Vendors → GRN → Users → Sites
   {
     label: "Dashboard",
     href: "/dashboard/manager",
@@ -94,6 +101,12 @@ const navigationItems: NavigationItem[] = [
     roles: [ROLES.MANAGER],
   },
   {
+    label: "GRN",
+    href: "/dashboard/grn",
+    icon: Package,
+    roles: [ROLES.MANAGER],
+  },
+  {
     label: "User Management",
     href: "/dashboard/manager/users",
     icon: Users,
@@ -112,7 +125,7 @@ const navigationItems: NavigationItem[] = [
     roles: [ROLES.MANAGER],
   },
 
-  // Purchase Officer - Logical sequence: Dashboard → Requests → Inventory → Vendors
+  // Purchase Officer - Logical sequence: Dashboard → Requests → Inventory → Vendors → GRN
   {
     label: "Dashboard",
     href: "/dashboard/purchase",
@@ -135,6 +148,12 @@ const navigationItems: NavigationItem[] = [
     label: "Vendors",
     href: "/dashboard/vendors",
     icon: Store,
+    roles: [ROLES.PURCHASE_OFFICER],
+  },
+  {
+    label: "GRN",
+    href: "/dashboard/grn",
+    icon: Package,
     roles: [ROLES.PURCHASE_OFFICER],
   },
   {

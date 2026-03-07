@@ -14,6 +14,7 @@ import type * as costComparisons from "../costComparisons.js";
 import type * as cron from "../cron.js";
 import type * as dashboard from "../dashboard.js";
 import type * as deliveries from "../deliveries.js";
+import type * as grn from "../grn.js";
 import type * as http from "../http.js";
 import type * as inventory from "../inventory.js";
 import type * as migrations from "../migrations.js";
@@ -42,6 +43,7 @@ declare const fullApi: ApiFromModules<{
   cron: typeof cron;
   dashboard: typeof dashboard;
   deliveries: typeof deliveries;
+  grn: typeof grn;
   http: typeof http;
   inventory: typeof inventory;
   migrations: typeof migrations;

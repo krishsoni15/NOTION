@@ -42,7 +42,7 @@ export const getAllGRNLogs = query({
 
             return await Promise.all(
                 limited.map(async (note) => {
-                    const user = await ctx.db.get(note.userId);
+                    const user = note.userId ? await ctx.db.get(note.userId) : null;
                     return {
                         ...note,
                         userName: user?.fullName || "Unknown User",
@@ -64,7 +64,7 @@ export const getAllGRNLogs = query({
 
         return await Promise.all(
             auditLogs.map(async (note) => {
-                const user = await ctx.db.get(note.userId);
+                const user = note.userId ? await ctx.db.get(note.userId) : null;
                 return {
                     ...note,
                     type: note.type || "log",
@@ -97,7 +97,7 @@ export const getAuditLogs = query({
 
         return await Promise.all(
             auditLogs.map(async (note) => {
-                const user = await ctx.db.get(note.userId);
+                const user = note.userId ? await ctx.db.get(note.userId) : null;
                 return {
                     ...note,
                     type: "log" as const,
@@ -129,7 +129,7 @@ export const getNotes = query({
 
         return await Promise.all(
             userNotes.map(async (note) => {
-                const user = await ctx.db.get(note.userId);
+                const user = note.userId ? await ctx.db.get(note.userId) : null;
                 return {
                     ...note,
                     type: "note" as const,

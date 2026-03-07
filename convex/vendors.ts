@@ -8,19 +8,18 @@
 
 import { v, ConvexError } from "convex/values";
 import { mutation, query } from "./_generated/server";
-import { getAuthUserId } from "@convex-dev/auth/server";
 import type { Id } from "./_generated/dataModel";
 
 // Helper function to get current user
 async function getCurrentUser(ctx: any) {
-  const userId = await getAuthUserId(ctx);
-  if (!userId) {
+  const identity = await ctx.auth.getUserIdentity();
+  if (!identity) {
     throw new ConvexError("Not authenticated");
   }
 
   const user = await ctx.db
     .query("users")
-    .withIndex("by_clerk_user_id", (q: any) => q.eq("clerkUserId", userId))
+    .withIndex("by_clerk_user_id", (q: any) => q.eq("clerkUserId", identity.subject))
     .unique();
 
   if (!user) {
@@ -41,12 +40,12 @@ async function getCurrentUser(ctx: any) {
 export const getAllVendors = query({
   args: {},
   handler: async (ctx) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) return [];
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) return [];
 
     const currentUser = await ctx.db
       .query("users")
-      .withIndex("by_clerk_user_id", (q: any) => q.eq("clerkUserId", userId))
+      .withIndex("by_clerk_user_id", (q: any) => q.eq("clerkUserId", identity.subject))
       .unique();
 
     if (!currentUser) return [];
@@ -121,16 +120,15 @@ export const createVendor = mutation({
       throw new ConvexError("Unauthorized: Only Purchase Officers and Managers can create vendors");
     }
 
-    // Validate GST number format (15 characters, alphanumeric)
-    // Relaxed GST check to allow empty/informal formats, or we just remove the regex
+    // Validate GST number format (15 characters, alphanumeric) - Relaxed to allow empty
     const gstRegex = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
-    if (args.gstNumber && !gstRegex.test(args.gstNumber)) {
+    if (args.gstNumber && args.gstNumber.trim().length > 0 && !gstRegex.test(args.gstNumber.trim().toUpperCase())) {
       throw new ConvexError("Invalid GST number format. Expected format: 24AAAAA0000A1Z5");
     }
 
     // Validate email format (only if provided)
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (args.email && !emailRegex.test(args.email)) {
+    if (args.email && args.email.trim().length > 0 && !emailRegex.test(args.email.trim())) {
       throw new ConvexError("Invalid email format");
     }
 
@@ -180,13 +178,13 @@ export const updateVendor = mutation({
 
     // Validate GST number format
     const gstRegex = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
-    if (args.gstNumber && !gstRegex.test(args.gstNumber)) {
+    if (args.gstNumber && args.gstNumber.trim().length > 0 && !gstRegex.test(args.gstNumber.trim().toUpperCase())) {
       throw new ConvexError("Invalid GST number format. Expected format: 24AAAAA0000A1Z5");
     }
 
     // Validate email format (only if provided)
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (args.email && !emailRegex.test(args.email)) {
+    if (args.email && args.email.trim().length > 0 && !emailRegex.test(args.email.trim())) {
       throw new ConvexError("Invalid email format");
     }
 
@@ -210,8 +208,8 @@ export const updateVendor = mutation({
 export const checkVendorUsage = query({
   args: { vendorId: v.id("vendors") },
   handler: async (ctx, args) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) return { isInUse: false, usedInInventory: 0 };
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) return { isInUse: false, usedInInventory: 0 };
 
     // Check if vendor is used in any inventory items
     // Support both old vendorId and new vendorIds format

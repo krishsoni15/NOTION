@@ -41,6 +41,7 @@ interface InventoryFormDialogProps {
   initialData?: {
     itemName: string;
     description?: string;
+    specification?: string;
     hsnSacCode?: string;
     unit: string;
     centralStock: number;
@@ -104,6 +105,7 @@ export function InventoryFormDialog({
   const [formData, setFormData] = useState({
     itemName: "",
     description: "",
+    specification: "",
     hsnSacCode: "",
     unit: "",
     centralStock: "0",
@@ -125,6 +127,7 @@ export function InventoryFormDialog({
         setFormData({
           itemName: initialData.itemName,
           description: initialData.description || "",
+          specification: initialData.specification || "",
           hsnSacCode: initialData.hsnSacCode || "",
           unit: initialData.unit,
           centralStock: initialData.centralStock.toString(),
@@ -138,6 +141,7 @@ export function InventoryFormDialog({
         setFormData({
           itemName: currentItem.itemName,
           description: currentItem.description || "",
+          specification: (currentItem as any).specification || "",
           hsnSacCode: (currentItem as any).hsnSacCode || "",
           unit: currentItem.unit ?? "",
           centralStock: (currentItem.centralStock || 0).toString(),
@@ -175,6 +179,7 @@ export function InventoryFormDialog({
       setFormData({
         itemName: "",
         description: "",
+        specification: "",
         hsnSacCode: "",
         unit: "",
         centralStock: "0",
@@ -388,6 +393,7 @@ export function InventoryFormDialog({
           itemId,
           itemName: formData.itemName,
           description: formData.description,
+          specification: formData.specification ? formData.specification : undefined,
           hsnSacCode: formData.hsnSacCode,
           unit: formData.unit || undefined,
           centralStock: parseFloat(formData.centralStock),
@@ -420,6 +426,7 @@ export function InventoryFormDialog({
         const newItemId = await createItem({
           itemName: formData.itemName,
           description: formData.description,
+          specification: formData.specification ? formData.specification : undefined,
           hsnSacCode: formData.hsnSacCode,
           unit: formData.unit || undefined,
           centralStock: parseFloat(formData.centralStock),
@@ -516,6 +523,20 @@ export function InventoryFormDialog({
                     value={formData.description}
                     onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                     required
+                    disabled={isLoading || !canEdit}
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="specification">Specification / Model No <span className="text-muted-foreground text-xs">(optional)</span></Label>
+                <div className="relative">
+                  <textarea
+                    id="specification"
+                    className="flex min-h-[60px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                    placeholder="Enter specification or model no..."
+                    value={formData.specification}
+                    onChange={(e) => setFormData({ ...formData, specification: e.target.value })}
                     disabled={isLoading || !canEdit}
                   />
                 </div>

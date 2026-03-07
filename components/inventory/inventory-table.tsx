@@ -104,6 +104,7 @@ export function InventoryTable({ items, viewMode = "table", onRefresh }: Invento
     return {
       itemName: editingItem.itemName,
       description: editingItem.description,
+      specification: (editingItem as any).specification,
       hsnSacCode: editingItem.hsnSacCode,
       unit: editingItem.unit ?? "",
       centralStock: editingItem.centralStock ?? 0,
@@ -248,6 +249,16 @@ export function InventoryTable({ items, viewMode = "table", onRefresh }: Invento
                         className="text-sm text-foreground/80 leading-relaxed max-w-[250px]"
                         truncateLength={60}
                       />
+                      {(item as any).specification && (
+                        <div className="mt-2 pt-2 border-t border-border/40">
+                          <p className="text-[10px] uppercase font-bold text-muted-foreground/70 tracking-wider mb-1">Specification</p>
+                          <ReadMoreText
+                            text={(item as any).specification}
+                            className="text-xs text-foreground/70 leading-relaxed max-w-[250px]"
+                            truncateLength={40}
+                          />
+                        </div>
+                      )}
                     </TableCell>
                     <TableCell className="align-top py-4">
                       {((item as any).vendors && (item as any).vendors.length > 0) ? (

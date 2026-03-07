@@ -205,6 +205,7 @@ export function CheckDialog({
     const [editQuantity, setEditQuantity] = useState("");
     const [editUnit, setEditUnit] = useState("");
     const [editDescription, setEditDescription] = useState("");
+    const [editSpecification, setEditSpecification] = useState("");
     const [editItemName, setEditItemName] = useState("");
     const [isUpdatingItem, setIsUpdatingItem] = useState(false);
 
@@ -579,6 +580,7 @@ export function CheckDialog({
         setEditQuantity(request?.quantity.toString() || "");
         setEditUnit(request?.unit || "");
         setEditDescription(request?.description || "");
+        setEditSpecification(request?.specsBrand || (itemInInventory as any)?.specification || "");
     };
 
     const handleCancelEditItem = () => {
@@ -586,6 +588,7 @@ export function CheckDialog({
         setEditQuantity(request?.quantity.toString() || "");
         setEditUnit(request?.unit || "");
         setEditDescription(request?.description || "");
+        setEditSpecification(request?.specsBrand || (itemInInventory as any)?.specification || "");
         setEditItemName(request?.itemName || "");
     };
 
@@ -610,6 +613,7 @@ export function CheckDialog({
                 quantity,
                 unit: editUnit.trim() || undefined,
                 description: editDescription.trim() || undefined,
+                specsBrand: editSpecification.trim() || undefined,
                 itemName: editItemName.trim(),
             });
             toast.success("Item details updated successfully");
@@ -1185,6 +1189,23 @@ export function CheckDialog({
                                                 <p className="text-sm mt-1">{request.description || "No description provided"}</p>
                                             )}
                                         </div>
+                                        {/* Specification Row - Full Width */}
+                                        {(request.specsBrand || (itemInInventory as any)?.specification || isEditingItem) && (
+                                            <div className="mt-4 pt-4 border-t border-border/50">
+                                                <span className="text-muted-foreground">Specification / Model No:</span>
+                                                {isEditingItem ? (
+                                                    <Textarea
+                                                        value={editSpecification}
+                                                        onChange={(e) => setEditSpecification(e.target.value)}
+                                                        placeholder="Enter specification or model no..."
+                                                        className="mt-1 text-xs min-h-[60px]"
+                                                        disabled={isUpdatingItem}
+                                                    />
+                                                ) : (
+                                                    <p className="text-sm mt-1 min-h-[20px]">{request.specsBrand || (itemInInventory as any)?.specification || ""}</p>
+                                                )}
+                                            </div>
+                                        )}
                                         {/* Save/Cancel Edit Buttons */}
                                         {isEditingItem && (
                                             <div className="flex gap-2 justify-end pt-2">

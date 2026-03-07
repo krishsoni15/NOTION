@@ -244,6 +244,17 @@ export function ItemInfoDialog({
                     </button>
                   )}
                 </div>
+
+                {(inventoryItem as any)?.specification && (
+                  <div className="mt-4 pt-4 border-t border-slate-200/60 dark:border-slate-800/60">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="text-[11px] font-bold text-foreground uppercase opacity-80">Specification / Model No</span>
+                    </div>
+                    <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-wrap">
+                      {(inventoryItem as any).specification}
+                    </p>
+                  </div>
+                )}
               </div>
 
             </div>

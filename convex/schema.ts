@@ -190,6 +190,7 @@ export default defineSchema({
   inventory: defineTable({
     itemName: v.string(), // Item Name
     description: v.optional(v.string()), // Item Description
+    specification: v.optional(v.string()), // Specification / Model No
     hsnSacCode: v.optional(v.string()), // HSN/SAC Code
     unit: v.optional(v.string()), // Unit (e.g., bags, kg, mm, gm, nos, ton) - optional
     centralStock: v.optional(v.number()), // Central Stock quantity - optional
@@ -340,6 +341,13 @@ export default defineSchema({
         discountPercent: v.optional(v.number()), // Optional discount percentage
         gstPercent: v.optional(v.number()), // Optional GST percentage
         perUnitBasis: v.optional(v.number()), // Optional basis for price (e.g. price per 50 units)
+        contact: v.optional(v.string()), // Vendor Contact info
+        reference: v.optional(v.string()), // Reference
+        date: v.optional(v.string()), // Quote Date
+        deliveryPeriod: v.optional(v.string()), // Delivery period
+        paymentTerms: v.optional(v.string()), // Payment terms
+        pastPerformance: v.optional(v.string()), // Past performance
+        freight: v.optional(v.string()), // Freight
       })
     ),
     selectedVendorId: v.optional(v.id("vendors")), // Selected by manager
@@ -353,6 +361,7 @@ export default defineSchema({
     rejectedAt: v.optional(v.number()),
     approvedAt: v.optional(v.number()),
     approvedBy: v.optional(v.id("users")), // Manager who approved/rejected
+    counterOfferPercent: v.optional(v.number()), // Configurable user counter offer percentage
     isDirectDelivery: v.boolean(), // If item is in inventory, can go directly to delivery
     inventoryFulfillmentQuantity: v.optional(v.number()), // Quantity to be fulfilled from inventory in a split/mixed plan
     purchaseQuantity: v.optional(v.number()), // Quantity to buy (may be > required for extra inventory)

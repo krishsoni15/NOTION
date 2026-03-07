@@ -54,6 +54,8 @@ const statusColors: Record<string, string> = {
     out_for_delivery: "bg-sky-100 text-sky-800 dark:bg-sky-900/30 dark:text-sky-300",
     delivered: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300",
     split_approved: "bg-violet-100 text-violet-800 dark:bg-violet-900/30 dark:text-violet-300",
+    login: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300",
+    logout: "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300",
 };
 
 const roleColors: Record<string, string> = {
@@ -140,10 +142,10 @@ export function GRNLogsContent() {
                 <div>
                     <h1 className="text-2xl font-bold flex items-center gap-2.5">
                         <ClipboardList className="h-7 w-7 text-primary" />
-                        GRN Logs
+                        Activity Logs
                     </h1>
                     <p className="text-sm text-muted-foreground mt-1">
-                        Complete action audit trail across all requests
+                        Complete action audit trail across requests and system access
                         {logs && <span className="ml-1">— {logs.length} total entries</span>}
                     </p>
                 </div>
@@ -202,14 +204,14 @@ export function GRNLogsContent() {
 
             {/* Stats Row */}
             {logs && (
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
                     <div className="rounded-xl border p-3 bg-card/80">
                         <div className="text-2xl font-bold">{logs.length}</div>
                         <div className="text-xs text-muted-foreground">Total Logs</div>
                     </div>
                     <div className="rounded-xl border p-3 bg-card/80">
                         <div className="text-2xl font-bold">
-                            {new Set(logs.map(l => l.requestNumber)).size}
+                            {new Set(logs.map(l => l.requestNumber).filter(r => r !== "SYSTEM")).size}
                         </div>
                         <div className="text-xs text-muted-foreground">Requests Tracked</div>
                     </div>
@@ -223,7 +225,25 @@ export function GRNLogsContent() {
                         <div className="text-2xl font-bold text-blue-600">
                             {logs.filter(l => isToday(new Date(l.createdAt))).length}
                         </div>
-                        <div className="text-xs text-muted-foreground">Today</div>
+                        <div className="text-xs text-muted-foreground">Activity Today</div>
+                    </div>
+                    <div className="rounded-xl border p-3 bg-card/80">
+                        <div
+                            className="text-2xl font-bold text-emerald-600 truncate cursor-help"
+                            title={Array.from(new Set(logs.filter(l => l.status === "login" && isToday(new Date(l.createdAt))).map(l => l.userName))).join(", ") || "No logins today"}
+                        >
+                            {new Set(logs.filter(l => l.status === "login" && isToday(new Date(l.createdAt))).map(l => l.userName)).size}
+                        </div>
+                        <div className="text-xs text-muted-foreground">Logins Today</div>
+                    </div>
+                    <div className="rounded-xl border p-3 bg-card/80">
+                        <div
+                            className="text-2xl font-bold text-amber-600 truncate cursor-help"
+                            title={Array.from(new Set(logs.filter(l => l.status === "logout" && isToday(new Date(l.createdAt))).map(l => l.userName))).join(", ") || "No logouts today"}
+                        >
+                            {new Set(logs.filter(l => l.status === "logout" && isToday(new Date(l.createdAt))).map(l => l.userName)).size}
+                        </div>
+                        <div className="text-xs text-muted-foreground">Logouts Today</div>
                     </div>
                 </div>
             )}
@@ -233,12 +253,12 @@ export function GRNLogsContent() {
                 {!logs ? (
                     <div className="text-center py-20">
                         <RefreshCw className="h-8 w-8 animate-spin text-muted-foreground mx-auto mb-3" />
-                        <p className="text-muted-foreground">Loading GRN logs...</p>
+                        <p className="text-muted-foreground">Loading activity logs...</p>
                     </div>
                 ) : filteredLogs.length === 0 ? (
                     <div className="text-center py-20 space-y-3">
                         <ClipboardList className="h-12 w-12 text-muted-foreground/30 mx-auto" />
-                        <p className="text-muted-foreground font-medium">No GRN logs found</p>
+                        <p className="text-muted-foreground font-medium">No activity logs found</p>
                         {hasFilters && (
                             <Button variant="outline" size="sm" onClick={clearFilters}>
                                 Clear Filters
@@ -309,9 +329,12 @@ export function GRNLogsContent() {
                                                     <div className="flex items-center gap-2 shrink-0">
                                                         <Badge
                                                             variant="outline"
-                                                            className="text-[10px] h-5 px-1.5 font-mono shrink-0"
+                                                            className={cn("text-[10px] h-5 px-1.5 font-mono shrink-0",
+                                                                log.requestNumber === "SYSTEM"
+                                                                    ? "bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 border-dashed border-slate-300 dark:border-slate-700 font-sans tracking-wide"
+                                                                    : "")}
                                                         >
-                                                            #{log.requestNumber}
+                                                            {log.requestNumber === "SYSTEM" ? "SYSTEM" : `#${log.requestNumber}`}
                                                         </Badge>
                                                     </div>
                                                 </div>

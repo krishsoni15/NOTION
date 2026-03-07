@@ -322,6 +322,15 @@ export function InventoryCard({
                             className="text-xs text-muted-foreground/80 leading-relaxed min-h-[32px]"
                         />
                     </div>
+                    {(item as any).specification && (
+                        <div className="col-span-2 pt-2 border-t border-border/40 mt-1">
+                            <p className="text-[10px] uppercase font-bold text-muted-foreground/70 tracking-wider mb-1">Specification / Model No</p>
+                            <ReadMoreText
+                                text={(item as any).specification}
+                                className="text-xs text-muted-foreground/80 leading-relaxed min-h-[32px]"
+                            />
+                        </div>
+                    )}
                 </div>
 
             </CardContent>

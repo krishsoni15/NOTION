@@ -806,6 +806,7 @@ export const createDirectPO = mutation({
                         userId: currentUser._id,
                         role: currentUser.role,
                         status: "sign_pending",
+                        type: "log",
                         content: `Purchase Order created (PO#: ${po.poNumber}). Vendor selected. Awaiting Manager signature.`,
                         createdAt: now,
                     });
@@ -874,6 +875,7 @@ export const updatePOStatus = mutation({
                     userId: currentUser._id,
                     role: currentUser.role,
                     status: reqStatus,
+                    type: "log",
                     content: `${statusLabels[args.status] || args.status} (PO#: ${po.poNumber})`,
                     createdAt: Date.now(),
                 });
@@ -927,6 +929,7 @@ export const cancelPO = mutation({
                     userId: currentUser._id,
                     role: currentUser.role,
                     status: "rejected",
+                    type: "log",
                     content: `PO Cancelled (PO#: ${po.poNumber}). Request status set to Rejected.`,
                     createdAt: Date.now(),
                 });
@@ -983,6 +986,7 @@ export const approveDirectPO = mutation({
                     userId: currentUser._id,
                     role: currentUser.role,
                     status: "pending_po",
+                    type: "log",
                     content: `PO Digitally Signed & Approved by Manager (PO#: ${po.poNumber}). Status → Pending PO.`,
                     createdAt: now,
                 });
@@ -1039,6 +1043,7 @@ export const rejectDirectPO = mutation({
                     userId: currentUser._id,
                     role: currentUser.role,
                     status: "sign_rejected",
+                    type: "log",
                     content: `Digitally Rejected: ${args.reason}`,
                     createdAt: now,
                 });
@@ -1101,6 +1106,7 @@ export const approveDirectPOByRequest = mutation({
                 userId: currentUser._id,
                 role: currentUser.role,
                 status: "pending_po",
+                type: "log",
                 content: `PO Digitally Signed by Manager for Request. Status → Pending PO.`,
                 createdAt: now,
             });
@@ -1163,6 +1169,7 @@ export const rejectDirectPOByRequest = mutation({
                 userId: currentUser._id,
                 role: currentUser.role,
                 status: "sign_rejected",
+                type: "log",
                 content: `Digitally Rejected: ${args.reason}`,
                 createdAt: now,
             });

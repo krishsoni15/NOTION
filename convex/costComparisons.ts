@@ -69,6 +69,13 @@ export const getCostComparisonByRequestId = query({
           discountPercent: quote.discountPercent,
           gstPercent: quote.gstPercent,
           perUnitBasis: quote.perUnitBasis,
+          contact: quote.contact,
+          reference: quote.reference,
+          date: quote.date,
+          deliveryPeriod: quote.deliveryPeriod,
+          paymentTerms: quote.paymentTerms,
+          pastPerformance: quote.pastPerformance,
+          freight: quote.freight,
           vendor: vendor
             ? {
               _id: vendor._id,
@@ -154,6 +161,13 @@ export const getPendingCostComparisons = query({
               discountPercent: quote.discountPercent,
               gstPercent: quote.gstPercent,
               perUnitBasis: quote.perUnitBasis,
+              contact: quote.contact,
+              reference: quote.reference,
+              date: quote.date,
+              deliveryPeriod: quote.deliveryPeriod,
+              paymentTerms: quote.paymentTerms,
+              pastPerformance: quote.pastPerformance,
+              freight: quote.freight,
               vendor: vendor
                 ? {
                   _id: vendor._id,
@@ -207,12 +221,20 @@ export const upsertCostComparison = mutation({
         discountPercent: v.optional(v.number()),
         gstPercent: v.optional(v.number()),
         perUnitBasis: v.optional(v.number()),
+        contact: v.optional(v.string()),
+        reference: v.optional(v.string()),
+        date: v.optional(v.string()),
+        deliveryPeriod: v.optional(v.string()),
+        paymentTerms: v.optional(v.string()),
+        pastPerformance: v.optional(v.string()),
+        freight: v.optional(v.string()),
       })
     ),
     isDirectDelivery: v.boolean(),
     inventoryFulfillmentQuantity: v.optional(v.number()),
     purchaseQuantity: v.optional(v.number()), // Quantity to buy (may be > required for extra inventory)
     managerNotes: v.optional(v.string()),
+    counterOfferPercent: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     const currentUser = await getCurrentUser(ctx);
@@ -250,6 +272,7 @@ export const upsertCostComparison = mutation({
         inventoryFulfillmentQuantity: args.inventoryFulfillmentQuantity,
         purchaseQuantity: args.purchaseQuantity,
         managerNotes: args.managerNotes !== undefined ? args.managerNotes : existing.managerNotes,
+        counterOfferPercent: args.counterOfferPercent,
         updatedAt: now,
       });
       return existing._id;
@@ -264,6 +287,7 @@ export const upsertCostComparison = mutation({
         inventoryFulfillmentQuantity: args.inventoryFulfillmentQuantity,
         purchaseQuantity: args.purchaseQuantity,
         managerNotes: args.managerNotes,
+        counterOfferPercent: args.counterOfferPercent,
         createdAt: now,
         updatedAt: now,
       });
@@ -323,6 +347,7 @@ export const submitCostComparison = mutation({
         userId: currentUser._id,
         role: currentUser.role,
         status: "cc_pending",
+        type: "log",
         content: `Cost Comparison submitted for Manager review (${costComparison.vendorQuotes.length} vendor quote(s)).`,
         createdAt: now,
       });
@@ -403,6 +428,7 @@ export const reviewCostComparison = mutation({
           userId: currentUser._id,
           role: currentUser.role,
           status: "cc_approved",
+          type: "log",
           content: `CC Approved. Vendor selected. Status → Ready for PO.${args.notes ? ` Notes: ${args.notes.trim()}` : ''}`,
           createdAt: now,
         });
@@ -436,6 +462,7 @@ export const reviewCostComparison = mutation({
           userId: currentUser._id,
           role: currentUser.role,
           status: "cc_rejected",
+          type: "log",
           content: `CC Rejected: ${args.notes.trim()}`,
           createdAt: now,
         });
@@ -461,9 +488,17 @@ export const resubmitCostComparison = mutation({
         discountPercent: v.optional(v.number()),
         gstPercent: v.optional(v.number()),
         perUnitBasis: v.optional(v.float64()),
+        contact: v.optional(v.string()),
+        reference: v.optional(v.string()),
+        date: v.optional(v.string()),
+        deliveryPeriod: v.optional(v.string()),
+        paymentTerms: v.optional(v.string()),
+        pastPerformance: v.optional(v.string()),
+        freight: v.optional(v.string()),
       })
     ),
     isDirectDelivery: v.boolean(),
+    counterOfferPercent: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     const currentUser = await getCurrentUser(ctx);
@@ -494,6 +529,7 @@ export const resubmitCostComparison = mutation({
       vendorQuotes: args.vendorQuotes,
       isDirectDelivery: args.isDirectDelivery,
       status: "cc_pending",
+      counterOfferPercent: args.counterOfferPercent,
       updatedAt: now,
     });
 
@@ -511,6 +547,7 @@ export const resubmitCostComparison = mutation({
         userId: currentUser._id,
         role: currentUser.role,
         status: "cc_pending",
+        type: "log",
         content: `Cost Comparison resubmitted after rejection (${args.vendorQuotes.length} vendor quote(s)). Awaiting Manager review.`,
         createdAt: now,
       });
@@ -573,6 +610,7 @@ export const approveSplitFulfillment = mutation({
         userId: currentUser._id,
         role: currentUser.role,
         status: "split_approved",
+        type: "log",
         content: `Split Fulfillment Approved: ${args.notes || "Partial inventory approved"}`,
         createdAt: now,
       });

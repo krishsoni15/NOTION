@@ -282,6 +282,7 @@ export const createInventoryItem = mutation({
   args: {
     itemName: v.string(),
     description: v.string(),
+    specification: v.optional(v.string()),
     hsnSacCode: v.optional(v.string()),
     unit: v.optional(v.string()),
     centralStock: v.optional(v.number()),
@@ -330,6 +331,7 @@ export const createInventoryItem = mutation({
     const itemId = await ctx.db.insert("inventory", {
       itemName: args.itemName,
       description: args.description,
+      specification: args.specification,
       hsnSacCode: args.hsnSacCode || "",
       unit: args.unit || "",
       centralStock: args.centralStock || 0,
@@ -354,6 +356,7 @@ export const updateInventoryItem = mutation({
     itemId: v.id("inventory"),
     itemName: v.string(),
     description: v.optional(v.string()),
+    specification: v.optional(v.string()),
     hsnSacCode: v.optional(v.string()),
     unit: v.optional(v.string()),
     centralStock: v.optional(v.number()),
@@ -391,6 +394,7 @@ export const updateInventoryItem = mutation({
     await ctx.db.patch(args.itemId, {
       itemName: args.itemName,
       description: args.description ?? item.description ?? "",
+      specification: args.specification ?? item.specification,
       hsnSacCode: args.hsnSacCode ?? item.hsnSacCode ?? "",
       unit: args.unit ?? item.unit ?? "",
       centralStock: args.centralStock ?? item.centralStock ?? 0,

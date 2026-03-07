@@ -6,7 +6,7 @@
  * Dialog for creating/editing cost comparisons with multiple vendor quotes.
  */
 
-import { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import {
@@ -43,7 +43,10 @@ import { VendorCreationForm } from "./vendor-creation-form";
 import { LazyImage } from "@/components/ui/lazy-image";
 import { ImageSlider } from "@/components/ui/image-slider";
 import type { Id } from "@/convex/_generated/dataModel";
-import { Edit, Check, X } from "lucide-react";
+import { Edit, Check, X, FileText, Download, Printer } from "lucide-react";
+import * as XLSX from "xlsx";
+import html2canvas from "html2canvas";
+import jsPDF from "jspdf";
 
 interface CostComparisonDialogProps {
   open: boolean;
@@ -60,6 +63,14 @@ interface VendorQuote {
   discountPercent?: number;  // Optional discount percentage
   gstPercent?: number;       // Optional GST percentage
   perUnitBasis?: number;     // Optional basis for price (e.g. price per 50 units)
+  contact?: string;          // Vendor Contact
+  reference?: string;        // Reference
+  date?: string;             // Date
+  deliveryPeriod?: string;   // Delivery Period
+  paymentTerms?: string;     // Payment Terms
+  pastPerformance?: string;  // Past Performance
+  freight?: string;          // Freight
+  specification?: string;    // Specification / Model No
 }
 
 // Common unit suggestions for autocomplete
@@ -134,6 +145,18 @@ export function CostComparisonDialog({
   const [quoteCgst, setQuoteCgst] = useState("9");       // CGST percentage (default 9)
   const [quoteSgst, setQuoteSgst] = useState("9");       // SGST percentage (default 9)
   const [perUnitBasis, setPerUnitBasis] = useState("1");   // Per unit basis for price (e.g. price per 1 unit, or per 50 units) - Hidden in UI now
+
+  // New Quote Fields
+  const [quoteContact, setQuoteContact] = useState("");
+  const [quoteReference, setQuoteReference] = useState("");
+  const [quoteDate, setQuoteDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [quoteDeliveryPeriod, setQuoteDeliveryPeriod] = useState("");
+  const [quotePaymentTerms, setQuotePaymentTerms] = useState("");
+  const [quotePastPerformance, setQuotePastPerformance] = useState("");
+  const [quoteFreight, setQuoteFreight] = useState("");
+  const [quoteSpecification, setQuoteSpecification] = useState("");
+  // showAdditionalDetails removed to keep section always open
+
   const [showVendorDetails, setShowVendorDetails] = useState<string | null>(null);
   const [showDirectDeliveryConfirm, setShowDirectDeliveryConfirm] = useState(false);
   const [showCreateVendorDialog, setShowCreateVendorDialog] = useState(false);
@@ -141,6 +164,9 @@ export function CostComparisonDialog({
   const [showVendorDropdown, setShowVendorDropdown] = useState(false);
   const [selectedVendorIndex, setSelectedVendorIndex] = useState(-1);
   const [editingQuoteIndex, setEditingQuoteIndex] = useState(-1); // -1 = adding new, >= 0 = editing existing
+  const [ccViewMode, setCCViewMode] = useState<"form" | "preview">("form"); // toggle between edit form and formatted CC preview
+  const [ccZoom, setCcZoom] = useState(1.0); // CC preview zoom level
+  const ccScrollRef = useRef<HTMLDivElement>(null); // ref for horizontal scroll container
 
   // Inventory-based fulfillment state (skip vendor comparison)
   const [useInventoryStock, setUseInventoryStock] = useState(false);
@@ -161,6 +187,7 @@ export function CostComparisonDialog({
   const [editQuantity, setEditQuantity] = useState("");
   const [editUnit, setEditUnit] = useState("");
   const [editDescription, setEditDescription] = useState("");
+  const [editSpecification, setEditSpecification] = useState("");
   const [editItemName, setEditItemName] = useState("");
   const [isUpdatingItem, setIsUpdatingItem] = useState(false);
 
@@ -173,9 +200,12 @@ export function CostComparisonDialog({
   const [selectedFinalVendor, setSelectedFinalVendor] = useState<Id<"vendors"> | "">("");
   const [managerNotes, setManagerNotes] = useState("");
   const [isReviewing, setIsReviewing] = useState(false);
+  const [counterOfferPercent, setCounterOfferPercent] = useState<number>(0);
+  const [showSubmitConfirm, setShowSubmitConfirm] = useState(false);
 
   const userRole = useUserRole();
   const isManager = userRole === ROLES.MANAGER;
+  const currentUser = useQuery(api.users.getCurrentUser);
   const reviewCC = useMutation(api.costComparisons.reviewCostComparison);
 
   const request = useQuery(
@@ -224,6 +254,14 @@ export function CostComparisonDialog({
           unit: q.unit,
           discountPercent: q.discountPercent,
           gstPercent: q.gstPercent,
+          perUnitBasis: q.perUnitBasis,
+          contact: q.contact,
+          reference: q.reference,
+          date: q.date,
+          deliveryPeriod: q.deliveryPeriod,
+          paymentTerms: q.paymentTerms,
+          pastPerformance: q.pastPerformance,
+          freight: q.freight,
         }))
       );
       setIsDirectDelivery(existingCC.isDirectDelivery);
@@ -241,9 +279,22 @@ export function CostComparisonDialog({
         setQuantityFromInventory(existingCC.inventoryFulfillmentQuantity);
       }
 
+      if (existingCC.counterOfferPercent !== undefined) {
+        setCounterOfferPercent(existingCC.counterOfferPercent);
+      } else {
+        setCounterOfferPercent(0); // default
+      }
+
       // Reset manager notes when opening
       if (isManager) {
         setManagerNotes("");
+      }
+
+      // Auto show preview if CC already has quotes
+      if (existingCC.vendorQuotes.length > 0) {
+        setCCViewMode("preview");
+      } else {
+        setCCViewMode("form");
       }
     } else if (open && !existingCC) {
       // Reset when opening new
@@ -251,6 +302,8 @@ export function CostComparisonDialog({
       setIsDirectDelivery(false);
       // Default to inventory stock if sufficient
       setUseInventoryStock(false);
+      setCCViewMode("form"); // always start in form mode for new CC
+      setCounterOfferPercent(0); // default
       if (isManager) {
         setManagerNotes("");
       }
@@ -356,6 +409,14 @@ export function CostComparisonDialog({
       discountPercent: discount > 0 ? discount : undefined,
       gstPercent: gst > 0 ? gst : undefined,
       perUnitBasis: basis,
+      contact: quoteContact.trim() || undefined,
+      reference: quoteReference.trim() || undefined,
+      date: quoteDate.trim() || undefined,
+      deliveryPeriod: quoteDeliveryPeriod.trim() || undefined,
+      paymentTerms: quotePaymentTerms.trim() || undefined,
+      pastPerformance: quotePastPerformance.trim() || undefined,
+      freight: quoteFreight.trim() || undefined,
+      specification: quoteSpecification.trim() || undefined,
     };
 
     let newQuotes: VendorQuote[];
@@ -385,14 +446,23 @@ export function CostComparisonDialog({
     setQuoteAmount("1");
     const defaultUnit = request?.unit || itemInInventory?.unit || "units";
     setQuoteUnit(defaultUnit);
-
     setQuoteDiscount("");
     setQuoteCgst("9"); // Reset to 9
     setQuoteSgst("9"); // Reset to 9
-    // setQuoteGst("");
+    setQuoteContact("");
+    setQuoteReference("");
+    setQuoteDate(new Date().toISOString().slice(0, 10));
+    setQuoteDeliveryPeriod("");
+    setQuotePaymentTerms("");
+    setQuotePastPerformance("");
+    setQuoteFreight("");
+    setQuoteSpecification("");
     setEditingQuoteIndex(-1);
     setVendorSearchTerm("");
     setVendorDialogOpen(false);
+
+    // Switch to preview mode to show the formatted CC after adding
+    setCCViewMode("preview");
   };
 
   // Get related units based on selected item's unit
@@ -443,14 +513,18 @@ export function CostComparisonDialog({
     setUnitPrice((quote.unitPrice * (quote.perUnitBasis || 1)).toString());
     setQuoteAmount((quote.amount || 1).toString());
     setQuoteUnit(quote.unit || "");
-
     setQuoteDiscount(quote.discountPercent?.toString() || "");
-    // Split GST back into CGST/SGST (assuming equal split if persisted as total)
-    // If backend supports separate fields, ideally use them. Here we'll just split existing total.
     const totalGst = quote.gstPercent || 0;
     setQuoteCgst((totalGst / 2).toString());
     setQuoteSgst((totalGst / 2).toString());
-    // setQuoteGst(quote.gstPercent?.toString() || "");
+    setQuoteContact(quote.contact || "");
+    setQuoteReference(quote.reference || "");
+    setQuoteDate(quote.date || new Date().toISOString().slice(0, 10));
+    setQuoteDeliveryPeriod(quote.deliveryPeriod || "");
+    setQuotePaymentTerms(quote.paymentTerms || "");
+    setQuotePastPerformance(quote.pastPerformance || "");
+    setQuoteFreight(quote.freight || "");
+    setQuoteSpecification(quote.specification || "");
     setVendorDialogOpen(true);
   };
 
@@ -548,7 +622,8 @@ export function CostComparisonDialog({
   // Calculate total with discount and GST for a quote
   const calculateQuoteTotal = (quote: VendorQuote, quantity: number) => {
     const finalUnitPrice = calculateFinalPrice(quote.unitPrice, quote.discountPercent, quote.gstPercent);
-    return finalUnitPrice * quantity;
+    const freightAmt = parseFloat(quote.freight || "0") || 0;
+    return finalUnitPrice * quantity + freightAmt;
   };
 
 
@@ -558,6 +633,7 @@ export function CostComparisonDialog({
     setEditQuantity(request?.quantity.toString() || "");
     setEditUnit(request?.unit || itemInInventory?.unit || "");
     setEditDescription(request?.description || "");
+    setEditSpecification(request?.specsBrand || (itemInInventory as any)?.specification || "");
     setEditItemName(request?.itemName || "");
   };
 
@@ -566,6 +642,7 @@ export function CostComparisonDialog({
     setEditQuantity(request?.quantity.toString() || "");
     setEditUnit(request?.unit || "");
     setEditDescription(request?.description || "");
+    setEditSpecification(request?.specsBrand || (itemInInventory as any)?.specification || "");
     setEditItemName(request?.itemName || "");
   };
 
@@ -590,6 +667,7 @@ export function CostComparisonDialog({
         quantity,
         unit: editUnit.trim() || undefined,
         description: editDescription.trim() || undefined,
+        specsBrand: editSpecification.trim() || undefined,
         itemName: editItemName.trim(),
       });
       toast.success("Item details updated successfully");
@@ -860,11 +938,43 @@ export function CostComparisonDialog({
       setCurrentCCIndex(0);
     }
   }, [open]);
+  // ── Shared style objects for CC preview table (forced light mode) ──────────
+  const excelThStyle: React.CSSProperties = {
+    border: "1px solid #000",
+    padding: "5px 4px",
+    textAlign: "center",
+    fontWeight: "normal",
+    fontSize: "10px",
+    color: "#000",
+    background: "#dee5ed",
+  };
+  const excelTdStyle: React.CSSProperties = {
+    border: "1px solid #000",
+    padding: "5px 4px",
+    textAlign: "center",
+    fontWeight: "normal",
+    fontSize: "11px",
+    color: "#000",
+    background: "#fff",
+  };
+  const actionBtnOutline: React.CSSProperties = {
+    display: "flex",
+    alignItems: "center",
+    gap: "6px",
+    padding: "7px 14px",
+    borderRadius: "6px",
+    border: "1.5px solid #bbb",
+    background: "#fff",
+    color: "#333",
+    fontWeight: 600,
+    fontSize: "12px",
+    cursor: "pointer",
+  };
 
   return (
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
-        <DialogContent className="max-w-3xl w-[95vw] max-h-[90vh] flex flex-col overflow-hidden">
+        <DialogContent className={`${ccViewMode === "preview" && vendorQuotes.length > 0 ? "max-w-[98vw] sm:max-w-[95vw] md:max-w-6xl lg:max-w-7xl xl:max-w-[1400px]" : "max-w-[98vw] sm:max-w-3xl"} max-h-[92vh] flex flex-col overflow-hidden transition-all duration-300`}>
           <DialogHeader className="pb-4 border-b">
             <div className="flex items-start justify-between">
               <div>
@@ -875,13 +985,30 @@ export function CostComparisonDialog({
                   <span>{request?.itemName}</span>
                 </DialogDescription>
               </div>
-              <Badge variant={
-                request?.status === "delivered" ? "default" :
-                  (request?.status === "rejected" || request?.status === "rejected_po" || request?.status === "cc_rejected") ? "destructive" :
-                    "outline"
-              }>
-                {request?.status?.replace("_", " ") || "Pending"}
-              </Badge>
+              <div className="flex items-center gap-2">
+                <Badge variant={
+                  request?.status === "delivered" ? "default" :
+                    (request?.status === "rejected" || request?.status === "rejected_po" || request?.status === "cc_rejected") ? "destructive" :
+                      "outline"
+                }>
+                  {request?.status?.replace("_", " ") || "Pending"}
+                </Badge>
+                {/* Toggle View Mode Button */}
+                {vendorQuotes.length > 0 && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCCViewMode(prev => prev === "form" ? "preview" : "form")}
+                    className="h-7 text-xs gap-1.5 border-dashed border-2 hover:border-primary hover:text-primary hover:bg-primary/5"
+                  >
+                    {ccViewMode === "preview" ? (
+                      <><Edit className="h-3 w-3" /> Edit CC</>
+                    ) : (
+                      <><FileText className="h-3 w-3" /> View CC Format</>
+                    )}
+                  </Button>
+                )}
+              </div>
             </div>
 
             {/* CC Navigation Tabs - shown when there are multiple CCs */}
@@ -910,9 +1037,560 @@ export function CostComparisonDialog({
             )}
           </DialogHeader>
 
-          <div className="space-y-3 flex-1 overflow-y-auto overflow-x-hidden pr-1">
+          <div className={`flex-1 overflow-y-auto ${ccViewMode === "preview" && vendorQuotes.length > 0 ? "overflow-x-auto" : "overflow-x-hidden space-y-3 pr-1"}`}>
+
+            {/* ── CC FORMATTED PREVIEW ─── Excel Match ─────────────── */}
+            {ccViewMode === "preview" && vendorQuotes.length > 0 && request && (() => {
+              // Calculate values
+              const sortedQuotes = [...vendorQuotes].sort((a, b) =>
+                calculateQuoteTotal(a, request.quantity) - calculateQuoteTotal(b, request.quantity)
+              );
+              const lowestQuote = sortedQuotes[0];
+              const getBaseRate = (q: typeof vendorQuotes[0]) => calculatePriceAfterDiscount(q.unitPrice * (q.perUnitBasis || 1), q.discountPercent);
+              const getBaseTotal = (q: typeof vendorQuotes[0]) => getBaseRate(q) * request.quantity;
+              const getGstAmountTotal = (q: typeof vendorQuotes[0]) => calculateGstAmount(getBaseRate(q), q.gstPercent) * request.quantity;
+              const getGrandTotal = (q: typeof vendorQuotes[0]) => calculateQuoteTotal(q, request.quantity);
+
+              const lowestBaseRate = getBaseRate(lowestQuote);
+              const lowestBaseTotal = getBaseTotal(lowestQuote);
+
+              const counterOfferMultiplier = 1 - (counterOfferPercent / 100);
+              const counterBaseRate = lowestBaseRate * counterOfferMultiplier;
+              const counterBaseTotal = lowestBaseTotal * counterOfferMultiplier;
+
+              const lowestTotal = lowestQuote ? getGrandTotal(lowestQuote) : 0;
+              const counterTotal = lowestTotal * counterOfferMultiplier;
+
+              const totalColumnsCount = 10 + vendorQuotes.length * 3;
+
+              return (
+                <div style={{
+                  fontFamily: "Arial, sans-serif",
+                  color: "#000",
+                  background: "#fff",
+                  width: "100%",
+                  paddingBottom: "12px"
+                }}>
+
+                  {/* ── TOOLBAR: Zoom only ── */}
+                  <div style={{ display: "flex", alignItems: "center", gap: "6px", padding: "6px 4px 8px", borderBottom: "1px solid #e5e7eb", marginBottom: "6px" }}>
+                    <span style={{ fontSize: "10px", fontWeight: 600, color: "#999", textTransform: "uppercase", letterSpacing: "0.5px", marginRight: "2px" }}>Zoom</span>
+                    <button
+                      onClick={() => setCcZoom(z => Math.max(0.5, parseFloat((z - 0.1).toFixed(1))))}
+                      style={{ display: "flex", alignItems: "center", justifyContent: "center", width: "28px", height: "28px", borderRadius: "6px", border: "1.5px solid #ddd", background: "#f5f5f5", cursor: "pointer", color: "#444", fontSize: "16px", fontWeight: "bold", flexShrink: 0 }}
+                      title="Zoom out"
+                    >−</button>
+                    <span style={{ fontSize: "11px", fontWeight: 700, color: "#555", minWidth: "38px", textAlign: "center", background: "#f0f0f0", borderRadius: "4px", padding: "2px 4px" }}>{Math.round(ccZoom * 100)}%</span>
+                    <button
+                      onClick={() => setCcZoom(z => Math.min(1.5, parseFloat((z + 0.1).toFixed(1))))}
+                      style={{ display: "flex", alignItems: "center", justifyContent: "center", width: "28px", height: "28px", borderRadius: "6px", border: "1.5px solid #ddd", background: "#f5f5f5", cursor: "pointer", color: "#444", fontSize: "16px", fontWeight: "bold", flexShrink: 0 }}
+                      title="Zoom in"
+                    >+</button>
+                    <button
+                      onClick={() => setCcZoom(1.0)}
+                      style={{ fontSize: "10px", padding: "4px 8px", borderRadius: "5px", border: "1.5px solid #ddd", background: "#f5f5f5", cursor: "pointer", color: "#666", marginLeft: "2px" }}
+                      title="Reset zoom"
+                    >Reset</button>
+                  </div>
+
+                  {/* Table with absolute side scroll arrows */}
+                  <div style={{ position: "relative", width: "100%" }}>
+                    {/* LEFT arrow — absolute, vertically centered */}
+                    <button
+                      onClick={() => ccScrollRef.current?.scrollBy({ left: -250, behavior: "smooth" })}
+                      style={{
+                        position: "absolute", left: 0, top: "50%", transform: "translateY(-50%)",
+                        zIndex: 10, display: "flex", alignItems: "center", justifyContent: "center",
+                        width: "26px", height: "48px", borderRadius: "0 8px 8px 0",
+                        border: "1.5px solid #ddd", borderLeft: "none",
+                        background: "rgba(255,255,255,0.95)", cursor: "pointer", color: "#555",
+                        boxShadow: "2px 0 8px rgba(0,0,0,0.10)",
+                      }}
+                      title="Scroll left"
+                    >
+                      <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M7.5 10L3.5 6l4-4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                    </button>
+
+                    {/* Scrollable zoomable table container — full width */}
+                    <div ref={ccScrollRef} style={{ overflowX: "auto", width: "100%" }}>
+                      {/* Ensure table doesn't squash too much */}
+                      <div style={{ minWidth: `${1000 + vendorQuotes.length * 150}px`, transform: `scale(${ccZoom})`, transformOrigin: "top left", width: `${100 / ccZoom}%` }}>
+                        <table id="cc-export-table" style={{
+                          width: "100%",
+                          borderCollapse: "collapse",
+                          tableLayout: "fixed",
+                        }}>
+                          {/* Define column widths generally: SR NO, Item Desc, Spec, Unit, Qty, Counter Rate, Counter Total, Lowest Rate, Lowest Total, then 3 cols per vendor */}
+                          {/* Column widths: SR NO(40), ITEM DESC(220), SPEC(180), UNIT(60), QTY(60), COUNTER RATE(70), TOTAL(80), LOWEST RATE(70), DISC(55), TOTAL(80) */}
+                          <colgroup>
+                            <col style={{ width: "40px" }} />
+                            <col style={{ width: "220px" }} />
+                            <col style={{ width: "180px" }} />
+                            <col style={{ width: "60px" }} />
+                            <col style={{ width: "60px" }} />
+                            <col style={{ width: "70px" }} />
+                            <col style={{ width: "80px" }} />
+                            <col style={{ width: "70px" }} />
+                            <col style={{ width: "55px" }} />
+                            <col style={{ width: "80px" }} />
+                            {vendorQuotes.map((_, i) => (<React.Fragment key={i}><col style={{ width: "70px" }} /><col style={{ width: "55px" }} /><col style={{ width: "80px" }} /></React.Fragment>))}
+                          </colgroup>
+                          <tbody>
+                            {/* Row Header 1: Company Name */}
+                            <tr>
+                              <th colSpan={totalColumnsCount} style={{ ...excelThStyle, background: "#cbe4f9", color: "#1a4670", fontSize: "16px", padding: "8px", border: "1px solid #7a7a7a" }}>
+                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0 10px" }}>
+                                  <span style={{ visibility: "hidden" }}>NOTION</span> {/* spacer for centering */}
+                                  <span style={{ textAlign: "center", letterSpacing: "1px" }}>NOTION ELECTRONICS PVT. LTD. ( AN ISO 9001: 2015 COMPANY )</span>
+                                  <img src="/images/logos/Notion_Logo-removebg-preview.png" alt="Notion Logo" style={{ height: "22px", objectFit: "contain" }} />
+                                </div>
+                              </th>
+                            </tr>
+
+                            {/* Row 2: Form Title */}
+                            <tr>
+                              <th colSpan={3} style={{ ...excelThStyle, background: "#e8acd1", color: "#61224d", textAlign: "left", fontSize: "12px", paddingLeft: "12px", border: "1px solid #7a7a7a" }}>
+                                PROJECT NAME : {request.requestNumber}
+                              </th>
+                              <th colSpan={totalColumnsCount - 3} style={{ ...excelThStyle, background: "#e8acd1", color: "#61224d", fontSize: "14px", border: "1px solid #7a7a7a" }}>
+                                VENDOR COMPARISON FORM
+                              </th>
+                            </tr>
+
+                            {/* Row 3: Super Headers */}
+                            <tr>
+                              <th rowSpan={5} style={{ ...excelThStyle, background: "#dee5ed" }}>SR NO.</th>
+                              <th rowSpan={5} style={{ ...excelThStyle, background: "#dee5ed" }}>ITEM DESCRIPTION</th>
+                              <th rowSpan={5} style={{ ...excelThStyle, background: "#dee5ed" }}>SPECIFICATION / MODEL NO</th>
+                              <th colSpan={2} style={{ ...excelThStyle, background: "#dee5ed", textAlign: "left", paddingLeft: "8px" }}>VENDOR</th>
+                              <th colSpan={2} style={{ ...excelThStyle, background: "#dee5ed" }}>
+                                <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "4px" }}>
+                                  COUNTER OFFER {counterOfferPercent}%
+                                </div>
+                              </th>
+                              <th colSpan={3} style={{ ...excelThStyle, background: "#dee5ed" }}>LOWEST RATE</th>
+                              {vendorQuotes.map((q, i) => {
+                                const isLowest = q.vendorId === lowestQuote?.vendorId;
+                                const isSelected = selectedFinalVendor === q.vendorId;
+                                return (
+                                  <th
+                                    key={i}
+                                    colSpan={3}
+                                    onClick={() => isManagerReview && setSelectedFinalVendor(isSelected ? "" : q.vendorId)}
+                                    title={isManagerReview ? "Click to select this vendor" : undefined}
+                                    style={{
+                                      ...excelThStyle,
+                                      background: isSelected ? "#86efac" : (isLowest ? "#d8f3dc" : "#dee5ed"),
+                                      textTransform: "uppercase",
+                                      cursor: isManagerReview ? "pointer" : "default",
+                                      border: isSelected ? "2px solid #166534" : "1px solid #7a7a7a",
+                                      color: isSelected ? "#14532d" : "#000"
+                                    }}
+                                  >
+                                    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "2px" }}>
+                                      <span>{getVendorName(q.vendorId)}</span>
+                                      {isManagerReview && (
+                                        <span className="no-export" data-html2canvas-ignore="true" style={{ fontSize: "9px", fontWeight: "bold", opacity: isSelected ? 1 : 0.6, letterSpacing: "0.5px" }}>
+                                          {isSelected ? "✓ SELECTED" : "CLICK TO SELECT"}
+                                        </span>
+                                      )}
+                                    </div>
+                                  </th>
+                                );
+                              })}
+                            </tr>
+
+                            {/* Row 4: CONTACT */}
+                            <tr>
+                              <th colSpan={2} style={{ ...excelThStyle, background: "#dee5ed", textAlign: "left", paddingLeft: "8px" }}>CONTACT</th>
+                              <th colSpan={2} style={{ ...excelThStyle, background: "#dee5ed" }}></th>
+                              <th colSpan={3} style={{ ...excelThStyle, background: "#d8f3dc", fontSize: "9px", fontWeight: "normal" }}>{lowestQuote?.contact || ""}</th>
+                              {vendorQuotes.map((q, i) => {
+                                const isLowest = q.vendorId === lowestQuote?.vendorId;
+                                return (
+                                  <th key={i} colSpan={3} style={{ ...excelThStyle, background: isLowest ? "#d8f3dc" : "#dee5ed", fontSize: "9px", fontWeight: "normal" }}>{q.contact || ""}</th>
+                                );
+                              })}
+                            </tr>
+
+                            {/* Row 5: REFERENCE */}
+                            <tr>
+                              <th colSpan={2} style={{ ...excelThStyle, background: "#dee5ed", textAlign: "left", paddingLeft: "8px" }}>REFRENCE</th>
+                              <th colSpan={2} style={{ ...excelThStyle, background: "#dee5ed" }}></th>
+                              <th colSpan={3} style={{ ...excelThStyle, background: "#d8f3dc", fontSize: "9px", fontWeight: "normal" }}>{lowestQuote?.reference || ""}</th>
+                              {vendorQuotes.map((q, i) => {
+                                const isLowest = q.vendorId === lowestQuote?.vendorId;
+                                return (
+                                  <th key={i} colSpan={3} style={{ ...excelThStyle, background: isLowest ? "#d8f3dc" : "#dee5ed", fontSize: "9px", fontWeight: "normal" }}>{q.reference || ""}</th>
+                                );
+                              })}
+                            </tr>
+
+                            {/* Row 6: DATE */}
+                            <tr>
+                              <th colSpan={2} style={{ ...excelThStyle, background: "#dee5ed", textAlign: "left", paddingLeft: "8px" }}>DATE</th>
+                              <th colSpan={2} style={{ ...excelThStyle, background: "#dee5ed" }}>{new Date().toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: '2-digit' }).replace(/\//g, '-')}</th>
+                              <th colSpan={3} style={{ ...excelThStyle, background: "#d8f3dc", fontSize: "9px", fontWeight: "normal" }}>{lowestQuote?.date ? new Date(lowestQuote.date).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: '2-digit' }) : ""}</th>
+                              {vendorQuotes.map((q, i) => {
+                                const isLowest = q.vendorId === lowestQuote?.vendorId;
+                                return (
+                                  <th key={i} colSpan={3} style={{ ...excelThStyle, background: isLowest ? "#d8f3dc" : "#dee5ed", fontSize: "9px", fontWeight: "normal" }}>{q.date ? new Date(q.date).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: '2-digit' }) : new Date().toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: '2-digit' })}</th>
+                                );
+                              })}
+                            </tr>
+
+                            {/* Row 7: Sub headers (Unit, Qty, Rate, Total) */}
+                            <tr>
+                              <th style={{ ...excelThStyle, background: "#dee5ed" }}>Unit</th>
+                              <th style={{ ...excelThStyle, background: "#dee5ed" }}>Qty</th>
+                              <th style={{ ...excelThStyle, background: "#dee5ed" }}>RATE</th>
+                              <th style={{ ...excelThStyle, background: "#dee5ed" }}>TOTAL</th>
+                              <th style={{ ...excelThStyle, background: "#d8f3dc" }}>RATE</th>
+                              <th style={{ ...excelThStyle, background: "#d8f3dc" }}>DISC.</th>
+                              <th style={{ ...excelThStyle, background: "#d8f3dc" }}>TOTAL</th>
+                              {vendorQuotes.map((q, i) => {
+                                const isLowest = q.vendorId === lowestQuote?.vendorId;
+                                return (
+                                  <React.Fragment key={i}>
+                                    <th style={{ ...excelThStyle, background: isLowest ? "#d8f3dc" : "#dee5ed" }}>RATE</th>
+                                    <th style={{ ...excelThStyle, background: isLowest ? "#d8f3dc" : "#dee5ed" }}>DISC.</th>
+                                    <th style={{ ...excelThStyle, background: isLowest ? "#d8f3dc" : "#dee5ed" }}>TOTAL</th>
+                                  </React.Fragment>
+                                );
+                              })}
+                            </tr>
+
+                            {/* Data Row */}
+                            <tr>
+                              <td style={{ ...excelTdStyle }}>1</td>
+                              <td style={{ ...excelTdStyle, textAlign: "left" }}>{request.itemName.toUpperCase()}</td>
+                              <td style={{ ...excelTdStyle, textAlign: "left", fontSize: "10px" }}>{vendorQuotes[0]?.specification || request.specsBrand || (itemInInventory as any)?.specification || ""}</td>
+                              <td style={{ ...excelTdStyle }}>{request.unit || vendorQuotes[0]?.unit || 'NOS.'}</td>
+                              <td style={{ ...excelTdStyle }}>{request.quantity}</td>
+
+                              {/* Counter Offer Base */}
+                              <td style={{ ...excelTdStyle }}>{parseFloat(counterBaseRate.toFixed(3))}</td>
+                              <td style={{ ...excelTdStyle }}>{parseFloat(counterBaseTotal.toFixed(3))}</td>
+
+                              {/* Lowest Rate — RATE + DISC. + TOTAL */}
+                              <td style={{ ...excelTdStyle, background: "#ebfbee" }}>{parseFloat(lowestBaseRate.toFixed(3))}</td>
+                              <td style={{ ...excelTdStyle, background: "#ebfbee" }}>{lowestQuote?.discountPercent ? parseFloat(lowestQuote.discountPercent.toFixed(2)) + "%" : ""}</td>
+                              <td style={{ ...excelTdStyle, background: "#ebfbee" }}>{parseFloat(lowestBaseTotal.toFixed(3))}</td>
+
+                              {/* Vendors Base */}
+                              {vendorQuotes.map((q, i) => {
+                                const baseRateBeforeDiscount = q.unitPrice * (q.perUnitBasis || 1);
+                                const isLowest = q.vendorId === lowestQuote?.vendorId;
+                                return (
+                                  <React.Fragment key={`data-v-${i}`}>
+                                    <td style={{ ...excelTdStyle, background: isLowest ? "#ebfbee" : "transparent" }}>{parseFloat(baseRateBeforeDiscount.toFixed(3))}</td>
+                                    <td style={{ ...excelTdStyle, background: isLowest ? "#ebfbee" : "transparent" }}>{q.discountPercent ? parseFloat(q.discountPercent.toFixed(2)) + "%" : ""}</td>
+                                    <td style={{ ...excelTdStyle, background: isLowest ? "#ebfbee" : "transparent" }}>{parseFloat(getBaseTotal(q).toFixed(3))}</td>
+                                  </React.Fragment>
+                                );
+                              })}
+                            </tr>
+
+                            {/* Freight */}
+                            <tr>
+                              <td colSpan={3} style={{ ...excelTdStyle, borderRight: "none" }}></td>
+                              <td colSpan={2} style={{ ...excelThStyle, background: "#dee5ed", borderLeft: "none", textAlign: "right", paddingRight: "8px" }}>Freight</td>
+                              <td style={{ ...excelTdStyle }}></td>
+                              <td style={{ ...excelTdStyle }}></td>
+                              <td style={{ ...excelTdStyle, background: "#ebfbee" }}></td>
+                              <td style={{ ...excelTdStyle, background: "#ebfbee" }}></td>
+                              <td style={{ ...excelTdStyle, background: "#ebfbee" }}>{lowestQuote?.freight || ""}</td>
+                              {vendorQuotes.map((q, i) => {
+                                const isLowest = q.vendorId === lowestQuote?.vendorId;
+                                return (
+                                  <React.Fragment key={`fr-${i}`}>
+                                    <td colSpan={3} style={{ ...excelTdStyle, background: isLowest ? "#ebfbee" : "transparent", textAlign: "center", fontSize: "9px" }}>{q.freight || ""}</td>
+                                  </React.Fragment>
+                                );
+                              })}
+                            </tr>
+
+                            {/* TOTAL (Base Amount without GST) */}
+                            <tr>
+                              <th colSpan={5} style={{ ...excelThStyle, background: "#9bc2e6", textAlign: "right", paddingRight: "8px", fontWeight: "bold", border: "1px solid #7a7a7a" }}>TOTAL</th>
+                              <td style={{ ...excelTdStyle, background: "#9bc2e6" }}></td>
+                              <td style={{ ...excelTdStyle, background: "#9bc2e6", fontWeight: "bold" }}>{parseFloat(counterBaseTotal.toFixed(3))}</td>
+                              <td style={{ ...excelTdStyle, background: "#c3e6cb" }}></td>
+                              <td style={{ ...excelTdStyle, background: "#c3e6cb" }}></td>
+                              <td style={{ ...excelTdStyle, background: "#c3e6cb", fontWeight: "bold" }}>{parseFloat(lowestBaseTotal.toFixed(3))}</td>
+                              {vendorQuotes.map((q, i) => {
+                                const isLowest = q.vendorId === lowestQuote?.vendorId;
+                                return (
+                                  <React.Fragment key={`tot-${i}`}>
+                                    <td style={{ ...excelTdStyle, background: isLowest ? "#c3e6cb" : "#9bc2e6" }}></td>
+                                    <td style={{ ...excelTdStyle, background: isLowest ? "#c3e6cb" : "#9bc2e6" }}></td>
+                                    <td style={{ ...excelTdStyle, background: isLowest ? "#c3e6cb" : "#9bc2e6", fontWeight: "bold" }}>{parseFloat(getBaseTotal(q).toFixed(3))}</td>
+                                  </React.Fragment>
+                                );
+                              })}
+                            </tr>
+
+                            {/* GST */}
+                            <tr>
+                              <th colSpan={5} style={{ ...excelThStyle, background: "#9bc2e6", textAlign: "right", paddingRight: "8px", fontWeight: "bold", border: "1px solid #7a7a7a" }}>GST</th>
+                              <td style={{ ...excelTdStyle, background: "#9bc2e6" }}></td>
+                              <td style={{ ...excelTdStyle, background: "#9bc2e6", fontWeight: "bold" }}>{parseFloat((getGstAmountTotal(lowestQuote) * counterOfferMultiplier).toFixed(3))}</td>
+                              <td style={{ ...excelTdStyle, background: "#c3e6cb", fontWeight: "bold", fontSize: "10px" }}>{lowestQuote?.gstPercent ? `${lowestQuote.gstPercent}%` : ""}</td>
+                              <td style={{ ...excelTdStyle, background: "#c3e6cb" }}></td>
+                              <td style={{ ...excelTdStyle, background: "#c3e6cb", fontWeight: "bold" }}>{parseFloat(getGstAmountTotal(lowestQuote).toFixed(3))}</td>
+                              {vendorQuotes.map((q, i) => (
+                                <React.Fragment key={`gst-${i}`}>
+                                  <td style={{ ...excelTdStyle, background: "#9bc2e6", fontWeight: "bold", fontSize: "10px" }}>{q.gstPercent ? `${q.gstPercent}%` : ""}</td>
+                                  <td style={{ ...excelTdStyle, background: "#9bc2e6" }}></td>
+                                  <td style={{ ...excelTdStyle, background: "#9bc2e6", fontWeight: "bold" }}>{parseFloat(getGstAmountTotal(q).toFixed(3))}</td>
+                                </React.Fragment>
+                              ))}
+                            </tr>
+
+                            {/* TOTAL AMOUNT (With GST) */}
+                            <tr>
+                              <th colSpan={5} style={{ ...excelThStyle, background: "#9bc2e6", textAlign: "right", paddingRight: "8px", fontWeight: "bold", border: "1px solid #7a7a7a" }}>TOTAL AMOUNT</th>
+                              <td style={{ ...excelTdStyle, background: "#9bc2e6" }}></td>
+                              <td style={{ ...excelTdStyle, background: "#9bc2e6", fontWeight: "bold" }}>{parseFloat(counterTotal.toFixed(3))}</td>
+                              <td style={{ ...excelTdStyle, background: "#c3e6cb" }}></td>
+                              <td style={{ ...excelTdStyle, background: "#c3e6cb" }}></td>
+                              <td style={{ ...excelTdStyle, background: "#c3e6cb", fontWeight: "bold" }}>{parseFloat(lowestTotal.toFixed(3))}</td>
+                              {vendorQuotes.map((q, i) => (
+                                <React.Fragment key={`grand-${i}`}>
+                                  <td style={{ ...excelTdStyle, background: "#9bc2e6" }}></td>
+                                  <td style={{ ...excelTdStyle, background: "#9bc2e6" }}></td>
+                                  <td style={{ ...excelTdStyle, background: "#9bc2e6", fontWeight: "bold" }}>{parseFloat(getGrandTotal(q).toFixed(3))}</td>
+                                </React.Fragment>
+                              ))}
+                            </tr>
+
+                            {/* DELIVERY PERIOD */}
+                            <tr>
+                              <th colSpan={5} style={{ ...excelThStyle, background: "#e8acd1", textAlign: "right", paddingRight: "8px", color: "#61224d", fontWeight: "bold", border: "1px solid #7a7a7a" }}>DELIVERY PERIOD</th>
+                              <td colSpan={5} style={{ ...excelTdStyle, background: "#e8acd1" }}></td>
+                              {vendorQuotes.map((q, i) => (
+                                <td key={`del-${i}`} colSpan={3} style={{ ...excelTdStyle, background: "#e8acd1", fontSize: "10px", textAlign: "center" }}>{q.deliveryPeriod || ""}</td>
+                              ))}
+                            </tr>
+
+                            {/* PAYMENT TERMS */}
+                            <tr>
+                              <th colSpan={5} style={{ ...excelThStyle, background: "#9bc2e6", textAlign: "right", paddingRight: "8px", color: "#61224d", fontWeight: "bold", border: "1px solid #7a7a7a" }}>PAYMENT TERMS</th>
+                              <td colSpan={5} style={{ ...excelTdStyle, background: "#9bc2e6" }}></td>
+                              {vendorQuotes.map((q, i) => (
+                                <td key={`pay-${i}`} colSpan={3} style={{ ...excelTdStyle, background: "#9bc2e6", fontSize: "10px", textAlign: "center" }}>{q.paymentTerms || ""}</td>
+                              ))}
+                            </tr>
+
+                            {/* PAST PERFORMANCE */}
+                            <tr>
+                              <th colSpan={5} style={{ ...excelThStyle, background: "#e8acd1", textAlign: "right", paddingRight: "8px", color: "#61224d", fontWeight: "bold", border: "1px solid #7a7a7a" }}>PAST PERFORMANCE</th>
+                              <td colSpan={5} style={{ ...excelTdStyle, background: "#e8acd1" }}></td>
+                              {vendorQuotes.map((q, i) => (
+                                <td key={`past-${i}`} colSpan={3} style={{ ...excelTdStyle, background: "#e8acd1", fontSize: "10px", textAlign: "center" }}>{q.pastPerformance || ""}</td>
+                              ))}
+                            </tr>
+
+                            {/* Signature Row */}
+                            <tr>
+                              <td colSpan={4} style={{ ...excelTdStyle, borderTop: "2px solid #000", height: "90px", verticalAlign: "top", padding: "12px", textAlign: "center" }}>
+                                <div style={{ fontWeight: "bold", marginBottom: "40px" }}>PREPARED BY</div>
+                                <div style={{ fontSize: "12px", fontWeight: "bold", color: "#333", textTransform: "uppercase" }}>{currentUser?.fullName || currentUser?.username || ""}</div>
+                              </td>
+                              <td colSpan={totalColumnsCount > 10 ? 3 : 2} style={{ ...excelTdStyle, borderTop: "2px solid #000", height: "90px", verticalAlign: "top", padding: "12px", textAlign: "center" }}>
+                                <div style={{ fontWeight: "bold", marginBottom: "40px" }}>VERIFIED BY</div>
+                                <div style={{ fontSize: "12px", fontWeight: "bold", color: "#333", textTransform: "uppercase", minHeight: "15px" }}>{existingCC ? (currentUser?.fullName || currentUser?.username || "") : ""}</div>
+                              </td>
+                              <td colSpan={totalColumnsCount - (4 + (totalColumnsCount > 10 ? 3 : 2))} style={{ ...excelTdStyle, borderTop: "2px solid #000", height: "90px", verticalAlign: "top", padding: "12px", textAlign: "center" }}>
+                                <div style={{ fontWeight: "bold", marginBottom: "40px" }}>APPROVED BY</div>
+                                <div style={{ fontSize: "12px", fontWeight: "bold", textTransform: "uppercase", color: existingCC?.status === "cc_approved" || request?.status === "ready_for_po" || request?.status === "pending_po" || request?.status === "delivered" ? "#217346" : existingCC?.status === "cc_rejected" ? "#d9534f" : "#f0ad4e" }}>
+                                  {existingCC?.status === "cc_approved" || request?.status === "ready_for_po" || request?.status === "pending_po" || request?.status === "delivered" ? existingCC?.approver?.fullName || "MANAGER" : existingCC?.status === "cc_rejected" ? "REJECTED" : "PENDING"}
+                                </div>
+                              </td>
+                            </tr>
+
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+
+                    {/* RIGHT arrow — absolute, vertically centered */}
+                    <button
+                      onClick={() => ccScrollRef.current?.scrollBy({ left: 250, behavior: "smooth" })}
+                      style={{
+                        position: "absolute", right: 0, top: "50%", transform: "translateY(-50%)",
+                        zIndex: 10, display: "flex", alignItems: "center", justifyContent: "center",
+                        width: "26px", height: "48px", borderRadius: "8px 0 0 8px",
+                        border: "1.5px solid #ddd", borderRight: "none",
+                        background: "rgba(255,255,255,0.95)", cursor: "pointer", color: "#555",
+                        boxShadow: "-2px 0 8px rgba(0,0,0,0.10)",
+                      }}
+                      title="Scroll right"
+                    >
+                      <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M4.5 2l4 4-4 4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                    </button>
+                  </div>
+
+                  {/* ── ACTION BUTTONS ── clean 2-row layout ── */}
+                  <div style={{ marginTop: "14px", padding: "0 2px" }}>
+                    {/* Row 1: utility buttons */}
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(110px, 1fr))", gap: "8px", marginBottom: "8px" }}>
+                      {/* Excel */}
+                      <button
+                        onClick={() => {
+                          try {
+                            const table = document.getElementById('cc-export-table');
+                            if (!table) return;
+                            const clone = table.cloneNode(true) as HTMLElement;
+                            clone.querySelectorAll('.no-export').forEach(el => el.remove());
+                            const wb = XLSX.utils.table_to_book(clone, { sheet: "Sheet1" });
+                            XLSX.writeFile(wb, `Cost_Comparison_${request.requestNumber || 'Export'}.xlsx`);
+                            toast.success("Excel downloaded!");
+                          } catch (err) { console.error(err); toast.error("Failed to download Excel"); }
+                        }}
+                        style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "5px", padding: "8px 10px", borderRadius: "7px", border: "1.5px solid #217346", background: "#fff", color: "#217346", fontWeight: 600, fontSize: "12px", cursor: "pointer" }}
+                      >
+                        <Download style={{ width: "13px", height: "13px" }} /> Excel
+                      </button>
+                      {/* PDF */}
+                      <button
+                        onClick={async () => {
+                          const table = document.getElementById('cc-export-table');
+                          if (!table) return;
+                          try {
+                            const canvas = await html2canvas(table, { scale: 2 } as any);
+                            const imgData = canvas.toDataURL("image/png");
+                            const pdf = new jsPDF({ orientation: "landscape", unit: "pt", format: [canvas.width * 0.75, canvas.height * 0.75] });
+                            pdf.addImage(imgData, "PNG", 0, 0, canvas.width * 0.75, canvas.height * 0.75);
+                            pdf.save(`Cost_Comparison_${request.requestNumber || 'Export'}.pdf`);
+                            toast.success("PDF downloaded!");
+                          } catch (err) { console.error(err); toast.error("Failed to download PDF"); }
+                        }}
+                        style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "5px", padding: "8px 10px", borderRadius: "7px", border: "1.5px solid #d9534f", background: "#fff", color: "#d9534f", fontWeight: 600, fontSize: "12px", cursor: "pointer" }}
+                      >
+                        <Printer style={{ width: "13px", height: "13px" }} /> PDF
+                      </button>
+                      {/* Add Quote */}
+                      {canEdit && !isManagerReview && (
+                        <button
+                          onClick={() => {
+                            setCCViewMode("form"); setVendorDialogOpen(true); setEditingQuoteIndex(-1);
+                            setSelectedVendorId(""); setUnitPrice("");
+                            setQuoteAmount((quantityToBuy || request?.quantity || 0).toString());
+                            const bestUnit = itemInInventory?.unit || request?.unit || "";
+                            if (bestUnit) setQuoteUnit(bestUnit);
+                          }}
+                          style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "5px", padding: "8px 10px", borderRadius: "7px", border: "1.5px solid #555", background: "#fff", color: "#333", fontWeight: 600, fontSize: "12px", cursor: "pointer" }}
+                        >
+                          <Plus style={{ width: "13px", height: "13px" }} /> Add Quote
+                        </button>
+                      )}
+                      {/* Edit CC */}
+                      {!isManagerReview && (
+                        <button
+                          onClick={() => setCCViewMode("form")}
+                          style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "5px", padding: "8px 10px", borderRadius: "7px", border: "1.5px solid #555", background: "#fff", color: "#333", fontWeight: 600, fontSize: "12px", cursor: "pointer" }}
+                        >
+                          <Edit style={{ width: "13px", height: "13px" }} /> Edit CC
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Row 2: Submit / status */}
+                    {canEdit && !isManager && (
+                      <button
+                        onClick={() => setShowSubmitConfirm(true)}
+                        disabled={isSaving || isSubmitting || vendorQuotes.length < 2}
+                        style={{
+                          width: "100%", display: "flex", alignItems: "center", justifyContent: "center", gap: "7px",
+                          padding: "10px 20px", borderRadius: "8px", border: "none",
+                          background: vendorQuotes.length < 2 ? "#c8c8c8" : "linear-gradient(135deg, #1565c0 0%, #1976d2 100%)",
+                          color: "#fff", fontWeight: 700, fontSize: "13px",
+                          cursor: vendorQuotes.length < 2 ? "not-allowed" : "pointer",
+                          boxShadow: vendorQuotes.length < 2 ? "none" : "0 2px 8px rgba(21,101,192,0.35)",
+                        }}
+                      >
+                        <Send style={{ width: "14px", height: "14px" }} />
+                        {existingCC?.status === "cc_rejected" ? "Resubmit CC" : "Submit for Approval"}
+                      </button>
+                    )}
+                    {/* Manager Review Actions IN PREVIEW (Compact) */}
+                    {isManagerReview && (
+                      <div className="flex flex-col md:flex-row items-center gap-3 bg-card p-3 rounded-lg border border-border mt-2 shadow-sm">
+                        {vendorQuotes.length > 0 && (
+                          <div className="flex flex-col items-start justify-center gap-1 w-full md:w-[180px] shrink-0 border-r border-border pr-2">
+                            <Label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+                              Final Vendor <span className="text-destructive">*</span>
+                            </Label>
+                            <div className={`text-sm font-semibold truncate w-full ${selectedFinalVendor ? "text-primary" : "text-muted-foreground italic"}`}>
+                              {selectedFinalVendor ? getVendorName(selectedFinalVendor as Id<"vendors">) : "None selected"}
+                            </div>
+                          </div>
+                        )}
+                        <Textarea
+                          placeholder="Manager notes (Required for rejection)..."
+                          value={managerNotes}
+                          onChange={(e) => setManagerNotes(e.target.value)}
+                          className="flex-1 w-full h-9 min-h-[36px] resize-none text-xs bg-background text-foreground placeholder:text-muted-foreground border-input py-2 px-3 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                        />
+                        <div className="flex gap-2 w-full md:w-auto shrink-0">
+                          <Button
+                            variant="outline"
+                            onClick={async () => {
+                              if (!managerNotes.trim()) {
+                                toast.error("Please provide a reason for rejection");
+                                return;
+                              }
+                              setIsReviewing(true);
+                              try {
+                                await reviewCC({ requestId, action: "reject", notes: managerNotes.trim() });
+                                toast.success("Cost comparison rejected");
+                                onOpenChange(false);
+                              } catch (error: any) { toast.error(error.message || "Failed to reject"); }
+                              finally { setIsReviewing(false); }
+                            }}
+                            disabled={isReviewing}
+                            className="text-destructive hover:bg-destructive/10 hover:text-destructive border-destructive/20 h-9 px-3 text-xs"
+                          >
+                            <X className="h-3.5 w-3.5 mr-1" /> Reject
+                          </Button>
+                          <Button
+                            onClick={async () => {
+                              if (!selectedFinalVendor) {
+                                toast.error("Please select a final vendor");
+                                return;
+                              }
+                              setIsReviewing(true);
+                              try {
+                                await reviewCC({ requestId, action: "approve", selectedVendorId: selectedFinalVendor as Id<"vendors">, notes: managerNotes.trim() || undefined });
+                                toast.success("Cost comparison approved");
+                                onOpenChange(false);
+                              } catch (error: any) { toast.error(error.message || "Failed to approve"); }
+                              finally { setIsReviewing(false); }
+                            }}
+                            disabled={isReviewing || !selectedFinalVendor}
+                            className="bg-primary hover:bg-primary/90 text-primary-foreground h-9 px-3 text-xs"
+                          >
+                            <CheckCircle className="h-3.5 w-3.5 mr-1" /> Approve
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                    {isManager && isSubmitted && !isManagerReview && (
+                      <div className="text-center text-xs text-muted-foreground italic py-2">
+                        {existingCC?.status === "cc_approved" ? "Cost comparison approved" : "Cost comparison rejected"}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
+            {/* ── REGULAR FORM VIEW (only when not in preview mode) ─────────────── */}
+            {ccViewMode !== "preview" && (
+              <>{/* wrapper fragment start */}</>
+            )}
             {/* Item Information Card - Compact & Clean */}
-            {request && (
+            {ccViewMode !== "preview" && request && (
               <div className="bg-muted/10 rounded-xl border border-border/50 overflow-hidden">
                 <div className="bg-card px-5 py-4">
                   <div className="flex items-center justify-between mb-4">
@@ -1062,8 +1740,27 @@ export function CostComparisonDialog({
                             disabled={isUpdatingItem}
                           />
                         ) : (
-                          <p className="text-sm text-muted-foreground/90 leading-relaxed bg-muted/20 p-2.5 rounded-md border border-border/40">
+                          <p className="text-sm text-muted-foreground/90 leading-relaxed bg-muted/20 p-2.5 rounded-md border border-border/40 min-h-[40px]">
                             {request.description}
+                          </p>
+                        )}
+                      </div>
+                    )}
+
+                    {(request.specsBrand || (itemInInventory as any)?.specification || isEditingItem) && (
+                      <div className="md:col-span-2 space-y-1.5 pt-2 border-t border-dashed">
+                        <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider">Specification / Model No</span>
+                        {isEditingItem ? (
+                          <Textarea
+                            value={editSpecification}
+                            onChange={(e) => setEditSpecification(e.target.value)}
+                            placeholder="Enter specification or model no..."
+                            className="mt-1 text-sm min-h-[60px]"
+                            disabled={isUpdatingItem}
+                          />
+                        ) : (
+                          <p className="text-sm text-muted-foreground/90 leading-relaxed bg-muted/20 p-2.5 rounded-md border border-border/40 min-h-[40px]">
+                            {request.specsBrand || (itemInInventory as any)?.specification || ""}
                           </p>
                         )}
                       </div>
@@ -1089,7 +1786,7 @@ export function CostComparisonDialog({
 
 
             {/* Loading Indicator for Inventory Data */}
-            {isInventoryLoading && canEdit && !isSubmitted && !isManager && (
+            {ccViewMode !== "preview" && isInventoryLoading && canEdit && !isSubmitted && !isManager && (
               <div className="p-4 bg-muted/50 border border-border/60 rounded-lg animate-pulse">
                 <div className="flex items-center gap-3">
                   <div className="h-10 w-10 bg-muted rounded-full"></div>
@@ -1105,7 +1802,7 @@ export function CostComparisonDialog({
 
 
             {/* Rejection Notes */}
-            {existingCC?.status === "cc_rejected" && (
+            {ccViewMode !== "preview" && existingCC?.status === "cc_rejected" && (
               <div className="p-2 bg-destructive/10 border border-destructive/20 rounded text-xs">
                 <div className="flex items-start gap-2">
                   <AlertCircle className="h-3.5 w-3.5 text-destructive mt-0.5 shrink-0" />
@@ -1118,30 +1815,48 @@ export function CostComparisonDialog({
             )}
 
             {/* Vendor Quotes - Show always to allow comparison even if stock exists */}
-            {(canEdit || isManagerReview) && (
+            {ccViewMode !== "preview" && (canEdit || isManagerReview) && (
               <div className="space-y-4 pt-2 border-t mt-4">
                 <div className="flex items-center justify-between">
                   <h3 className="text-sm font-semibold flex items-center gap-2">
                     <Building className="h-4 w-4 text-primary" />
                     {isManagerReview ? "Select Final Vendor" : "Vendor Quotes"}
                   </h3>
-                  {/* Create/Add Vendor Button */}
-                  {canEdit && !isManagerReview && vendorQuotes.length > 0 && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        setQuoteAmount((quantityToBuy || request?.quantity || 0).toString());
-                        const bestUnit = itemInInventory?.unit || request?.unit || "";
-                        if (bestUnit) setQuoteUnit(bestUnit);
-                        setVendorDialogOpen(true);
-                      }}
-                      className="h-8 gap-1 border-dashed border-2 hover:border-primary hover:text-primary hover:bg-primary/5 transition-all"
-                    >
-                      <Plus className="h-3.5 w-3.5" />
-                      Add Quote
-                    </Button>
-                  )}
+                  {/* Create/Add Vendor Button and Counter */}
+                  <div className="flex items-center gap-3">
+                    {canEdit && !isManagerReview && vendorQuotes.length > 0 && (
+                      <div className="flex items-center gap-2 border px-2 py-1 rounded-md bg-muted/20">
+                        <label htmlFor="base-counter-offer" className="text-xs font-semibold whitespace-nowrap text-muted-foreground">
+                          Counter Offer %
+                        </label>
+                        <input
+                          id="base-counter-offer"
+                          type="number"
+                          min={0}
+                          max={100}
+                          value={counterOfferPercent}
+                          onChange={(e) => setCounterOfferPercent(Number(e.target.value))}
+                          className="w-16 h-7 text-xs text-center p-0 bg-transparent border rounded border-muted-foreground/30"
+                        />
+                      </div>
+                    )}
+                    {canEdit && !isManagerReview && vendorQuotes.length > 0 && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setQuoteAmount((quantityToBuy || request?.quantity || 0).toString());
+                          const bestUnit = itemInInventory?.unit || request?.unit || "";
+                          if (bestUnit) setQuoteUnit(bestUnit);
+                          setVendorDialogOpen(true);
+                        }}
+                        className="h-8 gap-1 border-dashed border-2 hover:border-primary hover:text-primary hover:bg-primary/5 transition-all"
+                      >
+                        <Plus className="h-3.5 w-3.5" />
+                        Add Quote
+                      </Button>
+                    )}
+                  </div>
                 </div>
 
                 {/* Quantity Analysis Summary - Visible for Manager review OR when quotes exist */}
@@ -1272,6 +1987,13 @@ export function CostComparisonDialog({
                                     </div>
                                   )}
 
+                                  {quote.freight && parseFloat(quote.freight) > 0 && (
+                                    <div className="flex items-center gap-2 text-blue-600 dark:text-blue-400">
+                                      <span className="w-20">Freight:</span>
+                                      <span className="font-medium">+₹{parseFloat(quote.freight).toFixed(2)} <span className="text-muted-foreground font-normal text-[10px] ml-1 uppercase tracking-wider">(Total)</span></span>
+                                    </div>
+                                  )}
+
                                   <div className="flex items-center gap-2 pt-1 mt-1 border-t border-dashed border-muted-foreground/30">
                                     <span className="text-muted-foreground w-20 font-medium">Net Price:</span>
                                     <span className="font-semibold text-foreground">
@@ -1364,10 +2086,31 @@ export function CostComparisonDialog({
               </div>
             )}
 
-            {/* Manager Review Actions */}
-            {isManagerReview && (
+            {/* Manager Review Actions (Form view) */}
+            {ccViewMode !== "preview" && isManagerReview && (
               <div className="mt-4 pt-4 border-t border-border/60">
                 <div className="space-y-4">
+                  {/* Vendor Selection for Form Mode */}
+                  {vendorQuotes.length > 0 && (
+                    <div className="space-y-2">
+                      <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                        Select Final Vendor <span className="text-red-500">*</span>
+                      </Label>
+                      <select
+                        className="w-full md:max-w-md h-10 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                        value={selectedFinalVendor}
+                        onChange={(e) => setSelectedFinalVendor(e.target.value as Id<"vendors">)}
+                      >
+                        <option value="">-- Choose winning vendor --</option>
+                        {vendorQuotes.map((q) => (
+                          <option key={q.vendorId} value={q.vendorId}>
+                            {getVendorName(q.vendorId)} (₹{calculateQuoteTotal(q, request?.quantity || 0).toFixed(2)})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+
                   <div className="space-y-2">
                     <div className="flex items-center justify-between">
                       <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
@@ -1453,7 +2196,7 @@ export function CostComparisonDialog({
 
             {/* Purchase Officer Actions - Only show vendor workflow when insufficient inventory */}
             {
-              canEdit && !isSubmitted && !isManager && (
+              ccViewMode !== "preview" && canEdit && !isSubmitted && !isManager && (
                 <div className="space-y-2 pt-4 border-t mt-2">
                   {/* Auto-save indicator */}
                   {isSaving && (
@@ -1472,7 +2215,7 @@ export function CostComparisonDialog({
                       Cancel
                     </Button>
                     <Button
-                      onClick={handleSubmit}
+                      onClick={() => setShowSubmitConfirm(true)}
                       disabled={isSaving || isSubmitting || vendorQuotes.length < 2}
                       size="sm"
                       className="flex-1"
@@ -1486,7 +2229,7 @@ export function CostComparisonDialog({
             }
 
             {
-              isSubmitted && !isManagerReview && (
+              ccViewMode !== "preview" && isSubmitted && !isManagerReview && (
                 <p className="text-xs text-muted-foreground text-center py-4 border-t mt-2">
                   Submitted for manager approval
                 </p>
@@ -1518,7 +2261,7 @@ export function CostComparisonDialog({
           }
         }
       }}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-2xl md:max-w-4xl lg:max-w-5xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editingQuoteIndex >= 0 ? 'Edit Vendor Quote' : 'Add Vendor Quote'}</DialogTitle>
 
@@ -1572,6 +2315,10 @@ export function CostComparisonDialog({
                           } else {
                             setSelectedVendorId(selected._id as Id<"vendors">);
                             setVendorSearchTerm(selected.companyName);
+                            // Auto-fill contact if blank
+                            if (!quoteContact && (selected as any).phone) {
+                              setQuoteContact((selected as any).phone);
+                            }
                             setShowVendorDropdown(false);
                           }
                           setSelectedVendorIndex(-1);
@@ -1610,6 +2357,10 @@ export function CostComparisonDialog({
                             onClick={() => {
                               setSelectedVendorId(vendor._id);
                               setVendorSearchTerm(vendor.companyName);
+                              // Auto-fill contact from vendor phone if not already set
+                              if (!quoteContact && vendor.phone) {
+                                setQuoteContact(vendor.phone);
+                              }
                               setShowVendorDropdown(false);
                             }}
                             className={`w-full px-3 py-2 text-left text-sm hover:bg-muted transition-colors flex items-center justify-between cursor-pointer ${index === selectedVendorIndex ? 'bg-muted' : ''
@@ -1660,229 +2411,239 @@ export function CostComparisonDialog({
             </div>
           </div>
 
-          {/* Total Quantity and Unit Row */}
-          <div className="grid grid-cols-2 gap-3 mt-3">
-            <div className="space-y-1">
-              <Label className="text-sm font-medium">Total Quantity <span className="text-red-500">*</span></Label>
-              <Input
-                type="number"
-                min="0"
-                step="any"
-                value={quoteAmount}
-                onChange={(e) => setQuoteAmount(e.target.value)}
-                placeholder="Qty"
-                className="text-sm border-2 hover:border-primary/30 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all duration-200"
-                required
-              />
-            </div>
-
-            <div className="space-y-1">
-              <Label className="text-sm font-medium">Unit <span className="text-red-500">*</span></Label>
-              <div className="relative">
+          {/* Three-column form on desktop: Price/Qty/Unit | Discount/GST | Live Total */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-3">
+            {/* COL 1: Price / Qty / Unit */}
+            <div className="space-y-3">
+              <div className="space-y-1">
+                <Label className="text-sm font-medium">Price (₹/unit) <span className="text-red-500">*</span></Label>
                 <Input
-                  type="text"
-                  value={quoteUnit}
-                  onChange={(e) => handleQuoteUnitInputChange(e.target.value)}
-                  onKeyDown={handleQuoteUnitKeyDown}
-                  onFocus={handleQuoteUnitFocus}
-                  onBlur={handleQuoteUnitBlur}
-                  placeholder="e.g. kg"
-                  autoComplete="off"
+                  type="number" step="0.01" min="0" value={unitPrice}
+                  onChange={(e) => setUnitPrice(e.target.value)}
+                  placeholder="0.00"
+                  className="text-sm font-semibold border-2 hover:border-primary/30 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all duration-200"
+                  required autoFocus={editingQuoteIndex >= 0}
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-sm font-medium">Total Quantity <span className="text-red-500">*</span></Label>
+                <Input
+                  type="number" min="0" step="any" value={quoteAmount}
+                  onChange={(e) => setQuoteAmount(e.target.value)}
+                  placeholder="Qty"
                   className="text-sm border-2 hover:border-primary/30 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all duration-200"
                   required
                 />
-                {showUnitSuggestions && (
-                  <div className="absolute top-full left-0 right-0 z-[100] mt-1 bg-popover text-popover-foreground shadow-xl rounded-md border ring-1 ring-border/50 max-h-[200px] overflow-y-auto overflow-x-hidden animate-in fade-in-0 zoom-in-95 duration-100">
-                    {getFilteredUnitSuggestionsForQuote(quoteUnit).length > 0 ? (
-                      <div className="p-1">
-                        {getFilteredUnitSuggestionsForQuote(quoteUnit).map((suggestion, index) => (
-                          <div
-                            key={suggestion}
-                            onMouseDown={(e) => {
-                              e.preventDefault();
-                              handleQuoteUnitSuggestionClick(suggestion);
-                            }}
-                            className={`px-3 py-2 text-sm rounded-sm cursor-pointer transition-colors flex items-center justify-between ${selectedUnitIndex === index
-                              ? "bg-accent text-accent-foreground font-medium"
-                              : "hover:bg-muted/80 text-foreground/80"
-                              }`}
-                          >
-                            <span>{suggestion}</span>
-                            {selectedUnitIndex === index && (
-                              <Check className="h-3.5 w-3.5 opacity-70" />
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="p-3 text-xs text-muted-foreground text-center italic">
-                        Use &quot;{quoteUnit}&quot; as custom unit
-                      </div>
-                    )}
+              </div>
+              <div className="space-y-1">
+                <Label className="text-sm font-medium">Unit <span className="text-red-500">*</span></Label>
+                <div className="relative">
+                  <Input
+                    type="text" value={quoteUnit}
+                    onChange={(e) => handleQuoteUnitInputChange(e.target.value)}
+                    onKeyDown={handleQuoteUnitKeyDown}
+                    onFocus={handleQuoteUnitFocus}
+                    onBlur={handleQuoteUnitBlur}
+                    placeholder="e.g. kg" autoComplete="off"
+                    className="text-sm border-2 hover:border-primary/30 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all duration-200"
+                    required
+                  />
+                  {showUnitSuggestions && (
+                    <div className="absolute top-full left-0 right-0 z-[100] mt-1 bg-popover text-popover-foreground shadow-xl rounded-md border ring-1 ring-border/50 max-h-[200px] overflow-y-auto animate-in fade-in-0 zoom-in-95 duration-100">
+                      {getFilteredUnitSuggestionsForQuote(quoteUnit).length > 0 ? (
+                        <div className="p-1">
+                          {getFilteredUnitSuggestionsForQuote(quoteUnit).map((suggestion, index) => (
+                            <div key={suggestion}
+                              onMouseDown={(e) => { e.preventDefault(); handleQuoteUnitSuggestionClick(suggestion); }}
+                              className={`px-3 py-2 text-sm rounded-sm cursor-pointer transition-colors flex items-center justify-between ${selectedUnitIndex === index ? "bg-accent text-accent-foreground font-medium" : "hover:bg-muted/80 text-foreground/80"
+                                }`}
+                            >
+                              <span>{suggestion}</span>
+                              {selectedUnitIndex === index && <Check className="h-3.5 w-3.5 opacity-70" />}
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="p-3 text-xs text-muted-foreground text-center italic">Use &quot;{quoteUnit}&quot; as custom unit</div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* COL 2: Discount / GST */}
+            <div className="space-y-3">
+              <div className="space-y-1">
+                <Label className="text-sm font-medium">Discount %</Label>
+                <Input type="number" step="0.01" min="0" max="100" value={quoteDiscount} onChange={(e) => setQuoteDiscount(e.target.value)} placeholder="0" className="text-sm border-2 hover:border-primary/30 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all duration-200" />
+              </div>
+              <div className="space-y-1.5">
+                <div className="flex items-center gap-2 mb-2">
+                  <Checkbox
+                    id="gst-toggle"
+                    checked={parseFloat(quoteCgst || "0") === 9 && parseFloat(quoteSgst || "0") === 9}
+                    onCheckedChange={(checked) => { if (checked) { setQuoteCgst("9"); setQuoteSgst("9"); } else { setQuoteCgst("0"); setQuoteSgst("0"); } }}
+                  />
+                  <Label htmlFor="gst-toggle" className="text-xs font-medium cursor-pointer">Auto Apply 18% GST</Label>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-1">
+                    <Label className="text-xs">CGST %</Label>
+                    <Input type="number" step="0.01" min="0" value={quoteCgst} onChange={(e) => setQuoteCgst(e.target.value)} placeholder="0" className="text-sm h-9 border-2 hover:border-primary/30 focus:border-primary transition-all duration-200" />
                   </div>
-                )}
+                  <div className="space-y-1">
+                    <Label className="text-xs">SGST %</Label>
+                    <Input type="number" step="0.01" min="0" value={quoteSgst} onChange={(e) => setQuoteSgst(e.target.value)} placeholder="0" className="text-sm h-9 border-2 hover:border-primary/30 focus:border-primary transition-all duration-200" />
+                  </div>
+                </div>
               </div>
             </div>
-          </div>
 
-          {/* Price and Discount Row */}
-          <div className="grid grid-cols-2 gap-3 mt-3">
-            <div className="space-y-1">
-              <Label className="text-sm font-medium">Price (₹) <span className="text-red-500">*</span></Label>
-              <Input
-                type="number"
-                step="0.01"
-                min="0"
-                value={unitPrice}
-                onChange={(e) => setUnitPrice(e.target.value)}
-                placeholder="0.00"
-                className="text-sm font-semibold border-2 hover:border-primary/30 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all duration-200"
-                required
-                autoFocus={editingQuoteIndex >= 0}
-              />
-            </div>
-
-            <div className="space-y-1">
-              <Label className="text-sm font-medium">Discount %</Label>
-              <Input
-                type="number"
-                step="0.01"
-                min="0"
-                max="100"
-                value={quoteDiscount}
-                onChange={(e) => setQuoteDiscount(e.target.value)}
-                placeholder="0"
-                className="text-sm"
-              />
-            </div>
-          </div>
-
-          <div className="space-y-3 mt-3">
-            <div className="flex items-center gap-2 p-1">
-              <Checkbox
-                id="gst-toggle"
-                checked={parseFloat(quoteCgst || "0") === 9 && parseFloat(quoteSgst || "0") === 9}
-                onCheckedChange={(checked) => {
-                  if (checked) {
-                    setQuoteCgst("9");
-                    setQuoteSgst("9");
-                  } else {
-                    setQuoteCgst("0");
-                    setQuoteSgst("0");
-                  }
-                }}
-              />
-              <Label htmlFor="gst-toggle" className="text-sm font-medium cursor-pointer">
-                Auto Apply 18% GST
-              </Label>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <Label className="text-sm font-medium">CGST %</Label>
-                <Input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={quoteCgst}
-                  onChange={(e) => setQuoteCgst(e.target.value)}
-                  placeholder="0"
-                  className="text-sm"
-                />
-              </div>
-              <div className="space-y-1">
-                <Label className="text-sm font-medium">SGST %</Label>
-                <Input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={quoteSgst}
-                  onChange={(e) => setQuoteSgst(e.target.value)}
-                  placeholder="0"
-                  className="text-sm"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Price Calculation Preview */}
-          {unitPrice && (
-            <div className="p-3 bg-muted/50 rounded-lg space-y-2 mt-4">
-              <p className="text-xs font-medium text-muted-foreground">Price Calculation Preview</p>
-              <div className="grid grid-cols-2 gap-2 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Price per {quoteUnit || 'unit'}:</span>
-                  <span className="font-medium">₹{(parseFloat(unitPrice || "0") / (parseFloat(perUnitBasis || "1"))).toFixed(2)}</span>
+            {/* COL 3: Live Total */}
+            <div className="space-y-3">
+              <div className="rounded-lg bg-primary/5 border border-primary/20 p-4 space-y-2 h-full">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Live Total</p>
+                <div className="flex justify-between text-xs text-muted-foreground">
+                  <span>Price/unit:</span>
+                  <span className="font-medium text-foreground">₹{(parseFloat(unitPrice || "0") / parseFloat(perUnitBasis || "1")).toFixed(2)}</span>
                 </div>
                 {parseFloat(quoteDiscount || "0") > 0 && (
-                  <div className="flex justify-between text-green-600">
-                    <span>Discount ({quoteDiscount}%):</span>
-                    <span>-₹{((parseFloat(unitPrice || "0") / (parseFloat(perUnitBasis || "1"))) * parseFloat(quoteDiscount || "0") / 100).toFixed(2)}</span>
-                  </div>
-                )}
-                {parseFloat(quoteDiscount || "0") > 0 && (
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Price after Discount:</span>
-                    <span className="font-medium">₹{calculatePriceAfterDiscount((parseFloat(unitPrice || "0") / (parseFloat(perUnitBasis || "1"))), parseFloat(quoteDiscount || "0")).toFixed(2)}</span>
+                  <div className="flex justify-between text-xs text-green-600">
+                    <span>After Disc.:</span>
+                    <span>₹{calculatePriceAfterDiscount(parseFloat(unitPrice || "0") / parseFloat(perUnitBasis || "1"), parseFloat(quoteDiscount || "0")).toFixed(2)}</span>
                   </div>
                 )}
                 {(parseFloat(quoteCgst || "0") + parseFloat(quoteSgst || "0")) > 0 && (
-                  <div className="flex justify-between text-amber-600">
-                    <span>Tax ({(parseFloat(quoteCgst || "0") + parseFloat(quoteSgst || "0"))}%):</span>
-                    <span>+₹{calculateGstAmount(calculatePriceAfterDiscount((parseFloat(unitPrice || "0") / (parseFloat(perUnitBasis || "1"))), parseFloat(quoteDiscount || "0")), (parseFloat(quoteCgst || "0") + parseFloat(quoteSgst || "0"))).toFixed(2)}</span>
+                  <div className="flex justify-between text-xs text-amber-600">
+                    <span>GST ({parseFloat(quoteCgst || "0") + parseFloat(quoteSgst || "0")}%):</span>
+                    <span>+₹{calculateGstAmount(calculatePriceAfterDiscount(parseFloat(unitPrice || "0") / parseFloat(perUnitBasis || "1"), parseFloat(quoteDiscount || "0")), parseFloat(quoteCgst || "0") + parseFloat(quoteSgst || "0")).toFixed(2)}</span>
                   </div>
                 )}
-              </div>
-              <div className="flex justify-between pt-2 border-t border-muted-foreground/20">
-                <span className="font-semibold">Final Price per {quoteUnit || 'unit'}:</span>
-                <span className="font-bold text-primary">
-                  ₹{calculateFinalPrice((parseFloat(unitPrice || "0") / (parseFloat(perUnitBasis || "1"))), parseFloat(quoteDiscount || "0"), (parseFloat(quoteCgst || "0") + parseFloat(quoteSgst || "0"))).toFixed(2)}
-                </span>
-              </div>
-
-              {/* Total Amount Preview based on Quantity */}
-              <div className="flex justify-between pt-2 border-t-2 border-dashed border-muted-foreground/20 mt-1">
-                <span className="font-bold text-lg">Total Amount ({quoteAmount || 0} {quoteUnit || 'units'}):</span>
-                <span className="font-bold text-xl text-primary">
-                  ₹{(calculateFinalPrice((parseFloat(unitPrice || "0") / (parseFloat(perUnitBasis || "1"))), parseFloat(quoteDiscount || "0"), (parseFloat(quoteCgst || "0") + parseFloat(quoteSgst || "0"))) * (parseFloat(quoteAmount) || 0)).toFixed(2)}
-                </span>
+                {parseFloat(quoteFreight || "0") > 0 && (
+                  <div className="flex justify-between text-xs text-blue-600">
+                    <span>Freight:</span>
+                    <span>+₹{parseFloat(quoteFreight || "0").toFixed(2)}</span>
+                  </div>
+                )}
+                <div className="pt-2 border-t border-primary/20 flex justify-between items-center">
+                  <span className="text-xs font-semibold">Total ({quoteAmount || "0"} {quoteUnit || "unit"}):</span>
+                  <span className="text-lg font-bold text-primary">₹{((calculateFinalPrice(parseFloat(unitPrice || "0") / parseFloat(perUnitBasis || "1"), parseFloat(quoteDiscount || "0"), parseFloat(quoteCgst || "0") + parseFloat(quoteSgst || "0")) * (parseFloat(quoteAmount) || 0)) + (parseFloat(quoteFreight || "0") || 0)).toFixed(2)}</span>
+                </div>
               </div>
             </div>
-          )}
+          </div>
+
+
+          {/* Extra Quote Fields — Additional Details */}
+          <div className="mt-4 pt-4 border-t border-border/60">
+            <h4 className="flex items-center gap-2 w-full text-left mb-3">
+              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                Additional Details
+                <span className="font-normal normal-case ml-1">(optional)</span>
+              </span>
+            </h4>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-3">
+              <div className="space-y-1">
+                <Label className="text-xs font-medium">Contact</Label>
+                <Input type="text" value={quoteContact} onChange={(e) => setQuoteContact(e.target.value)} placeholder="Phone / email" className="text-sm h-9" />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs font-medium">Reference</Label>
+                <Input type="text" value={quoteReference} onChange={(e) => setQuoteReference(e.target.value)} placeholder="Quote ref. no." className="text-sm h-9" />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs font-medium">Date</Label>
+                <div className="relative flex items-center">
+                  <Input type="date" value={quoteDate} onChange={(e) => setQuoteDate(e.target.value)} className="text-sm h-9 pr-9" />
+                  {quoteDate && (
+                    <button
+                      type="button"
+                      onClick={() => setQuoteDate("")}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                      title="Clear date"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  )}
+                </div>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs font-medium">Freight (₹)</Label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm font-medium pointer-events-none">₹</span>
+                  <Input type="number" min="0" step="0.01" value={quoteFreight} onChange={(e) => setQuoteFreight(e.target.value)} placeholder="0.00" className="text-sm h-9 pl-7" />
+                </div>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs font-medium">Delivery Period</Label>
+                <Input type="text" value={quoteDeliveryPeriod} onChange={(e) => setQuoteDeliveryPeriod(e.target.value)} placeholder="e.g. 7 days" className="text-sm h-9" />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs font-medium">Payment Terms</Label>
+                <Input type="text" value={quotePaymentTerms} onChange={(e) => setQuotePaymentTerms(e.target.value)} placeholder="e.g. 30 days credit" className="text-sm h-9" />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs font-medium">Specification / Model No</Label>
+                <Input type="text" value={quoteSpecification} onChange={(e) => setQuoteSpecification(e.target.value)} placeholder={request?.specsBrand || (itemInInventory as any)?.specification || "e.g. Brand / Model No"} className="text-sm h-9" />
+              </div>
+              <div className="col-span-2 md:col-span-2 space-y-1">
+                <Label className="text-xs font-medium">Past Performance</Label>
+                <Input type="text" value={quotePastPerformance} onChange={(e) => setQuotePastPerformance(e.target.value)} placeholder="e.g. Good / Reliable / On-time delivery" className="text-sm h-9" />
+              </div>
+            </div>
+          </div>
+
+
+
 
           {/* Action buttons */}
-          <div className="flex justify-end gap-2 pt-4 border-t mt-4">
-            <Button variant="outline" onClick={() => {
-              setVendorDialogOpen(false);
-              setEditingQuoteIndex(-1);
-              setSelectedVendorId("");
-              setUnitPrice("");
-              setQuoteAmount("1");
-              setQuoteUnit("");
-
-              setQuoteDiscount("");
-              setQuoteCgst("9");
-              setQuoteSgst("9");
-              setVendorSearchTerm("");
-            }}>
-              Cancel
-            </Button>
-            <Button
-              onClick={handleAddVendor}
-              disabled={!selectedVendorId || !unitPrice}
-            >
-              {editingQuoteIndex >= 0 ? (
-                <>
-                  <Check className="h-4 w-4 mr-2" />
-                  Update Quote
-                </>
-              ) : (
-                <>
-                  <Plus className="h-4 w-4 mr-2" />
-                  Add Quote
-                </>
-              )}
-            </Button>
+          <div className="flex justify-between items-center gap-2 pt-4 border-t mt-4">
+            <div className="text-sm text-muted-foreground">
+              {unitPrice && quoteAmount ? (
+                <span>Est. Total: <strong className="text-foreground text-base">₹{((calculateFinalPrice(parseFloat(unitPrice || "0") / parseFloat(perUnitBasis || "1"), parseFloat(quoteDiscount || "0"), parseFloat(quoteCgst || "0") + parseFloat(quoteSgst || "0")) * (parseFloat(quoteAmount) || 0)) + (parseFloat(quoteFreight || "0") || 0)).toFixed(2)}</strong></span>
+              ) : <span className="text-xs italic">Fill price &amp; qty to see total</span>}
+            </div>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => {
+                setVendorDialogOpen(false);
+                setEditingQuoteIndex(-1);
+                setSelectedVendorId("");
+                setUnitPrice("");
+                setQuoteAmount("1");
+                setQuoteUnit("");
+                setQuoteDiscount("");
+                setQuoteCgst("9");
+                setQuoteSgst("9");
+                setQuoteContact("");
+                setQuoteReference("");
+                setQuoteDate(new Date().toISOString().slice(0, 10));
+                setQuoteDeliveryPeriod("");
+                setQuotePaymentTerms("");
+                setQuotePastPerformance("");
+                setQuoteFreight("");
+                setQuoteSpecification("");
+                setVendorSearchTerm("");
+              }}>
+                Cancel
+              </Button>
+              <Button
+                onClick={handleAddVendor}
+                disabled={!selectedVendorId || !unitPrice}
+              >
+                {editingQuoteIndex >= 0 ? (
+                  <>
+                    <Check className="h-4 w-4 mr-2" />
+                    Update Quote
+                  </>
+                ) : (
+                  <>
+                    <Plus className="h-4 w-4 mr-2" />
+                    Add Quote
+                  </>
+                )}
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>
@@ -1912,10 +2673,10 @@ export function CostComparisonDialog({
             initialCompanyName={vendorSearchTerm}
           />
         </DialogContent>
-      </Dialog>
+      </Dialog >
 
       {/* Inventory Information Dialog */}
-      <Dialog open={inventoryInfoOpen} onOpenChange={setInventoryInfoOpen}>
+      < Dialog open={inventoryInfoOpen} onOpenChange={setInventoryInfoOpen} >
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -2208,6 +2969,47 @@ export function CostComparisonDialog({
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowVendorDetails(null)}>
               Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog >
+
+      {/* ── Submit Confirmation Dialog ── */}
+      < Dialog open={showSubmitConfirm} onOpenChange={setShowSubmitConfirm} >
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Send className="h-4 w-4 text-primary" />
+              {existingCC?.status === "cc_rejected" ? "Resubmit Cost Comparison" : "Submit for Approval"}
+            </DialogTitle>
+            <DialogDescription>
+              {existingCC?.status === "cc_rejected"
+                ? "Are you sure you want to resubmit this cost comparison for manager review?"
+                : "Are you sure you want to submit this cost comparison for manager approval? You won\'t be able to edit it until the manager reviews it."}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex gap-2 mt-2">
+            <Button
+              variant="outline"
+              onClick={() => setShowSubmitConfirm(false)}
+              disabled={isSubmitting}
+              className="flex-1"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={async () => {
+                setShowSubmitConfirm(false);
+                await handleSubmit();
+              }}
+              disabled={isSubmitting}
+              className="flex-1"
+            >
+              {isSubmitting ? (
+                <span className="flex items-center gap-1.5"><span className="h-3.5 w-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />Submitting...</span>
+              ) : (
+                <span className="flex items-center gap-1.5"><Send className="h-3.5 w-3.5" />{existingCC?.status === "cc_rejected" ? "Resubmit" : "Confirm Submit"}</span>
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>

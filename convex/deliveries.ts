@@ -169,6 +169,7 @@ export const createDelivery = mutation({
                     userId: officer._id,
                     role: officer.role,
                     status: "out_for_delivery",
+                    type: "log",
                     content: `Delivery Challan created (${deliveryIdStr}). ${item.quantity} ${request.unit || 'units'} dispatched via ${args.deliveryType} transport. Vehicle: ${args.vehicleNumber || 'N/A'}.`,
                     createdAt: now,
                 });
@@ -314,6 +315,7 @@ export const confirmDelivery = mutation({
                     userId: dbUser._id,
                     role: dbUser.role,
                     status: "delivered",
+                    type: "log",
                     content: `Delivery confirmed${args.deliveryPhotos?.length ? ` with ${args.deliveryPhotos.length} photo(s)` : ''}. Item received at site.`,
                     createdAt: Date.now(),
                 });

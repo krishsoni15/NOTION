@@ -84,6 +84,16 @@ export async function POST(request: NextRequest) {
             maxAge: 7 * 24 * 60 * 60, // 7 days
         });
 
+        // Record login system log
+        try {
+            await convex.mutation(api.notes.recordSystemLog, {
+                clerkUserId: user.clerkUserId,
+                action: "login",
+            });
+        } catch (logError) {
+            console.error("Failed to record login system log:", logError);
+        }
+
         return response;
     } catch (error) {
         console.error("Login error:", error);

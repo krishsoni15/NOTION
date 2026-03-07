@@ -144,7 +144,8 @@ export const getUserRequests = query({
           .query("request_notes")
           .withIndex("by_request_number", (q) => q.eq("requestNumber", num))
           .collect();
-        notesCounts.set(num, notes.length);
+        // Only count user-written notes (type=="note"), not audit logs
+        notesCounts.set(num, notes.filter(n => n.type === "note").length);
       })
     );
 
@@ -255,7 +256,8 @@ export const getRequestsReadyForCC = query({
           .query("request_notes")
           .withIndex("by_request_number", (q) => q.eq("requestNumber", num))
           .collect();
-        notesCounts.set(num, notes.length);
+        // Only count user-written notes (type=="note"), not audit logs
+        notesCounts.set(num, notes.filter(n => n.type === "note").length);
       })
     );
 
@@ -448,7 +450,8 @@ export const getPurchaseRequestsByStatus = query({
           .query("request_notes")
           .withIndex("by_request_number", (q) => q.eq("requestNumber", num))
           .collect();
-        notesCounts.set(num, notes.length);
+        // Only count user-written notes (type=="note"), not audit logs
+        notesCounts.set(num, notes.filter(n => n.type === "note").length);
       })
     );
 
@@ -596,7 +599,8 @@ export const getAllRequests = query({
           .query("request_notes")
           .withIndex("by_request_number", (q) => q.eq("requestNumber", num))
           .collect();
-        notesCounts.set(num, notes.length);
+        // Only count user-written notes (type=="note"), not audit logs
+        notesCounts.set(num, notes.filter(n => n.type === "note").length);
       })
     );
 
@@ -900,6 +904,17 @@ export const createMaterialRequest = mutation({
       updatedAt: now,
     });
 
+    // AUDIT LOG: Request Created
+    await ctx.db.insert("request_notes", {
+      requestNumber,
+      userId: currentUser._id,
+      role: currentUser.role,
+      status: "pending",
+      type: "log",
+      content: `Request #${requestNumber} submitted${args.isUrgent ? " (Urgent)" : ""}. Item: ${args.itemName}, Qty: ${args.quantity} ${args.unit}.`,
+      createdAt: now,
+    });
+
     return { requestId, requestNumber };
   },
 });
@@ -1010,10 +1025,22 @@ export const createMultipleMaterialRequests = mutation({
         userId: currentUser._id,
         role: currentUser.role,
         status: "pending",
+        type: "note",
         content: args.orderNote,
         createdAt: now,
       });
     }
+
+    // AUDIT LOG: Request Created
+    await ctx.db.insert("request_notes", {
+      requestNumber,
+      userId: currentUser._id,
+      role: currentUser.role,
+      status: "pending",
+      type: "log",
+      content: `Request #${requestNumber} submitted with ${args.items.length} item(s).`,
+      createdAt: now,
+    });
 
     return { requestIds, requestNumber };
   },
@@ -1126,6 +1153,7 @@ export const saveMultipleMaterialRequestsAsDraft = mutation({
         userId: currentUser._id,
         role: currentUser.role,
         status: "draft",
+        type: "note",
         content: args.orderNote,
         createdAt: now,
       });
@@ -1137,6 +1165,7 @@ export const saveMultipleMaterialRequestsAsDraft = mutation({
       userId: currentUser._id,
       role: currentUser.role,
       status: "draft",
+      type: "log",
       content: `Draft created with ${args.items.length} item(s).`,
       createdAt: now,
     });
@@ -1255,6 +1284,7 @@ export const updateRequestStatus = mutation({
           userId: currentUser._id,
           role: currentUser.role,
           status: "rejected",
+          type: "log",
           content: content,
           createdAt: now,
         });
@@ -1350,6 +1380,7 @@ export const bulkUpdateRequestStatus = mutation({
             userId: currentUser._id,
             role: currentUser.role,
             status: newStatus,
+            type: "log",
             content: logContent,
             createdAt: now,
           });
@@ -1378,6 +1409,7 @@ export const bulkUpdateRequestStatus = mutation({
             userId: currentUser._id,
             role: currentUser.role,
             status: "rejected",
+            type: "log",
             content: content,
             createdAt: now,
           });
@@ -1463,6 +1495,7 @@ export const sendDraftRequest = mutation({
         userId: note.userId,
         role: note.role,
         status: note.status,
+        type: note.type, // Preserve the original type ("note" or "log")
         content: note.content,
         createdAt: note.createdAt,
       });
@@ -1482,6 +1515,7 @@ export const sendDraftRequest = mutation({
         userId: currentUser._id,
         role: currentUser.role,
         status: "pending",
+        type: "note",
         content: args.orderNote,
         createdAt: now,
       });
@@ -1493,6 +1527,7 @@ export const sendDraftRequest = mutation({
       userId: currentUser._id,
       role: currentUser.role,
       status: "pending",
+      type: "log",
       content: `Request submitted (converted from Draft ${args.requestNumber} to Pending).`,
       createdAt: now,
     });
@@ -1667,6 +1702,7 @@ export const updateDraftRequest = mutation({
           userId: currentUser._id,
           role: currentUser.role,
           status: "draft",
+          type: "note",
           content: args.orderNote,
           createdAt: now,
         });
@@ -1752,6 +1788,7 @@ export const markDelivery = mutation({
       userId: currentUser._id,
       role: currentUser.role,
       status: "delivered",
+      type: "log",
       content: `Delivery confirmed by Site Engineer. ${inventoryItem ? `Inventory stock updated for ${request.itemName} (+${request.quantity} ${request.unit || 'units'})` : `New inventory item created: ${request.itemName}`}`,
       createdAt: now,
     });
@@ -1799,6 +1836,7 @@ export const directToPO = mutation({
       userId: currentUser._id,
       role: currentUser.role,
       status: "ready_for_po",
+      type: "log",
       content: `Direct to PO: Skipped cost comparison. Item moved to Ready for PO.`,
       createdAt: now,
     });
@@ -1818,6 +1856,7 @@ export const updateRequestDetails = mutation({
     unit: v.optional(v.string()),
     description: v.optional(v.string()),
     itemName: v.optional(v.string()),
+    specsBrand: v.optional(v.string()),
     isSplitApproved: v.optional(v.boolean()),
     directAction: v.optional(v.string()),
   },
@@ -1858,6 +1897,7 @@ export const updateRequestDetails = mutation({
     if (args.unit !== undefined) updates.unit = args.unit;
     if (args.description !== undefined) updates.description = args.description;
     if (args.itemName !== undefined) updates.itemName = args.itemName;
+    if (args.specsBrand !== undefined) updates.specsBrand = args.specsBrand;
     if (args.isSplitApproved !== undefined) updates.isSplitApproved = args.isSplitApproved;
     if (args.directAction !== undefined) updates.directAction = args.directAction;
 
@@ -1880,6 +1920,7 @@ export const updateRequestDetails = mutation({
         userId: currentUser._id,
         role: currentUser.role,
         status: request.status,
+        type: "log",
         content: `Request details updated: ${changes.join(", ")}`,
         createdAt: Date.now(),
       });
@@ -1964,6 +2005,7 @@ export const updatePurchaseRequestStatus = mutation({
       userId: currentUser._id,
       role: currentUser.role,
       status: args.status,
+      type: "log",
       content: `Status changed: ${currentStatus} → ${statusLabels[args.status] || args.status}`,
       createdAt: now,
     });
@@ -2036,6 +2078,7 @@ export const splitAndDeliverInventory = mutation({
       userId: currentUser._id,
       role: currentUser.role,
       status: request.status,
+      type: "log",
       content: `Split & Deliver: ${args.inventoryQuantity} ${request.unit || 'units'} from inventory (stock deducted), ${remainingQty} ${request.unit || 'units'} remaining for purchase.`,
       createdAt: now,
     });
@@ -2147,6 +2190,7 @@ export const markReadyForDelivery = mutation({
       userId: currentUser._id,
       role: currentUser.role,
       status: "ready_for_delivery",
+      type: "log",
       content: isSplit
         ? `Partial delivery: ${args.deliveryQuantity} ${request.unit || 'units'} marked ready for delivery. ${remainingQuantity} ${request.unit || 'units'} remaining on PO.`
         : `Full quantity (${args.deliveryQuantity} ${request.unit || 'units'}) marked ready for delivery.`,
@@ -2249,6 +2293,7 @@ export const splitPendingPOQuantity = mutation({
       userId: currentUser._id,
       role: currentUser.role,
       status: "pending_po",
+      type: "log",
       content: `Quantity split: ${args.newQuantity} ${request.unit} kept for delivery, ${remainingQuantity} ${request.unit} moved back to Ready for CC (vendor couldn't supply full amount)`,
       createdAt: now,
     });
@@ -2318,6 +2363,7 @@ export const confirmDelivery = mutation({
       userId: currentUser._id,
       role: currentUser.role,
       status: "delivered",
+      type: "log",
       content: "Request marked as Delivered",
       createdAt: now,
     });

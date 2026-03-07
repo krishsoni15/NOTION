@@ -62,7 +62,7 @@ const navigationItems: NavigationItem[] = [
     roles: [ROLES.SITE_ENGINEER],
   },
   {
-    label: "GRN Logs",
+    label: "Logs",
     href: "/dashboard/grn-logs",
     icon: ScrollText,
     roles: [ROLES.SITE_ENGINEER],
@@ -106,7 +106,7 @@ const navigationItems: NavigationItem[] = [
     roles: [ROLES.MANAGER],
   },
   {
-    label: "GRN Logs",
+    label: "Logs",
     href: "/dashboard/grn-logs",
     icon: ScrollText,
     roles: [ROLES.MANAGER],
@@ -138,7 +138,7 @@ const navigationItems: NavigationItem[] = [
     roles: [ROLES.PURCHASE_OFFICER],
   },
   {
-    label: "GRN Logs",
+    label: "Logs",
     href: "/dashboard/grn-logs",
     icon: ScrollText,
     roles: [ROLES.PURCHASE_OFFICER],

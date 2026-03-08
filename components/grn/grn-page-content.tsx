@@ -104,9 +104,9 @@ export function GRNPageContent() {
                 ...grn,
                 rate,
                 total,
-                vendorName: grn.vendor?.companyName || "—",
+                vendorName: (grn as any).vendor?.companyName || "—",
                 materialName: grn.itemName || po?.itemDescription?.split("\n")[0] || "—",
-                siteName: grn.site?.name || "—",
+                siteName: (grn as any).site?.name || "—",
             };
         });
     }, [grns]);

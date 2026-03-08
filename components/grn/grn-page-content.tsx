@@ -95,7 +95,7 @@ export function GRNPageContent() {
     const enrichedGRNs = useMemo(() => {
         if (!grns) return [];
         return grns.map((grn) => {
-            const po = grn.po;
+            const po = grn.po as any;
             const basis = po?.perUnitBasis || 1;
             const unitRate = po?.unitRate || 0;
             const rate = unitRate / basis;

@@ -1,0 +1,121 @@
+Watching logs for production deployment insightful-monitor-731...
+3/8/2026, 1:06:12 PM [CONVEX M(vendors:createVendor)] Uncaught Error: Unauthorized: Only Purchase Officers can create vendors
+    at handler (../convex/vendors.ts:124:21)
+
+3/8/2026, 1:45:14 PM [CONVEX Q(users:getCurrentUser)] [LOG] 'getCurrentUser: identity =' null
+3/8/2026, 1:45:15 PM [CONVEX Q(users:getCurrentUser)] [LOG] 'getCurrentUser: identity =' {
+  tokenIdentifier: 'https://insightful-monitor-731.convex.site/auth-v2|usr_1772430538091_4ckkct4d',
+  issuer: 'https://insightful-monitor-731.convex.site/auth-v2',
+  subject: 'usr_1772430538091_4ckkct4d',
+  name: 'Notion Test User',
+  nickname: 'notion',
+  role: 'manager'
+}
+3/8/2026, 1:45:15 PM [CONVEX Q(users:getCurrentUser)] [LOG] 'getCurrentUser: returning user =' {
+  _creationTime: 1772430538091.0015,
+  _id: 'kn71bsmk8n1ega089txs82dh898248zk',
+  address: '',
+  assignedSites: [],
+  clerkUserId: 'usr_1772430538091_4ckkct4d',
+  createdAt: 1772430538091,
+  fullName: 'Notion Test User',
+  isActive: true,
+  passwordHash: '$2b$10$64ZlJLkdFd9Xa3CCotID3OTAFoGNNu6llIJVj..Yw3TmjAoAKsMSS',
+  phoneNumber: '',
+  role: 'manager',
+  updatedAt: 1772430538091,
+  username: 'notion'
+}
+3/8/2026, 1:45:41 PM [CONVEX M(vendors:createVendor)] Uncaught Error: Unauthorized: Only Purchase Officers can create vendors
+    at handler (../convex/vendors.ts:124:21)
+
+3/8/2026, 1:45:47 PM [CONVEX M(vendors:createVendor)] Uncaught Error: Unauthorized: Only Purchase Officers can create vendors
+    at handler (../convex/vendors.ts:124:21)
+
+3/8/2026, 1:45:51 PM [CONVEX M(vendors:createVendor)] Uncaught Error: Unauthorized: Only Purchase Officers can create vendors
+    at handler (../convex/vendors.ts:124:21)
+
+3/8/2026, 1:46:05 PM [CONVEX M(vendors:createVendor)] Uncaught Error: Unauthorized: Only Purchase Officers can create vendors
+    at handler (../convex/vendors.ts:124:21)
+
+3/8/2026, 1:46:25 PM [CONVEX Q(grn:getAllGRNs)] Could not find public function for 'grn:getAllGRNs'. Did you forget to run `npx convex dev` or `npx convex deploy`?
+
+3/8/2026, 1:45:14 PM [CONVEX Q(users:getCurrentUser)] [LOG] 'getCurrentUser: identity =' null
+3/8/2026, 1:46:56 PM [CONVEX Q(grn:getAllGRNs)] Could not find public function for 'grn:getAllGRNs'. Did you forget to run `npx convex dev` or `npx convex deploy`?
+
+3/8/2026, 1:45:14 PM [CONVEX Q(users:getCurrentUser)] [LOG] 'getCurrentUser: identity =' null
+3/8/2026, 1:47:00 PM [CONVEX Q(grn:getAllGRNs)] Could not find public function for 'grn:getAllGRNs'. Did you forget to run `npx convex dev` or `npx convex deploy`?
+
+3/8/2026, 1:45:15 PM [CONVEX Q(users:getCurrentUser)] [LOG] 'getCurrentUser: identity =' {
+  tokenIdentifier: 'https://insightful-monitor-731.convex.site/auth-v2|usr_1772430538091_4ckkct4d',
+  issuer: 'https://insightful-monitor-731.convex.site/auth-v2',
+  subject: 'usr_1772430538091_4ckkct4d',
+  name: 'Notion Test User',
+  nickname: 'notion',
+  role: 'manager'
+}
+3/8/2026, 1:45:15 PM [CONVEX Q(users:getCurrentUser)] [LOG] 'getCurrentUser: returning user =' {
+  _creationTime: 1772430538091.0015,
+  _id: 'kn71bsmk8n1ega089txs82dh898248zk',
+  address: '',
+  assignedSites: [],
+  clerkUserId: 'usr_1772430538091_4ckkct4d',
+  createdAt: 1772430538091,
+  fullName: 'Notion Test User',
+  isActive: true,
+  passwordHash: '$2b$10$64ZlJLkdFd9Xa3CCotID3OTAFoGNNu6llIJVj..Yw3TmjAoAKsMSS',
+  phoneNumber: '',
+  role: 'manager',
+  updatedAt: 1772430538091,
+  username: 'notion'
+}
+3/8/2026, 1:47:00 PM [CONVEX Q(grn:getAllGRNs)] Could not find public function for 'grn:getAllGRNs'. Did you forget to run `npx convex dev` or `npx convex deploy`?
+
+3/8/2026, 1:51:20 PM [CONVEX Q(users:getCurrentUser)] [LOG] 'getCurrentUser: identity =' null
+3/8/2026, 1:51:21 PM [CONVEX Q(users:getCurrentUser)] [LOG] 'getCurrentUser: identity =' {
+  tokenIdentifier: 'https://insightful-monitor-731.convex.site/auth-v2|usr_1772430538091_4ckkct4d',
+  issuer: 'https://insightful-monitor-731.convex.site/auth-v2',
+  subject: 'usr_1772430538091_4ckkct4d',
+  name: 'Notion Test User',
+  nickname: 'notion',
+  role: 'manager'
+}
+3/8/2026, 1:51:21 PM [CONVEX Q(users:getCurrentUser)] [LOG] 'getCurrentUser: returning user =' {
+  _creationTime: 1772430538091.0015,
+  _id: 'kn71bsmk8n1ega089txs82dh898248zk',
+  address: '',
+  assignedSites: [],
+  clerkUserId: 'usr_1772430538091_4ckkct4d',
+  createdAt: 1772430538091,
+  fullName: 'Notion Test User',
+  isActive: true,
+  passwordHash: '$2b$10$64ZlJLkdFd9Xa3CCotID3OTAFoGNNu6llIJVj..Yw3TmjAoAKsMSS',
+  phoneNumber: '',
+  role: 'manager',
+  updatedAt: 1772430538091,
+  username: 'notion'
+}
+3/8/2026, 1:51:20 PM [CONVEX Q(users:getCurrentUser)] [LOG] 'getCurrentUser: identity =' null
+3/8/2026, 1:51:21 PM [CONVEX Q(users:getCurrentUser)] [LOG] 'getCurrentUser: identity =' {
+  tokenIdentifier: 'https://insightful-monitor-731.convex.site/auth-v2|usr_1772430538091_4ckkct4d',
+  issuer: 'https://insightful-monitor-731.convex.site/auth-v2',
+  subject: 'usr_1772430538091_4ckkct4d',
+  name: 'Notion Test User',
+  nickname: 'notion',
+  role: 'manager'
+}
+3/8/2026, 1:51:21 PM [CONVEX Q(users:getCurrentUser)] [LOG] 'getCurrentUser: returning user =' {
+  _creationTime: 1772430538091.0015,
+  _id: 'kn71bsmk8n1ega089txs82dh898248zk',
+  address: '',
+  assignedSites: [],
+  clerkUserId: 'usr_1772430538091_4ckkct4d',
+  createdAt: 1772430538091,
+  fullName: 'Notion Test User',
+  isActive: true,
+  passwordHash: '$2b$10$64ZlJLkdFd9Xa3CCotID3OTAFoGNNu6llIJVj..Yw3TmjAoAKsMSS',
+  phoneNumber: '',
+  role: 'manager',
+  updatedAt: 1772430538091,
+  username: 'notion'
+}

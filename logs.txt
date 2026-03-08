@@ -1,0 +1,24 @@
+3/8/2026, 1:51:20 PM [CONVEX Q(users:getCurrentUser)] [LOG] 'getCurrentUser: identity =' null
+3/8/2026, 1:51:21 PM [CONVEX Q(users:getCurrentUser)] [LOG] 'getCurrentUser: identity =' {
+  tokenIdentifier: 'https://insightful-monitor-731.convex.site/auth-v2|usr_1772430538091_4ckkct4d',
+  issuer: 'https://insightful-monitor-731.convex.site/auth-v2',
+  subject: 'usr_1772430538091_4ckkct4d',
+  name: 'Notion Test User',
+  nickname: 'notion',
+  role: 'manager'
+}
+3/8/2026, 1:51:21 PM [CONVEX Q(users:getCurrentUser)] [LOG] 'getCurrentUser: returning user =' {
+  _creationTime: 1772430538091.0015,
+  _id: 'kn71bsmk8n1ega089txs82dh898248zk',
+  address: '',
+  assignedSites: [],
+  clerkUserId: 'usr_1772430538091_4ckkct4d',
+  createdAt: 1772430538091,
+  fullName: 'Notion Test User',
+  isActive: true,
+  passwordHash: '$2b$10$64ZlJLkdFd9Xa3CCotID3OTAFoGNNu6llIJVj..Yw3TmjAoAKsMSS',
+  phoneNumber: '',
+  role: 'manager',
+  updatedAt: 1772430538091,
+  username: 'notion'
+}

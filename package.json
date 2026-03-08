@@ -6,7 +6,7 @@
     "dev": "next dev",
     "dev:convex": "convex dev",
     "dev:all": "concurrently \"npm run dev\" \"npm run dev:convex\"",
-    "build": "npx convex deploy --cmd 'next build'",
+    "build": "next build",
     "start": "next start",
     "lint": "eslint"
   },

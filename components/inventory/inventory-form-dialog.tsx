@@ -86,7 +86,7 @@ export function InventoryFormDialog({
   const uploadInputRef = useRef<HTMLInputElement>(null);
   const formInitializedRef = useRef(false);
 
-  const canEdit = userRole === ROLES.PURCHASE_OFFICER && !isAddImageMode; // Only Purchase Officers can edit item details
+  const canEdit = (userRole === ROLES.PURCHASE_OFFICER || userRole === ROLES.MANAGER) && !isAddImageMode; // Purchase Officers and Managers can edit item details
   // Purchase Officer can add images when creating or editing items
   // Site Engineer can add images to existing items only
   const canAddImages =

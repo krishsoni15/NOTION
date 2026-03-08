@@ -46,7 +46,7 @@ type SortField = "grnNumber" | "grnDate" | "invoiceNo" | "poNumber" | "vendorNam
 type SortDirection = "asc" | "desc";
 
 export function GRNPageContent() {
-    const grns = useQuery(api.grn.getAllGRNs);
+    const grns = useQuery(api.grn.getAllGRNs) as any;
     const updateGRN = useMutation(api.grn.updateGRN);
 
     const [searchQuery, setSearchQuery] = useState("");

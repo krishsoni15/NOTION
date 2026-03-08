@@ -94,7 +94,7 @@ export function GRNPageContent() {
     // Enrich GRN data with computed fields
     const enrichedGRNs = useMemo(() => {
         if (!grns) return [];
-        return grns.map((_grn) => {
+        return grns.map((_grn: any) => {
             const grn = _grn as any;
             const po = grn.po as any;
             const basis = po?.perUnitBasis || 1;
@@ -117,7 +117,7 @@ export function GRNPageContent() {
         if (!searchQuery.trim()) return enrichedGRNs;
         const q = searchQuery.toLowerCase();
         return enrichedGRNs.filter(
-            (grn) =>
+            (grn: any) =>
                 grn.grnNumber.toLowerCase().includes(q) ||
                 grn.po?.poNumber.toLowerCase().includes(q) ||
                 grn.vendorName.toLowerCase().includes(q) ||
@@ -133,7 +133,7 @@ export function GRNPageContent() {
     // Unique site names for filter
     const uniqueSites = useMemo(() => {
         const sites = new Set<string>();
-        enrichedGRNs.forEach((grn) => {
+        enrichedGRNs.forEach((grn: any) => {
             if (grn.siteName && grn.siteName !== "—") sites.add(grn.siteName);
         });
         return Array.from(sites).sort();
@@ -142,7 +142,7 @@ export function GRNPageContent() {
     // Apply site filter to filtered results
     const siteFiltered = useMemo(() => {
         if (filterSite.length === 0) return filtered;
-        return filtered.filter((grn) => filterSite.includes(grn.siteName));
+        return filtered.filter((grn: any) => filterSite.includes(grn.siteName));
     }, [filtered, filterSite]);
 
     // Sort
@@ -211,8 +211,8 @@ export function GRNPageContent() {
     }, [updateGRN]);
 
     // Grand totals (use siteFiltered)
-    const grandTotal = useMemo(() => siteFiltered.reduce((sum, grn) => sum + grn.total, 0), [siteFiltered]);
-    const totalQuantity = useMemo(() => siteFiltered.reduce((sum, grn) => sum + grn.receivedQuantity, 0), [siteFiltered]);
+    const grandTotal = useMemo(() => siteFiltered.reduce((sum: any, grn: any) => sum + grn.total, 0), [siteFiltered]);
+    const totalQuantity = useMemo(() => siteFiltered.reduce((sum: any, grn: any) => sum + grn.receivedQuantity, 0), [siteFiltered]);
 
     return (
         <div className="space-y-3 sm:space-y-4">

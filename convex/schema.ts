@@ -149,6 +149,8 @@ export default defineSchema({
     ),
     perUnitBasis: v.optional(v.number()),
     perUnitBasisUnit: v.optional(v.string()),
+    imageUrl: v.optional(v.string()), // Item photo URL
+    imageKey: v.optional(v.string()), // R2 object key
     approvedBy: v.optional(v.id("users")),
     approvedAt: v.optional(v.number()),
     rejectionReason: v.optional(v.string()),

@@ -480,6 +480,24 @@ export function DirectPODialog({ open, onOpenChange, initialData, mode = "standa
         });
     };
 
+    const uploadImage = async (file: File) => {
+        const formData = new FormData();
+        formData.append("file", file);
+        formData.append("itemId", "direct-po-item");
+
+        const resp = await fetch("/api/upload/image", {
+            method: "POST",
+            body: formData,
+        });
+
+        if (!resp.ok) {
+            const error = await resp.json().catch(() => ({}));
+            throw new Error(error.error || "Image upload failed");
+        }
+
+        return await resp.json() as { imageUrl: string; imageKey: string };
+    };
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setIsLoading(true);
@@ -489,19 +507,35 @@ export function DirectPODialog({ open, onOpenChange, initialData, mode = "standa
             if (!commonData.vendorId) throw new Error("Vendor is required");
             if (!commonData.validTill) throw new Error("PO expiry date is required");
 
-            // Validate and format all items
-            const formattedItems = items.map(item => {
-                if (!item.itemDescription.trim()) throw new Error("Item description is required for all items");
-                if (item.quantity <= 0) throw new Error("Quantity must be greater than 0 for all items");
-                if (item.unitPrice <= 0) throw new Error("Unit price must be greater than 0 for all items");
+            // Handle image uploads and format all items
+            const toastId = toast.loading("Processing items and images...");
+
+            const formattedItems = await Promise.all(items.map(async (item, idx) => {
+                if (!item.itemDescription.trim()) throw new Error(`Item ${idx + 1}: Description is required`);
+                if (item.quantity <= 0) throw new Error(`Item ${idx + 1}: Quantity must be greater than 0`);
+                if (item.unitPrice <= 0) throw new Error(`Item ${idx + 1}: Unit price must be greater than 0`);
+
+                let finalImageUrl = item.inventoryImageUrl || undefined;
+                let finalImageKey = undefined;
+
+                // Priority to user-uploaded/captured photo
+                if (item.photoFile) {
+                    try {
+                        const uploadResult = await uploadImage(item.photoFile);
+                        finalImageUrl = uploadResult.imageUrl;
+                        finalImageKey = uploadResult.imageKey;
+                    } catch (uploadErr) {
+                        console.error(`Upload error for item ${idx + 1}:`, uploadErr);
+                        // We throw to prevent PO creation if upload fails (safe approach)
+                        throw new Error(`Failed to upload photo for item ${idx + 1}`);
+                    }
+                }
 
                 const cleanName = item.itemDescription.trim();
                 const cleanDesc = (item.description || "").trim();
                 let fullDescription = cleanName;
 
                 if (cleanDesc) {
-                    // Check if description already starts with the name (case-insensitive)
-                    // This prevents duplication like "Cement\nCement\nDetails"
                     if (cleanDesc.toLowerCase().startsWith(cleanName.toLowerCase())) {
                         fullDescription = cleanDesc;
                     } else {
@@ -520,8 +554,12 @@ export function DirectPODialog({ open, onOpenChange, initialData, mode = "standa
                     discountPercent: parseFloat(item.discountPercent) || 0,
                     perUnitBasis: item.perUnitBasis || 1,
                     perUnitBasisUnit: item.perUnitBasisUnit || item.unit,
+                    imageUrl: finalImageUrl,
+                    imageKey: finalImageKey,
                 };
-            });
+            }));
+
+            toast.loading("Generating Purchase Order...", { id: toastId });
 
             await createDirectPO({
                 existingRequestNumber: commonData.requestNumber || undefined,
@@ -533,7 +571,9 @@ export function DirectPODialog({ open, onOpenChange, initialData, mode = "standa
                 isDirect: poType === "direct",
                 isUrgent: false,
             });
+
             toast.success(`${poType === "direct" ? "Direct PO" : "Purchase Order"} generated successfully!`, {
+                id: toastId,
                 description: "The PO is now pending approval.",
             });
 
@@ -959,6 +999,8 @@ export function DirectPODialog({ open, onOpenChange, initialData, mode = "standa
                                                             handleItemChange(index, 'unit', selectedItem.unit || item.unit);
                                                             handleItemChange(index, 'perUnitBasisUnit', selectedItem.unit || item.unit);
                                                             handleItemChange(index, 'hsnCode', (selectedItem as any).hsnSacCode || "");
+                                                            // Auto-set inventory image if available
+                                                            handleItemChange(index, 'inventoryImageUrl', (selectedItem as any).imageUrl || null);
                                                             setActiveItemIndex(null);
                                                             setShowItemSuggestions(false);
                                                         } else {
@@ -1002,8 +1044,7 @@ export function DirectPODialog({ open, onOpenChange, initialData, mode = "standa
                                                                     handleItemChange(index, 'perUnitBasisUnit', invItem.unit || item.unit);
                                                                     handleItemChange(index, 'hsnCode', (invItem as any).hsnSacCode || "");
                                                                     // Auto-set inventory image if available
-                                                                    const firstImg = (invItem as any).images?.[0]?.imageUrl || null;
-                                                                    handleItemChange(index, 'inventoryImageUrl', firstImg);
+                                                                    handleItemChange(index, 'inventoryImageUrl', (invItem as any).imageUrl || null);
                                                                     setActiveItemIndex(null);
                                                                     setShowItemSuggestions(false);
                                                                 }}
@@ -1103,71 +1144,101 @@ export function DirectPODialog({ open, onOpenChange, initialData, mode = "standa
                                                         </div>
                                                     )}
                                                     {!item.photoPreview && item.inventoryImageUrl && (
-                                                        <div className="absolute top-0.5 left-0.5 bg-green-500 text-white text-[9px] px-1 rounded font-medium">
+                                                        <div className="absolute top-0.5 left-0.5 bg-green-500 text-white text-[9px] px-1 rounded font-medium shadow-sm">
                                                             Inv
                                                         </div>
                                                     )}
                                                     <button
                                                         type="button"
                                                         onClick={() => handleItemPhotoRemove(index)}
-                                                        className="absolute -top-1 -right-1 bg-destructive text-destructive-foreground rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                        className="absolute -top-1 -right-1 bg-destructive text-destructive-foreground rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity ring-2 ring-background"
                                                         title="Remove photo"
                                                     >
                                                         <X className="h-3 w-3" />
                                                     </button>
                                                 </div>
-                                                <div className="flex flex-col gap-1.5">
+                                                <div className="flex flex-col gap-1.5 pt-1">
                                                     <button
                                                         type="button"
                                                         onClick={() => setCameraOpenForItem(index)}
-                                                        className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                                                        className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-blue-600 transition-colors font-medium"
                                                     >
                                                         <Camera className="h-3.5 w-3.5" />
-                                                        Retake
+                                                        Capture
                                                     </button>
                                                     <button
                                                         type="button"
                                                         onClick={() => itemPhotoInputRefs.current[index]?.click()}
-                                                        className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                                                        className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-blue-600 transition-colors font-medium"
                                                     >
                                                         <Upload className="h-3.5 w-3.5" />
-                                                        Replace
+                                                        Upload
                                                     </button>
                                                 </div>
                                             </div>
                                         ) : (
-                                            <div className="flex gap-2">
-                                                <button
+                                            <div className="flex flex-wrap gap-2">
+                                                <input
+                                                    type="file"
+                                                    accept="image/*"
+                                                    ref={el => itemPhotoInputRefs.current[index] = el}
+                                                    onChange={(e) => {
+                                                        const file = e.target.files?.[0];
+                                                        if (file) handleItemPhotoSelect(index, file);
+                                                    }}
+                                                    className="hidden"
+                                                />
+                                                <Button
                                                     type="button"
+                                                    variant="outline"
+                                                    size="sm"
+                                                    className="h-9 px-3 gap-1.5 border-dashed border-2 hover:border-blue-500 hover:text-blue-600 hover:bg-blue-50/50"
                                                     onClick={() => setCameraOpenForItem(index)}
-                                                    className="flex-1 flex items-center justify-center gap-2 h-9 border border-dashed rounded-md text-sm text-muted-foreground hover:text-foreground hover:border-foreground/50 transition-colors"
                                                 >
                                                     <Camera className="h-4 w-4" />
                                                     Camera
-                                                </button>
-                                                <button
+                                                </Button>
+                                                <Button
                                                     type="button"
+                                                    variant="outline"
+                                                    size="sm"
+                                                    className="h-9 px-3 gap-1.5 border-dashed border-2 hover:border-blue-500 hover:text-blue-600 hover:bg-blue-50/50"
                                                     onClick={() => itemPhotoInputRefs.current[index]?.click()}
-                                                    className="flex-1 flex items-center justify-center gap-2 h-9 border border-dashed rounded-md text-sm text-muted-foreground hover:text-foreground hover:border-foreground/50 transition-colors"
                                                 >
                                                     <Upload className="h-4 w-4" />
                                                     Upload
-                                                </button>
+                                                </Button>
+                                                <Button
+                                                    type="button"
+                                                    variant="outline"
+                                                    size="sm"
+                                                    className="h-9 px-3 gap-1.5 border-dashed border-2 hover:border-orange-500 hover:text-orange-600 hover:bg-orange-50/50"
+                                                    onClick={() => {
+                                                        const itemName = item.itemDescription.trim();
+                                                        if (!itemName) {
+                                                            toast.error("Enter item name first");
+                                                            return;
+                                                        }
+                                                        const match = (inventoryItemsSuggestions || []).find(
+                                                            (i: any) => i.itemName.toLowerCase() === itemName.toLowerCase() ||
+                                                                itemName.toLowerCase().includes(i.itemName.toLowerCase())
+                                                        );
+
+                                                        if (match?.imageUrl) {
+                                                            handleItemChange(index, 'inventoryImageUrl', match.imageUrl);
+                                                            toast.success("Matched inventory image found!");
+                                                        } else {
+                                                            toast.info("No matching inventory photo found", {
+                                                                description: "Try camera or manual upload."
+                                                            });
+                                                        }
+                                                    }}
+                                                >
+                                                    <Search className="h-4 w-4" />
+                                                    Inv. Photo
+                                                </Button>
                                             </div>
                                         )}
-
-                                        {/* Hidden file input per item */}
-                                        <input
-                                            ref={(el) => { itemPhotoInputRefs.current[index] = el; }}
-                                            type="file"
-                                            accept="image/*"
-                                            className="hidden"
-                                            onChange={(e) => {
-                                                const file = e.target.files?.[0];
-                                                if (file) handleItemPhotoSelect(index, file);
-                                                e.target.value = '';
-                                            }}
-                                        />
                                     </div>
 
                                     {/* Row 2: Qty, Unit, Price, HSN */}

@@ -108,6 +108,7 @@ export const getInventoryItemsForAutocomplete = query({
       itemName: item.itemName,
       unit: item.unit || "",
       centralStock: item.centralStock || 0,
+      imageUrl: (item as any).images?.[0]?.imageUrl || null,
     }));
   },
 });

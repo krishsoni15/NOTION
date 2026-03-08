@@ -260,7 +260,9 @@ export const getPurchaseOrderDetails = query({
             discountPercent: po.discountPercent || 0,
             gstTaxRate: po.gstTaxRate,
             perUnitBasis: po.perUnitBasis,
-            perUnitBasisUnit: po.perUnitBasisUnit
+            perUnitBasisUnit: po.perUnitBasisUnit,
+            imageUrl: po.imageUrl,
+            imageKey: po.imageKey
         }));
 
         return {
@@ -601,6 +603,8 @@ export const createDirectPO = mutation({
             discountPercent: v.optional(v.number()),
             perUnitBasis: v.optional(v.number()),
             perUnitBasisUnit: v.optional(v.string()),
+            imageUrl: v.optional(v.string()),
+            imageKey: v.optional(v.string()),
         })),
     },
     handler: async (ctx, args) => {
@@ -732,6 +736,8 @@ export const createDirectPO = mutation({
                     validTill: args.validTill,
                     perUnitBasis: item.perUnitBasis,
                     perUnitBasisUnit: item.perUnitBasisUnit,
+                    imageUrl: item.imageUrl,
+                    imageKey: item.imageKey,
                     updatedAt: now,
                     // We don't change createdBy or createdAt to accept history? 
                     // Or maybe we should if we want it to look "new"? 
@@ -760,6 +766,8 @@ export const createDirectPO = mutation({
                     validTill: args.validTill,
                     perUnitBasis: item.perUnitBasis,
                     perUnitBasisUnit: item.perUnitBasisUnit,
+                    imageUrl: item.imageUrl,
+                    imageKey: item.imageKey,
                     createdAt: now,
                     updatedAt: now,
                 });

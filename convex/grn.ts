@@ -71,13 +71,15 @@ export const getPendingPOsForGRN = query({
                 .withIndex("by_po_id", (q) => q.eq("poId", po._id))
                 .collect();
 
-            const receivedQuantity = grns.reduce((sum, grn) => sum + grn.receivedQuantity, 0);
-            const remainingQuantity = po.quantity - receivedQuantity;
+            const receivedQuantity = grns.reduce((sum, grn) => sum + ((grn as any).receivedQuantity || 0), 0);
+            const remainingQuantity = ((po as any).quantity || 0) - receivedQuantity;
 
             if (remainingQuantity > 0) {
-                const vendor = await ctx.db.get(po.vendorId);
-                const request = po.requestId ? await ctx.db.get(po.requestId) : null;
-                const site = po.deliverySiteId ? await ctx.db.get(po.deliverySiteId) : (request?.siteId ? await ctx.db.get(request.siteId) : null);
+                const vendor = (po as any).vendorId ? await ctx.db.get((po as any).vendorId) : null;
+                const request = (po as any).requestId ? await ctx.db.get((po as any).requestId) : null;
+                const site = (po as any).deliverySiteId
+                    ? await ctx.db.get((po as any).deliverySiteId)
+                    : (request && (request as any).siteId ? await ctx.db.get((request as any).siteId) : null);
 
                 pendingPOs.push({
                     ...po,
@@ -113,11 +115,11 @@ export const getAllGRNs = query({
 
         return Promise.all(
             grns.map(async (grn) => {
-                const po = await ctx.db.get(grn.poId);
-                const vendor = po ? await ctx.db.get(po.vendorId) : null;
-                const site = grn.siteId ? await ctx.db.get(grn.siteId) : null;
-                const creator = await ctx.db.get(grn.createdBy);
-                const request = po?.requestId ? await ctx.db.get(po.requestId) : null;
+                const po = (grn as any).poId ? await ctx.db.get((grn as any).poId) : null;
+                const vendor = po && (po as any).vendorId ? await ctx.db.get((po as any).vendorId) : null;
+                const site = (grn as any).siteId ? await ctx.db.get((grn as any).siteId) : null;
+                const creator = (grn as any).createdBy ? await ctx.db.get((grn as any).createdBy) : null;
+                const request = po && (po as any).requestId ? await ctx.db.get((po as any).requestId) : null;
 
                 return {
                     ...grn,
@@ -375,3 +377,4 @@ export const updateGRN = mutation({
         await ctx.db.patch(args.grnId, updates);
     },
 });
+

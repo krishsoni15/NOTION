@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState } from "react";
 import { cn } from "@/lib/utils";
+import { ImageOff } from "lucide-react";
 
 interface LazyImageProps {
   src: string;
@@ -20,44 +21,42 @@ export function LazyImage({
   width,
   height,
   priority = false,
-  onClick
+  onClick,
 }: LazyImageProps) {
-  console.log('LazyImage rendering with src:', src, 'width:', width, 'height:', height);
+  const [status, setStatus] = useState<"loading" | "loaded" | "error">("loading");
 
   return (
     <div
-      className={cn("relative overflow-hidden bg-gray-200 border-2 border-dashed border-gray-300", className)}
+      className={cn("relative overflow-hidden bg-muted", className)}
       style={{ width, height, minWidth: width, minHeight: height }}
       onClick={onClick}
     >
-      {/* Show loading state initially */}
-      <div className="absolute inset-0 bg-blue-100 flex items-center justify-center rounded">
-        <div className="text-xs text-blue-600">Loading...</div>
-      </div>
+      {/* Loading shimmer */}
+      {status === "loading" && (
+        <div className="absolute inset-0 bg-muted animate-pulse rounded" />
+      )}
 
+      {/* Error fallback */}
+      {status === "error" && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-muted rounded text-muted-foreground">
+          <ImageOff className="h-5 w-5 opacity-40" />
+          <span className="text-[10px] opacity-50">No image</span>
+        </div>
+      )}
+
+      {/* Actual image — always rendered so onLoad/onError fire */}
       <img
         src={src}
         alt={alt}
         width={width}
         height={height}
-        className="w-full h-full object-cover rounded"
-        onError={(e) => {
-          console.error('❌ Image failed to load:', src);
-          e.currentTarget.style.display = 'none';
-          const parent = e.currentTarget.parentElement;
-          if (parent) {
-            // Clear loading state and show error
-            parent.innerHTML = '<div class="absolute inset-0 bg-red-100 flex items-center justify-center rounded text-xs text-red-600">❌ Failed</div>';
-          }
-        }}
-        onLoad={(e) => {
-          console.log('✅ Image loaded successfully:', src);
-          // Hide loading state
-          const loadingDiv = e.currentTarget.previousElementSibling as HTMLElement;
-          if (loadingDiv) {
-            loadingDiv.style.display = 'none';
-          }
-        }}
+        loading={priority ? "eager" : "lazy"}
+        className={cn(
+          "w-full h-full object-cover rounded transition-opacity duration-200",
+          status === "loaded" ? "opacity-100" : "opacity-0"
+        )}
+        onLoad={() => setStatus("loaded")}
+        onError={() => setStatus("error")}
       />
     </div>
   );

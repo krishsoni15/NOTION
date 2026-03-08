@@ -108,9 +108,9 @@ export const createVendor = mutation({
     companyName: v.string(),
     contactName: v.optional(v.string()),
     email: v.optional(v.string()),
-    phone: v.string(),
-    gstNumber: v.string(),
-    address: v.string(),
+    phone: v.optional(v.string()),
+    gstNumber: v.optional(v.string()),
+    address: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const currentUser = await getCurrentUser(ctx);
@@ -120,26 +120,28 @@ export const createVendor = mutation({
       throw new ConvexError("Unauthorized: Only Purchase Officers and Managers can create vendors");
     }
 
-    // Validate GST number format (15 characters, alphanumeric) - Relaxed to allow empty
+    // Validate GST number format (15 characters, alphanumeric) - only if provided
     const gstRegex = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
-    if (args.gstNumber && args.gstNumber.trim().length > 0 && !gstRegex.test(args.gstNumber.trim().toUpperCase())) {
+    const gst = (args.gstNumber || "").trim().toUpperCase();
+    if (gst.length > 0 && !gstRegex.test(gst)) {
       throw new ConvexError("Invalid GST number format. Expected format: 24AAAAA0000A1Z5");
     }
 
     // Validate email format (only if provided)
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (args.email && args.email.trim().length > 0 && !emailRegex.test(args.email.trim())) {
+    const email = (args.email || "").trim();
+    if (email.length > 0 && !emailRegex.test(email)) {
       throw new ConvexError("Invalid email format");
     }
 
     const now = Date.now();
     const vendorId = await ctx.db.insert("vendors", {
-      companyName: args.companyName,
-      contactName: args.contactName,
-      email: args.email ?? "",
-      phone: args.phone,
-      gstNumber: args.gstNumber,
-      address: args.address,
+      companyName: args.companyName.trim(),
+      contactName: args.contactName || "",
+      email: email,
+      phone: (args.phone || "").trim(),
+      gstNumber: gst,
+      address: (args.address || "").trim(),
       isActive: true,
       createdBy: currentUser._id,
       createdAt: now,
@@ -159,9 +161,9 @@ export const updateVendor = mutation({
     companyName: v.string(),
     contactName: v.optional(v.string()),
     email: v.optional(v.string()),
-    phone: v.string(),
-    gstNumber: v.string(),
-    address: v.string(),
+    phone: v.optional(v.string()),
+    gstNumber: v.optional(v.string()),
+    address: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const currentUser = await getCurrentUser(ctx);
@@ -178,23 +180,25 @@ export const updateVendor = mutation({
 
     // Validate GST number format
     const gstRegex = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
-    if (args.gstNumber && args.gstNumber.trim().length > 0 && !gstRegex.test(args.gstNumber.trim().toUpperCase())) {
+    const gst = (args.gstNumber || "").trim().toUpperCase();
+    if (gst.length > 0 && !gstRegex.test(gst)) {
       throw new ConvexError("Invalid GST number format. Expected format: 24AAAAA0000A1Z5");
     }
 
     // Validate email format (only if provided)
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (args.email && args.email.trim().length > 0 && !emailRegex.test(args.email.trim())) {
+    const email = (args.email || "").trim();
+    if (email.length > 0 && !emailRegex.test(email)) {
       throw new ConvexError("Invalid email format");
     }
 
     await ctx.db.patch(args.vendorId, {
-      companyName: args.companyName,
-      contactName: args.contactName,
-      email: args.email ?? "",
-      phone: args.phone,
-      gstNumber: args.gstNumber,
-      address: args.address,
+      companyName: args.companyName.trim(),
+      contactName: args.contactName || "",
+      email: email,
+      phone: (args.phone || "").trim(),
+      gstNumber: gst,
+      address: (args.address || "").trim(),
       updatedAt: Date.now(),
     });
 

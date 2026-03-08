@@ -14,9 +14,9 @@ export const clearOldMessages = mutation({
   args: {},
   handler: async (ctx) => {
     const messages = await ctx.db.query("messages").collect();
-    
+
     let deletedCount = 0;
-    
+
     for (const message of messages) {
       const messageAny = message as any;
       if ("text" in messageAny && !("content" in messageAny)) {
@@ -24,9 +24,9 @@ export const clearOldMessages = mutation({
         deletedCount++;
       }
     }
-    
-    return { 
-      success: true, 
+
+    return {
+      success: true,
       deletedCount,
       message: `Cleared ${deletedCount} old message(s)`
     };
@@ -87,19 +87,91 @@ export const clearAllConversations = mutation({
 });
 
 /**
+ * Fix broken R2 image URLs in inventory items
+ * The old R2_PUBLIC_URL had a typo (dsa inserted in hash).
+ * This migration replaces all old broken URLs with the correct ones.
+ */
+export const fixInventoryImageUrls = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const OLD_URL = "https://pub-7e8316b021014356a6325dsa4db14a513.r2.dev";
+    const NEW_URL = "https://pub-7e8316b021014356a8325ea8b18a513.r2.dev";
+
+    const items = await ctx.db.query("inventory").collect();
+
+    let fixedItemCount = 0;
+    let fixedImageCount = 0;
+
+    for (const item of items) {
+      const images = item.images || [];
+      if (images.length === 0) continue;
+
+      let changed = false;
+      const updatedImages = images.map((img: any) => {
+        if (img.imageUrl && img.imageUrl.includes(OLD_URL)) {
+          changed = true;
+          fixedImageCount++;
+          return {
+            ...img,
+            imageUrl: img.imageUrl.replace(OLD_URL, NEW_URL),
+          };
+        }
+        return img;
+      });
+
+      if (changed) {
+        await ctx.db.patch(item._id, { images: updatedImages });
+        fixedItemCount++;
+      }
+    }
+
+    // Also fix GRN invoice photos if any
+    const grns = await ctx.db.query("grns").collect();
+    let fixedGrnCount = 0;
+    for (const grn of grns) {
+      const grnAny = grn as any;
+      const photos = grnAny.invoicePhotos || [];
+      if (photos.length === 0) continue;
+
+      let changed = false;
+      const updatedPhotos = photos.map((photo: any) => {
+        if (photo.photoUrl && photo.photoUrl.includes(OLD_URL)) {
+          changed = true;
+          return { ...photo, photoUrl: photo.photoUrl.replace(OLD_URL, NEW_URL) };
+        }
+        return photo;
+      });
+
+      if (changed) {
+        await ctx.db.patch(grn._id, { invoicePhotos: updatedPhotos } as any);
+        fixedGrnCount++;
+      }
+    }
+
+    return {
+      success: true,
+      fixedItemCount,
+      fixedImageCount,
+      fixedGrnCount,
+      message: `Fixed URLs in ${fixedItemCount} inventory item(s) covering ${fixedImageCount} image(s), and ${fixedGrnCount} GRN record(s)`,
+    };
+  },
+});
+
+/**
  * Clear all presence records
  */
 export const clearAllPresence = mutation({
   args: {},
   handler: async (ctx) => {
     const presenceRecords = await ctx.db.query("userPresence").collect();
-    
+
     for (const record of presenceRecords) {
       await ctx.db.delete(record._id);
     }
-    
-    return { 
-      success: true, 
+
+    return {
+      success: true,
       deletedCount: presenceRecords.length,
       message: `Cleared ${presenceRecords.length} presence record(s)`
     };

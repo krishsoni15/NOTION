@@ -9,9 +9,13 @@ import { Badge } from "@/components/ui/badge";
 import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { toast } from "sonner";
-import { CheckCircle, Package, Loader2, Truck, TrendingDown, TrendingUp } from "lucide-react";
+import { CheckCircle, Package, Loader2, Truck, TrendingDown, TrendingUp, CalendarIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Id } from "@/convex/_generated/dataModel";
+import { MediaInput } from "@/components/shared/media-input";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import { format } from "date-fns";
 
 interface BulkDeliveryItem {
     requestId: Id<"requests">;
@@ -31,7 +35,13 @@ interface BulkDeliveryDialogProps {
     vendorName: string;
     poNumber: string;
     mode?: "delivery" | "direct_delivered";
-    onDirectDelivery?: (quantities: Record<string, number>) => Promise<void>;
+    onDirectDelivery?: (
+        quantities: Record<string, number>,
+        invoices: {
+            no: Record<string, string>,
+            photos: Record<string, File | null>
+        }
+    ) => Promise<void>;
 }
 
 export function BulkDeliveryDialog({
@@ -45,6 +55,9 @@ export function BulkDeliveryDialog({
 }: BulkDeliveryDialogProps) {
     // Initialize delivery quantities with REQUESTED quantities (auto-filled to requested, not PO)
     const [deliveryQuantities, setDeliveryQuantities] = useState<Record<string, number>>({});
+    const [invoiceNos, setInvoiceNos] = useState<Record<string, string>>({});
+    const [invoiceDates, setInvoiceDates] = useState<Record<string, Date | undefined>>({});
+    const [invoicePhotoFiles, setInvoicePhotoFiles] = useState<Record<string, File | null>>({});
 
     // Reinitialize quantities when items change or dialog opens
     useEffect(() => {
@@ -54,12 +67,15 @@ export function BulkDeliveryDialog({
                 initial[item.requestId] = item.requestedQuantity; // Auto-fill with requested quantity
             });
             setDeliveryQuantities(initial);
+            setInvoiceNos({});
+            setInvoiceDates({});
+            setInvoicePhotoFiles({});
         }
     }, [open, items]);
 
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isDirectDelivering, setIsDirectDelivering] = useState(false);
-    const markReadyForDelivery = useMutation(api.requests.markReadyForDelivery);
+    const createGRNFromDelivery = useMutation(api.grn.createGRNFromDelivery);
 
     const handleQuantityChange = (requestId: string, value: string) => {
         const numValue = parseInt(value) || 0;
@@ -79,16 +95,38 @@ export function BulkDeliveryDialog({
         try {
             let deliveredCount = 0;
             let skippedCount = 0;
+            const createdGRNs: string[] = [];
 
             for (const item of items) {
                 const deliveryQty = deliveryQuantities[item.requestId];
 
                 if (deliveryQty > 0) {
-                    await markReadyForDelivery({
+                    let invoicePhoto = undefined;
+                    const photoFile = invoicePhotoFiles[item.requestId];
+                    if (photoFile) {
+                        const formData = new FormData();
+                        formData.append("file", photoFile);
+                        const response = await fetch("/api/upload/image", { method: "POST", body: formData });
+                        if (response.ok) {
+                            const data = await response.json();
+                            invoicePhoto = { imageUrl: data.imageUrl, imageKey: data.imageKey };
+                        }
+                    }
+
+                    // Create GRN automatically
+                    const result = await createGRNFromDelivery({
+                        poNumber: poNumber,
                         requestId: item.requestId,
                         deliveryQuantity: deliveryQty,
-                        targetStatus: mode === "direct_delivered" ? "delivered" : "ready_for_delivery",
+                        invoiceNo: invoiceNos[item.requestId] || undefined,
+                        invoiceDate: invoiceDates[item.requestId] ? invoiceDates[item.requestId]!.getTime() : undefined,
+                        invoicePhoto,
                     });
+
+                    if (result?.grnNumber) {
+                        createdGRNs.push(result.grnNumber);
+                    }
+
                     deliveredCount++;
                 } else {
                     skippedCount++;
@@ -96,8 +134,8 @@ export function BulkDeliveryDialog({
             }
 
             if (deliveredCount > 0) {
-                const actionText = mode === "direct_delivered" ? "directly delivered" : "for delivery";
-                toast.success(`Successfully marked ${deliveredCount} item(s) ${actionText}${skippedCount > 0 ? ` (${skippedCount} skipped)` : ""}`);
+                const grnInfo = createdGRNs.length > 0 ? ` (${createdGRNs.join(", ")})` : "";
+                toast.success(`✅ ${deliveredCount} GRN(s) created${grnInfo}${skippedCount > 0 ? ` · ${skippedCount} skipped` : ""}`);
             }
 
             onOpenChange(false);
@@ -108,9 +146,12 @@ export function BulkDeliveryDialog({
                 initial[item.requestId] = item.requestedQuantity;
             });
             setDeliveryQuantities(initial);
-        } catch (error) {
-            console.error("Failed to mark delivery:", error);
-            toast.error("Failed to mark items for delivery");
+            setInvoiceNos({});
+            setInvoiceDates({});
+            setInvoicePhotoFiles({});
+        } catch (error: any) {
+            console.error("Failed to create GRN:", error);
+            toast.error(error.message || "Failed to confirm delivery");
         } finally {
             setIsSubmitting(false);
         }
@@ -132,10 +173,10 @@ export function BulkDeliveryDialog({
                         ) : (
                             <Truck className="h-5 w-5 text-emerald-600" />
                         )}
-                        {mode === "direct_delivered" ? "Direct Delivery" : "Bulk Delivery"} - {vendorName}
+                        {mode === "direct_delivered" ? "Direct Delivery" : "Confirm Delivery"} - {vendorName}
                     </DialogTitle>
                     <DialogDescription>
-                        Review and confirm {mode === "direct_delivered" ? "direct delivery" : "delivery"} quantities for {items.length} item(s) from PO: <span className="font-mono font-semibold">{poNumber}</span>
+                        Confirm delivery quantities for {items.length} item(s) from PO: <span className="font-mono font-semibold">{poNumber}</span>. Each delivered item will generate a separate GRN automatically.
                     </DialogDescription>
                 </DialogHeader>
 
@@ -256,6 +297,52 @@ export function BulkDeliveryDialog({
                                                     {isFullDelivery && "Full requested quantity will be delivered"}
                                                 </p>
                                             </div>
+
+                                            {/* Invoice Details — compact single row, all optional */}
+                                            {deliveryQty > 0 && (
+                                                <div className="mt-3 flex items-end gap-2 flex-wrap p-2.5 bg-muted/20 border border-muted rounded-md border-dashed">
+                                                    <div className="flex-1 min-w-[120px]">
+                                                        <Label className="text-[10px] text-muted-foreground uppercase mb-1 block">Invoice No. <span className="text-[9px] normal-case">(Optional)</span></Label>
+                                                        <Input
+                                                            placeholder="INV-001"
+                                                            value={invoiceNos[item.requestId] || ""}
+                                                            onChange={(e) => setInvoiceNos((prev) => ({ ...prev, [item.requestId]: e.target.value }))}
+                                                            className="h-8 text-xs bg-background"
+                                                        />
+                                                    </div>
+                                                    <div className="min-w-[120px]">
+                                                        <Label className="text-[10px] text-muted-foreground uppercase mb-1 block">Invoice Date <span className="text-[9px] normal-case">(Optional)</span></Label>
+                                                        <Popover>
+                                                            <PopoverTrigger asChild>
+                                                                <Button
+                                                                    variant="outline"
+                                                                    className={cn(
+                                                                        "h-8 w-full justify-start text-left text-xs px-2",
+                                                                        !invoiceDates[item.requestId] && "text-muted-foreground border-dashed"
+                                                                    )}
+                                                                >
+                                                                    <CalendarIcon className="mr-1.5 h-3 w-3 opacity-70" />
+                                                                    {invoiceDates[item.requestId] ? format(invoiceDates[item.requestId]!, "dd/MM/yy") : "Select"}
+                                                                </Button>
+                                                            </PopoverTrigger>
+                                                            <PopoverContent className="w-auto p-0 z-[100]" align="start">
+                                                                <Calendar
+                                                                    mode="single"
+                                                                    selected={invoiceDates[item.requestId]}
+                                                                    onSelect={(date) => setInvoiceDates((prev) => ({ ...prev, [item.requestId]: date }))}
+                                                                    initialFocus
+                                                                />
+                                                            </PopoverContent>
+                                                        </Popover>
+                                                    </div>
+                                                    <div className="min-w-[100px]">
+                                                        <Label className="text-[10px] text-muted-foreground uppercase mb-1 block">Upload <span className="text-[9px] normal-case">(Optional)</span></Label>
+                                                        <MediaInput
+                                                            onValueChange={(file) => setInvoicePhotoFiles((prev) => ({ ...prev, [item.requestId]: file }))}
+                                                        />
+                                                    </div>
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
                                 </div>
@@ -267,7 +354,7 @@ export function BulkDeliveryDialog({
                 {/* Footer Actions */}
                 <div className="flex flex-col gap-3 pt-4 border-t">
                     <div className="text-sm text-muted-foreground text-center">
-                        Delivering <span className="font-bold text-emerald-600">{totalToDeliver}</span> / {totalRemaining} remaining
+                        Delivering <span className="font-bold text-emerald-600">{totalToDeliver}</span> / {totalRemaining} remaining · Each item generates a unique GRN
                     </div>
                     <div className="flex items-center gap-2">
                         <Button
@@ -285,7 +372,7 @@ export function BulkDeliveryDialog({
                                     onClick={async () => {
                                         setIsDirectDelivering(true);
                                         try {
-                                            await onDirectDelivery(deliveryQuantities);
+                                            await onDirectDelivery(deliveryQuantities, { no: invoiceNos, photos: invoicePhotoFiles });
                                             onOpenChange(false);
                                         } finally {
                                             setIsDirectDelivering(false);
@@ -315,7 +402,7 @@ export function BulkDeliveryDialog({
                                 {isSubmitting ? (
                                     <>
                                         <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                        Processing...
+                                        Creating GRNs...
                                     </>
                                 ) : (
                                     <>

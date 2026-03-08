@@ -36,7 +36,8 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { AlertCircle, Plus, Search, X, Info, ChevronDown, ChevronUp, Copy } from "lucide-react";
+import { AlertCircle, Plus, Search, X, Info, ChevronDown, ChevronUp, Copy, Camera, Upload, ImageIcon } from "lucide-react";
+import { CameraDialog } from "@/components/inventory/camera-dialog";
 import type { Id } from "@/convex/_generated/dataModel";
 import { AddressAutocomplete } from "@/components/vendors/address-autocomplete";
 import { VendorFormDialog } from "@/components/vendors/vendor-form-dialog";
@@ -179,8 +180,16 @@ export function DirectPODialog({ open, onOpenChange, initialData, mode = "standa
             discountPercent: "0",
             sgst: "0",
             cgst: "0",
+            // Photo fields
+            photoFile: null as File | null,
+            photoPreview: null as string | null,
+            inventoryImageUrl: null as string | null, // from inventory item
         }
     ]);
+
+    // Camera state (shared, per active item index)
+    const [cameraOpenForItem, setCameraOpenForItem] = useState<number | null>(null);
+    const itemPhotoInputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
     // Refs for scrolling to items
     const itemRefs = useRef<(HTMLDivElement | null)[]>([]);
@@ -329,6 +338,9 @@ export function DirectPODialog({ open, onOpenChange, initialData, mode = "standa
                         discountPercent: item.discountPercent?.toString() || "0", // Auto-fill discount
                         sgst: item.sgst?.toString() || "0",                       // Auto-fill SGST
                         cgst: item.cgst?.toString() || "0",                       // Auto-fill CGST
+                        photoFile: null,
+                        photoPreview: null,
+                        inventoryImageUrl: (matchingInvItem as any)?.images?.[0]?.imageUrl || null,
                     };
                 }));
             }
@@ -368,6 +380,9 @@ export function DirectPODialog({ open, onOpenChange, initialData, mode = "standa
             discountPercent: "0",
             sgst: "0",
             cgst: "0",
+            photoFile: null,
+            photoPreview: null,
+            inventoryImageUrl: null,
         }]);
         setVendorSearchQuery("");
         setItemSearchQuery("");
@@ -403,8 +418,39 @@ export function DirectPODialog({ open, onOpenChange, initialData, mode = "standa
                 discountPercent: "0",
                 sgst: "0",
                 cgst: "0",
+                photoFile: null,
+                photoPreview: null,
+                inventoryImageUrl: null,
             }
         ]);
+    };
+
+    const handleItemPhotoSelect = (index: number, file: File) => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const result = e.target?.result as string;
+            if (result) {
+                setItems(prev => {
+                    const next = [...prev];
+                    next[index] = { ...next[index], photoFile: file, photoPreview: result };
+                    return next;
+                });
+            }
+        };
+        reader.readAsDataURL(file);
+    };
+
+    const handleItemCameraCapture = (index: number, file: File) => {
+        handleItemPhotoSelect(index, file);
+        setCameraOpenForItem(null);
+    };
+
+    const handleItemPhotoRemove = (index: number) => {
+        setItems(prev => {
+            const next = [...prev];
+            next[index] = { ...next[index], photoFile: null, photoPreview: null, inventoryImageUrl: null };
+            return next;
+        });
     };
 
     const handleDuplicateItem = (index: number) => {
@@ -955,6 +1001,9 @@ export function DirectPODialog({ open, onOpenChange, initialData, mode = "standa
                                                                     handleItemChange(index, 'unit', invItem.unit || item.unit);
                                                                     handleItemChange(index, 'perUnitBasisUnit', invItem.unit || item.unit);
                                                                     handleItemChange(index, 'hsnCode', (invItem as any).hsnSacCode || "");
+                                                                    // Auto-set inventory image if available
+                                                                    const firstImg = (invItem as any).images?.[0]?.imageUrl || null;
+                                                                    handleItemChange(index, 'inventoryImageUrl', firstImg);
                                                                     setActiveItemIndex(null);
                                                                     setShowItemSuggestions(false);
                                                                 }}
@@ -963,7 +1012,21 @@ export function DirectPODialog({ open, onOpenChange, initialData, mode = "standa
                                                                     selectedItemSuggestionIndex === suggestionIdx && "bg-accent"
                                                                 )}
                                                             >
-                                                                <span>{invItem.itemName}</span>
+                                                                <div className="flex items-center gap-2 flex-1 min-w-0">
+                                                                    {/* Inventory image thumbnail */}
+                                                                    {(invItem as any).images?.[0]?.imageUrl ? (
+                                                                        <img
+                                                                            src={(invItem as any).images[0].imageUrl}
+                                                                            alt={invItem.itemName}
+                                                                            className="w-8 h-8 object-cover rounded border flex-shrink-0"
+                                                                        />
+                                                                    ) : (
+                                                                        <div className="w-8 h-8 rounded border bg-muted flex items-center justify-center flex-shrink-0">
+                                                                            <ImageIcon className="h-3.5 w-3.5 text-muted-foreground" />
+                                                                        </div>
+                                                                    )}
+                                                                    <span className="truncate">{invItem.itemName}</span>
+                                                                </div>
                                                                 <div className="flex items-center gap-2">
                                                                     {invItem.unit && <span className="text-xs text-muted-foreground">{invItem.unit}</span>}
                                                                     <button
@@ -1014,6 +1077,96 @@ export function DirectPODialog({ open, onOpenChange, initialData, mode = "standa
                                             value={item.description || ""}
                                             onChange={(e) => handleItemChange(index, 'description', e.target.value)}
                                             className="min-h-[60px]"
+                                        />
+                                    </div>
+
+                                    {/* Row 1.6: Item Photo */}
+                                    <div className="space-y-1.5">
+                                        <Label className="text-sm flex items-center gap-1.5">
+                                            <ImageIcon className="h-3.5 w-3.5" />
+                                            Item Photo
+                                            <span className="text-muted-foreground text-xs">(optional)</span>
+                                        </Label>
+
+                                        {/* Show current photo (user-captured OR inventory image) */}
+                                        {(item.photoPreview || item.inventoryImageUrl) ? (
+                                            <div className="flex gap-3 items-start">
+                                                <div className="relative group">
+                                                    <img
+                                                        src={item.photoPreview || item.inventoryImageUrl!}
+                                                        alt="Item photo"
+                                                        className="w-20 h-20 object-cover rounded-lg border-2 border-border shadow-sm"
+                                                    />
+                                                    {item.photoPreview && (
+                                                        <div className="absolute top-0.5 left-0.5 bg-blue-500 text-white text-[9px] px-1 rounded font-medium">
+                                                            New
+                                                        </div>
+                                                    )}
+                                                    {!item.photoPreview && item.inventoryImageUrl && (
+                                                        <div className="absolute top-0.5 left-0.5 bg-green-500 text-white text-[9px] px-1 rounded font-medium">
+                                                            Inv
+                                                        </div>
+                                                    )}
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleItemPhotoRemove(index)}
+                                                        className="absolute -top-1 -right-1 bg-destructive text-destructive-foreground rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                        title="Remove photo"
+                                                    >
+                                                        <X className="h-3 w-3" />
+                                                    </button>
+                                                </div>
+                                                <div className="flex flex-col gap-1.5">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setCameraOpenForItem(index)}
+                                                        className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                                                    >
+                                                        <Camera className="h-3.5 w-3.5" />
+                                                        Retake
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => itemPhotoInputRefs.current[index]?.click()}
+                                                        className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                                                    >
+                                                        <Upload className="h-3.5 w-3.5" />
+                                                        Replace
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <div className="flex gap-2">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setCameraOpenForItem(index)}
+                                                    className="flex-1 flex items-center justify-center gap-2 h-9 border border-dashed rounded-md text-sm text-muted-foreground hover:text-foreground hover:border-foreground/50 transition-colors"
+                                                >
+                                                    <Camera className="h-4 w-4" />
+                                                    Camera
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => itemPhotoInputRefs.current[index]?.click()}
+                                                    className="flex-1 flex items-center justify-center gap-2 h-9 border border-dashed rounded-md text-sm text-muted-foreground hover:text-foreground hover:border-foreground/50 transition-colors"
+                                                >
+                                                    <Upload className="h-4 w-4" />
+                                                    Upload
+                                                </button>
+                                            </div>
+                                        )}
+
+                                        {/* Hidden file input per item */}
+                                        <input
+                                            ref={(el) => { itemPhotoInputRefs.current[index] = el; }}
+                                            type="file"
+                                            accept="image/*"
+                                            className="hidden"
+                                            onChange={(e) => {
+                                                const file = e.target.files?.[0];
+                                                if (file) handleItemPhotoSelect(index, file);
+                                                e.target.value = '';
+                                            }}
                                         />
                                     </div>
 
@@ -1132,6 +1285,16 @@ export function DirectPODialog({ open, onOpenChange, initialData, mode = "standa
                                 <Plus className="h-4 w-4 mr-2" />
                                 Add Another Item
                             </Button>
+
+                            {/* Camera dialog for item photos */}
+                            {cameraOpenForItem !== null && (
+                                <CameraDialog
+                                    open={true}
+                                    onOpenChange={(open) => { if (!open) setCameraOpenForItem(null); }}
+                                    onCapture={(file) => handleItemCameraCapture(cameraOpenForItem, file)}
+                                    multiple={false}
+                                />
+                            )}
 
 
 

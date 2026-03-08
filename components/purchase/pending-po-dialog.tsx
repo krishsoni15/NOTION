@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { toast } from "sonner";
 import { BulkDeliveryDialog } from "@/components/purchase/bulk-delivery-dialog";
@@ -45,6 +46,8 @@ import {
     CheckCircle,
     Phone,
     Mail,
+    Send,
+    MessageCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
@@ -210,7 +213,7 @@ export function PendingPODialog({ onBack, onViewPO, onCreateDirectPO }: PendingP
     const updateLastTalkDate = useMutation(api.requests.updateLastTalkDate);
     const updateLastTalkText = useMutation(api.requests.updateLastTalkText);
     const updateCommittedDate = useMutation(api.requests.updateCommittedDate);
-    const markReadyForDelivery = useMutation(api.requests.markReadyForDelivery);
+
 
     // Bulk delivery dialog state
     const [bulkDeliveryData, setBulkDeliveryData] = useState<{
@@ -253,6 +256,7 @@ export function PendingPODialog({ onBack, onViewPO, onCreateDirectPO }: PendingP
             }
         }
         return map;
+
     }, [allPOs]);
 
     /* Pending items */
@@ -314,7 +318,7 @@ export function PendingPODialog({ onBack, onViewPO, onCreateDirectPO }: PendingP
                 const bT = Math.max(...b.items.map((i) => i.updatedAt ?? i.createdAt ?? 0));
                 return bT - aT;
             });
-    }, [pendingItems]);
+    }, [pendingItems, allPOs]);
 
     /* Filtered */
     const filtered = useMemo(() => {
@@ -429,10 +433,10 @@ export function PendingPODialog({ onBack, onViewPO, onCreateDirectPO }: PendingP
         vendors?.find((v) => v._id === item?.selectedVendorId) ?? null;
 
     /* ── Download XL ── */
-    const handleDownloadXL = () => {
+    const handleDownloadXL = async () => {
         try {
             // Dynamically import xlsx to avoid SSR issues
-            const XLSX = require("xlsx");
+            const XLSX = await import("xlsx");
 
             const rows = filtered.map((group) => {
                 const vendorName = getVendorName(group.firstItem);
@@ -498,6 +502,38 @@ export function PendingPODialog({ onBack, onViewPO, onCreateDirectPO }: PendingP
             vendorName: vName,
             poNumber: group.poNumber || group.requestNumber,
         });
+    };
+
+    /* ── Send Actions ── */
+    const handleShareWhatsApp = (group: any) => {
+        const vendorPhone = getVendorFull(group.firstItem)?.phone || "";
+        const vendorName = getVendorName(group.firstItem) || "";
+        const date = fmtDate(group.firstItem.createdAt);
+        const total = group.totalAmount || 0;
+        const itemsCount = group.items.length;
+        const firstItemName = group.firstItem?.itemName || "Items";
+        const itemsSummary = itemsCount > 1 ? `${firstItemName} + ${itemsCount - 1} more` : firstItemName;
+
+        const message = `*Purchase Order*\n\nPO No: *${group.poNumber}*\nDate: ${date}\n${vendorName ? `Vendor: ${vendorName}\n` : ''}Items: ${itemsSummary}\nAmount: *Rs. ${total.toLocaleString('en-IN', { minimumFractionDigits: 2 })}*\n\nKindly confirm receipt and expected delivery date.\n\nRegards,\nNotion Electronica Pvt. Ltd.`;
+
+        const whatsappUrl = vendorPhone
+            ? `https://wa.me/${vendorPhone.replace(/[^0-9]/g, '')}?text=${encodeURIComponent(message)}`
+            : `https://wa.me/?text=${encodeURIComponent(message)}`;
+
+        window.open(whatsappUrl, '_blank');
+        toast.success("Opening WhatsApp...");
+    };
+
+    const handleShareEmail = (group: any) => {
+        const vendorEmail = getVendorFull(group.firstItem)?.email || "";
+        if (!vendorEmail) {
+            toast.error("Vendor email not found");
+            return;
+        }
+        toast.success("Opening Mail Client...");
+        const subject = encodeURIComponent(`Purchase Order #${group.poNumber}`);
+        const body = encodeURIComponent(`Please find the details for PO #${group.poNumber} attached.\n\nRegards,\nNotion Electronica Pvt. Ltd.`);
+        window.open(`mailto:${vendorEmail}?subject=${subject}&body=${body}`);
     };
 
     /* ── Render ── */
@@ -684,6 +720,23 @@ export function PendingPODialog({ onBack, onViewPO, onCreateDirectPO }: PendingP
                                                         <Button size="sm" variant="outline" onClick={() => handleOpenAvailable(group)} className="h-7 text-xs px-2.5 gap-1 border-emerald-500/30 text-emerald-600 hover:bg-emerald-500/10 hover:border-emerald-500">
                                                             <CheckCircle className="h-3 w-3" /> Available
                                                         </Button>
+                                                        <DropdownMenu>
+                                                            <DropdownMenuTrigger asChild>
+                                                                <Button size="sm" variant="outline" className="h-7 text-xs px-2.5 gap-1 border-slate-500/30 text-slate-600 hover:bg-slate-500/10 hover:border-slate-500 dark:text-slate-400">
+                                                                    <Send className="h-3 w-3" /> Send
+                                                                </Button>
+                                                            </DropdownMenuTrigger>
+                                                            <DropdownMenuContent align="end" className="w-40">
+                                                                <DropdownMenuItem onClick={() => handleShareWhatsApp(group)} className="gap-2 cursor-pointer text-sm">
+                                                                    <MessageCircle className="h-4 w-4 text-green-500" />
+                                                                    WhatsApp
+                                                                </DropdownMenuItem>
+                                                                <DropdownMenuItem onClick={() => handleShareEmail(group)} className="gap-2 cursor-pointer text-sm">
+                                                                    <Mail className="h-4 w-4 text-blue-500" />
+                                                                    Email
+                                                                </DropdownMenuItem>
+                                                            </DropdownMenuContent>
+                                                        </DropdownMenu>
                                                     </>
                                                 )}
                                             </div>
@@ -785,7 +838,7 @@ export function PendingPODialog({ onBack, onViewPO, onCreateDirectPO }: PendingP
                         /* ── Table View (CRM-style) ── */
                         <div className="rounded-lg border overflow-hidden bg-card">
                             {/* thead */}
-                            <div className="grid grid-cols-[1.5fr_120px_120px_250px_130px_130px] bg-muted/40 border-b">
+                            <div className="grid grid-cols-[1fr_120px_120px_250px_130px_130px] bg-muted/40 border-b">
                                 {[
                                     { label: "Vendor", icon: Building2 },
                                     { label: "Order No", icon: Hash },
@@ -814,7 +867,7 @@ export function PendingPODialog({ onBack, onViewPO, onCreateDirectPO }: PendingP
 
                                     return (
                                         <div key={key} className="group hover:bg-muted/20 transition-colors border-b last:border-0 border-border">
-                                            <div className="grid grid-cols-[1.5fr_120px_120px_250px_130px_130px] items-center min-h-[64px]">
+                                            <div className="grid grid-cols-[1fr_120px_120px_250px_130px_130px] items-center min-h-[64px]">
 
                                                 {/* Vendor */}
                                                 <div className="px-3 py-2.5 border-r h-full flex flex-col justify-center min-w-0">
@@ -902,6 +955,23 @@ export function PendingPODialog({ onBack, onViewPO, onCreateDirectPO }: PendingP
                                                             <Button size="sm" variant="outline" onClick={() => handleOpenAvailable(group)} className="h-7 text-xs px-2.5 gap-1 border-emerald-500/30 text-emerald-600 hover:bg-emerald-500/10 hover:border-emerald-500 w-full">
                                                                 <CheckCircle className="h-3 w-3" /> Available
                                                             </Button>
+                                                            <DropdownMenu>
+                                                                <DropdownMenuTrigger asChild>
+                                                                    <Button size="sm" variant="outline" className="h-7 text-xs px-2.5 gap-1 border-slate-500/30 text-slate-600 hover:bg-slate-500/10 hover:border-slate-500 w-full dark:text-slate-400">
+                                                                        <Send className="h-3 w-3" /> Send
+                                                                    </Button>
+                                                                </DropdownMenuTrigger>
+                                                                <DropdownMenuContent align="end" className="w-40">
+                                                                    <DropdownMenuItem onClick={() => handleShareWhatsApp(group)} className="gap-2 cursor-pointer text-sm">
+                                                                        <MessageCircle className="h-4 w-4 text-green-500" />
+                                                                        WhatsApp
+                                                                    </DropdownMenuItem>
+                                                                    <DropdownMenuItem onClick={() => handleShareEmail(group)} className="gap-2 cursor-pointer text-sm">
+                                                                        <Mail className="h-4 w-4 text-blue-500" />
+                                                                        Email
+                                                                    </DropdownMenuItem>
+                                                                </DropdownMenuContent>
+                                                            </DropdownMenu>
                                                         </>
                                                     )}
                                                 </div>
@@ -938,7 +1008,7 @@ export function PendingPODialog({ onBack, onViewPO, onCreateDirectPO }: PendingP
                 </>
             )}
 
-            {/* Bulk Delivery Dialog */}
+            {/* Bulk Delivery Dialog — Confirms delivery and auto-creates GRNs */}
             {bulkDeliveryData && (
                 <BulkDeliveryDialog
                     open={!!bulkDeliveryData}
@@ -946,25 +1016,6 @@ export function PendingPODialog({ onBack, onViewPO, onCreateDirectPO }: PendingP
                     items={bulkDeliveryData.items}
                     vendorName={bulkDeliveryData.vendorName}
                     poNumber={bulkDeliveryData.poNumber}
-                    mode={"delivery"} // Start with regular delivery
-                    onDirectDelivery={async (quantities) => {
-                        let deliveredCount = 0;
-                        for (const item of bulkDeliveryData.items) {
-                            const qty = quantities[item.requestId];
-                            if (qty > 0) {
-                                await markReadyForDelivery({
-                                    requestId: item.requestId,
-                                    deliveryQuantity: qty,
-                                    targetStatus: "delivered", // skip DC
-                                });
-                                deliveredCount++;
-                            }
-                        }
-                        if (deliveredCount > 0) {
-                            toast.success(`Successfully marked ${deliveredCount} item(s) as directly delivered`);
-                        }
-                        setBulkDeliveryData(null);
-                    }}
                 />
             )}
         </div>

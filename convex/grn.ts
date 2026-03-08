@@ -22,13 +22,13 @@ async function getCurrentUser(ctx: any) {
     return user;
 }
 
-// Helper function to generate GRN Number
+// Helper function to generate GRN Number in format GRN-001, GRN-002, etc.
 async function generateGRNNumber(ctx: any): Promise<string> {
     const allGRNs = await ctx.db.query("grns").collect();
 
     let maxNumber = 0;
     for (const grn of allGRNs) {
-        // e.g., GRN-001
+        // Match any trailing digits after "GRN-" (handles GRN-001, GRN-2026-0001, etc.)
         const numMatch = grn.grnNumber.match(/(\d+)$/);
         if (numMatch) {
             const num = parseInt(numMatch[1], 10);
@@ -38,7 +38,7 @@ async function generateGRNNumber(ctx: any): Promise<string> {
         }
     }
     const nextNumber = maxNumber + 1;
-    return `GRN-${nextNumber.toString().padStart(4, "0")}`;
+    return `GRN-${nextNumber.toString().padStart(3, "0")}`;
 }
 
 export const getPendingPOsForGRN = query({
@@ -143,6 +143,7 @@ export const createGRN = mutation({
             imageUrl: v.string(),
             imageKey: v.string(),
         })),
+        itemName: v.optional(v.string()),
     },
     handler: async (ctx, args) => {
         const currentUser = await getCurrentUser(ctx);
@@ -183,6 +184,7 @@ export const createGRN = mutation({
             invoiceDate: args.invoiceDate,
             siteId: args.siteId || po.deliverySiteId,
             invoicePhoto: args.invoicePhoto,
+            itemName: args.itemName || po.itemDescription,
             status: "completed",
             createdBy: currentUser._id,
             createdAt: now,
@@ -219,7 +221,122 @@ export const createGRN = mutation({
             createdAt: now,
         });
 
-        return grnId;
+        return { grnId, grnNumber };
+    },
+});
+
+// New mutation: Create GRN from Pending PO page delivery
+// This creates a GRN for each item being delivered
+export const createGRNFromDelivery = mutation({
+    args: {
+        poNumber: v.string(),
+        requestId: v.id("requests"),
+        deliveryQuantity: v.number(),
+        invoiceNo: v.optional(v.string()),
+        invoiceDate: v.optional(v.number()),
+        invoicePhoto: v.optional(v.object({
+            imageUrl: v.string(),
+            imageKey: v.string(),
+        })),
+    },
+    handler: async (ctx, args) => {
+        const currentUser = await getCurrentUser(ctx);
+
+        if (currentUser.role !== "site_engineer" && currentUser.role !== "manager" && currentUser.role !== "purchase_officer") {
+            throw new Error("Unauthorized");
+        }
+
+        if (args.deliveryQuantity <= 0) {
+            throw new Error("Delivery quantity must be greater than 0");
+        }
+
+        // Find the PO for this request
+        const request = await ctx.db.get(args.requestId);
+        if (!request) {
+            throw new Error("Request not found");
+        }
+
+        // Find PO by poNumber and requestId
+        const allPOs = await ctx.db
+            .query("purchaseOrders")
+            .withIndex("by_po_number", (q) => q.eq("poNumber", args.poNumber))
+            .collect();
+
+        // Find the PO that matches this request
+        let po = allPOs.find(p => p.requestId === args.requestId);
+
+        // If no direct match, try finding any PO with this number
+        if (!po && allPOs.length > 0) {
+            po = allPOs[0];
+        }
+
+        if (!po) {
+            throw new Error(`Purchase Order ${args.poNumber} not found`);
+        }
+
+        // Calculate current received
+        const existingGRNs = await ctx.db
+            .query("grns")
+            .withIndex("by_po_id", (q) => q.eq("poId", po._id))
+            .collect();
+
+        const currentReceived = existingGRNs.reduce((sum, g) => sum + g.receivedQuantity, 0);
+
+        if (currentReceived + args.deliveryQuantity > po.quantity) {
+            throw new Error(`Cannot receive more than PO quantity. Remaining: ${po.quantity - currentReceived}`);
+        }
+
+        const grnNumber = await generateGRNNumber(ctx);
+        const now = Date.now();
+
+        // Get site info
+        const siteId = po.deliverySiteId || request.siteId;
+
+        const grnId = await ctx.db.insert("grns", {
+            grnNumber,
+            poId: po._id,
+            receivedQuantity: args.deliveryQuantity,
+            invoiceNo: args.invoiceNo,
+            invoiceDate: args.invoiceDate,
+            siteId: siteId,
+            invoicePhoto: args.invoicePhoto,
+            itemName: request.itemName || po.itemDescription,
+            status: "completed",
+            createdBy: currentUser._id,
+            createdAt: now,
+            updatedAt: now,
+        });
+
+        const newReceivedTotal = currentReceived + args.deliveryQuantity;
+
+        // If fully received, update PO status
+        if (newReceivedTotal >= po.quantity) {
+            await ctx.db.patch(po._id, {
+                status: "delivered",
+                actualDeliveryDate: now,
+                updatedAt: now,
+            });
+        }
+
+        // Update request status to delivered
+        await ctx.db.patch(args.requestId, {
+            status: "delivered",
+            deliveryMarkedAt: now,
+            updatedAt: now,
+        });
+
+        // Add to log
+        await ctx.db.insert("request_notes", {
+            requestNumber: request.requestNumber || "SYSTEM",
+            userId: currentUser._id,
+            role: currentUser.role,
+            type: "log",
+            content: `Created GRN ${grnNumber} — Delivered ${args.deliveryQuantity} ${request.unit || 'unit(s)'} of ${request.itemName}`,
+            status: "delivered",
+            createdAt: now,
+        });
+
+        return { grnId, grnNumber };
     },
 });
 
@@ -228,6 +345,7 @@ export const updateGRN = mutation({
         grnId: v.id("grns"),
         invoiceNo: v.optional(v.string()),
         invoiceDate: v.optional(v.number()),
+        clearInvoiceDate: v.optional(v.boolean()),
         invoicePhoto: v.optional(v.object({
             imageUrl: v.string(),
             imageKey: v.string(),
@@ -247,7 +365,11 @@ export const updateGRN = mutation({
 
         const updates: any = { updatedAt: Date.now() };
         if (args.invoiceNo !== undefined) updates.invoiceNo = args.invoiceNo;
-        if (args.invoiceDate !== undefined) updates.invoiceDate = args.invoiceDate;
+        if (args.clearInvoiceDate) {
+            updates.invoiceDate = undefined;
+        } else if (args.invoiceDate !== undefined) {
+            updates.invoiceDate = args.invoiceDate;
+        }
         if (args.invoicePhoto !== undefined) updates.invoicePhoto = args.invoicePhoto;
 
         await ctx.db.patch(args.grnId, updates);

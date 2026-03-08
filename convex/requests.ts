@@ -2186,6 +2186,11 @@ export const markReadyForDelivery = mutation({
     requestId: v.id("requests"),
     deliveryQuantity: v.number(),
     targetStatus: v.optional(v.union(v.literal("ready_for_delivery"), v.literal("delivered"))),
+    invoiceNo: v.optional(v.string()),
+    invoicePhoto: v.optional(v.object({
+      imageUrl: v.string(),
+      imageKey: v.string(),
+    })),
   },
   handler: async (ctx, args) => {
     const currentUser = await getCurrentUser(ctx);
@@ -2296,6 +2301,43 @@ export const markReadyForDelivery = mutation({
         : `[Item #${request.itemOrder ?? 1}] Full quantity (${args.deliveryQuantity} ${request.unit || 'units'}) marked ${targetStatus === 'delivered' ? 'directly delivered' : 'ready for delivery'}.`,
       createdAt: now,
     });
+
+    // Create GRN if we have a linked PO
+    if (po) {
+      const allGRNs = await ctx.db.query("grns").collect();
+      let maxNumber = 0;
+      for (const grn of allGRNs) {
+        const numMatch = grn.grnNumber.match(/(\d+)$/);
+        if (numMatch) {
+          const num = parseInt(numMatch[1], 10);
+          if (num > maxNumber) maxNumber = num;
+        }
+      }
+      const grnNumber = `GRN-${(maxNumber + 1).toString().padStart(4, "0")}`;
+
+      await ctx.db.insert("grns", {
+        grnNumber,
+        poId: po._id, // use the original PO id since it represents the same order
+        receivedQuantity: args.deliveryQuantity,
+        invoiceNo: args.invoiceNo,
+        siteId: request.siteId,
+        invoicePhoto: args.invoicePhoto,
+        status: "completed",
+        createdBy: currentUser._id,
+        createdAt: now,
+        updatedAt: now,
+      });
+
+      await ctx.db.insert("request_notes", {
+        requestNumber: request.requestNumber,
+        userId: currentUser._id,
+        role: currentUser.role,
+        type: "log",
+        content: `Created GRN ${grnNumber} for ${args.deliveryQuantity} unit(s)`,
+        status: targetStatus,
+        createdAt: now,
+      });
+    }
   },
 });
 

@@ -498,6 +498,7 @@ export default defineSchema({
     invoiceNo: v.optional(v.string()), // Manual entry
     invoiceDate: v.optional(v.number()), // Manual entry
     receivedQuantity: v.number(), // Quantity received in this GRN
+    itemName: v.optional(v.string()), // Material name for register view
     siteId: v.optional(v.id("sites")), // Delivery site
     invoicePhoto: v.optional(v.object({
       imageUrl: v.string(),

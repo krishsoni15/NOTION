@@ -94,7 +94,8 @@ export function GRNPageContent() {
     // Enrich GRN data with computed fields
     const enrichedGRNs = useMemo(() => {
         if (!grns) return [];
-        return grns.map((grn) => {
+        return grns.map((_grn) => {
+            const grn = _grn as any;
             const po = grn.po as any;
             const basis = po?.perUnitBasis || 1;
             const unitRate = po?.unitRate || 0;
@@ -104,9 +105,9 @@ export function GRNPageContent() {
                 ...grn,
                 rate,
                 total,
-                vendorName: (grn as any).vendor?.companyName || "—",
+                vendorName: grn.vendor?.companyName || "—",
                 materialName: grn.itemName || po?.itemDescription?.split("\n")[0] || "—",
-                siteName: (grn as any).site?.name || "—",
+                siteName: grn.site?.name || "—",
             };
         });
     }, [grns]);

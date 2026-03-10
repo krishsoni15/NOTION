@@ -253,15 +253,17 @@ export function PurchaseOrderTemplate({ data }: { data: POData }) {
                             <tr key={item._id}>
                                 <td className="border border-[#000000] p-1 text-center font-bold">{idx + 1}</td>
                                 <td className="border border-[#000000] p-1">
-                                    {item.imageUrl && (
-                                        <img
-                                            src={item.imageUrl}
-                                            alt={item.itemDescription?.split('\n')[0] || "Item"}
-                                            style={{ width: '36px', height: '36px', objectFit: 'cover', borderRadius: '3px', float: 'right', marginLeft: '4px' }}
-                                        />
-                                    )}
                                     <div className="font-bold uppercase">{item.itemDescription?.split('\n')[0] || "Item"}</div>
                                     <div className="text-[9px] whitespace-pre-line" style={{ color: '#4b5563' }}>{item.itemDescription}</div>
+                                    {item.imageUrl && (
+                                        <div className="mt-2 text-center w-full">
+                                            <img
+                                                src={item.imageUrl}
+                                                alt={item.itemDescription?.split('\n')[0] || "Item"}
+                                                style={{ width: '100%', maxHeight: '180px', objectFit: 'contain', borderRadius: '4px' }}
+                                            />
+                                        </div>
+                                    )}
                                 </td>
                                 <td className="border border-[#000000] p-1 text-center">{item.hsnSacCode || '-'}</td>
                                 <td className="border border-[#000000] p-1 text-center font-bold">{item.quantity}</td>

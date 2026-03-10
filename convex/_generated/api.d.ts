@@ -17,6 +17,7 @@ import type * as deliveries from "../deliveries.js";
 import type * as grn from "../grn.js";
 import type * as http from "../http.js";
 import type * as inventory from "../inventory.js";
+import type * as maintenance from "../maintenance.js";
 import type * as migrations from "../migrations.js";
 import type * as notes from "../notes.js";
 import type * as notifications from "../notifications.js";
@@ -46,6 +47,7 @@ declare const fullApi: ApiFromModules<{
   grn: typeof grn;
   http: typeof http;
   inventory: typeof inventory;
+  maintenance: typeof maintenance;
   migrations: typeof migrations;
   notes: typeof notes;
   notifications: typeof notifications;

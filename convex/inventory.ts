@@ -16,16 +16,16 @@ import type { Id } from "./_generated/dataModel";
 async function getCurrentUser(ctx: any) {
   const identity = await ctx.auth.getUserIdentity();
   if (!identity) {
-    throw new Error("Not authenticated");
+    throw new ConvexError("Not authenticated");
   }
 
   const user = await ctx.db
     .query("users")
     .withIndex("by_clerk_user_id", (q: any) => q.eq("clerkUserId", identity.subject))
-    .unique();
+    .first();
 
   if (!user) {
-    throw new Error("User not found");
+    throw new ConvexError("User not found");
   }
 
   return user;
@@ -48,7 +48,7 @@ export const getAllInventoryItems = query({
     const currentUser = await ctx.db
       .query("users")
       .withIndex("by_clerk_user_id", (q: any) => q.eq("clerkUserId", userId))
-      .unique();
+      .first();
 
     if (!currentUser) return [];
 
@@ -103,7 +103,7 @@ export const getInventoryItemByName = query({
     const currentUser = await ctx.db
       .query("users")
       .withIndex("by_clerk_user_id", (q: any) => q.eq("clerkUserId", userId))
-      .unique();
+      .first();
 
     if (!currentUser) return null;
 
@@ -155,7 +155,7 @@ export const getInventoryItemById = query({
 
     const item = await ctx.db.get(args.itemId);
     if (!item || !item.isActive) {
-      throw new Error("Inventory item not found");
+      throw new ConvexError("Inventory item not found");
     }
 
     // Fetch vendor info for multiple vendors (support both old vendorId and new vendorIds)
@@ -216,7 +216,7 @@ export const getInventoryStatusForItems = query({
     const currentUser = await ctx.db
       .query("users")
       .withIndex("by_clerk_user_id", (q: any) => q.eq("clerkUserId", userId))
-      .unique();
+      .first();
 
     if (!currentUser) return {};
 
@@ -294,7 +294,7 @@ export const createInventoryItem = mutation({
 
     // Check if user is a Purchase Officer or Manager
     if (currentUser.role !== "purchase_officer" && currentUser.role !== "manager") {
-      throw new Error("Unauthorized: Only Purchase Officers and Managers can create inventory items");
+      throw new ConvexError("Unauthorized: Only Purchase Officers and Managers can create inventory items");
     }
 
     // Support both old vendorId and new vendorIds
@@ -305,7 +305,7 @@ export const createInventoryItem = mutation({
       for (const vendorId of vendorIds) {
         const vendor = await ctx.db.get(vendorId);
         if (!vendor || !vendor.isActive) {
-          throw new Error(`Vendor not found: ${vendorId}`);
+          throw new ConvexError(`Vendor not found: ${vendorId}`);
         }
       }
     }
@@ -322,7 +322,7 @@ export const createInventoryItem = mutation({
     );
 
     if (isDuplicate) {
-      throw new Error(
+      throw new ConvexError(
         "An item with this name and description already exists. Please modify the description or use the existing item."
       );
     }
@@ -368,12 +368,12 @@ export const updateInventoryItem = mutation({
 
     // Check if user is a Purchase Officer or Manager
     if (currentUser.role !== "purchase_officer" && currentUser.role !== "manager") {
-      throw new Error("Unauthorized: Only Purchase Officers and Managers can update inventory items");
+      throw new ConvexError("Unauthorized: Only Purchase Officers and Managers can update inventory items");
     }
 
     const item = await ctx.db.get(args.itemId);
     if (!item || !item.isActive) {
-      throw new Error("Inventory item not found");
+      throw new ConvexError("Inventory item not found");
     }
 
     // Support both old vendorId and new vendorIds
@@ -386,7 +386,7 @@ export const updateInventoryItem = mutation({
       for (const vendorId of vendorIds) {
         const vendor = await ctx.db.get(vendorId);
         if (!vendor || !vendor.isActive) {
-          throw new Error(`Vendor not found: ${vendorId}`);
+          throw new ConvexError(`Vendor not found: ${vendorId}`);
         }
       }
     }
@@ -421,7 +421,7 @@ export const linkVendorToItem = mutation({
 
     // Check if user is a Purchase Officer or Manager
     if (currentUser.role !== "purchase_officer" && currentUser.role !== "manager") {
-      throw new Error("Unauthorized: Only Purchase Officers and Managers can link vendors to items");
+      throw new ConvexError("Unauthorized: Only Purchase Officers and Managers can link vendors to items");
     }
 
     // Find the inventory item by name
@@ -431,13 +431,13 @@ export const linkVendorToItem = mutation({
       .first();
 
     if (!item || !item.isActive) {
-      throw new Error("Inventory item not found");
+      throw new ConvexError("Inventory item not found");
     }
 
     // Validate vendor exists
     const vendor = await ctx.db.get(args.vendorId);
     if (!vendor || !vendor.isActive) {
-      throw new Error("Vendor not found");
+      throw new ConvexError("Vendor not found");
     }
 
     // Add vendor to the item's vendor list
@@ -464,12 +464,12 @@ export const deleteInventoryItem = mutation({
 
     // Check if user is a Purchase Officer or Manager
     if (currentUser.role !== "purchase_officer" && currentUser.role !== "manager") {
-      throw new Error("Unauthorized: Only Purchase Officers and Managers can delete inventory items");
+      throw new ConvexError("Unauthorized: Only Purchase Officers and Managers can delete inventory items");
     }
 
     const item = await ctx.db.get(args.itemId);
     if (!item) {
-      throw new Error("Inventory item not found");
+      throw new ConvexError("Inventory item not found");
     }
 
     // Note: Image deletion from R2 should be handled by the frontend
@@ -503,12 +503,12 @@ export const addImageToInventory = mutation({
       currentUser.role !== "purchase_officer" &&
       currentUser.role !== "manager"
     ) {
-      throw new Error("Unauthorized: Only Site Engineers, Purchase Officers, and Managers can add images");
+      throw new ConvexError("Unauthorized: Only Site Engineers, Purchase Officers, and Managers can add images");
     }
 
     const item = await ctx.db.get(args.itemId);
     if (!item || !item.isActive) {
-      throw new Error("Inventory item not found");
+      throw new ConvexError("Inventory item not found");
     }
 
     const existingImages = item.images || [];
@@ -541,12 +541,12 @@ export const removeImageFromInventory = mutation({
 
     // Check if user is a Purchase Officer or Manager
     if (currentUser.role !== "purchase_officer" && currentUser.role !== "manager") {
-      throw new Error("Unauthorized: Only Purchase Officers and Managers can remove images");
+      throw new ConvexError("Unauthorized: Only Purchase Officers and Managers can remove images");
     }
 
     const item = await ctx.db.get(args.itemId);
     if (!item || !item.isActive) {
-      throw new Error("Inventory item not found");
+      throw new ConvexError("Inventory item not found");
     }
 
     const existingImages = item.images || [];
@@ -578,21 +578,21 @@ export const deductInventoryStock = mutation({
 
     // Check if user is a Purchase Officer or Manager
     if (currentUser.role !== "purchase_officer" && currentUser.role !== "manager") {
-      throw new Error("Unauthorized: Only Purchase Officers and Managers can deduct inventory stock");
+      throw new ConvexError("Unauthorized: Only Purchase Officers and Managers can deduct inventory stock");
     }
 
     if (args.quantity <= 0) {
-      throw new Error("Quantity must be greater than 0");
+      throw new ConvexError("Quantity must be greater than 0");
     }
 
     const item = await ctx.db.get(args.itemId);
     if (!item || !item.isActive) {
-      throw new Error("Inventory item not found");
+      throw new ConvexError("Inventory item not found");
     }
 
     const currentStock = item.centralStock || 0;
     if (currentStock < args.quantity) {
-      throw new Error(`Insufficient stock. Available: ${currentStock}, Requested: ${args.quantity}`);
+      throw new ConvexError(`Insufficient stock. Available: ${currentStock}, Requested: ${args.quantity}`);
     }
 
     const newStock = currentStock - args.quantity;
@@ -621,11 +621,11 @@ export const deductInventoryStockByName = mutation({
 
     // Check if user is a Purchase Officer or Manager
     if (currentUser.role !== "purchase_officer" && currentUser.role !== "manager") {
-      throw new Error("Unauthorized: Only Purchase Officers and Managers can deduct inventory stock");
+      throw new ConvexError("Unauthorized: Only Purchase Officers and Managers can deduct inventory stock");
     }
 
     if (args.quantity <= 0) {
-      throw new Error("Quantity must be greater than 0");
+      throw new ConvexError("Quantity must be greater than 0");
     }
 
     // Find the inventory item by name (case-insensitive)
@@ -639,12 +639,12 @@ export const deductInventoryStockByName = mutation({
     );
 
     if (!item) {
-      throw new Error(`Inventory item not found: ${args.itemName}`);
+      throw new ConvexError(`Inventory item not found: ${args.itemName}`);
     }
 
     const currentStock = item.centralStock || 0;
     if (currentStock < args.quantity) {
-      throw new Error(`Insufficient stock. Available: ${currentStock}, Requested: ${args.quantity}`);
+      throw new ConvexError(`Insufficient stock. Available: ${currentStock}, Requested: ${args.quantity}`);
     }
 
     const newStock = currentStock - args.quantity;

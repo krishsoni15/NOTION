@@ -64,7 +64,7 @@ export const createDelivery = mutation({
     handler: async (ctx, args) => {
         const user = await ctx.auth.getUserIdentity();
         if (!user) {
-            throw new Error("Not authenticated");
+            throw new ConvexError("Not authenticated");
         }
 
         const officer = await ctx.db
@@ -73,7 +73,7 @@ export const createDelivery = mutation({
             .first();
 
         if (!officer) {
-            throw new Error("User not found");
+            throw new ConvexError("User not found");
         }
 
         const { items, ...deliveryData } = args;
@@ -282,7 +282,7 @@ export const confirmDelivery = mutation({
     handler: async (ctx, args) => {
         const request = await ctx.db.get(args.requestId);
         if (!request) {
-            throw new Error("Request not found");
+            throw new ConvexError("Request not found");
         }
 
         // If already delivered, just return success
@@ -292,7 +292,7 @@ export const confirmDelivery = mutation({
 
         // Allow confirming from pending_po, delivery_processing, out_for_delivery, ready_for_delivery, delivery_stage
         if (!["pending_po", "delivery_processing", "out_for_delivery", "ready_for_delivery", "delivery_stage"].includes(request.status)) {
-            throw new Error(`Request is not in a deliverable state: ${request.status}`);
+            throw new ConvexError(`Request is not in a deliverable state: ${request.status}`);
         }
 
         // Update status to delivered

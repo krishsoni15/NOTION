@@ -13,16 +13,16 @@ import type { Id } from "./_generated/dataModel";
 async function getCurrentUser(ctx: any) {
     const userId = await getAuthUserId(ctx);
     if (!userId) {
-        throw new Error("Not authenticated");
+        throw new ConvexError("Not authenticated");
     }
 
     const user = await ctx.db
         .query("users")
         .withIndex("by_clerk_user_id", (q: any) => q.eq("clerkUserId", userId))
-        .unique();
+        .first();
 
     if (!user) {
-        throw new Error("User not found");
+        throw new ConvexError("User not found");
     }
 
     return user;
@@ -89,7 +89,7 @@ export const getAllPurchaseOrders = query({
             currentUser.role !== "purchase_officer" &&
             currentUser.role !== "manager"
         ) {
-            throw new Error("Unauthorized");
+            throw new ConvexError("Unauthorized");
         }
 
         const pos = await ctx.db
@@ -133,7 +133,7 @@ export const getDirectPurchaseOrders = query({
             currentUser.role !== "purchase_officer" &&
             currentUser.role !== "manager"
         ) {
-            throw new Error("Unauthorized");
+            throw new ConvexError("Unauthorized");
         }
 
         const pos = await ctx.db
@@ -177,7 +177,7 @@ export const getPurchaseOrderDetails = query({
         const currentUser = await getCurrentUser(ctx);
 
         // Allow authenticated users to view POs (might be site engineer seeing their site's PO, or manager/purchaser)
-        if (!currentUser) throw new Error("Unauthorized");
+        if (!currentUser) throw new ConvexError("Unauthorized");
 
         let pos = await ctx.db
             .query("purchaseOrders")
@@ -383,12 +383,12 @@ export const getPurchaseOrderById = query({
             currentUser.role !== "purchase_officer" &&
             currentUser.role !== "manager"
         ) {
-            throw new Error("Unauthorized");
+            throw new ConvexError("Unauthorized");
         }
 
         const po = await ctx.db.get(args.poId);
         if (!po) {
-            throw new Error("Purchase Order not found");
+            throw new ConvexError("Purchase Order not found");
         }
 
         const vendor = await ctx.db.get(po.vendorId);
@@ -420,7 +420,7 @@ export const getPOsByRequestId = query({
             currentUser.role !== "manager" &&
             currentUser.role !== "site_engineer"
         ) {
-            throw new Error("Unauthorized");
+            throw new ConvexError("Unauthorized");
         }
 
         const pos = await ctx.db
@@ -447,7 +447,7 @@ export const getPOsForRequestNumber = query({
             currentUser.role !== "manager" &&
             currentUser.role !== "site_engineer"
         ) {
-            throw new Error("Unauthorized");
+            throw new ConvexError("Unauthorized");
         }
 
         // 1. Get all requests with this number
@@ -608,19 +608,19 @@ export const createDirectPO = mutation({
 
         // Only Purchase Officers can create Direct POs
         if (currentUser.role !== "purchase_officer") {
-            throw new Error("Unauthorized: Only Purchase Officers can create Direct POs");
+            throw new ConvexError("Unauthorized: Only Purchase Officers can create Direct POs");
         }
 
         // Validate vendor exists
         const vendor = await ctx.db.get(args.vendorId);
         if (!vendor || !vendor.isActive) {
-            throw new Error("Vendor not found or inactive");
+            throw new ConvexError("Vendor not found or inactive");
         }
 
         // Validate site exists
         const site = await ctx.db.get(args.deliverySiteId);
         if (!site || !site.isActive) {
-            throw new Error("Site not found or inactive");
+            throw new ConvexError("Site not found or inactive");
         }
 
         // Always generate a NEW unique PO number for each PO creation
@@ -638,26 +638,26 @@ export const createDirectPO = mutation({
         let itemOrder = 1;
         for (const item of args.items) {
             // Validate item inputs
-            if (item.quantity <= 0) throw new Error("Quantity must be greater than 0");
-            if (item.unitRate <= 0) throw new Error("Unit rate must be greater than 0");
-            if (item.gstTaxRate < 0 || item.gstTaxRate > 100) throw new Error("GST tax rate must be between 0 and 100");
+            if (item.quantity <= 0) throw new ConvexError("Quantity must be greater than 0");
+            if (item.unitRate <= 0) throw new ConvexError("Unit rate must be greater than 0");
+            if (item.gstTaxRate < 0 || item.gstTaxRate > 100) throw new ConvexError("GST tax rate must be between 0 and 100");
 
             let requestId = item.requestId;
 
             if (requestId) {
                 // Update existing request
                 const existingRequest = await ctx.db.get(requestId);
-                if (!existingRequest) throw new Error(`Request ${requestId} not found`);
+                if (!existingRequest) throw new ConvexError(`Request ${requestId} not found`);
 
                 // PROTECTION: Cannot modify requests that are already signed/approved
                 const signedStatuses = ["pending_po", "ordered", "ready_for_delivery", "out_for_delivery", "delivery_processing", "delivery_stage", "delivered"];
                 if (signedStatuses.includes(existingRequest.status)) {
-                    throw new Error(`Cannot modify request - PO has already been signed and approved. Status: ${existingRequest.status}`);
+                    throw new ConvexError(`Cannot modify request - PO has already been signed and approved. Status: ${existingRequest.status}`);
                 }
 
                 // Only allow modification of sign_pending and sign_rejected requests
                 if (!["sign_pending", "sign_rejected", "ready_for_po", "direct_po"].includes(existingRequest.status)) {
-                    throw new Error(`Request is in an invalid status for PO modification: ${existingRequest.status}`);
+                    throw new ConvexError(`Request is in an invalid status for PO modification: ${existingRequest.status}`);
                 }
 
                 // Keep the existing request ID, just update status and details
@@ -770,7 +770,7 @@ export const createDirectPO = mutation({
             const existingCC = await ctx.db
                 .query("costComparisons")
                 .withIndex("by_request_id", q => q.eq("requestId", requestId!))
-                .unique();
+                .first();
 
             if (existingCC) {
                 // Update existing CC if exists (e.g. came from "Ready for PO" after CC approval)
@@ -858,12 +858,12 @@ export const updatePOStatus = mutation({
 
         // Only Purchase Officers can update PO status
         if (currentUser.role !== "purchase_officer") {
-            throw new Error("Unauthorized: Only Purchase Officers can update PO status");
+            throw new ConvexError("Unauthorized: Only Purchase Officers can update PO status");
         }
 
         const po = await ctx.db.get(args.poId);
         if (!po) {
-            throw new Error("Purchase Order not found");
+            throw new ConvexError("Purchase Order not found");
         }
 
         await ctx.db.patch(args.poId, {
@@ -920,16 +920,16 @@ export const cancelPO = mutation({
 
         // Only Purchase Officers can cancel POs
         if (currentUser.role !== "purchase_officer") {
-            throw new Error("Unauthorized: Only Purchase Officers can cancel POs");
+            throw new ConvexError("Unauthorized: Only Purchase Officers can cancel POs");
         }
 
         const po = await ctx.db.get(args.poId);
         if (!po) {
-            throw new Error("Purchase Order not found");
+            throw new ConvexError("Purchase Order not found");
         }
 
         if (po.status === "delivered") {
-            throw new Error("Cannot cancel a delivered PO");
+            throw new ConvexError("Cannot cancel a delivered PO");
         }
 
         await ctx.db.patch(args.poId, {
@@ -970,15 +970,15 @@ export const approveDirectPO = mutation({
     handler: async (ctx, args) => {
         const currentUser = await getCurrentUser(ctx);
         if (currentUser.role !== "manager") {
-            throw new Error("Unauthorized: Only Managers can approve POs");
+            throw new ConvexError("Unauthorized: Only Managers can approve POs");
         }
 
         const po = await ctx.db.get(args.poId);
-        if (!po) throw new Error("PO not found");
+        if (!po) throw new ConvexError("PO not found");
 
         // Status check: must be sign_pending or pending_approval
         if (po.status !== "sign_pending" && po.status !== "pending_approval") {
-            throw new Error("PO is not pending approval");
+            throw new ConvexError("PO is not pending approval");
         }
 
         const now = Date.now();
@@ -1025,15 +1025,15 @@ export const rejectDirectPO = mutation({
     handler: async (ctx, args) => {
         const currentUser = await getCurrentUser(ctx);
         if (currentUser.role !== "manager") {
-            throw new Error("Unauthorized: Only Managers can reject POs");
+            throw new ConvexError("Unauthorized: Only Managers can reject POs");
         }
 
         const po = await ctx.db.get(args.poId);
-        if (!po) throw new Error("PO not found");
+        if (!po) throw new ConvexError("PO not found");
 
         // Status check: must be sign_pending or pending_approval
         if (po.status !== "sign_pending" && po.status !== "pending_approval") {
-            throw new Error("PO is not pending approval");
+            throw new ConvexError("PO is not pending approval");
         }
 
         const now = Date.now();
@@ -1082,7 +1082,7 @@ export const approveDirectPOByRequest = mutation({
     handler: async (ctx, args) => {
         const currentUser = await getCurrentUser(ctx);
         if (currentUser.role !== "manager") {
-            throw new Error("Unauthorized: Only Managers can approve POs");
+            throw new ConvexError("Unauthorized: Only Managers can approve POs");
         }
 
         const pos = await ctx.db
@@ -1095,11 +1095,11 @@ export const approveDirectPOByRequest = mutation({
             .sort((a, b) => b._creationTime - a._creationTime)
             .find(p => p.status === "sign_pending" || p.status === "pending_approval");
 
-        if (!po) throw new Error("Linked pending PO not found");
+        if (!po) throw new ConvexError("Linked pending PO not found");
 
         // Status check
         if (po.status !== "sign_pending" && po.status !== "pending_approval" && po.status !== "sign_rejected") {
-            throw new Error("PO status is not valid for approval");
+            throw new ConvexError("PO status is not valid for approval");
         }
 
         const now = Date.now();
@@ -1144,7 +1144,7 @@ export const rejectDirectPOByRequest = mutation({
     handler: async (ctx, args) => {
         const currentUser = await getCurrentUser(ctx);
         if (currentUser.role !== "manager") {
-            throw new Error("Unauthorized: Only Managers can reject POs");
+            throw new ConvexError("Unauthorized: Only Managers can reject POs");
         }
 
         const pos = await ctx.db
@@ -1157,11 +1157,11 @@ export const rejectDirectPOByRequest = mutation({
             .sort((a, b) => b._creationTime - a._creationTime)
             .find(p => p.status === "sign_pending" || p.status === "pending_approval");
 
-        if (!po) throw new Error("Linked pending PO not found");
+        if (!po) throw new ConvexError("Linked pending PO not found");
 
         // Status check
         if (po.status !== "sign_pending" && po.status !== "pending_approval") {
-            throw new Error("PO is not pending approval");
+            throw new ConvexError("PO is not pending approval");
         }
 
         const now = Date.now();

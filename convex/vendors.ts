@@ -20,7 +20,7 @@ async function getCurrentUser(ctx: any) {
   const user = await ctx.db
     .query("users")
     .withIndex("by_clerk_user_id", (q: any) => q.eq("clerkUserId", identity.subject))
-    .unique();
+    .first();
 
   if (!user) {
     throw new ConvexError("User not found");
@@ -46,15 +46,12 @@ export const getAllVendors = query({
     const currentUser = await ctx.db
       .query("users")
       .withIndex("by_clerk_user_id", (q: any) => q.eq("clerkUserId", identity.subject))
-      .unique();
+      .first();
 
     if (!currentUser) return [];
 
-    // Check if user has access (Purchase Officer or Manager)
-    if (
-      currentUser.role !== "purchase_officer" &&
-      currentUser.role !== "manager"
-    ) {
+    const userRole = (currentUser.role || "").trim();
+    if (userRole !== "purchase_officer" && userRole !== "manager") {
       return [];
     }
 
@@ -115,8 +112,8 @@ export const createVendor = mutation({
   handler: async (ctx, args) => {
     const currentUser = await getCurrentUser(ctx);
 
-    // Check if user is a Purchase Officer or Manager
-    if (currentUser.role !== "purchase_officer" && currentUser.role !== "manager") {
+    const userRole = (currentUser.role || "").trim();
+    if (userRole !== "purchase_officer" && userRole !== "manager") {
       throw new ConvexError("Unauthorized: Only Purchase Officers and Managers can create vendors");
     }
 

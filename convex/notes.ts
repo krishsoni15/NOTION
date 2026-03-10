@@ -16,7 +16,7 @@ export const getAllGRNLogs = query({
         const currentUser = await ctx.db
             .query("users")
             .withIndex("by_clerk_user_id", (q: any) => q.eq("clerkUserId", userId))
-            .unique();
+            .first();
 
         if (!currentUser) return [];
 
@@ -148,14 +148,14 @@ export const addNote = mutation({
     },
     handler: async (ctx, args) => {
         const identity = await ctx.auth.getUserIdentity();
-        if (!identity) throw new Error("Unauthenticated");
+        if (!identity) throw new ConvexError("Unauthenticated");
 
         const user = await ctx.db
             .query("users")
             .withIndex("by_clerk_user_id", (q) => q.eq("clerkUserId", identity.subject))
             .first();
 
-        if (!user) throw new Error("User not found");
+        if (!user) throw new ConvexError("User not found");
 
         const request = await ctx.db
             .query("requests")

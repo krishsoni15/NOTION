@@ -15,16 +15,16 @@ import type { Id } from "./_generated/dataModel";
 async function getCurrentUser(ctx: any) {
   const userId = await getAuthUserId(ctx);
   if (!userId) {
-    throw new Error("Not authenticated");
+    throw new ConvexError("Not authenticated");
   }
 
   const user = await ctx.db
     .query("users")
     .withIndex("by_clerk_user_id", (q: any) => q.eq("clerkUserId", userId))
-    .unique();
+    .first();
 
   if (!user) {
-    throw new Error("User not found");
+    throw new ConvexError("User not found");
   }
 
   return user;
@@ -46,7 +46,7 @@ export const getCostComparisonByRequestId = query({
     const currentUser = await ctx.db
       .query("users")
       .withIndex("by_clerk_user_id", (q: any) => q.eq("clerkUserId", userId))
-      .unique();
+      .first();
 
     if (!currentUser) return null;
 
@@ -131,7 +131,7 @@ export const getPendingCostComparisons = query({
     const currentUser = await ctx.db
       .query("users")
       .withIndex("by_clerk_user_id", (q: any) => q.eq("clerkUserId", userId))
-      .unique();
+      .first();
 
     if (!currentUser) return [];
 
@@ -242,18 +242,18 @@ export const upsertCostComparison = mutation({
     // Only purchase officers can create/update cost comparisons,
     // BUT managers can also do it for split fulfillment approval flows.
     if (currentUser.role !== "purchase_officer" && currentUser.role !== "manager") {
-      throw new Error("Unauthorized: Only purchase officers or managers can create cost comparisons");
+      throw new ConvexError("Unauthorized: Only purchase officers or managers can create cost comparisons");
     }
 
     // Verify request exists and is in correct status
     const request = await ctx.db.get(args.requestId);
     if (!request) {
-      throw new Error("Request not found");
+      throw new ConvexError("Request not found");
     }
 
     const allowedStatuses = ["approved", "ready_for_cc", "cc_pending", "cc_rejected", "recheck", "pending"];
     if (!allowedStatuses.includes(request.status)) {
-      throw new Error(`Request must be in one of the following statuses: ${allowedStatuses.join(", ")}`);
+      throw new ConvexError(`Request must be in one of the following statuses: ${allowedStatuses.join(", ")}`);
     }
 
     // Check if cost comparison already exists
@@ -308,7 +308,7 @@ export const submitCostComparison = mutation({
 
     // Only purchase officers can submit cost comparisons
     if (currentUser.role !== "purchase_officer") {
-      throw new Error("Unauthorized: Only purchase officers can submit cost comparisons");
+      throw new ConvexError("Unauthorized: Only purchase officers can submit cost comparisons");
     }
 
     // Get cost comparison
@@ -318,11 +318,11 @@ export const submitCostComparison = mutation({
       .first();
 
     if (!costComparison) {
-      throw new Error("Cost comparison not found");
+      throw new ConvexError("Cost comparison not found");
     }
 
     if (costComparison.vendorQuotes.length === 0) {
-      throw new Error("Please add at least one vendor quote before submitting");
+      throw new ConvexError("Please add at least one vendor quote before submitting");
     }
 
     const now = Date.now();
@@ -372,7 +372,7 @@ export const reviewCostComparison = mutation({
 
     // Only managers can review cost comparisons
     if (currentUser.role !== "manager") {
-      throw new Error("Unauthorized: Only managers can review cost comparisons");
+      throw new ConvexError("Unauthorized: Only managers can review cost comparisons");
     }
 
     // Get cost comparison
@@ -382,18 +382,18 @@ export const reviewCostComparison = mutation({
       .first();
 
     if (!costComparison) {
-      throw new Error("Cost comparison not found");
+      throw new ConvexError("Cost comparison not found");
     }
 
     if (costComparison.status !== "cc_pending") {
-      throw new Error("Cost comparison is not pending approval");
+      throw new ConvexError("Cost comparison is not pending approval");
     }
 
     const now = Date.now();
 
     if (args.action === "approve") {
       if (!args.selectedVendorId) {
-        throw new Error("Please select a vendor before approving");
+        throw new ConvexError("Please select a vendor before approving");
       }
 
       // Verify vendor is in quotes
@@ -401,7 +401,7 @@ export const reviewCostComparison = mutation({
         (q) => q.vendorId === args.selectedVendorId
       );
       if (!vendorInQuotes) {
-        throw new Error("Selected vendor must be in the quotes list");
+        throw new ConvexError("Selected vendor must be in the quotes list");
       }
 
       // Update cost comparison
@@ -436,7 +436,7 @@ export const reviewCostComparison = mutation({
     } else {
       // Reject - require notes
       if (!args.notes || !args.notes.trim()) {
-        throw new Error("Rejection reason is required");
+        throw new ConvexError("Rejection reason is required");
       }
 
       await ctx.db.patch(costComparison._id, {
@@ -505,7 +505,7 @@ export const resubmitCostComparison = mutation({
 
     // Only purchase officers can resubmit
     if (currentUser.role !== "purchase_officer") {
-      throw new Error("Unauthorized: Only purchase officers can resubmit cost comparisons");
+      throw new ConvexError("Unauthorized: Only purchase officers can resubmit cost comparisons");
     }
 
     // Get cost comparison
@@ -515,11 +515,11 @@ export const resubmitCostComparison = mutation({
       .first();
 
     if (!costComparison) {
-      throw new Error("Cost comparison not found");
+      throw new ConvexError("Cost comparison not found");
     }
 
     if (costComparison.status !== "cc_rejected") {
-      throw new Error("Cost comparison is not rejected");
+      throw new ConvexError("Cost comparison is not rejected");
     }
 
     const now = Date.now();
@@ -573,7 +573,7 @@ export const approveSplitFulfillment = mutation({
 
     // Only managers can review
     if (currentUser.role !== "manager") {
-      throw new Error("Unauthorized: Only managers can approve split fulfillment");
+      throw new ConvexError("Unauthorized: Only managers can approve split fulfillment");
     }
 
     // Get cost comparison
@@ -583,7 +583,7 @@ export const approveSplitFulfillment = mutation({
       .first();
 
     if (!costComparison) {
-      throw new Error("Cost comparison not found");
+      throw new ConvexError("Cost comparison not found");
     }
 
     const now = Date.now();

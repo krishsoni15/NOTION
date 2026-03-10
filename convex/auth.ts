@@ -53,6 +53,14 @@ http.route({
           alg: "RS256",
           use: "sig",
         },
+        {
+          kty: "RSA",
+          n: "5kB57Pnd4TIssxVNIkG-sIY8g-RQRo1BSqu43tdnDlKsSbdWAN_w2b8M9lnlVxioUTUYKhSl4H_j-iGH9ZQmltZvisAkeYOyvrWdPwTxqjCgKnXXuAci7jb3slwSDz_MobYkkxItey0d_N1SUItQzn3y9Y9syQTXuLbe_PVZ67RJigpUT7pLebVADzyUbARmUQfeMDSkVce70FCXQ4Vt1FWlLaAFP0YHvwsn5OY84NUxxvL8VhepzALTCsKp5EYbJWCoFepuuZcJpfIEcakCfzUEZstp3V1OmKuBHz_bAXHpATJZkPdzD__aSQOVQVEFw-enjb1lGJhmxiz2y5-4FQ",
+          e: "AQAB",
+          kid: "notion-client-1",
+          alg: "RS256",
+          use: "sig",
+        }
       ],
     };
 

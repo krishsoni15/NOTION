@@ -28,7 +28,7 @@ export const getAllSites = query({
     const currentUser = await ctx.db
       .query("users")
       .withIndex("by_clerk_user_id", (q) => q.eq("clerkUserId", userId))
-      .unique();
+      .first();
 
     if (!currentUser) return [];
 
@@ -101,19 +101,19 @@ export const createSite = mutation({
   },
   handler: async (ctx, args) => {
     const userId = await getAuthUserId(ctx);
-    if (!userId) throw new Error("Not authenticated");
+    if (!userId) throw new ConvexError("Not authenticated");
 
     // Get current user
     const currentUser = await ctx.db
       .query("users")
       .withIndex("by_clerk_user_id", (q) => q.eq("clerkUserId", userId))
-      .unique();
+      .first();
 
-    if (!currentUser) throw new Error("User not found");
+    if (!currentUser) throw new ConvexError("User not found");
 
     // Check if user is a manager or purchase officer
     if (currentUser.role !== "manager" && currentUser.role !== "purchase_officer") {
-      throw new Error("Unauthorized: Only managers and purchase officers can create sites");
+      throw new ConvexError("Unauthorized: Only managers and purchase officers can create sites");
     }
 
     // Check if site name already exists (case-insensitive)
@@ -124,7 +124,7 @@ export const createSite = mutation({
     );
 
     if (existingSite) {
-      throw new Error(`Location "${args.name}" already exists`);
+      throw new ConvexError(`Location "${args.name}" already exists`);
     }
 
     const now = Date.now();
@@ -161,24 +161,24 @@ export const updateSite = mutation({
   },
   handler: async (ctx, args) => {
     const userId = await getAuthUserId(ctx);
-    if (!userId) throw new Error("Not authenticated");
+    if (!userId) throw new ConvexError("Not authenticated");
 
     // Get current user
     const currentUser = await ctx.db
       .query("users")
       .withIndex("by_clerk_user_id", (q) => q.eq("clerkUserId", userId))
-      .unique();
+      .first();
 
-    if (!currentUser) throw new Error("User not found");
+    if (!currentUser) throw new ConvexError("User not found");
 
     // Check if user is a manager
     if (currentUser.role !== "manager") {
-      throw new Error("Unauthorized: Only managers can update sites");
+      throw new ConvexError("Unauthorized: Only managers can update sites");
     }
 
     // Get site
     const site = await ctx.db.get(args.siteId);
-    if (!site) throw new Error("Site not found");
+    if (!site) throw new ConvexError("Site not found");
 
     // Update site
     await ctx.db.patch(args.siteId, {
@@ -235,24 +235,24 @@ export const toggleSiteStatus = mutation({
   args: { siteId: v.id("sites") },
   handler: async (ctx, args) => {
     const userId = await getAuthUserId(ctx);
-    if (!userId) throw new Error("Not authenticated");
+    if (!userId) throw new ConvexError("Not authenticated");
 
     // Get current user
     const currentUser = await ctx.db
       .query("users")
       .withIndex("by_clerk_user_id", (q) => q.eq("clerkUserId", userId))
-      .unique();
+      .first();
 
-    if (!currentUser) throw new Error("User not found");
+    if (!currentUser) throw new ConvexError("User not found");
 
     // Check if user is a manager
     if (currentUser.role !== "manager") {
-      throw new Error("Unauthorized: Only managers can toggle site status");
+      throw new ConvexError("Unauthorized: Only managers can toggle site status");
     }
 
     // Get site
     const site = await ctx.db.get(args.siteId);
-    if (!site) throw new Error("Site not found");
+    if (!site) throw new ConvexError("Site not found");
 
     // If trying to deactivate, check if site is assigned to users
     if (site.isActive) {
@@ -262,7 +262,7 @@ export const toggleSiteStatus = mutation({
       );
 
       if (assignedToUsers.length > 0) {
-        throw new Error(
+        throw new ConvexError(
           `Cannot deactivate site: It is assigned to ${assignedToUsers.length} user(s). Please unassign the site first.`
         );
       }
@@ -287,24 +287,24 @@ export const deleteSite = mutation({
   args: { siteId: v.id("sites") },
   handler: async (ctx, args) => {
     const userId = await getAuthUserId(ctx);
-    if (!userId) throw new Error("Not authenticated");
+    if (!userId) throw new ConvexError("Not authenticated");
 
     // Get current user
     const currentUser = await ctx.db
       .query("users")
       .withIndex("by_clerk_user_id", (q) => q.eq("clerkUserId", userId))
-      .unique();
+      .first();
 
-    if (!currentUser) throw new Error("User not found");
+    if (!currentUser) throw new ConvexError("User not found");
 
     // Check if user is a manager
     if (currentUser.role !== "manager") {
-      throw new Error("Unauthorized: Only managers can delete sites");
+      throw new ConvexError("Unauthorized: Only managers can delete sites");
     }
 
     // Get site
     const site = await ctx.db.get(args.siteId);
-    if (!site) throw new Error("Site not found");
+    if (!site) throw new ConvexError("Site not found");
 
     // Check if site is assigned to any users
     const allUsers = await ctx.db.query("users").collect();
@@ -313,7 +313,7 @@ export const deleteSite = mutation({
     );
 
     if (assignedToUsers.length > 0) {
-      throw new Error(
+      throw new ConvexError(
         `Cannot delete site: It is assigned to ${assignedToUsers.length} user(s). Please unassign the site first.`
       );
     }
@@ -325,7 +325,7 @@ export const deleteSite = mutation({
       .collect();
 
     if (requests.length > 0) {
-      throw new Error(
+      throw new ConvexError(
         `Cannot delete site: It is used in ${requests.length} request(s). Sites with associated requests cannot be deleted.`
       );
     }

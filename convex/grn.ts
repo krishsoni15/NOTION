@@ -1,22 +1,21 @@
-import { v } from "convex/values";
+import { v, ConvexError } from "convex/values";
 import { mutation, query } from "./_generated/server";
-import { getAuthUserId } from "@convex-dev/auth/server";
 import type { Id } from "./_generated/dataModel";
 
 // Helper function to get current user
 async function getCurrentUser(ctx: any) {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) {
-        throw new Error("Not authenticated");
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+        throw new ConvexError("Not authenticated");
     }
 
     const user = await ctx.db
         .query("users")
-        .withIndex("by_clerk_user_id", (q: any) => q.eq("clerkUserId", userId))
-        .unique();
+        .withIndex("by_clerk_user_id", (q: any) => q.eq("clerkUserId", identity.subject))
+        .first();
 
     if (!user) {
-        throw new Error("User not found");
+        throw new ConvexError("User not found");
     }
 
     return user;
@@ -24,17 +23,18 @@ async function getCurrentUser(ctx: any) {
 
 // Helper function to generate GRN Number in format GRN-001, GRN-002, etc.
 async function generateGRNNumber(ctx: any): Promise<string> {
-    const allGRNs = await ctx.db.query("grns").collect();
+    // Optimization: query only the latest GRN and extract its number
+    const latestGRN = await ctx.db
+        .query("grns")
+        .order("desc")
+        .first();
 
     let maxNumber = 0;
-    for (const grn of allGRNs) {
+    if (latestGRN) {
         // Match any trailing digits after "GRN-" (handles GRN-001, GRN-2026-0001, etc.)
-        const numMatch = grn.grnNumber.match(/(\d+)$/);
+        const numMatch = latestGRN.grnNumber.match(/(\d+)$/);
         if (numMatch) {
-            const num = parseInt(numMatch[1], 10);
-            if (num > maxNumber) {
-                maxNumber = num;
-            }
+            maxNumber = parseInt(numMatch[1], 10);
         }
     }
     const nextNumber = maxNumber + 1;
@@ -44,16 +44,16 @@ async function generateGRNNumber(ctx: any): Promise<string> {
 export const getPendingPOsForGRN = query({
     args: {},
     handler: async (ctx) => {
-        const userId = await getAuthUserId(ctx);
-        if (!userId) return null;
+        const identity = await ctx.auth.getUserIdentity();
+        if (!identity) return [];
 
         const currentUser = await ctx.db
             .query("users")
-            .withIndex("by_clerk_user_id", (q: any) => q.eq("clerkUserId", userId))
-            .unique();
+            .withIndex("by_clerk_user_id", (q: any) => q.eq("clerkUserId", identity.subject))
+            .first();
 
         if (!currentUser || (currentUser.role !== "site_engineer" && currentUser.role !== "manager" && currentUser.role !== "purchase_officer")) {
-            return null;
+            return [];
         }
 
         // Get all ordered POs
@@ -99,19 +99,21 @@ export const getPendingPOsForGRN = query({
 export const getAllGRNs = query({
     args: {},
     handler: async (ctx) => {
-        const userId = await getAuthUserId(ctx);
-        if (!userId) return null;
+        const identity = await ctx.auth.getUserIdentity();
+        if (!identity) return [];
 
         const currentUser = await ctx.db
             .query("users")
-            .withIndex("by_clerk_user_id", (q: any) => q.eq("clerkUserId", userId))
-            .unique();
+            .withIndex("by_clerk_user_id", (q: any) => q.eq("clerkUserId", identity.subject))
+            .first();
 
         if (!currentUser || (currentUser.role !== "site_engineer" && currentUser.role !== "manager" && currentUser.role !== "purchase_officer")) {
-            return null;
+            return [];
         }
 
-        const grns = await ctx.db.query("grns").order("desc").collect();
+        // Extreme limit (jugad) to prevent Convex internal DB operation limits (1000)
+        // 50 records * ~5 lookups per record = 250 DB operations. Safe.
+        const grns = await ctx.db.query("grns").order("desc").take(50);
 
         return Promise.all(
             grns.map(async (grn) => {
@@ -151,16 +153,16 @@ export const createGRN = mutation({
         const currentUser = await getCurrentUser(ctx);
 
         if (currentUser.role !== "site_engineer" && currentUser.role !== "manager" && currentUser.role !== "purchase_officer") {
-            throw new Error("Unauthorized");
+            throw new ConvexError("Unauthorized");
         }
 
         const po = await ctx.db.get(args.poId);
         if (!po) {
-            throw new Error("Purchase Order not found");
+            throw new ConvexError("Purchase Order not found");
         }
 
         if (args.receivedQuantity <= 0) {
-            throw new Error("Received quantity must be greater than 0");
+            throw new ConvexError("Received quantity must be greater than 0");
         }
 
         // Calculate current received
@@ -172,7 +174,7 @@ export const createGRN = mutation({
         const currentReceived = existingGRNs.reduce((sum, g) => sum + g.receivedQuantity, 0);
 
         if (currentReceived + args.receivedQuantity > po.quantity) {
-            throw new Error(`Cannot receive more than PO quantity. Remaining: ${po.quantity - currentReceived}`);
+            throw new ConvexError(`Cannot receive more than PO quantity. Remaining: ${po.quantity - currentReceived}`);
         }
 
         const grnNumber = await generateGRNNumber(ctx);
@@ -245,17 +247,17 @@ export const createGRNFromDelivery = mutation({
         const currentUser = await getCurrentUser(ctx);
 
         if (currentUser.role !== "site_engineer" && currentUser.role !== "manager" && currentUser.role !== "purchase_officer") {
-            throw new Error("Unauthorized");
+            throw new ConvexError("Unauthorized");
         }
 
         if (args.deliveryQuantity <= 0) {
-            throw new Error("Delivery quantity must be greater than 0");
+            throw new ConvexError("Delivery quantity must be greater than 0");
         }
 
         // Find the PO for this request
         const request = await ctx.db.get(args.requestId);
         if (!request) {
-            throw new Error("Request not found");
+            throw new ConvexError("Request not found");
         }
 
         // Find PO by poNumber and requestId
@@ -273,7 +275,7 @@ export const createGRNFromDelivery = mutation({
         }
 
         if (!po) {
-            throw new Error(`Purchase Order ${args.poNumber} not found`);
+            throw new ConvexError(`Purchase Order ${args.poNumber} not found`);
         }
 
         // Calculate current received
@@ -285,7 +287,7 @@ export const createGRNFromDelivery = mutation({
         const currentReceived = existingGRNs.reduce((sum, g) => sum + g.receivedQuantity, 0);
 
         if (currentReceived + args.deliveryQuantity > po.quantity) {
-            throw new Error(`Cannot receive more than PO quantity. Remaining: ${po.quantity - currentReceived}`);
+            throw new ConvexError(`Cannot receive more than PO quantity. Remaining: ${po.quantity - currentReceived}`);
         }
 
         const grnNumber = await generateGRNNumber(ctx);
@@ -357,12 +359,12 @@ export const updateGRN = mutation({
         const currentUser = await getCurrentUser(ctx);
 
         if (currentUser.role !== "site_engineer" && currentUser.role !== "manager" && currentUser.role !== "purchase_officer") {
-            throw new Error("Unauthorized");
+            throw new ConvexError("Unauthorized");
         }
 
         const grn = await ctx.db.get(args.grnId);
         if (!grn) {
-            throw new Error("GRN not found");
+            throw new ConvexError("GRN not found");
         }
 
         const updates: any = { updatedAt: Date.now() };

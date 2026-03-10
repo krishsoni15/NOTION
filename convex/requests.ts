@@ -16,16 +16,16 @@ import type { Id } from "./_generated/dataModel";
 async function getCurrentUser(ctx: any) {
   const userId = await getAuthUserId(ctx);
   if (!userId) {
-    throw new Error("Not authenticated");
+    throw new ConvexError("Not authenticated");
   }
 
   const user = await ctx.db
     .query("users")
     .withIndex("by_clerk_user_id", (q: any) => q.eq("clerkUserId", userId))
-    .unique();
+    .first();
 
   if (!user) {
-    throw new Error("User not found");
+    throw new ConvexError("User not found");
   }
 
   return user;
@@ -48,7 +48,7 @@ export const getUserAssignedSites = query({
     const currentUser = await ctx.db
       .query("users")
       .withIndex("by_clerk_user_id", (q: any) => q.eq("clerkUserId", userId))
-      .unique();
+      .first();
 
     if (!currentUser) return [];
 
@@ -84,7 +84,7 @@ export const getInventoryItemsForAutocomplete = query({
     const currentUser = await ctx.db
       .query("users")
       .withIndex("by_clerk_user_id", (q: any) => q.eq("clerkUserId", userId))
-      .unique();
+      .first();
 
     if (!currentUser) return [];
 
@@ -125,7 +125,7 @@ export const getUserRequests = query({
     const currentUser = await ctx.db
       .query("users")
       .withIndex("by_clerk_user_id", (q: any) => q.eq("clerkUserId", userId))
-      .unique();
+      .first();
 
     if (!currentUser) return [];
 
@@ -165,7 +165,7 @@ export const getUserRequests = query({
         const costComparison = await ctx.db
           .query("costComparisons")
           .withIndex("by_request_id", (q) => q.eq("requestId", request._id))
-          .unique();
+          .first();
 
         if (costComparison) {
           // If approved, use selected vendor
@@ -231,7 +231,7 @@ export const getRequestsReadyForCC = query({
     const currentUser = await ctx.db
       .query("users")
       .withIndex("by_clerk_user_id", (q: any) => q.eq("clerkUserId", userId))
-      .unique();
+      .first();
 
     if (!currentUser) return [];
 
@@ -276,7 +276,7 @@ export const getRequestsReadyForCC = query({
         const costComparison = await ctx.db
           .query("costComparisons")
           .withIndex("by_request_id", (q) => q.eq("requestId", request._id))
-          .unique();
+          .first();
 
         if (costComparison) {
           // If approved, use selected vendor
@@ -362,7 +362,7 @@ export const getPurchaseRequestsByStatus = query({
     const currentUser = await ctx.db
       .query("users")
       .withIndex("by_clerk_user_id", (q: any) => q.eq("clerkUserId", userId))
-      .unique();
+      .first();
 
     if (!currentUser) return [];
 
@@ -575,7 +575,7 @@ export const getAllRequests = query({
     const currentUser = await ctx.db
       .query("users")
       .withIndex("by_clerk_user_id", (q: any) => q.eq("clerkUserId", userId))
-      .unique();
+      .first();
 
     if (!currentUser) return [];
 
@@ -620,7 +620,7 @@ export const getAllRequests = query({
         const costComparison = await ctx.db
           .query("costComparisons")
           .withIndex("by_request_id", (q) => q.eq("requestId", request._id))
-          .unique();
+          .first();
 
         if (costComparison) {
           // If approved, use selected vendor
@@ -687,7 +687,7 @@ export const getRequestsByRequestNumber = query({
     const currentUser = await ctx.db
       .query("users")
       .withIndex("by_clerk_user_id", (q: any) => q.eq("clerkUserId", userId))
-      .unique();
+      .first();
 
     if (!currentUser) return [];
 
@@ -721,7 +721,7 @@ export const getRequestsByRequestNumber = query({
         const costComparison = await ctx.db
           .query("costComparisons")
           .withIndex("by_request_id", (q) => q.eq("requestId", request._id))
-          .unique();
+          .first();
 
         return {
           ...request,
@@ -756,7 +756,7 @@ export const getRequestById = query({
     const currentUser = await ctx.db
       .query("users")
       .withIndex("by_clerk_user_id", (q: any) => q.eq("clerkUserId", userId))
-      .unique();
+      .first();
 
     if (!currentUser) return null;
 
@@ -842,20 +842,20 @@ export const createMaterialRequest = mutation({
 
     // Only site engineers can create requests
     if (currentUser.role !== "site_engineer") {
-      throw new Error("Unauthorized: Only site engineers can create requests");
+      throw new ConvexError("Unauthorized: Only site engineers can create requests");
     }
 
     // Verify site exists and is assigned to user
     const site = await ctx.db.get(args.siteId);
     if (!site || !site.isActive) {
-      throw new Error("Site not found or inactive");
+      throw new ConvexError("Site not found or inactive");
     }
 
     if (
       !currentUser.assignedSites ||
       !currentUser.assignedSites.includes(args.siteId)
     ) {
-      throw new Error("Unauthorized: Site not assigned to you");
+      throw new ConvexError("Unauthorized: Site not assigned to you");
     }
 
     // Use provided request number or generate a new one
@@ -952,11 +952,11 @@ export const createMultipleMaterialRequests = mutation({
 
     // Only site engineers can create requests
     if (currentUser.role !== "site_engineer") {
-      throw new Error("Unauthorized: Only site engineers can create requests");
+      throw new ConvexError("Unauthorized: Only site engineers can create requests");
     }
 
     if (args.items.length === 0) {
-      throw new Error("At least one item is required");
+      throw new ConvexError("At least one item is required");
     }
 
     // Generate unique sequential request number (001, 002, 003, etc.)
@@ -989,13 +989,13 @@ export const createMultipleMaterialRequests = mutation({
       // Verify each item's site exists and is assigned to user
       const site = await ctx.db.get(item.siteId);
       if (!site || !site.isActive) {
-        throw new Error(`Item ${i + 1}: Site not found or inactive`);
+        throw new ConvexError(`Item ${i + 1}: Site not found or inactive`);
       }
       if (
         !currentUser.assignedSites ||
         !currentUser.assignedSites.includes(item.siteId)
       ) {
-        throw new Error(`Item ${i + 1}: Site not assigned to you`);
+        throw new ConvexError(`Item ${i + 1}: Site not assigned to you`);
       }
 
       const requestId = await ctx.db.insert("requests", {
@@ -1079,11 +1079,11 @@ export const saveMultipleMaterialRequestsAsDraft = mutation({
 
     // Only site engineers can save drafts
     if (currentUser.role !== "site_engineer") {
-      throw new Error("Unauthorized: Only site engineers can save drafts");
+      throw new ConvexError("Unauthorized: Only site engineers can save drafts");
     }
 
     if (args.items.length === 0) {
-      throw new Error("At least one item is required");
+      throw new ConvexError("At least one item is required");
     }
 
     // Generate temporary draft ID (DRAFT-001, DRAFT-002, etc.)
@@ -1117,13 +1117,13 @@ export const saveMultipleMaterialRequestsAsDraft = mutation({
       // Verify each item's site exists and is assigned to user
       const site = await ctx.db.get(item.siteId);
       if (!site || !site.isActive) {
-        throw new Error(`Item ${i + 1}: Site not found or inactive`);
+        throw new ConvexError(`Item ${i + 1}: Site not found or inactive`);
       }
       if (
         !currentUser.assignedSites ||
         !currentUser.assignedSites.includes(item.siteId)
       ) {
-        throw new Error(`Item ${i + 1}: Site not assigned to you`);
+        throw new ConvexError(`Item ${i + 1}: Site not assigned to you`);
       }
 
       const requestId = await ctx.db.insert("requests", {
@@ -1204,23 +1204,23 @@ export const updateRequestStatus = mutation({
 
     // Only managers can approve/reject, Purchase Officers can mark direct PO
     if (currentUser.role !== "manager" && !(currentUser.role === "purchase_officer" && args.status === "ready_for_po")) {
-      throw new Error("Unauthorized: Only managers (or Purchase Officers for Direct PO) can update request status");
+      throw new ConvexError("Unauthorized: Only managers (or Purchase Officers for Direct PO) can update request status");
     }
 
     const request = await ctx.db.get(args.requestId);
     if (!request) {
-      throw new Error("Request not found");
+      throw new ConvexError("Request not found");
     }
 
     // Status validation
     if (currentUser.role === "manager") {
       // Manager can update from pending, approved (correction), or recheck (re-evaluation)
       const allowed = ["pending", "approved", "recheck"];
-      if (!allowed.includes(request.status)) throw new Error("Request status can only be updated from pending, approved, or recheck");
+      if (!allowed.includes(request.status)) throw new ConvexError("Request status can only be updated from pending, approved, or recheck");
     } else {
       // Purchase Officer
       const allowed = ["recheck", "ready_for_cc", "cc_pending", "cc_rejected"];
-      if (!allowed.includes(request.status)) throw new Error("Purchase Officer can only update from recheck/cc stages");
+      if (!allowed.includes(request.status)) throw new ConvexError("Purchase Officer can only update from recheck/cc stages");
     }
 
     const now = Date.now();
@@ -1316,11 +1316,11 @@ export const bulkUpdateRequestStatus = mutation({
 
     // Only managers can approve/reject requests
     if (currentUser.role !== "manager") {
-      throw new Error("Unauthorized: Only managers can update request status");
+      throw new ConvexError("Unauthorized: Only managers can update request status");
     }
 
     if (args.requestIds.length === 0) {
-      throw new Error("No requests selected");
+      throw new ConvexError("No requests selected");
     }
 
     const now = Date.now();
@@ -1435,7 +1435,7 @@ export const sendDraftRequest = mutation({
 
     // Only site engineers can send their own draft requests
     if (currentUser.role !== "site_engineer") {
-      throw new Error("Unauthorized: Only site engineers can send draft requests");
+      throw new ConvexError("Unauthorized: Only site engineers can send draft requests");
     }
 
     // Get all requests with this draft request number
@@ -1445,13 +1445,13 @@ export const sendDraftRequest = mutation({
       .collect();
 
     if (requests.length === 0) {
-      throw new Error("Draft request not found");
+      throw new ConvexError("Draft request not found");
     }
 
     // Check if all requests are in draft status and created by current user
     const allDrafts = requests.every((req) => req.status === "draft" && req.createdBy === currentUser._id);
     if (!allDrafts) {
-      throw new Error("All requests must be in draft status and created by you");
+      throw new ConvexError("All requests must be in draft status and created by you");
     }
 
     // Generate next sequential request number (only count non-draft requests)
@@ -1549,7 +1549,7 @@ export const deleteDraftRequest = mutation({
 
     // Only site engineers can delete their own drafts
     if (currentUser.role !== "site_engineer") {
-      throw new Error("Unauthorized: Only site engineers can delete their own drafts");
+      throw new ConvexError("Unauthorized: Only site engineers can delete their own drafts");
     }
 
     // Get all requests with this request number
@@ -1559,13 +1559,13 @@ export const deleteDraftRequest = mutation({
       .collect();
 
     if (requests.length === 0) {
-      throw new Error("Draft request not found");
+      throw new ConvexError("Draft request not found");
     }
 
     // Check if all requests are in draft status and created by current user
     const allDrafts = requests.every((req) => req.status === "draft" && req.createdBy === currentUser._id);
     if (!allDrafts) {
-      throw new Error("Unauthorized: You can only delete your own drafts");
+      throw new ConvexError("Unauthorized: You can only delete your own drafts");
     }
 
     // Delete all linked request_notes to prevent history pollution when ID is reused
@@ -1620,7 +1620,7 @@ export const updateDraftRequest = mutation({
 
     // Only site engineers can update their own drafts
     if (currentUser.role !== "site_engineer") {
-      throw new Error("Unauthorized: Only site engineers can update drafts");
+      throw new ConvexError("Unauthorized: Only site engineers can update drafts");
     }
 
     // Get existing draft requests
@@ -1630,17 +1630,17 @@ export const updateDraftRequest = mutation({
       .collect();
 
     if (existingRequests.length === 0) {
-      throw new Error("Draft request not found");
+      throw new ConvexError("Draft request not found");
     }
 
     // Check if all are drafts created by current user
     const allDrafts = existingRequests.every((req) => req.status === "draft" && req.createdBy === currentUser._id);
     if (!allDrafts) {
-      throw new Error("Unauthorized: You can only update your own drafts");
+      throw new ConvexError("Unauthorized: You can only update your own drafts");
     }
 
     if (args.items.length === 0) {
-      throw new Error("At least one item is required");
+      throw new ConvexError("At least one item is required");
     }
 
     const now = Date.now();
@@ -1657,13 +1657,13 @@ export const updateDraftRequest = mutation({
       // Verify each item's site exists and is assigned to user
       const site = await ctx.db.get(item.siteId);
       if (!site || !site.isActive) {
-        throw new Error(`Item ${i + 1}: Site not found or inactive`);
+        throw new ConvexError(`Item ${i + 1}: Site not found or inactive`);
       }
       if (
         !currentUser.assignedSites ||
         !currentUser.assignedSites.includes(item.siteId)
       ) {
-        throw new Error(`Item ${i + 1}: Site not assigned to you`);
+        throw new ConvexError(`Item ${i + 1}: Site not assigned to you`);
       }
 
       const requestId = await ctx.db.insert("requests", {
@@ -1726,22 +1726,22 @@ export const markDelivery = mutation({
 
     // Only site engineers can mark delivery
     if (currentUser.role !== "site_engineer") {
-      throw new Error("Unauthorized: Only site engineers can mark delivery");
+      throw new ConvexError("Unauthorized: Only site engineers can mark delivery");
     }
 
     const request = await ctx.db.get(args.requestId);
     if (!request) {
-      throw new Error("Request not found");
+      throw new ConvexError("Request not found");
     }
 
     // Check if user created this request
     if (request.createdBy !== currentUser._id) {
-      throw new Error("Unauthorized: You can only mark your own requests as delivered");
+      throw new ConvexError("Unauthorized: You can only mark your own requests as delivered");
     }
 
     // Only requests in delivery_stage can be marked as delivered
     if (request.status !== "delivery_stage") {
-      throw new Error("Only requests in delivery stage can be marked as delivered");
+      throw new ConvexError("Only requests in delivery stage can be marked as delivered");
     }
 
     const now = Date.now();
@@ -1812,17 +1812,17 @@ export const directToPO = mutation({
 
     // Only purchase officers can use direct to PO
     if (currentUser.role !== "purchase_officer") {
-      throw new Error("Unauthorized: Only purchase officers can use direct to PO");
+      throw new ConvexError("Unauthorized: Only purchase officers can use direct to PO");
     }
 
     const request = await ctx.db.get(args.requestId);
     if (!request) {
-      throw new Error("Request not found");
+      throw new ConvexError("Request not found");
     }
 
     // Only allow for approved requests that are ready for CC or recheck
     if (request.status !== "approved" && request.status !== "ready_for_cc" && request.status !== "recheck") {
-      throw new Error("Can only use direct to PO for approved requests ready for cost comparison or recheck");
+      throw new ConvexError("Can only use direct to PO for approved requests ready for cost comparison or recheck");
     }
 
     const now = Date.now();
@@ -1866,12 +1866,12 @@ export const updateRequestDetails = mutation({
 
     // Allow purchase officers and managers
     if (currentUser.role !== "purchase_officer" && currentUser.role !== "manager") {
-      throw new Error("Unauthorized: Only purchase officers and managers can update request details");
+      throw new ConvexError("Unauthorized: Only purchase officers and managers can update request details");
     }
 
     const request = await ctx.db.get(args.requestId);
     if (!request) {
-      throw new Error("Request not found");
+      throw new ConvexError("Request not found");
     }
 
     // Status checks
@@ -1886,7 +1886,7 @@ export const updateRequestDetails = mutation({
       // If manager, just warn or allow? It's better to allow essential updates.
       // But let's stick to extending the list for now.
       if (!isManagerAction) {
-        throw new Error("Can only update details for approved requests in cost comparison process");
+        throw new ConvexError("Can only update details for approved requests in cost comparison process");
       }
     }
 
@@ -1938,22 +1938,22 @@ export const updateLastTalkDate = mutation({
   },
   handler: async (ctx, args) => {
     const userId = await getAuthUserId(ctx);
-    if (!userId) throw new Error("Not authenticated");
+    if (!userId) throw new ConvexError("Not authenticated");
 
     const currentUser = await ctx.db
       .query("users")
       .withIndex("by_clerk_user_id", (q: any) => q.eq("clerkUserId", userId))
-      .unique();
+      .first();
 
-    if (!currentUser) throw new Error("User not found");
+    if (!currentUser) throw new ConvexError("User not found");
 
     if (currentUser.role !== "purchase_officer" && currentUser.role !== "manager") {
-      throw new Error("Only Purchase Officer or Manager can update last talk date");
+      throw new ConvexError("Only Purchase Officer or Manager can update last talk date");
     }
 
     const request = await ctx.db.get(args.requestId);
     if (!request) {
-      throw new Error("Request not found");
+      throw new ConvexError("Request not found");
     }
 
     await ctx.db.patch(args.requestId, {
@@ -1969,22 +1969,22 @@ export const updateLastTalkText = mutation({
   },
   handler: async (ctx, args) => {
     const userId = await getAuthUserId(ctx);
-    if (!userId) throw new Error("Not authenticated");
+    if (!userId) throw new ConvexError("Not authenticated");
 
     const currentUser = await ctx.db
       .query("users")
       .withIndex("by_clerk_user_id", (q: any) => q.eq("clerkUserId", userId))
-      .unique();
+      .first();
 
-    if (!currentUser) throw new Error("User not found");
+    if (!currentUser) throw new ConvexError("User not found");
 
     if (currentUser.role !== "purchase_officer" && currentUser.role !== "manager") {
-      throw new Error("Only Purchase Officer or Manager can update last talk text");
+      throw new ConvexError("Only Purchase Officer or Manager can update last talk text");
     }
 
     const request = await ctx.db.get(args.requestId);
     if (!request) {
-      throw new Error("Request not found");
+      throw new ConvexError("Request not found");
     }
 
     await ctx.db.patch(args.requestId, {
@@ -2000,21 +2000,21 @@ export const updateCommittedDate = mutation({
   },
   handler: async (ctx, args) => {
     const userId = await getAuthUserId(ctx);
-    if (!userId) throw new Error("Not authenticated");
+    if (!userId) throw new ConvexError("Not authenticated");
 
     const currentUser = await ctx.db
       .query("users")
       .withIndex("by_clerk_user_id", (q: any) => q.eq("clerkUserId", userId))
-      .unique();
+      .first();
 
-    if (!currentUser) throw new Error("User not found");
+    if (!currentUser) throw new ConvexError("User not found");
 
     if (currentUser.role !== "purchase_officer" && currentUser.role !== "manager") {
-      throw new Error("Only Purchase Officer or Manager can update committed date");
+      throw new ConvexError("Only Purchase Officer or Manager can update committed date");
     }
 
     const request = await ctx.db.get(args.requestId);
-    if (!request) throw new Error("Request not found");
+    if (!request) throw new ConvexError("Request not found");
 
     await ctx.db.patch(args.requestId, {
       committedDate: args.committedDate,
@@ -2043,12 +2043,12 @@ export const updatePurchaseRequestStatus = mutation({
 
     // Only purchase officers can update purchase request status
     if (currentUser.role !== "purchase_officer") {
-      throw new Error("Unauthorized: Only purchase officers can update purchase request status");
+      throw new ConvexError("Unauthorized: Only purchase officers can update purchase request status");
     }
 
     const request = await ctx.db.get(args.requestId);
     if (!request) {
-      throw new Error("Request not found");
+      throw new ConvexError("Request not found");
     }
 
     // Validate status transitions
@@ -2069,7 +2069,7 @@ export const updatePurchaseRequestStatus = mutation({
     const allowedStatuses = validTransitions[currentStatus] || [];
 
     if (!allowedStatuses.includes(args.status) && args.status !== currentStatus) {
-      throw new Error(`Invalid status transition from ${currentStatus} to ${args.status}`);
+      throw new ConvexError(`Invalid status transition from ${currentStatus} to ${args.status}`);
     }
 
     const now = Date.now();
@@ -2119,14 +2119,14 @@ export const splitAndDeliverInventory = mutation({
   handler: async (ctx, args) => {
     const currentUser = await getCurrentUser(ctx);
     if (currentUser.role !== "purchase_officer") {
-      throw new Error("Unauthorized");
+      throw new ConvexError("Unauthorized");
     }
 
     const request = await ctx.db.get(args.requestId);
-    if (!request) throw new Error("Request not found");
+    if (!request) throw new ConvexError("Request not found");
 
     if (args.inventoryQuantity <= 0 || args.inventoryQuantity >= request.quantity) {
-      throw new Error("Invalid split quantity");
+      throw new ConvexError("Invalid split quantity");
     }
 
     const inventoryItem = await ctx.db
@@ -2135,7 +2135,7 @@ export const splitAndDeliverInventory = mutation({
       .first();
 
     if (!inventoryItem || (inventoryItem.centralStock || 0) < args.inventoryQuantity) {
-      throw new Error("Insufficient inventory");
+      throw new ConvexError("Insufficient inventory");
     }
 
     const now = Date.now();
@@ -2196,18 +2196,18 @@ export const markReadyForDelivery = mutation({
   handler: async (ctx, args) => {
     const currentUser = await getCurrentUser(ctx);
     if (currentUser.role !== "purchase_officer") {
-      throw new Error("Unauthorized");
+      throw new ConvexError("Unauthorized");
     }
 
     const request = await ctx.db.get(args.requestId);
-    if (!request) throw new Error("Request not found");
+    if (!request) throw new ConvexError("Request not found");
 
     if (args.deliveryQuantity <= 0) {
-      throw new Error("Quantity must be greater than 0");
+      throw new ConvexError("Quantity must be greater than 0");
     }
 
     if (args.deliveryQuantity > request.quantity) {
-      throw new Error("Delivery quantity cannot exceed request quantity");
+      throw new ConvexError("Delivery quantity cannot exceed request quantity");
     }
 
     const now = Date.now();
@@ -2356,27 +2356,27 @@ export const splitPendingPOQuantity = mutation({
 
     // Only purchase officers and managers can split PO quantities
     if (currentUser.role !== "purchase_officer" && currentUser.role !== "manager") {
-      throw new Error("Unauthorized: Only purchase officers and managers can split PO quantities");
+      throw new ConvexError("Unauthorized: Only purchase officers and managers can split PO quantities");
     }
 
     // Get the original request
     const request = await ctx.db.get(args.requestId);
     if (!request) {
-      throw new Error("Request not found");
+      throw new ConvexError("Request not found");
     }
 
     // Validate status - must be pending_po
     if (request.status !== "pending_po") {
-      throw new Error("Can only split Pending PO requests");
+      throw new ConvexError("Can only split Pending PO requests");
     }
 
     // Validate new quantity
     if (args.newQuantity <= 0) {
-      throw new Error("New quantity must be greater than 0");
+      throw new ConvexError("New quantity must be greater than 0");
     }
 
     if (args.newQuantity >= request.quantity) {
-      throw new Error("New quantity must be less than original quantity");
+      throw new ConvexError("New quantity must be less than original quantity");
     }
 
     const remainingQuantity = request.quantity - args.newQuantity;
@@ -2391,7 +2391,7 @@ export const splitPendingPOQuantity = mutation({
     const po = pos.find(p => p.status === "ordered");
 
     if (!po) {
-      throw new Error("No active PO found for this request");
+      throw new ConvexError("No active PO found for this request");
     }
 
     // Calculate new amounts based on unit price
@@ -2469,12 +2469,12 @@ export const confirmDelivery = mutation({
 
     // Only site engineers (or authorized roles) can confirm
     if (currentUser.role !== "site_engineer" && currentUser.role !== "manager" && currentUser.role !== "purchase_officer") {
-      throw new Error("Unauthorized to confirm delivery");
+      throw new ConvexError("Unauthorized to confirm delivery");
     }
 
     const request = await ctx.db.get(args.requestId);
     if (!request) {
-      throw new Error("Request not found");
+      throw new ConvexError("Request not found");
     }
 
     // If already delivered, just return success (idempotent)
@@ -2486,7 +2486,7 @@ export const confirmDelivery = mutation({
     // Allow confirming from pending_po, delivery_processing, out_for_delivery, ready_for_delivery, delivery_stage
     const validStatuses = ["pending_po", "out_for_delivery", "delivery_processing", "delivery_stage", "ready_for_delivery"];
     if (!validStatuses.includes(request.status)) {
-      throw new Error(`Request is not in a delivery stage: ${request.status}`);
+      throw new ConvexError(`Request is not in a delivery stage: ${request.status}`);
     }
 
     const now = Date.now();

@@ -43,7 +43,7 @@ export const getUserByClerkId = query({
     const user = await ctx.db
       .query("users")
       .withIndex("by_clerk_user_id", (q) => q.eq("clerkUserId", args.clerkUserId))
-      .unique();
+      .first();
 
     return user;
   },
@@ -87,7 +87,7 @@ export const getUserByUsername = query({
     const user = await ctx.db
       .query("users")
       .withIndex("by_username", (q) => q.eq("username", args.username))
-      .unique();
+      .first();
 
     return user;
   },
@@ -103,7 +103,7 @@ export const getUserByUsernamePublic = query({
     const user = await ctx.db
       .query("users")
       .withIndex("by_username", (q) => q.eq("username", args.username))
-      .unique();
+      .first();
 
     if (!user) return null;
 
@@ -134,7 +134,7 @@ export const getAllUsers = query({
     const currentUser = await ctx.db
       .query("users")
       .withIndex("by_clerk_user_id", (q) => q.eq("clerkUserId", identity.subject))
-      .unique();
+      .first();
 
     if (!currentUser) {
       return []; // Return empty array if user not found
@@ -163,7 +163,7 @@ export const getUsersByRole = query({
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) {
-      throw new Error("Not authenticated");
+      throw new ConvexError("Not authenticated");
     }
 
     const users = await ctx.db
@@ -194,7 +194,7 @@ export const syncCurrentUser = mutation({
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) {
-      throw new Error("Not authenticated");
+      throw new ConvexError("Not authenticated");
     }
 
     console.log("Syncing user identity:", JSON.stringify(identity, null, 2));
@@ -203,7 +203,7 @@ export const syncCurrentUser = mutation({
     const existingUser = await ctx.db
       .query("users")
       .withIndex("by_clerk_user_id", (q) => q.eq("clerkUserId", identity.subject))
-      .unique();
+      .first();
 
     // Get role from Clerk metadata or args
     const metadata = identity.publicMetadata as Record<string, unknown> | undefined;
@@ -285,34 +285,34 @@ export const createUser = mutation({
     const identity = await ctx.auth.getUserIdentity();
     console.log("createUser: identity =", identity ? identity.subject : "null");
     if (!identity) {
-      throw new Error("Not authenticated");
+      throw new ConvexError("Not authenticated");
     }
 
     // Get current user
     const currentUser = await ctx.db
       .query("users")
       .withIndex("by_clerk_user_id", (q) => q.eq("clerkUserId", identity.subject))
-      .unique();
+      .first();
 
     console.log("createUser: currentUser =", currentUser ? { id: currentUser._id, role: currentUser.role } : "null");
 
     if (!currentUser) {
-      throw new Error("User not found");
+      throw new ConvexError("User not found");
     }
 
     // Check if user is a manager
     if (currentUser.role !== "manager") {
-      throw new Error("Unauthorized: Only managers can create users");
+      throw new ConvexError("Unauthorized: Only managers can create users");
     }
 
     // Check if username already exists
     const existingUser = await ctx.db
       .query("users")
       .withIndex("by_username", (q) => q.eq("username", args.username))
-      .unique();
+      .first();
 
     if (existingUser) {
-      throw new Error("Username already exists");
+      throw new ConvexError("Username already exists");
     }
 
     // Get signature URL if storage ID provided
@@ -368,28 +368,28 @@ export const updateUser = mutation({
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) {
-      throw new Error("Not authenticated");
+      throw new ConvexError("Not authenticated");
     }
 
     // Get current user
     const currentUser = await ctx.db
       .query("users")
       .withIndex("by_clerk_user_id", (q) => q.eq("clerkUserId", identity.subject))
-      .unique();
+      .first();
 
     if (!currentUser) {
-      throw new Error("User not found");
+      throw new ConvexError("User not found");
     }
 
     // Check if user is a manager
     if (currentUser.role !== "manager") {
-      throw new Error("Unauthorized: Only managers can update users");
+      throw new ConvexError("Unauthorized: Only managers can update users");
     }
 
     // Get user to update
     const userToUpdate = await ctx.db.get(args.userId);
     if (!userToUpdate) {
-      throw new Error("User not found");
+      throw new ConvexError("User not found");
     }
 
     // Handle Signature Update
@@ -430,27 +430,27 @@ export const disableUser = mutation({
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) {
-      throw new Error("Not authenticated");
+      throw new ConvexError("Not authenticated");
     }
 
     // Get current user
     const currentUser = await ctx.db
       .query("users")
       .withIndex("by_clerk_user_id", (q) => q.eq("clerkUserId", identity.subject))
-      .unique();
+      .first();
 
     if (!currentUser) {
-      throw new Error("User not found");
+      throw new ConvexError("User not found");
     }
 
     // Check if user is a manager
     if (currentUser.role !== "manager") {
-      throw new Error("Unauthorized: Only managers can disable users");
+      throw new ConvexError("Unauthorized: Only managers can disable users");
     }
 
     // Don't allow disabling self
     if (args.userId === currentUser._id) {
-      throw new Error("Cannot disable your own account");
+      throw new ConvexError("Cannot disable your own account");
     }
 
     // Disable user
@@ -471,22 +471,22 @@ export const enableUser = mutation({
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) {
-      throw new Error("Not authenticated");
+      throw new ConvexError("Not authenticated");
     }
 
     // Get current user
     const currentUser = await ctx.db
       .query("users")
       .withIndex("by_clerk_user_id", (q) => q.eq("clerkUserId", identity.subject))
-      .unique();
+      .first();
 
     if (!currentUser) {
-      throw new Error("User not found");
+      throw new ConvexError("User not found");
     }
 
     // Check if user is a manager
     if (currentUser.role !== "manager") {
-      throw new Error("Unauthorized: Only managers can enable users");
+      throw new ConvexError("Unauthorized: Only managers can enable users");
     }
 
     // Enable user
@@ -516,22 +516,22 @@ export const updateProfile = mutation({
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) {
-      throw new Error("Not authenticated");
+      throw new ConvexError("Not authenticated");
     }
 
     // Verify user is updating their own profile
     if (identity.subject !== args.clerkUserId) {
-      throw new Error("Unauthorized: You can only update your own profile");
+      throw new ConvexError("Unauthorized: You can only update your own profile");
     }
 
     // Get user
     const user = await ctx.db
       .query("users")
       .withIndex("by_clerk_user_id", (q) => q.eq("clerkUserId", args.clerkUserId))
-      .unique();
+      .first();
 
     if (!user) {
-      throw new Error("User not found");
+      throw new ConvexError("User not found");
     }
 
     // Update profile
@@ -561,27 +561,27 @@ export const deleteUser = mutation({
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) {
-      throw new Error("Not authenticated");
+      throw new ConvexError("Not authenticated");
     }
 
     // Get current user
     const currentUser = await ctx.db
       .query("users")
       .withIndex("by_clerk_user_id", (q) => q.eq("clerkUserId", identity.subject))
-      .unique();
+      .first();
 
     if (!currentUser) {
-      throw new Error("User not found");
+      throw new ConvexError("User not found");
     }
 
     // Check if user is a manager
     if (currentUser.role !== "manager") {
-      throw new Error("Unauthorized: Only managers can delete users");
+      throw new ConvexError("Unauthorized: Only managers can delete users");
     }
 
     // Don't allow deleting yourself
     if (currentUser._id === args.userId) {
-      throw new Error("You cannot delete yourself");
+      throw new ConvexError("You cannot delete yourself");
     }
 
     // Delete user from Convex only (Clerk deletion handled via API)
@@ -615,7 +615,7 @@ export const internalUpsertUser = internalMutation({
     const existingUser = await ctx.db
       .query("users")
       .withIndex("by_clerk_user_id", (q) => q.eq("clerkUserId", args.clerkUserId))
-      .unique();
+      .first();
 
     // Determine role (default to site_engineer if not provided)
     // Note: This logic might need refinement based on how role is passed from Clerk
@@ -665,7 +665,7 @@ export const internalDeleteUserByClerkId = internalMutation({
     const user = await ctx.db
       .query("users")
       .withIndex("by_clerk_user_id", (q) => q.eq("clerkUserId", args.clerkUserId))
-      .unique();
+      .first();
 
     if (user) {
       await ctx.db.delete(user._id);
@@ -689,22 +689,22 @@ export const generateSignatureUploadUrl = mutation({
   handler: async (ctx) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) {
-      throw new Error("Not authenticated");
+      throw new ConvexError("Not authenticated");
     }
 
     // Get current user
     const currentUser = await ctx.db
       .query("users")
       .withIndex("by_clerk_user_id", (q) => q.eq("clerkUserId", identity.subject))
-      .unique();
+      .first();
 
     if (!currentUser) {
-      throw new Error("User not found");
+      throw new ConvexError("User not found");
     }
 
     // Only managers can upload signatures
     if (currentUser.role !== "manager") {
-      throw new Error("Unauthorized: Only managers can upload signatures");
+      throw new ConvexError("Unauthorized: Only managers can upload signatures");
     }
 
     return await ctx.storage.generateUploadUrl();
@@ -721,22 +721,22 @@ export const updateSignature = mutation({
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) {
-      throw new Error("Not authenticated");
+      throw new ConvexError("Not authenticated");
     }
 
     // Get current user
     const currentUser = await ctx.db
       .query("users")
       .withIndex("by_clerk_user_id", (q) => q.eq("clerkUserId", identity.subject))
-      .unique();
+      .first();
 
     if (!currentUser) {
-      throw new Error("User not found");
+      throw new ConvexError("User not found");
     }
 
     // Only managers can update signatures
     if (currentUser.role !== "manager") {
-      throw new Error("Unauthorized: Only managers can update signatures");
+      throw new ConvexError("Unauthorized: Only managers can update signatures");
     }
 
     // Delete old signature if exists
@@ -766,22 +766,22 @@ export const deleteSignature = mutation({
   handler: async (ctx) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) {
-      throw new Error("Not authenticated");
+      throw new ConvexError("Not authenticated");
     }
 
     // Get current user
     const currentUser = await ctx.db
       .query("users")
       .withIndex("by_clerk_user_id", (q) => q.eq("clerkUserId", identity.subject))
-      .unique();
+      .first();
 
     if (!currentUser) {
-      throw new Error("User not found");
+      throw new ConvexError("User not found");
     }
 
     // Only managers can delete signatures
     if (currentUser.role !== "manager") {
-      throw new Error("Unauthorized: Only managers can delete signatures");
+      throw new ConvexError("Unauthorized: Only managers can delete signatures");
     }
 
     // Delete from storage
@@ -860,6 +860,6 @@ export const seedManager = mutation({
     }
 
 
-    throw new Error("All existing managers already have passwords. Use the login page instead.");
+    throw new ConvexError("All existing managers already have passwords. Use the login page instead.");
   },
 });

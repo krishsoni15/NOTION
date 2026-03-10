@@ -42,23 +42,23 @@ export const getOrCreateConversation = mutation({
   },
   handler: async (ctx, args) => {
     const userId = await getAuthUserId(ctx);
-    if (!userId) throw new Error("Not authenticated");
+    if (!userId) throw new ConvexError("Not authenticated");
 
     // Get current user
     const currentUser = await ctx.db
       .query("users")
       .withIndex("by_clerk_user_id", (q) => q.eq("clerkUserId", userId))
-      .unique();
+      .first();
 
-    if (!currentUser) throw new Error("User not found");
+    if (!currentUser) throw new ConvexError("User not found");
 
     // Get other user
     const otherUser = await ctx.db.get(args.otherUserId);
-    if (!otherUser) throw new Error("Other user not found");
+    if (!otherUser) throw new ConvexError("Other user not found");
 
     // Check if chat is allowed
     if (!canChatWith(currentUser.role, otherUser.role)) {
-      throw new Error("Chat not allowed between these roles");
+      throw new ConvexError("Chat not allowed between these roles");
     }
 
     // Check if conversation already exists between these two users
@@ -101,7 +101,7 @@ export const getConversations = query({
     const currentUser = await ctx.db
       .query("users")
       .withIndex("by_clerk_user_id", (q) => q.eq("clerkUserId", userId))
-      .unique();
+      .first();
 
     if (!currentUser) return [];
 
@@ -166,7 +166,7 @@ export const getConversation = query({
     const currentUser = await ctx.db
       .query("users")
       .withIndex("by_clerk_user_id", (q) => q.eq("clerkUserId", userId))
-      .unique();
+      .first();
 
     if (!currentUser) return null;
 
@@ -176,7 +176,7 @@ export const getConversation = query({
 
     // Check if user is a participant
     if (!conversation.participants.includes(currentUser._id)) {
-      throw new Error("Not authorized to view this conversation");
+      throw new ConvexError("Not authorized to view this conversation");
     }
 
     // Get other user
@@ -218,7 +218,7 @@ export const getMessages = query({
     const currentUser = await ctx.db
       .query("users")
       .withIndex("by_clerk_user_id", (q) => q.eq("clerkUserId", userId))
-      .unique();
+      .first();
 
     if (!currentUser) return [];
 
@@ -228,7 +228,7 @@ export const getMessages = query({
 
     // Check if user is a participant
     if (!conversation.participants.includes(currentUser._id)) {
-      throw new Error("Not authorized to view this conversation");
+      throw new ConvexError("Not authorized to view this conversation");
     }
 
     // Get messages
@@ -295,23 +295,23 @@ export const sendMessage = mutation({
   },
   handler: async (ctx, args) => {
     const userId = await getAuthUserId(ctx);
-    if (!userId) throw new Error("Not authenticated");
+    if (!userId) throw new ConvexError("Not authenticated");
 
     // Get current user
     const currentUser = await ctx.db
       .query("users")
       .withIndex("by_clerk_user_id", (q) => q.eq("clerkUserId", userId))
-      .unique();
+      .first();
 
-    if (!currentUser) throw new Error("User not found");
+    if (!currentUser) throw new ConvexError("User not found");
 
     // Get conversation
     const conversation = await ctx.db.get(args.conversationId);
-    if (!conversation) throw new Error("Conversation not found");
+    if (!conversation) throw new ConvexError("Conversation not found");
 
     // Check if user is a participant
     if (!conversation.participants.includes(currentUser._id)) {
-      throw new Error("Not authorized to send messages in this conversation");
+      throw new ConvexError("Not authorized to send messages in this conversation");
     }
 
     // Validate content - allow either text content, image, or location
@@ -319,11 +319,11 @@ export const sendMessage = mutation({
     const hasContent = trimmedContent || args.imageUrl || args.location || args.fileUrl;
 
     if (!hasContent) {
-      throw new Error("Message content cannot be empty");
+      throw new ConvexError("Message content cannot be empty");
     }
 
     if (trimmedContent.length > 5000) {
-      throw new Error("Message content too long (max 5000 characters)");
+      throw new ConvexError("Message content too long (max 5000 characters)");
     }
 
     // Check if receiver is online (for delivery status)
@@ -337,7 +337,7 @@ export const sendMessage = mutation({
       const otherUserPresence = await ctx.db
         .query("userPresence")
         .withIndex("by_user_id", (q) => q.eq("userId", otherUserId))
-        .unique();
+        .first();
 
       // If receiver is online, mark as delivered immediately
       if (otherUserPresence?.isOnline) {
@@ -411,23 +411,23 @@ export const markAsRead = mutation({
   },
   handler: async (ctx, args) => {
     const userId = await getAuthUserId(ctx);
-    if (!userId) throw new Error("Not authenticated");
+    if (!userId) throw new ConvexError("Not authenticated");
 
     // Get current user
     const currentUser = await ctx.db
       .query("users")
       .withIndex("by_clerk_user_id", (q) => q.eq("clerkUserId", userId))
-      .unique();
+      .first();
 
-    if (!currentUser) throw new Error("User not found");
+    if (!currentUser) throw new ConvexError("User not found");
 
     // Get conversation
     const conversation = await ctx.db.get(args.conversationId);
-    if (!conversation) throw new Error("Conversation not found");
+    if (!conversation) throw new ConvexError("Conversation not found");
 
     // Check if user is a participant
     if (!conversation.participants.includes(currentUser._id)) {
-      throw new Error("Not authorized");
+      throw new ConvexError("Not authorized");
     }
 
     // Get all messages in this conversation
@@ -492,7 +492,7 @@ export const getChattableUsers = query({
     const currentUser = await ctx.db
       .query("users")
       .withIndex("by_clerk_user_id", (q) => q.eq("clerkUserId", userId))
-      .unique();
+      .first();
 
     if (!currentUser) return [];
 
@@ -550,7 +550,7 @@ export const searchConversations = query({
     const currentUser = await ctx.db
       .query("users")
       .withIndex("by_clerk_user_id", (q) => q.eq("clerkUserId", userId))
-      .unique();
+      .first();
 
     if (!currentUser) return [];
 
@@ -620,7 +620,7 @@ export const getUnreadCount = query({
     const currentUser = await ctx.db
       .query("users")
       .withIndex("by_clerk_user_id", (q) => q.eq("clerkUserId", userId))
-      .unique();
+      .first();
 
     if (!currentUser) return 0;
 
@@ -653,7 +653,7 @@ export const getSiteEngineerStats = query({
     const currentUser = await ctx.db
       .query("users")
       .withIndex("by_clerk_user_id", (q) => q.eq("clerkUserId", userId))
-      .unique();
+      .first();
 
     if (!currentUser || currentUser.role !== "site_engineer") {
       return { total: 0, pending: 0, approved: 0, delivered: 0 };

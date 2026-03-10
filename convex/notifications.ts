@@ -17,7 +17,7 @@ export const getMyNotifications = query({
         const user = await ctx.db
             .query("users")
             .withIndex("by_clerk_user_id", (q) => q.eq("clerkUserId", userId))
-            .unique();
+            .first();
 
         if (!user) return [];
 
@@ -45,7 +45,7 @@ export const getUnreadCount = query({
         const user = await ctx.db
             .query("users")
             .withIndex("by_clerk_user_id", (q) => q.eq("clerkUserId", userId))
-            .unique();
+            .first();
 
         if (!user) return 0;
 
@@ -68,7 +68,7 @@ export const markAsRead = mutation({
     },
     handler: async (ctx, args) => {
         const userId = await getAuthUserId(ctx);
-        if (!userId) throw new Error("Not authenticated");
+        if (!userId) throw new ConvexError("Not authenticated");
 
         await ctx.db.patch(args.notificationId, {
             isRead: true,
@@ -83,14 +83,14 @@ export const markAllAsRead = mutation({
     args: {},
     handler: async (ctx) => {
         const userId = await getAuthUserId(ctx);
-        if (!userId) throw new Error("Not authenticated");
+        if (!userId) throw new ConvexError("Not authenticated");
 
         const user = await ctx.db
             .query("users")
             .withIndex("by_clerk_user_id", (q) => q.eq("clerkUserId", userId))
-            .unique();
+            .first();
 
-        if (!user) throw new Error("User not found");
+        if (!user) throw new ConvexError("User not found");
 
         const unreadNotifications = await ctx.db
             .query("notifications")

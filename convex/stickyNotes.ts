@@ -31,7 +31,7 @@ export const list = query({
     const currentUser = await ctx.db
       .query("users")
       .withIndex("by_clerk_user_id", (q) => q.eq("clerkUserId", userId))
-      .unique();
+      .first();
 
     if (!currentUser) return [];
 
@@ -96,7 +96,7 @@ export const getPendingReminders = query({
     const currentUser = await ctx.db
       .query("users")
       .withIndex("by_clerk_user_id", (q) => q.eq("clerkUserId", userId))
-      .unique();
+      .first();
 
     if (!currentUser) return 0;
 
@@ -193,24 +193,24 @@ export const create = mutation({
   },
   handler: async (ctx, args) => {
     const userId = await getAuthUserId(ctx);
-    if (!userId) throw new Error("Not authenticated");
+    if (!userId) throw new ConvexError("Not authenticated");
 
     // Get current user
     const currentUser = await ctx.db
       .query("users")
       .withIndex("by_clerk_user_id", (q) => q.eq("clerkUserId", userId))
-      .unique();
+      .first();
 
-    if (!currentUser) throw new Error("User not found");
+    if (!currentUser) throw new ConvexError("User not found");
 
     // Check permissions: Only managers can create notes for other users
     if (currentUser.role !== "manager" && args.assignedTo !== currentUser._id) {
-      throw new Error("Unauthorized: You can only create notes for yourself");
+      throw new ConvexError("Unauthorized: You can only create notes for yourself");
     }
 
     // Verify assigned user exists
     const assignedUser = await ctx.db.get(args.assignedTo);
-    if (!assignedUser) throw new Error("Assigned user not found");
+    if (!assignedUser) throw new ConvexError("Assigned user not found");
 
     const now = Date.now();
 
@@ -287,19 +287,19 @@ export const update = mutation({
   },
   handler: async (ctx, args) => {
     const userId = await getAuthUserId(ctx);
-    if (!userId) throw new Error("Not authenticated");
+    if (!userId) throw new ConvexError("Not authenticated");
 
     // Get current user
     const currentUser = await ctx.db
       .query("users")
       .withIndex("by_clerk_user_id", (q) => q.eq("clerkUserId", userId))
-      .unique();
+      .first();
 
-    if (!currentUser) throw new Error("User not found");
+    if (!currentUser) throw new ConvexError("User not found");
 
     // Get note
     const note = await ctx.db.get(args.noteId);
-    if (!note) throw new Error("Note not found");
+    if (!note) throw new ConvexError("Note not found");
 
     const isManager = currentUser.role === "manager";
     const isCreator = note.createdBy === currentUser._id;
@@ -323,12 +323,12 @@ export const update = mutation({
     // For position/size updates: Allow anyone who can view the note
     if (isOnlyPositionUpdate && !hasContentUpdate) {
       if (!canViewNote) {
-        throw new Error("Unauthorized: You can only update notes you can view");
+        throw new ConvexError("Unauthorized: You can only update notes you can view");
       }
     } else {
       // For content updates: Only assignee can update
       if (!isAssignee) {
-        throw new Error("Unauthorized: Only the assigned manager can update this note");
+        throw new ConvexError("Unauthorized: Only the assigned manager can update this note");
       }
     }
 
@@ -363,23 +363,23 @@ export const complete = mutation({
   },
   handler: async (ctx, args) => {
     const userId = await getAuthUserId(ctx);
-    if (!userId) throw new Error("Not authenticated");
+    if (!userId) throw new ConvexError("Not authenticated");
 
     // Get current user
     const currentUser = await ctx.db
       .query("users")
       .withIndex("by_clerk_user_id", (q) => q.eq("clerkUserId", userId))
-      .unique();
+      .first();
 
-    if (!currentUser) throw new Error("User not found");
+    if (!currentUser) throw new ConvexError("User not found");
 
     // Get note
     const note = await ctx.db.get(args.noteId);
-    if (!note) throw new Error("Note not found");
+    if (!note) throw new ConvexError("Note not found");
 
     // Check permissions: Only assignee can mark as completed
     if (note.assignedTo !== currentUser._id) {
-      throw new Error("Unauthorized: You can only complete notes assigned to you");
+      throw new ConvexError("Unauthorized: You can only complete notes assigned to you");
     }
 
     // Update note
@@ -401,23 +401,23 @@ export const deleteNote = mutation({
   },
   handler: async (ctx, args) => {
     const userId = await getAuthUserId(ctx);
-    if (!userId) throw new Error("Not authenticated");
+    if (!userId) throw new ConvexError("Not authenticated");
 
     // Get current user
     const currentUser = await ctx.db
       .query("users")
       .withIndex("by_clerk_user_id", (q) => q.eq("clerkUserId", userId))
-      .unique();
+      .first();
 
-    if (!currentUser) throw new Error("User not found");
+    if (!currentUser) throw new ConvexError("User not found");
 
     // Get note
     const note = await ctx.db.get(args.noteId);
-    if (!note) throw new Error("Note not found");
+    if (!note) throw new ConvexError("Note not found");
 
     // Check permissions: Only assignee can delete
     if (note.assignedTo !== currentUser._id) {
-      throw new Error("Unauthorized: Only the assigned manager can delete this note");
+      throw new ConvexError("Unauthorized: Only the assigned manager can delete this note");
     }
 
     // Soft delete
@@ -459,7 +459,7 @@ export const getUnreadCount = query({
     const currentUser = await ctx.db
       .query("users")
       .withIndex("by_clerk_user_id", (q) => q.eq("clerkUserId", userId))
-      .unique();
+      .first();
 
     if (!currentUser) return 0;
 
@@ -482,14 +482,14 @@ export const markAllRead = mutation({
   args: {},
   handler: async (ctx) => {
     const userId = await getAuthUserId(ctx);
-    if (!userId) throw new Error("Not authenticated");
+    if (!userId) throw new ConvexError("Not authenticated");
 
     const currentUser = await ctx.db
       .query("users")
       .withIndex("by_clerk_user_id", (q) => q.eq("clerkUserId", userId))
-      .unique();
+      .first();
 
-    if (!currentUser) throw new Error("User not found");
+    if (!currentUser) throw new ConvexError("User not found");
 
     const unreadNotes = await ctx.db
       .query("stickyNotes")

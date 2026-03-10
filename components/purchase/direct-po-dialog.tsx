@@ -1221,13 +1221,14 @@ export function DirectPODialog({ open, onOpenChange, initialData, mode = "standa
                                                             toast.error("Enter item name first");
                                                             return;
                                                         }
-                                                        const match = (inventoryItemsSuggestions || []).find(
+                                                        const match = (inventoryItems || []).find(
                                                             (i: any) => i.itemName.toLowerCase() === itemName.toLowerCase() ||
                                                                 itemName.toLowerCase().includes(i.itemName.toLowerCase())
                                                         );
 
-                                                        if (match?.imageUrl) {
-                                                            handleItemChange(index, 'inventoryImageUrl', match.imageUrl);
+                                                        const invImageUrl = (match as any)?.images?.[0]?.imageUrl;
+                                                        if (invImageUrl) {
+                                                            handleItemChange(index, 'inventoryImageUrl', invImageUrl);
                                                             toast.success("Matched inventory image found!");
                                                         } else {
                                                             toast.info("No matching inventory photo found", {

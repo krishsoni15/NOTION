@@ -63,12 +63,15 @@ export const checkSystemHealth = query({
         const grns = await ctx.db.query("grns").collect();
         const pos = await ctx.db.query("purchaseOrders").collect();
 
+        const vendors = await ctx.db.query("vendors").collect();
+
         // Check for duplicates
         const clerkIds = users.map(u => u.clerkUserId);
         const hasDuplicateUsers = new Set(clerkIds).size !== clerkIds.length;
 
         return {
             userCount: users.length,
+            vendorCount: vendors.length,
             grnCount: grns.length,
             poCount: pos.length,
             hasDuplicateUsers,
@@ -76,4 +79,28 @@ export const checkSystemHealth = query({
             recommendation: hasDuplicateUsers ? "Run cleanupDuplicateUsers mutation" : "System looks healthy",
         };
     },
+});
+
+export const deleteAllVendors = mutation({
+    args: { adminSecret: v.string() },
+    handler: async (ctx, args) => {
+        if (args.adminSecret !== "notion-fix-2026") throw new ConvexError("Unauthorized: Incorrect secret");
+        const vendors = await ctx.db.query("vendors").collect();
+        for (const vendor of vendors) {
+            await ctx.db.delete(vendor._id);
+        }
+        return { success: true, message: `Deleted ${vendors.length} vendors.` };
+    }
+});
+
+export const deleteAllGrns = mutation({
+    args: { adminSecret: v.string() },
+    handler: async (ctx, args) => {
+        if (args.adminSecret !== "notion-fix-2026") throw new ConvexError("Unauthorized: Incorrect secret");
+        const grns = await ctx.db.query("grns").collect();
+        for (const grn of grns) {
+            await ctx.db.delete(grn._id);
+        }
+        return { success: true, message: `Deleted ${grns.length} GRNs.` };
+    }
 });

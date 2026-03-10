@@ -5,7 +5,7 @@
  * Only managers can create, edit, and manage users.
  */
 
-import { v } from "convex/values";
+import { v, ConvexError } from "convex/values";
 import { mutation, query, internalMutation } from "./_generated/server";
 
 // ============================================================================

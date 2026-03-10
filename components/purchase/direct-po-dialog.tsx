@@ -1181,7 +1181,9 @@ export function DirectPODialog({ open, onOpenChange, initialData, mode = "standa
                                                 <input
                                                     type="file"
                                                     accept="image/*"
-                                                    ref={el => itemPhotoInputRefs.current[index] = el}
+                                                    ref={(el: HTMLInputElement | null) => {
+                                                        itemPhotoInputRefs.current[index] = el;
+                                                    }}
                                                     onChange={(e) => {
                                                         const file = e.target.files?.[0];
                                                         if (file) handleItemPhotoSelect(index, file);

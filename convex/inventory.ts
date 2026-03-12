@@ -65,7 +65,9 @@ export const getAllInventoryItems = query({
         const vendorIds = (item as any).vendorIds || (item.vendorId ? [item.vendorId] : []);
         const vendors = await Promise.all(
           vendorIds.map(async (vendorId: any) => {
-            const vendor = await ctx.db.get(vendorId) as any;
+            const normalizedId = ctx.db.normalizeId("vendors", vendorId);
+            if (!normalizedId) return null;
+            const vendor = await ctx.db.get(normalizedId) as any;
             if (!vendor) return null;
             return {
               _id: vendor._id,
@@ -123,7 +125,9 @@ export const getInventoryItemByName = query({
     const vendorIds = (item as any).vendorIds || (item.vendorId ? [item.vendorId] : []);
     const vendors = await Promise.all(
       vendorIds.map(async (vendorId: any) => {
-        const vendor = await ctx.db.get(vendorId) as any;
+        const normalizedId = ctx.db.normalizeId("vendors", vendorId);
+        if (!normalizedId) return null;
+        const vendor = await ctx.db.get(normalizedId) as any;
         if (!vendor) return null;
         return {
           _id: vendor._id,
@@ -162,7 +166,9 @@ export const getInventoryItemById = query({
     const vendorIds = (item as any).vendorIds || (item.vendorId ? [item.vendorId] : []);
     const vendors = await Promise.all(
       vendorIds.map(async (vendorId: any) => {
-        const vendor = await ctx.db.get(vendorId) as any;
+        const normalizedId = ctx.db.normalizeId("vendors", vendorId);
+        if (!normalizedId) return null;
+        const vendor = await ctx.db.get(normalizedId) as any;
         if (!vendor) return null;
         return {
           _id: vendor._id,

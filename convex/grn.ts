@@ -115,13 +115,23 @@ export const getAllGRNs = query({
         // 50 records * ~5 lookups per record = 250 DB operations. Safe.
         const grns = await ctx.db.query("grns").order("desc").take(50);
 
+        const safeGet = async (tableName: keyof import("./_generated/dataModel").DataModel, idStr: any) => {
+            if (!idStr) return null;
+            try {
+                const normalizedId = ctx.db.normalizeId(tableName, idStr);
+                return normalizedId ? await ctx.db.get(normalizedId) : null;
+            } catch (e) {
+                return null;
+            }
+        };
+
         return Promise.all(
             grns.map(async (grn) => {
-                const po = (grn as any).poId ? await ctx.db.get((grn as any).poId) : null;
-                const vendor = po && (po as any).vendorId ? await ctx.db.get((po as any).vendorId) : null;
-                const site = (grn as any).siteId ? await ctx.db.get((grn as any).siteId) : null;
-                const creator = (grn as any).createdBy ? await ctx.db.get((grn as any).createdBy) : null;
-                const request = po && (po as any).requestId ? await ctx.db.get((po as any).requestId) : null;
+                const po = await safeGet("purchaseOrders", (grn as any).poId);
+                const vendor = po ? await safeGet("vendors", (po as any).vendorId) : null;
+                const site = await safeGet("sites", (grn as any).siteId);
+                const creator = await safeGet("users", (grn as any).createdBy);
+                const request = po ? await safeGet("requests", (po as any).requestId) : null;
 
                 return {
                     ...grn,

@@ -65,6 +65,7 @@ export interface DirectPOInitialData {
         sgst?: number;            // Add SGST
         cgst?: number;            // Add CGST
         hsnCode?: string;
+        imageUrl?: string;
     }[];
     vendorDetails?: {
         name: string;
@@ -340,7 +341,7 @@ export function DirectPODialog({ open, onOpenChange, initialData, mode = "standa
                         cgst: item.cgst?.toString() || "0",                       // Auto-fill CGST
                         photoFile: null,
                         photoPreview: null,
-                        inventoryImageUrl: (matchingInvItem as any)?.images?.[0]?.imageUrl || null,
+                        inventoryImageUrl: item.imageUrl || (matchingInvItem as any)?.images?.[0]?.imageUrl || null,
                     };
                 }));
             }
@@ -1000,7 +1001,7 @@ export function DirectPODialog({ open, onOpenChange, initialData, mode = "standa
                                                             handleItemChange(index, 'perUnitBasisUnit', selectedItem.unit || item.unit);
                                                             handleItemChange(index, 'hsnCode', (selectedItem as any).hsnSacCode || "");
                                                             // Auto-set inventory image if available
-                                                            handleItemChange(index, 'inventoryImageUrl', (selectedItem as any).imageUrl || null);
+                                                            handleItemChange(index, 'inventoryImageUrl', (selectedItem as any).images?.[0]?.imageUrl || null);
                                                             setActiveItemIndex(null);
                                                             setShowItemSuggestions(false);
                                                         } else {
@@ -1044,7 +1045,7 @@ export function DirectPODialog({ open, onOpenChange, initialData, mode = "standa
                                                                     handleItemChange(index, 'perUnitBasisUnit', invItem.unit || item.unit);
                                                                     handleItemChange(index, 'hsnCode', (invItem as any).hsnSacCode || "");
                                                                     // Auto-set inventory image if available
-                                                                    handleItemChange(index, 'inventoryImageUrl', (invItem as any).imageUrl || null);
+                                                                    handleItemChange(index, 'inventoryImageUrl', (invItem as any).images?.[0]?.imageUrl || null);
                                                                     setActiveItemIndex(null);
                                                                     setShowItemSuggestions(false);
                                                                 }}

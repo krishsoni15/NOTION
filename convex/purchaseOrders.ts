@@ -321,6 +321,8 @@ export const getPublicPODetails = query({
             gstTaxRate: number;
             perUnitBasis?: number;
             perUnitBasisUnit?: string;
+            imageUrl?: string;
+            imageKey?: string;
         }>();
 
         for (const po of pos) {
@@ -344,7 +346,9 @@ export const getPublicPODetails = query({
                     discountPercent: po.discountPercent || 0,
                     gstTaxRate: po.gstTaxRate,
                     perUnitBasis: po.perUnitBasis,
-                    perUnitBasisUnit: po.perUnitBasisUnit
+                    perUnitBasisUnit: po.perUnitBasisUnit,
+                    imageUrl: po.imageUrl,
+                    imageKey: po.imageKey
                 });
             }
         }

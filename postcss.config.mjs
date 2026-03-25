@@ -1,6 +1,8 @@
 const config = {
   plugins: {
-    "@tailwindcss/postcss": {},
+    "@tailwindcss/postcss": {
+      base: "/home/krish/Data/Desktop/NOTION",
+    },
   },
 };
 

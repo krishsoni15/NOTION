@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Loader2, Download, Printer, FileText, X, ZoomIn, ZoomOut, RotateCcw, Send, MessageCircle, Mail, ChevronDown, Move } from "lucide-react";
 import { PurchaseOrderTemplate } from "./purchase-order-template";
+import { DeliveryChallanTemplate } from "./delivery-challan-template";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
@@ -35,6 +36,8 @@ interface PDFPreviewDialogProps {
     poNumber: string | null;
     requestId?: string | null; // Optional: filter to single item
     requestIds?: string[] | null; // Optional: filter to multiple items
+    deliveryId?: string | null; // For DC preview
+    type?: "po" | "dc"; // Toggle between PO and DC preview
 }
 
 export function PDFPreviewDialog({
@@ -43,6 +46,8 @@ export function PDFPreviewDialog({
     poNumber,
     requestId,
     requestIds,
+    deliveryId,
+    type = "po", // Default to PO
 }: PDFPreviewDialogProps) {
     const [isDownloading, setIsDownloading] = useState(false);
     const [isPrinting, setIsPrinting] = useState(false);
@@ -51,12 +56,22 @@ export function PDFPreviewDialog({
 
     const poData = useQuery(
         api.purchaseOrders.getPurchaseOrderDetails,
-        poNumber ? {
+        poNumber && type === "po" ? {
             poNumber,
             requestId: (requestId || undefined) as Id<"requests"> | undefined,
             requestIds: (requestIds || undefined) as Id<"requests">[] | undefined
         } : "skip"
     );
+
+    const dcData = useQuery(
+        api.deliveries.getDeliveryWithItems,
+        deliveryId && type === "dc" ? { deliveryId: deliveryId as Id<"deliveries"> } : "skip"
+    );
+
+    const isDataLoaded = type === "po" ? !!poData : !!dcData;
+    const currentData = type === "po" ? poData : dcData;
+    const documentName = type === "po" ? "Purchase Order" : "Delivery Challan";
+    const documentId = type === "po" ? poNumber : (dcData as any)?.deliveryId || "DC";
 
     const [zoomLevel, setZoomLevel] = useState(1);
     const containerRef = useRef<HTMLDivElement>(null);
@@ -86,11 +101,23 @@ export function PDFPreviewDialog({
         setIsDownloading(true);
         try {
             const html2pdf = await getHtml2Pdf();
-
             const element = pdfContentRef.current;
+
+            // Ensure all images are loaded before generating PDF
+            const images = element.getElementsByTagName('img');
+            const imagePromises = Array.from(images).map(img => {
+                if (img.complete) return Promise.resolve();
+                return new Promise((resolve) => {
+                    img.onload = resolve;
+                    img.onerror = resolve; // Continue even if image fails
+                });
+            });
+
+            await Promise.all(imagePromises);
+
             const opt = {
                 margin: 0,
-                filename: `PO_${poNumber}.pdf`,
+                filename: `${documentId}.pdf`,
                 image: { type: "jpeg", quality: 1.0 },
                 html2canvas: {
                     scale: 3,
@@ -98,6 +125,7 @@ export function PDFPreviewDialog({
                     logging: false,
                     letterRendering: true,
                     windowWidth: 794,
+                    allowTaint: false
                 },
                 jsPDF: { unit: "mm", format: "a4", orientation: "portrait", compress: true },
             };
@@ -174,9 +202,22 @@ Notion Electronica Pvt. Ltd.`;
             // Generate PDF Blob
             const html2pdf = await getHtml2Pdf();
             const element = pdfContentRef.current;
+
+            // Ensure all images are loaded before generating PDF
+            const images = element.getElementsByTagName('img');
+            const imagePromises = Array.from(images).map(img => {
+                if (img.complete) return Promise.resolve();
+                return new Promise((resolve) => {
+                    img.onload = resolve;
+                    img.onerror = resolve; // Continue even if image fails
+                });
+            });
+
+            await Promise.all(imagePromises);
+
             const opt = {
                 margin: 0,
-                filename: `PO_${poNumber}.pdf`,
+                filename: `${documentId}.pdf`,
                 image: { type: "jpeg", quality: 1.0 },
                 html2canvas: {
                     scale: 3,
@@ -184,6 +225,7 @@ Notion Electronica Pvt. Ltd.`;
                     logging: false,
                     letterRendering: true,
                     windowWidth: 794,
+                    allowTaint: false
                 },
                 jsPDF: { unit: "mm", format: "a4", orientation: "portrait", compress: true },
             };
@@ -289,9 +331,9 @@ Notion Electronica Pvt. Ltd.`;
                             </div>
                             <div className="hidden xs:block">
                                 <DialogTitle className="text-xs font-bold text-white leading-tight">
-                                    PO Preview
+                                    {documentName} Preview
                                 </DialogTitle>
-                                <p className="text-[9px] text-slate-400 font-mono">#{poNumber}</p>
+                                <p className="text-[9px] text-slate-400 font-mono">#{documentId}</p>
                             </div>
                         </div>
 
@@ -333,7 +375,7 @@ Notion Electronica Pvt. Ltd.`;
                                 <DropdownMenuTrigger asChild>
                                     <button
                                         className="h-7 w-7 flex items-center justify-center rounded-md text-slate-300 hover:text-white hover:bg-slate-700"
-                                        disabled={!poData}
+                                        disabled={!isDataLoaded}
                                     >
                                         <Send className="h-3.5 w-3.5" />
                                     </button>
@@ -354,7 +396,7 @@ Notion Electronica Pvt. Ltd.`;
                             <button
                                 className="h-7 w-7 flex items-center justify-center rounded-md text-slate-300 hover:text-white hover:bg-slate-700 hidden sm:flex"
                                 onClick={handlePrint}
-                                disabled={!poData || isPrinting}
+                                disabled={!isDataLoaded || isPrinting}
                             >
                                 {isPrinting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Printer className="h-3.5 w-3.5" />}
                             </button>
@@ -363,7 +405,7 @@ Notion Electronica Pvt. Ltd.`;
                             <button
                                 className="h-7 px-2.5 flex items-center gap-1.5 rounded-md bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold"
                                 onClick={handleDownload}
-                                disabled={!poData || isDownloading}
+                                disabled={!isDataLoaded || isDownloading}
                             >
                                 {isDownloading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
                                 <span className="hidden md:inline">Download</span>
@@ -398,10 +440,10 @@ Notion Electronica Pvt. Ltd.`;
                         WebkitOverflowScrolling: 'touch',
                     }}
                 >
-                    {!poData ? (
+                    {!isDataLoaded ? (
                         <div className="flex flex-col items-center justify-center h-full gap-3">
                             <Loader2 className="h-8 w-8 animate-spin text-blue-400" />
-                            <p className="text-sm text-slate-400">Loading PO details...</p>
+                            <p className="text-sm text-slate-400">Loading {documentName} details...</p>
                         </div>
                     ) : (
                         <div
@@ -424,8 +466,12 @@ Notion Electronica Pvt. Ltd.`;
                                         transform: `scale(${zoomLevel})`,
                                     }}
                                 >
-                                    <div ref={pdfContentRef} style={{ width: "210mm", backgroundColor: 'white' }}>
-                                        <PurchaseOrderTemplate data={poData as any} />
+                                    <div ref={pdfContentRef} className="print-surface" style={{ width: "210mm", backgroundColor: 'white' }}>
+                                        {type === "po" ? (
+                                            <PurchaseOrderTemplate data={poData as any} />
+                                        ) : (
+                                            <DeliveryChallanTemplate data={dcData as any} />
+                                        )}
                                     </div>
                                 </div>
                             </div>
@@ -469,7 +515,7 @@ Notion Electronica Pvt. Ltd.`;
                     </DropdownMenu>
 
                     {/* Download */}
-                    <Button onClick={handleDownload} disabled={!poData || isDownloading} className="h-9 flex-1 bg-blue-600 text-white font-semibold">
+                    <Button onClick={handleDownload} disabled={!isDataLoaded || isDownloading} className="h-9 flex-1 bg-blue-600 text-white font-semibold">
                         {isDownloading ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Download className="h-4 w-4 mr-1" />}
                         Download
                     </Button>

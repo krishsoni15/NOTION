@@ -15,8 +15,9 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { X, Upload, Loader2, Image as ImageIcon, CheckCircle2 } from "lucide-react";
+import { X, Upload, Loader2, Image as ImageIcon, CheckCircle2, Truck } from "lucide-react";
 import { toast } from "sonner";
+import { Badge } from "@/components/ui/badge";
 import type { Id } from "@/convex/_generated/dataModel";
 
 interface ConfirmDeliveryDialogProps {
@@ -152,6 +153,24 @@ export function ConfirmDeliveryDialog({
         }
     };
 
+    const handleDirectConfirm = async () => {
+        if (!requestId) return;
+        setIsSubmitting(true);
+        try {
+            await confirmDelivery({
+                requestId,
+                notes: notes.trim() || undefined,
+            });
+            toast.success("Item marked as delivered (Direct)");
+            onOpenChange(false);
+            resetForm();
+        } catch (error: any) {
+            toast.error(error.message || "Failed to confirm delivery");
+        } finally {
+            setIsSubmitting(false);
+        }
+    };
+
     return (
         <Dialog open={open} onOpenChange={handleOpenChange}>
             <DialogContent className="sm:max-w-md max-h-[90vh] overflow-y-auto">
@@ -161,19 +180,18 @@ export function ConfirmDeliveryDialog({
                         Confirm Delivery
                     </DialogTitle>
                     <DialogDescription>
-                        Add proof of delivery photos and notes (optional) to complete the process.
+                        Collect proof of delivery or confirm direct receipt to site.
                     </DialogDescription>
                 </DialogHeader>
 
                 <div className="space-y-6 py-4">
                     <div className="space-y-4">
                         <div className="space-y-2">
-                            <Label className="text-sm font-semibold">
-                                Proof of Delivery Photos <span className="text-destructive font-bold">(Required)</span>
+                            <Label className="text-sm font-semibold flex items-center justify-between">
+                                <span>Proof of Delivery Photos</span>
+                                <Badge variant="outline" className="text-[10px] uppercase text-amber-600 border-amber-200">Optional for direct</Badge>
                             </Label>
-                            <div
-                                className="grid grid-cols-3 gap-3"
-                            >
+                            <div className="grid grid-cols-3 gap-3">
                                 {imagePreviews.map((preview, index) => (
                                     <div key={index} className="relative aspect-square rounded-lg border bg-muted group">
                                         <img
@@ -209,7 +227,7 @@ export function ConfirmDeliveryDialog({
                                 disabled={isSubmitting}
                             />
                             <p className="text-[10px] text-muted-foreground">
-                                Supported formats: JPG, PNG, WEBP. Max size: 5MB.
+                                Upload photos to provide proof for site audit logs.
                             </p>
                         </div>
 
@@ -227,29 +245,40 @@ export function ConfirmDeliveryDialog({
                     </div>
                 </div>
 
-                <DialogFooter className="flex-col sm:flex-row gap-2">
+                <DialogFooter className="flex flex-col sm:flex-row gap-3 pt-6 border-t mt-2">
                     <Button
-                        variant="outline"
+                        variant="ghost"
                         onClick={() => handleOpenChange(false)}
                         disabled={isSubmitting}
-                        className="w-full sm:w-auto"
+                        className="h-10 px-6 font-medium hover:bg-muted"
                     >
                         Cancel
                     </Button>
-                    <Button
-                        onClick={handleConfirm}
-                        disabled={isSubmitting}
-                        className="w-full sm:w-auto bg-emerald-600 hover:bg-emerald-700 text-white font-bold"
-                    >
-                        {isSubmitting ? (
-                            <>
-                                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                {isUploading ? "Uploading..." : "Confirming..."}
-                            </>
-                        ) : (
-                            "Confirm Receipt"
-                        )}
-                    </Button>
+
+                    <div className="flex items-center gap-2 w-full sm:w-auto sm:ml-auto">
+                        <Button
+                            variant="outline"
+                            onClick={handleDirectConfirm}
+                            disabled={isSubmitting}
+                            className="flex-1 sm:flex-none border-slate-300 h-10 px-4 gap-2 hover:bg-slate-50 transition-all font-medium"
+                        >
+                            <Truck className="h-4 w-4" />
+                            Direct Deliver
+                        </Button>
+
+                        <Button
+                            onClick={handleConfirm}
+                            disabled={isSubmitting}
+                            className="flex-1 sm:flex-none bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg shadow-emerald-600/20 h-10 px-6 gap-2 transition-all active:scale-95 font-semibold"
+                        >
+                            {isSubmitting ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                                <CheckCircle2 className="h-4 w-4" />
+                            )}
+                            {isSubmitting ? (isUploading ? "Uploading..." : "Confirming...") : "Confirm Receipt"}
+                        </Button>
+                    </div>
                 </DialogFooter>
             </DialogContent>
         </Dialog>

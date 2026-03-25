@@ -28,6 +28,17 @@ async function getCurrentUser(ctx: any) {
     return user;
 }
 
+// Helper function to get current user or null
+async function getCurrentUserOrNull(ctx: any) {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) return null;
+
+    return await ctx.db
+        .query("users")
+        .withIndex("by_clerk_user_id", (q: any) => q.eq("clerkUserId", userId))
+        .first();
+}
+
 
 // Helper function to generate Request Number (shared sequence with Requests)
 async function generateRequestNumber(ctx: any): Promise<string> {
@@ -82,7 +93,8 @@ async function generatePONumber(ctx: any): Promise<string> {
 export const getAllPurchaseOrders = query({
     args: {},
     handler: async (ctx) => {
-        const currentUser = await getCurrentUser(ctx);
+        const currentUser = await getCurrentUserOrNull(ctx);
+        if (!currentUser) return [];
 
         // Only Purchase Officers and Managers can view POs
         if (
@@ -126,14 +138,15 @@ export const getAllPurchaseOrders = query({
 export const getDirectPurchaseOrders = query({
     args: {},
     handler: async (ctx) => {
-        const currentUser = await getCurrentUser(ctx);
+        const currentUser = await getCurrentUserOrNull(ctx);
+        if (!currentUser) return [];
 
         // Only Purchase Officers and Managers can view POs
         if (
             currentUser.role !== "purchase_officer" &&
             currentUser.role !== "manager"
         ) {
-            throw new ConvexError("Unauthorized");
+            return [];
         }
 
         const pos = await ctx.db
@@ -174,10 +187,10 @@ export const getPurchaseOrderDetails = query({
         requestIds: v.optional(v.array(v.id("requests"))), // Optional: filter to multiple items
     },
     handler: async (ctx, args) => {
-        const currentUser = await getCurrentUser(ctx);
+        const currentUser = await getCurrentUserOrNull(ctx);
 
-        // Allow authenticated users to view POs (might be site engineer seeing their site's PO, or manager/purchaser)
-        if (!currentUser) throw new ConvexError("Unauthorized");
+        // Allow authenticated users to view POs
+        if (!currentUser) return null;
 
         let pos = await ctx.db
             .query("purchaseOrders")
@@ -382,14 +395,15 @@ export const getPublicPODetails = query({
 export const getPurchaseOrderById = query({
     args: { poId: v.id("purchaseOrders") },
     handler: async (ctx, args) => {
-        const currentUser = await getCurrentUser(ctx);
+        const currentUser = await getCurrentUserOrNull(ctx);
+        if (!currentUser) return null;
 
         // Only Purchase Officers and Managers can view POs
         if (
             currentUser.role !== "purchase_officer" &&
             currentUser.role !== "manager"
         ) {
-            throw new ConvexError("Unauthorized");
+            return null;
         }
 
         const po = await ctx.db.get(args.poId);
@@ -418,7 +432,8 @@ export const getPurchaseOrderById = query({
 export const getPOsByRequestId = query({
     args: { requestId: v.id("requests") },
     handler: async (ctx, args) => {
-        const currentUser = await getCurrentUser(ctx);
+        const currentUser = await getCurrentUserOrNull(ctx);
+        if (!currentUser) return [];
 
         // Only Purchase Officers and Managers can view POs
         if (
@@ -426,7 +441,7 @@ export const getPOsByRequestId = query({
             currentUser.role !== "manager" &&
             currentUser.role !== "site_engineer"
         ) {
-            throw new ConvexError("Unauthorized");
+            return [];
         }
 
         const pos = await ctx.db
@@ -445,7 +460,8 @@ export const getPOsByRequestId = query({
 export const getPOsForRequestNumber = query({
     args: { requestNumber: v.string() },
     handler: async (ctx, args) => {
-        const currentUser = await getCurrentUser(ctx);
+        const currentUser = await getCurrentUserOrNull(ctx);
+        if (!currentUser) return [];
 
         // Permissions check
         if (
@@ -453,7 +469,7 @@ export const getPOsForRequestNumber = query({
             currentUser.role !== "manager" &&
             currentUser.role !== "site_engineer"
         ) {
-            throw new ConvexError("Unauthorized");
+            return [];
         }
 
         // 1. Get all requests with this number

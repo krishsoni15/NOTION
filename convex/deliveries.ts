@@ -60,6 +60,7 @@ export const createDelivery = mutation({
         approvedByRole: v.optional(v.union(v.literal("manager"), v.literal("pe"))),
         paymentAmount: v.optional(v.number()),
         paymentStatus: v.optional(v.union(v.literal("pending"), v.literal("paid"), v.literal("partial"))),
+        directDelivery: v.optional(v.boolean()),
     },
     handler: async (ctx, args) => {
         const user = await ctx.auth.getUserIdentity();
@@ -122,6 +123,8 @@ export const createDelivery = mutation({
         // If a DC covers multiple items, `poId` is good for grouping, but strictly, we want to know WHICH items.
         // Adding `deliveryId` to `requests` table is logical.
 
+        const targetStatus = args.directDelivery ? "delivered" : "out_for_delivery";
+
         for (const item of items) {
             const request = await ctx.db.get(item.requestId);
             if (!request) continue;
@@ -135,7 +138,7 @@ export const createDelivery = mutation({
                 await ctx.db.insert("requests", {
                     ...request, // Copy fields
                     quantity: item.quantity,
-                    status: "out_for_delivery", // Set to processing stage
+                    status: targetStatus, // Set to processing stage
                     deliveryMarkedAt: now,
                     deliveryId: deliveryId, // Link to delivery
                     createdAt: now,
@@ -152,7 +155,7 @@ export const createDelivery = mutation({
             } else {
                 // Full delivery of this request item
                 await ctx.db.patch(request._id, {
-                    status: "out_for_delivery", // Set to processing stage
+                    status: targetStatus, // Set to processing stage
                     updatedAt: now,
                     deliveryMarkedAt: now,
                     deliveryId: deliveryId, // Link to delivery
@@ -168,9 +171,9 @@ export const createDelivery = mutation({
                     requestNumber: request.requestNumber,
                     userId: officer._id,
                     role: officer.role,
-                    status: "out_for_delivery",
+                    status: targetStatus,
                     type: "log",
-                    content: `[Item #${request.itemOrder ?? 1}] Delivery Challan created (${deliveryIdStr}). ${item.quantity} ${request.unit || 'units'} dispatched via ${args.deliveryType} transport. Vehicle: ${args.vehicleNumber || 'N/A'}.`,
+                    content: `[Item #${request.itemOrder ?? 1}] Delivery Challan created (${deliveryIdStr}). ${item.quantity} ${request.unit || 'units'} dispatched via ${args.deliveryType} transport. Vehicle: ${args.vehicleNumber || 'N/A'}.${args.directDelivery ? ' Marked as delivered directly.' : ''}`,
                     createdAt: now,
                 });
             }
@@ -236,9 +239,22 @@ export const getDeliveryWithItems = query({
             .query("requests")
             .collect();
 
-        const items = allRequests
-            .filter(item => item.deliveryId === args.deliveryId)
-            .map(item => ({
+        const deliveryRequests = allRequests.filter(item => item.deliveryId === args.deliveryId);
+
+        // Fetch PO items to get price/tax info if available
+        let poItems: any[] = [];
+        if (delivery.poId) {
+            poItems = await ctx.db
+                .query("purchaseOrders")
+                .withIndex("by_po_number", (q) => q.eq("poNumber", po!.poNumber))
+                .collect();
+        }
+
+        const items = deliveryRequests.map(item => {
+            // Find corresponding PO item to get financial details
+            const poItem = poItems.find(p => p.requestId === item._id);
+
+            return {
                 _id: item._id,
                 itemName: item.itemName,
                 quantity: item.quantity,
@@ -247,7 +263,12 @@ export const getDeliveryWithItems = query({
                 status: item.status,
                 deliveryPhotos: item.deliveryPhotos,
                 deliveryNotes: item.deliveryNotes,
-            }));
+                hsnSacCode: poItem?.hsnSacCode || item.specsBrand, // Fallback
+                unitRate: poItem?.unitRate,
+                discountPercent: poItem?.discountPercent,
+                gstTaxRate: poItem?.gstTaxRate,
+            };
+        });
 
         // Get creator details
         const creator = await ctx.db.get(delivery.createdBy);
@@ -263,6 +284,8 @@ export const getDeliveryWithItems = query({
                 companyName: vendor.companyName,
                 contactName: vendor.contactName,
                 phone: vendor.phone,
+                address: vendor.address,
+                gstNumber: vendor.gstNumber,
             } : null,
             creator: creator ? {
                 fullName: creator.fullName,

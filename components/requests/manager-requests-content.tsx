@@ -31,6 +31,9 @@ import type { Id } from "@/convex/_generated/dataModel";
 
 import { PDFPreviewDialog } from "@/components/purchase/pdf-preview-dialog";
 import { POSelectionDialog } from "@/components/purchase/po-selection-dialog";
+import { PendingPODialog } from "@/components/purchase/pending-po-dialog";
+import { DirectPODialog, type DirectPOInitialData } from "@/components/purchase/direct-po-dialog";
+import { Zap } from "lucide-react";
 
 type SortOption = "newest" | "oldest" | "items_desc" | "items_asc";
 
@@ -72,6 +75,11 @@ export function ManagerRequestsContent() {
     const [inventoryFilter, setInventoryFilter] = useState<string>("all");
     const [sortBy, setSortBy] = useState<SortOption>("newest");
     const { viewMode, toggleViewMode } = useViewMode("manager-requests-view-mode");
+    const [showPendingPODialog, setShowPendingPODialog] = useState(false);
+    const [showDirectPODialog, setShowDirectPODialog] = useState(false);
+    const [directPOMode, setDirectPOMode] = useState<"standard" | "direct">("standard");
+    const [directPOInitialData, setDirectPOInitialData] = useState<DirectPOInitialData | null>(null);
+    const [pdfPreviewRequestId, setPdfPreviewRequestId] = useState<string | null>(null);
 
     // Pagination State
     const [currentPage, setCurrentPage] = useState(1);
@@ -370,209 +378,173 @@ export function ManagerRequestsContent() {
 
     return (
         <>
-            <div className="space-y-6">
-                {/* Search and Filters */}
-                {/* Enhanced Toolbar */}
-                <div className="flex flex-col gap-3 bg-card p-4 rounded-xl border border-border shadow-sm">
-                    {/* Row 1: Search and View Mode */}
-                    <div className="flex items-center gap-3">
-                        <div className="relative flex-1">
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                            <Input
-                                placeholder="Search by request #, item, site, or creator..."
-                                value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
-                                className="pl-9 h-10 bg-muted/30 border-muted-foreground/20 focus-visible:ring-primary/20 transition-all font-medium w-full"
-                            />
+            {!showPendingPODialog && (
+                <div className="space-y-6">
+                    {/* Search and Filters */}
+                    {/* Enhanced Toolbar */}
+                    <div className="flex flex-col gap-3 bg-card p-4 rounded-xl border border-border shadow-sm">
+                        {/* Row 1: Search and View Mode */}
+                        <div className="flex items-center gap-3">
+                            <div className="relative flex-1">
+                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                                <Input
+                                    placeholder="Search by request #, item, site, or creator..."
+                                    value={searchQuery}
+                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                    className="pl-9 h-10 bg-muted/30 border-muted-foreground/20 focus-visible:ring-primary/20 transition-all font-medium w-full"
+                                />
+                            </div>
+                            <Button
+                                variant="outline"
+                                size="icon"
+                                onClick={toggleViewMode}
+                                className="h-10 w-10 flex-shrink-0 bg-muted/30 border-muted-foreground/20 hover:bg-primary/10 hover:border-primary/30 hover:text-primary transition-all"
+                            >
+                                {viewMode === "card" ? <TableIcon className="h-5 w-5" /> : <LayoutGrid className="h-5 w-5" />}
+                            </Button>
                         </div>
-                        <Button
-                            variant="outline"
-                            size="icon"
-                            onClick={toggleViewMode}
-                            className="h-10 w-10 flex-shrink-0 bg-muted/30 border-muted-foreground/20 hover:bg-primary/10 hover:border-primary/30 hover:text-primary transition-all"
-                        >
-                            {viewMode === "card" ? <TableIcon className="h-5 w-5" /> : <LayoutGrid className="h-5 w-5" />}
-                        </Button>
-                    </div>
 
-                    {/* Row 2: Primary Filters */}
-                    <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-border/50">
-                        <Select value={workFilter} onValueChange={setWorkFilter}>
-                            <SelectTrigger className="h-9 w-[160px] bg-muted/20 border-muted-foreground/10">
-                                <SelectValue placeholder="All Requests" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">Total: {allRequests?.length || 0}</SelectItem>
-                                <SelectItem value="work_pending">Pending Work ({workCounts.work_pending || 0})</SelectItem>
-                            </SelectContent>
-                        </Select>
-
-                        <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-                            <SelectTrigger className="h-9 w-[170px] bg-muted/20 border-muted-foreground/10">
-                                <Filter className="h-3.5 w-3.5 mr-2 opacity-70" />
-                                <SelectValue placeholder="Category" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">All Categories</SelectItem>
-                                <SelectItem value="site_engineer">Site Eng. ({categoryCounts.site_engineer || 0})</SelectItem>
-                                <SelectItem value="purchases">Purchases ({categoryCounts.purchases || 0})</SelectItem>
-                            </SelectContent>
-                        </Select>
-
-                        <Select value={inventoryFilter} onValueChange={setInventoryFilter}>
-                            <SelectTrigger className="h-9 w-[160px] bg-muted/20 border-muted-foreground/10">
-                                <Package className="h-3.5 w-3.5 mr-2 opacity-70" />
-                                <SelectValue placeholder="Inventory" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">All Inventory</SelectItem>
-                                <SelectItem value="new_item">New Item</SelectItem>
-                                <SelectItem value="out_of_stock">Out of Stock</SelectItem>
-                                <SelectItem value="partially_stocked">Partially</SelectItem>
-                                <SelectItem value="in_stock">In Stock</SelectItem>
-                            </SelectContent>
-                        </Select>
-
-                        <Popover>
-                            <PopoverTrigger asChild>
-                                <Button variant="outline" className="h-9 min-w-[140px] justify-between px-3 text-left font-normal bg-muted/20 border-muted-foreground/10">
-                                    <span className="truncate">
-                                        {statusFilter.length === 0 ? "All Statuses" : `${statusFilter.length} Selected`}
-                                    </span>
-                                    <Filter className="ml-2 h-3.5 w-3.5 shrink-0 opacity-50" />
-                                </Button>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-[280px] p-0" align="start">
-                                <Command>
-                                    <CommandInput placeholder="Search status..." />
-                                    <CommandList className="max-h-[600px]">
-                                        <CommandEmpty>No status found.</CommandEmpty>
-                                        <CommandGroup className="p-2">
-                                            <CommandItem
-                                                onSelect={() => setStatusFilter([])}
-                                                className={cn(
-                                                    "cursor-pointer py-2 px-3 mb-1 rounded-lg transition-all flex items-center gap-3 h-auto group",
-                                                    statusFilter.length === 0
-                                                        ? "bg-primary/10 text-primary"
-                                                        : "hover:bg-muted/50 text-muted-foreground hover:text-foreground"
-                                                )}
-                                            >
-                                                <div className={cn(
-                                                    "h-2 w-2 rounded-full",
-                                                    statusFilter.length === 0 ? "bg-primary" : "bg-muted-foreground/30"
-                                                )} />
-                                                <span className="font-bold text-sm flex-1">All Statuses</span>
-                                                {statusFilter.length === 0 && <Check className="h-4 w-4 text-primary" strokeWidth={3} />}
-                                            </CommandItem>
-
-                                            <Separator className="my-1.5 mx-1 opacity-50" />
-
-                                            {detailedStatusOptions.map((option) => {
-                                                const isSelected = statusFilter.includes(option.value);
-                                                return (
-                                                    <CommandItem
-                                                        key={option.value}
-                                                        onSelect={() => {
-                                                            if (isSelected) setStatusFilter(statusFilter.filter(s => s !== option.value));
-                                                            else setStatusFilter([...statusFilter, option.value]);
-                                                        }}
-                                                        className={cn(
-                                                            "cursor-pointer py-2 px-3 mb-1 rounded-lg transition-all flex items-center gap-3 h-auto group",
-                                                            isSelected
-                                                                ? "bg-primary/5 text-primary"
-                                                                : "hover:bg-muted/30 text-muted-foreground hover:text-foreground"
-                                                        )}
-                                                    >
-                                                        <div className={cn(
-                                                            "h-2 w-2 rounded-full shrink-0",
-                                                            isSelected ? "bg-primary" : "bg-muted-foreground/20"
-                                                        )} />
-                                                        <span className={cn("flex-1 font-bold text-sm truncate", option.color)}>{option.label}</span>
-                                                        <span className="text-[10px] font-black px-1.5 py-0.5 rounded-full bg-muted/50 text-muted-foreground">
-                                                            {option.count}
-                                                        </span>
-                                                        {isSelected && <Check className="h-4 w-4 text-primary shrink-0" strokeWidth={3} />}
-                                                    </CommandItem>
-                                                );
-                                            })}
-                                        </CommandGroup>
-                                    </CommandList>
-                                </Command>
-                            </PopoverContent>
-                        </Popover>
-
-                        <Button
-                            variant={statusFilter.length === 1 && statusFilter[0] === "pending_po" ? "default" : "outline"}
-                            onClick={() => {
-                                if (statusFilter.length === 1 && statusFilter[0] === "pending_po") {
-                                    setStatusFilter([]);
-                                } else {
-                                    setStatusFilter(["pending_po"]);
-                                    setWorkFilter("all");
-                                    setCategoryFilter("all");
-                                }
-                            }}
-                            className={cn(
-                                "h-9 transition-all",
-                                statusFilter.length === 1 && statusFilter[0] === "pending_po"
-                                    ? "bg-amber-500 hover:bg-amber-600 text-white border-amber-500"
-                                    : "border-amber-500/50 text-amber-600 hover:bg-amber-50 hover:text-amber-700 dark:hover:bg-amber-900/20"
-                            )}
-                        >
-                            <Clock className="h-3.5 w-3.5 mr-2" />
-                            Pending PO ({getSmartStatusCount("pending_po")})
-                        </Button>
-
-                        <div className="ml-auto flex items-center gap-2">
-                            <Select value={sortBy} onValueChange={(v) => setSortBy(v as SortOption)}>
-                                <SelectTrigger className="h-9 w-[150px] bg-muted/20 border-muted-foreground/10">
-                                    <SelectValue placeholder="Sort" />
+                        {/* Row 2: Primary Filters */}
+                        <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-border/50">
+                            <Select value={workFilter} onValueChange={setWorkFilter}>
+                                <SelectTrigger className="h-9 w-[160px] bg-muted/20 border-muted-foreground/10">
+                                    <SelectValue placeholder="All Requests" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="newest">Newest First</SelectItem>
-                                    <SelectItem value="oldest">Oldest First</SelectItem>
-                                    <SelectItem value="items_desc">Most Items</SelectItem>
-                                    <SelectItem value="items_asc">Fewest Items</SelectItem>
+                                    <SelectItem value="all">Total: {allRequests?.length || 0}</SelectItem>
+                                    <SelectItem value="work_pending">Pending Work ({workCounts.work_pending || 0})</SelectItem>
                                 </SelectContent>
                             </Select>
+
+                            <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+                                <SelectTrigger className="h-9 w-[170px] bg-muted/20 border-muted-foreground/10">
+                                    <Filter className="h-3.5 w-3.5 mr-2 opacity-70" />
+                                    <SelectValue placeholder="Category" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">All Categories</SelectItem>
+                                    <SelectItem value="site_engineer">Site Eng. ({categoryCounts.site_engineer || 0})</SelectItem>
+                                    <SelectItem value="purchases">Purchases ({categoryCounts.purchases || 0})</SelectItem>
+                                </SelectContent>
+                            </Select>
+
+                            <Select value={inventoryFilter} onValueChange={setInventoryFilter}>
+                                <SelectTrigger className="h-9 w-[160px] bg-muted/20 border-muted-foreground/10">
+                                    <Package className="h-3.5 w-3.5 mr-2 opacity-70" />
+                                    <SelectValue placeholder="Inventory" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">All Inventory</SelectItem>
+                                    <SelectItem value="new_item">New Item</SelectItem>
+                                    <SelectItem value="out_of_stock">Out of Stock</SelectItem>
+                                    <SelectItem value="partially_stocked">Partially</SelectItem>
+                                    <SelectItem value="in_stock">In Stock</SelectItem>
+                                </SelectContent>
+                            </Select>
+
+                            <Popover>
+                                <PopoverTrigger asChild>
+                                    <Button variant="outline" className="h-9 min-w-[140px] justify-between px-3 text-left font-normal bg-muted/20 border-muted-foreground/10">
+                                        <span className="truncate">
+                                            {statusFilter.length === 0 ? "All Statuses" : `${statusFilter.length} Selected`}
+                                        </span>
+                                        <Filter className="ml-2 h-3.5 w-3.5 shrink-0 opacity-50" />
+                                    </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-[280px] p-0" align="start">
+                                    <Command>
+                                        <CommandInput placeholder="Search status..." />
+                                        <CommandList className="max-h-[600px]">
+                                            <CommandEmpty>No status found.</CommandEmpty>
+                                            <CommandGroup className="p-2">
+                                                <CommandItem
+                                                    onSelect={() => setStatusFilter([])}
+                                                    className={cn(
+                                                        "cursor-pointer py-2 px-3 mb-1 rounded-lg transition-all flex items-center gap-3 h-auto group",
+                                                        statusFilter.length === 0
+                                                            ? "bg-primary/10 text-primary"
+                                                            : "hover:bg-muted/50 text-muted-foreground hover:text-foreground"
+                                                    )}
+                                                >
+                                                    <div className={cn(
+                                                        "h-2 w-2 rounded-full",
+                                                        statusFilter.length === 0 ? "bg-primary" : "bg-muted-foreground/30"
+                                                    )} />
+                                                    <span className="font-bold text-sm flex-1">All Statuses</span>
+                                                    {statusFilter.length === 0 && <Check className="h-4 w-4 text-primary" strokeWidth={3} />}
+                                                </CommandItem>
+
+                                                <Separator className="my-1.5 mx-1 opacity-50" />
+
+                                                {detailedStatusOptions.map((option) => {
+                                                    const isSelected = statusFilter.includes(option.value);
+                                                    return (
+                                                        <CommandItem
+                                                            key={option.value}
+                                                            onSelect={() => {
+                                                                if (isSelected) setStatusFilter(statusFilter.filter(s => s !== option.value));
+                                                                else setStatusFilter([...statusFilter, option.value]);
+                                                            }}
+                                                            className={cn(
+                                                                "cursor-pointer py-2 px-3 mb-1 rounded-lg transition-all flex items-center gap-3 h-auto group",
+                                                                isSelected
+                                                                    ? "bg-primary/5 text-primary"
+                                                                    : "hover:bg-muted/30 text-muted-foreground hover:text-foreground"
+                                                            )}
+                                                        >
+                                                            <div className={cn(
+                                                                "h-2 w-2 rounded-full shrink-0",
+                                                                isSelected ? "bg-primary" : "bg-muted-foreground/20"
+                                                            )} />
+                                                            <span className={cn("flex-1 font-bold text-sm truncate", option.color)}>{option.label}</span>
+                                                            <span className="text-[10px] font-black px-1.5 py-0.5 rounded-full bg-muted/50 text-muted-foreground">
+                                                                {option.count}
+                                                            </span>
+                                                            {isSelected && <Check className="h-4 w-4 text-primary shrink-0" strokeWidth={3} />}
+                                                        </CommandItem>
+                                                    );
+                                                })}
+                                            </CommandGroup>
+                                        </CommandList>
+                                    </Command>
+                                </PopoverContent>
+                            </Popover>
+
+                            <Button
+                                variant={showPendingPODialog ? "default" : "outline"}
+                                onClick={() => {
+                                    setShowPendingPODialog(true);
+                                }}
+                                className={cn(
+                                    "h-9 transition-all",
+                                    showPendingPODialog
+                                        ? "bg-amber-500 hover:bg-amber-600 text-white border-amber-500"
+                                        : "border-amber-500/50 text-amber-600 hover:bg-amber-50 hover:text-amber-700 dark:hover:bg-amber-900/20"
+                                )}
+                            >
+                                <Clock className="h-3.5 w-3.5 mr-2" />
+                                Pending PO ({getSmartStatusCount("pending_po")})
+                            </Button>
+
+                            <div className="ml-auto flex items-center gap-2">
+                                <Select value={sortBy} onValueChange={(v) => setSortBy(v as SortOption)}>
+                                    <SelectTrigger className="h-9 w-[150px] bg-muted/20 border-muted-foreground/10">
+                                        <SelectValue placeholder="Sort" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="newest">Newest First</SelectItem>
+                                        <SelectItem value="oldest">Oldest First</SelectItem>
+                                        <SelectItem value="items_desc">Most Items</SelectItem>
+                                        <SelectItem value="items_asc">Fewest Items</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+
                         </div>
                     </div>
-                </div>
 
-                {/* Pagination Controls - Top */}
-                <div className="bg-card p-2 rounded-xl border border-border shadow-sm">
-                    <PaginationControls
-                        currentPage={currentPage}
-                        totalPages={Math.ceil(groupedAndSortedRequests.length / pageSize)}
-                        onPageChange={setCurrentPage}
-                        pageSize={pageSize}
-                        onPageSizeChange={setPageSize}
-                        totalItems={groupedAndSortedRequests.length}
-                        pageSizeOptions={[10, 25, 50, 100]}
-                        itemCount={groupedAndSortedRequests.length > 0 ? Math.min(pageSize, groupedAndSortedRequests.length - (currentPage - 1) * pageSize) : 0}
-                        className="py-0 border-none shadow-none"
-                    />
-                </div>
-
-                {/* Main Content */}
-                <RequestsTable
-                    requests={paginatedItems as any}
-                    onViewDetails={(requestId) => setSelectedRequestId(requestId)}
-                    onOpenCC={(requestId, requestIds) => {
-                        setCCRequestId(requestId);
-                        setCCRequestIds(requestIds);
-                    }}
-                    showCreator={true}
-                    viewMode={viewMode}
-                    preciseStatuses={true}
-                    hideStatusOnCard={true}
-                    hideItemCountOnCard={true}
-                    onViewPDF={setPdfRequestNumber}
-                />
-
-                {/* Pagination Controls - Bottom */}
-                {groupedAndSortedRequests.length > pageSize && (
-                    <Card className="bg-card p-2 border-border shadow-sm">
+                    {/* Pagination Controls - Top */}
+                    <div className="bg-card p-2 rounded-xl border border-border shadow-sm">
                         <PaginationControls
                             currentPage={currentPage}
                             totalPages={Math.ceil(groupedAndSortedRequests.length / pageSize)}
@@ -584,9 +556,67 @@ export function ManagerRequestsContent() {
                             itemCount={groupedAndSortedRequests.length > 0 ? Math.min(pageSize, groupedAndSortedRequests.length - (currentPage - 1) * pageSize) : 0}
                             className="py-0 border-none shadow-none"
                         />
-                    </Card>
-                )}
-            </div>
+                    </div>
+
+                    {/* Main Content */}
+                    <RequestsTable
+                        requests={paginatedItems as any}
+                        onViewDetails={(requestId) => setSelectedRequestId(requestId)}
+                        onOpenCC={(requestId, requestIds) => {
+                            setCCRequestId(requestId);
+                            setCCRequestIds(requestIds);
+                        }}
+                        showCreator={true}
+                        viewMode={viewMode}
+                        preciseStatuses={true}
+                        hideStatusOnCard={true}
+                        hideItemCountOnCard={true}
+                        onViewPDF={setPdfRequestNumber}
+                    />
+
+                    {/* Pagination Controls - Bottom */}
+                    {groupedAndSortedRequests.length > pageSize && (
+                        <Card className="bg-card p-2 border-border shadow-sm">
+                            <PaginationControls
+                                currentPage={currentPage}
+                                totalPages={Math.ceil(groupedAndSortedRequests.length / pageSize)}
+                                onPageChange={setCurrentPage}
+                                pageSize={pageSize}
+                                onPageSizeChange={setPageSize}
+                                totalItems={groupedAndSortedRequests.length}
+                                pageSizeOptions={[10, 25, 50, 100]}
+                                itemCount={groupedAndSortedRequests.length > 0 ? Math.min(pageSize, groupedAndSortedRequests.length - (currentPage - 1) * pageSize) : 0}
+                                className="py-0 border-none shadow-none"
+                            />
+                        </Card>
+                    )}
+                </div>
+            )}
+
+            {/* ── Pending PO full-page view (replaces main table) ── */}
+            {showPendingPODialog && (
+                <div className="space-y-6">
+                    <PendingPODialog
+                        onBack={() => setShowPendingPODialog(false)}
+                        onViewPO={(poNumber, requestId) => {
+                            setPdfPreviewPoNumber(poNumber);
+                            setPdfPreviewRequestId(requestId);
+                        }}
+
+                        requests={allRequests as any}
+                    />
+                </div>
+            )}
+
+            <DirectPODialog
+                open={showDirectPODialog}
+                onOpenChange={(open) => {
+                    setShowDirectPODialog(open);
+                    if (!open) setDirectPOInitialData(null);
+                }}
+                initialData={directPOInitialData}
+                mode={directPOMode}
+            />
 
             <RequestDetailsDialog
                 open={!!selectedRequestId}
@@ -634,8 +664,14 @@ export function ManagerRequestsContent() {
 
             <PDFPreviewDialog
                 open={!!pdfPreviewPoNumber}
-                onOpenChange={(open) => !open && setPdfPreviewPoNumber(null)}
+                onOpenChange={(open) => {
+                    if (!open) {
+                        setPdfPreviewPoNumber(null);
+                        setPdfPreviewRequestId(null);
+                    }
+                }}
                 poNumber={pdfPreviewPoNumber}
+                requestId={pdfPreviewRequestId}
             />
         </>
     );

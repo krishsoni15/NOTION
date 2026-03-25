@@ -632,109 +632,120 @@ export function PurchaseRequestsContent() {
             <div className="flex gap-2 items-center">
               {/* Status Filter */}
               <div className="flex-1 sm:flex-none sm:w-[250px]">
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      role="combobox"
-                      className="w-full justify-between h-9 sm:h-10"
-                    >
-                      {filterStatus.length > 0
-                        ? `${filterStatus.length} selected`
-                        : "Filter by status"}
-                      <Filter className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-[400px] p-0" align="start">
-                    <Command>
-                      <CommandInput placeholder="Search status..." />
-                      <CommandList className="max-h-[600px] overflow-y-auto">
-                        <CommandEmpty>No status found.</CommandEmpty>
-                        <CommandGroup>
-                          <CommandItem
-                            onSelect={() => setFilterStatus([])}
-                            className="font-medium h-auto py-3 items-start"
-                          >
-                            <div
-                              className={cn(
-                                "mr-2 flex h-4 w-4 shrink-0 items-center justify-center rounded-sm border border-primary mt-0.5",
-                                filterStatus.length === 0
-                                  ? "bg-primary text-primary-foreground"
-                                  : "opacity-50 [&_svg]:invisible"
-                              )}
+                {isHydrated ? (
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        role="combobox"
+                        className="w-full justify-between h-9 sm:h-10"
+                      >
+                        {filterStatus.length > 0
+                          ? `${filterStatus.length} selected`
+                          : "Filter by status"}
+                        <Filter className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-[400px] p-0" align="start">
+                      <Command>
+                        <CommandInput placeholder="Search status..." />
+                        <CommandList className="max-h-[600px] overflow-y-auto">
+                          <CommandEmpty>No status found.</CommandEmpty>
+                          <CommandGroup>
+                            <CommandItem
+                              onSelect={() => setFilterStatus([])}
+                              className="font-medium h-auto py-3 items-start"
                             >
-                              <Check className={cn("h-4 w-4")} />
-                            </div>
-                            <span className="flex-1 whitespace-normal break-words leading-tight">All Statuses</span>
-                          </CommandItem>
-                          {/* Draft (My Drafts) Special Case */}
-                          <CommandItem
-                            onSelect={() => {
-                              setFilterStatus((prev) =>
-                                prev.includes("draft")
-                                  ? prev.filter((s) => s !== "draft")
-                                  : [...prev, "draft"]
-                              );
-                            }}
-                            className={cn("h-auto py-3 items-start", colorMap.gray.bgHover)}
-                          >
-                            <div
-                              className={cn(
-                                "mr-2 flex h-4 w-4 shrink-0 items-center justify-center rounded-sm border mt-0.5",
-                                filterStatus.includes("draft")
-                                  ? colorMap.gray.checkboxActive
-                                  : cn(colorMap.gray.checkboxBorder, "opacity-50 [&_svg]:invisible")
-                              )}
-                            >
-                              <Check className={cn("h-4 w-4")} />
-                            </div>
-                            <span className={cn("flex-1 whitespace-normal break-words leading-tight", colorMap.gray.text)}>Draft (My Drafts)</span>
-                          </CommandItem>
-                          {Object.entries(statusConfig)
-                            .filter(([key]) => key !== "draft" && key !== "delivery_stage")
-                            .map(([key, config]) => (
-                              <CommandItem
-                                key={key}
-                                onSelect={() => {
-                                  setFilterStatus((prev) =>
-                                    prev.includes(key)
-                                      ? prev.filter((s) => s !== key)
-                                      : [...prev, key]
-                                  );
-                                }}
-                                className={cn("h-auto py-3 items-start", (colorMap[config.color] || colorMap.gray).bgHover)}
+                              <div
+                                className={cn(
+                                  "mr-2 flex h-4 w-4 shrink-0 items-center justify-center rounded-sm border border-primary mt-0.5",
+                                  filterStatus.length === 0
+                                    ? "bg-primary text-primary-foreground"
+                                    : "opacity-50 [&_svg]:invisible"
+                                )}
                               >
-                                <div
-                                  className={cn(
-                                    "mr-2 flex h-4 w-4 shrink-0 items-center justify-center rounded-sm border mt-0.5",
-                                    filterStatus.includes(key)
-                                      ? (colorMap[config.color] || colorMap.gray).checkboxActive
-                                      : cn((colorMap[config.color] || colorMap.gray).checkboxBorder, "opacity-50 [&_svg]:invisible")
-                                  )}
+                                <Check className={cn("h-4 w-4")} />
+                              </div>
+                              <span className="flex-1 whitespace-normal break-words leading-tight">All Statuses</span>
+                            </CommandItem>
+                            {/* Draft (My Drafts) Special Case */}
+                            <CommandItem
+                              onSelect={() => {
+                                setFilterStatus((prev) =>
+                                  prev.includes("draft")
+                                    ? prev.filter((s) => s !== "draft")
+                                    : [...prev, "draft"]
+                                );
+                              }}
+                              className={cn("h-auto py-3 items-start", colorMap.gray.bgHover)}
+                            >
+                              <div
+                                className={cn(
+                                  "mr-2 flex h-4 w-4 shrink-0 items-center justify-center rounded-sm border mt-0.5",
+                                  filterStatus.includes("draft")
+                                    ? colorMap.gray.checkboxActive
+                                    : cn(colorMap.gray.checkboxBorder, "opacity-50 [&_svg]:invisible")
+                                )}
+                              >
+                                <Check className={cn("h-4 w-4")} />
+                              </div>
+                              <span className={cn("flex-1 whitespace-normal break-words leading-tight", colorMap.gray.text)}>Draft (My Drafts)</span>
+                            </CommandItem>
+                            {Object.entries(statusConfig)
+                              .filter(([key]) => key !== "draft" && key !== "delivery_stage")
+                              .map(([key, config]) => (
+                                <CommandItem
+                                  key={key}
+                                  onSelect={() => {
+                                    setFilterStatus((prev) =>
+                                      prev.includes(key)
+                                        ? prev.filter((s) => s !== key)
+                                        : [...prev, key]
+                                    );
+                                  }}
+                                  className={cn("h-auto py-3 items-start", (colorMap[config.color] || colorMap.gray).bgHover)}
                                 >
-                                  <Check className={cn("h-4 w-4")} />
-                                </div>
-                                <span className={cn("flex-1 whitespace-normal break-words leading-tight", (colorMap[config.color] || colorMap.gray).text)}>{config.label}</span>
-                              </CommandItem>
-                            ))}
-                        </CommandGroup>
-                        {filterStatus.length > 0 && (
-                          <>
-                            <CommandSeparator />
-                            <CommandGroup>
-                              <CommandItem
-                                onSelect={() => setFilterStatus([])}
-                                className="justify-center text-center"
-                              >
-                                Clear filters
-                              </CommandItem>
-                            </CommandGroup>
-                          </>
-                        )}
-                      </CommandList>
-                    </Command>
-                  </PopoverContent>
-                </Popover>
+                                  <div
+                                    className={cn(
+                                      "mr-2 flex h-4 w-4 shrink-0 items-center justify-center rounded-sm border mt-0.5",
+                                      filterStatus.includes(key)
+                                        ? (colorMap[config.color] || colorMap.gray).checkboxActive
+                                        : cn((colorMap[config.color] || colorMap.gray).checkboxBorder, "opacity-50 [&_svg]:invisible")
+                                    )}
+                                  >
+                                    <Check className={cn("h-4 w-4")} />
+                                  </div>
+                                  <span className={cn("flex-1 whitespace-normal break-words leading-tight", (colorMap[config.color] || colorMap.gray).text)}>{config.label}</span>
+                                </CommandItem>
+                              ))}
+                          </CommandGroup>
+                          {filterStatus.length > 0 && (
+                            <>
+                              <CommandSeparator />
+                              <CommandGroup>
+                                <CommandItem
+                                  onSelect={() => setFilterStatus([])}
+                                  className="justify-center text-center"
+                                >
+                                  Clear filters
+                                </CommandItem>
+                              </CommandGroup>
+                            </>
+                          )}
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
+                ) : (
+                  <Button
+                    variant="outline"
+                    className="w-full justify-between h-9 sm:h-10 opacity-50"
+                    disabled
+                  >
+                    Filter by status
+                    <Filter className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                )}
               </div>
 
               <Button

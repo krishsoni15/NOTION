@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { useMutation } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { toast } from "sonner";
-import { CheckCircle, Package, Loader2, Truck, TrendingDown, TrendingUp, CalendarIcon } from "lucide-react";
+import { CheckCircle, Package, Loader2, Truck, TrendingDown, TrendingUp, CalendarIcon, RotateCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Id } from "@/convex/_generated/dataModel";
 import { MediaInput } from "@/components/shared/media-input";
@@ -76,6 +76,7 @@ export function BulkDeliveryDialog({
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isDirectDelivering, setIsDirectDelivering] = useState(false);
     const createGRNFromDelivery = useMutation(api.grn.createGRNFromDelivery);
+    const markReadyForDelivery = useMutation(api.requests.markReadyForDelivery);
 
     const handleQuantityChange = (requestId: string, value: string) => {
         const numValue = parseInt(value) || 0;
@@ -90,52 +91,32 @@ export function BulkDeliveryDialog({
         }));
     };
 
-    const handleSubmit = async () => {
+    const handleConfirmDelivery = async () => {
         setIsSubmitting(true);
         try {
-            let deliveredCount = 0;
+            let processedCount = 0;
             let skippedCount = 0;
-            const createdGRNs: string[] = [];
 
             for (const item of items) {
                 const deliveryQty = deliveryQuantities[item.requestId];
 
                 if (deliveryQty > 0) {
-                    let invoicePhoto = undefined;
-                    const photoFile = invoicePhotoFiles[item.requestId];
-                    if (photoFile) {
-                        const formData = new FormData();
-                        formData.append("file", photoFile);
-                        const response = await fetch("/api/upload/image", { method: "POST", body: formData });
-                        if (response.ok) {
-                            const data = await response.json();
-                            invoicePhoto = { imageUrl: data.imageUrl, imageKey: data.imageKey };
-                        }
-                    }
-
-                    // Create GRN automatically
-                    const result = await createGRNFromDelivery({
-                        poNumber: poNumber,
-                        requestId: item.requestId,
+                    // Uses markReadyForDelivery which:
+                    // - For partial: splits request, delivered portion → ready_for_delivery, remaining stays in pending_po
+                    // - For full: simply updates status to ready_for_delivery
+                    await markReadyForDelivery({
+                        requestId: item.requestId as Id<"requests">,
                         deliveryQuantity: deliveryQty,
-                        invoiceNo: invoiceNos[item.requestId] || undefined,
-                        invoiceDate: invoiceDates[item.requestId] ? invoiceDates[item.requestId]!.getTime() : undefined,
-                        invoicePhoto,
+                        targetStatus: "ready_for_delivery",
                     });
-
-                    if (result?.grnNumber) {
-                        createdGRNs.push(result.grnNumber);
-                    }
-
-                    deliveredCount++;
+                    processedCount++;
                 } else {
                     skippedCount++;
                 }
             }
 
-            if (deliveredCount > 0) {
-                const grnInfo = createdGRNs.length > 0 ? ` (${createdGRNs.join(", ")})` : "";
-                toast.success(`✅ ${deliveredCount} GRN(s) created${grnInfo}${skippedCount > 0 ? ` · ${skippedCount} skipped` : ""}`);
+            if (processedCount > 0) {
+                toast.success(`✅ ${processedCount} item(s) marked as Ready for Delivery${skippedCount > 0 ? ` · ${skippedCount} skipped` : ""}`);
             }
 
             onOpenChange(false);
@@ -150,10 +131,80 @@ export function BulkDeliveryDialog({
             setInvoiceDates({});
             setInvoicePhotoFiles({});
         } catch (error: any) {
-            console.error("Failed to create GRN:", error);
+            console.error("Failed to confirm delivery:", error);
             toast.error(error.message || "Failed to confirm delivery");
         } finally {
             setIsSubmitting(false);
+        }
+    };
+
+    const handleDirectDelivery = async () => {
+        setIsDirectDelivering(true);
+        try {
+            if (onDirectDelivery) {
+                await onDirectDelivery(deliveryQuantities, { no: invoiceNos, photos: invoicePhotoFiles });
+            } else {
+                let deliveredCount = 0;
+                let skippedCount = 0;
+                const createdGRNs: string[] = [];
+
+                for (const item of items) {
+                    const deliveryQty = deliveryQuantities[item.requestId];
+
+                    if (deliveryQty > 0) {
+                        let invoicePhoto = undefined;
+                        const photoFile = invoicePhotoFiles[item.requestId];
+                        if (photoFile) {
+                            const formData = new FormData();
+                            formData.append("file", photoFile);
+                            const response = await fetch("/api/upload/image", { method: "POST", body: formData });
+                            if (response.ok) {
+                                const data = await response.json();
+                                invoicePhoto = { imageUrl: data.imageUrl, imageKey: data.imageKey };
+                            }
+                        }
+
+                        // Create GRN automatically
+                        const result = await createGRNFromDelivery({
+                            poNumber: poNumber,
+                            requestId: item.requestId as Id<"requests">,
+                            deliveryQuantity: deliveryQty,
+                            invoiceNo: invoiceNos[item.requestId] || undefined,
+                            invoiceDate: invoiceDates[item.requestId] ? invoiceDates[item.requestId]!.getTime() : undefined,
+                            invoicePhoto,
+                        });
+
+                        if (result?.grnNumber) {
+                            createdGRNs.push(result.grnNumber);
+                        }
+
+                        deliveredCount++;
+                    } else {
+                        skippedCount++;
+                    }
+                }
+
+                if (deliveredCount > 0) {
+                    const grnInfo = createdGRNs.length > 0 ? ` (${createdGRNs.join(", ")})` : "";
+                    toast.success(`✅ ${deliveredCount} GRN(s) created${grnInfo}${skippedCount > 0 ? ` · ${skippedCount} skipped` : ""}`);
+                }
+            }
+            onOpenChange(false);
+
+            // Reset quantities for next open
+            const initial: Record<string, number> = {};
+            items.forEach((item) => {
+                initial[item.requestId] = item.requestedQuantity;
+            });
+            setDeliveryQuantities(initial);
+            setInvoiceNos({});
+            setInvoiceDates({});
+            setInvoicePhotoFiles({});
+        } catch (error: any) {
+            console.error("Direct delivery failed:", error);
+            toast.error(error.message || "Failed to process direct delivery");
+        } finally {
+            setIsDirectDelivering(false);
         }
     };
 
@@ -352,64 +403,47 @@ export function BulkDeliveryDialog({
                 </div>
 
                 {/* Footer Actions */}
-                <div className="flex flex-col gap-3 pt-4 border-t">
-                    <div className="text-sm text-muted-foreground text-center">
-                        Delivering <span className="font-bold text-emerald-600">{totalToDeliver}</span> / {totalRemaining} remaining · Each item generates a unique GRN
+                <div className="flex flex-col gap-4 pt-6 border-t mt-4">
+                    <div className="text-xs text-muted-foreground bg-muted/30 p-2 rounded-lg text-center font-medium">
+                        Delivering <span className="text-emerald-600 font-bold">{totalToDeliver}</span> / {totalRemaining} total remaining items.
+                        <p className="text-[10px] mt-0.5 opacity-70">Each item generates a unique GRN for site audit trails.</p>
                     </div>
-                    <div className="flex items-center gap-2">
+
+                    <div className="flex items-center justify-between gap-3">
                         <Button
                             variant="outline"
                             onClick={() => onOpenChange(false)}
                             disabled={isSubmitting || isDirectDelivering}
-                            className="shrink-0"
+                            className="h-10 px-6 font-medium"
                         >
                             Cancel
                         </Button>
-                        <div className="flex items-center gap-2 flex-1 justify-end">
-                            {onDirectDelivery && (
-                                <Button
-                                    variant="outline"
-                                    onClick={async () => {
-                                        setIsDirectDelivering(true);
-                                        try {
-                                            await onDirectDelivery(deliveryQuantities, { no: invoiceNos, photos: invoicePhotoFiles });
-                                            onOpenChange(false);
-                                        } finally {
-                                            setIsDirectDelivering(false);
-                                        }
-                                    }}
-                                    disabled={isSubmitting || isDirectDelivering || totalToDeliver === 0}
-                                    className="border-violet-400 text-violet-700 hover:bg-violet-50 dark:border-violet-600 dark:text-violet-300 dark:hover:bg-violet-950/30 font-semibold"
-                                >
-                                    {isDirectDelivering ? (
-                                        <>
-                                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                            Processing...
-                                        </>
-                                    ) : (
-                                        <>
-                                            <Truck className="h-4 w-4 mr-2" />
-                                            Direct Delivered
-                                        </>
-                                    )}
-                                </Button>
-                            )}
+
+                        <div className="flex items-center gap-2">
                             <Button
-                                onClick={handleSubmit}
+                                variant="outline"
+                                onClick={handleDirectDelivery}
                                 disabled={isSubmitting || isDirectDelivering || totalToDeliver === 0}
-                                className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold px-6"
+                                className={cn(
+                                    "h-10 px-4 gap-2 transition-all",
+                                    !onDirectDelivery ? "border-slate-300 hover:bg-slate-50" : "bg-slate-800 hover:bg-slate-900 text-white shadow-sm"
+                                )}
+                            >
+                                {isDirectDelivering ? <RotateCw className="h-4 w-4 animate-spin" /> : <Truck className="h-4 w-4" />}
+                                <span className="font-medium">Direct Delivered</span>
+                            </Button>
+
+                            <Button
+                                onClick={handleConfirmDelivery}
+                                disabled={isSubmitting || isDirectDelivering || totalToDeliver === 0}
+                                className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg shadow-emerald-600/20 h-10 px-6 gap-2 transition-all active:scale-95"
                             >
                                 {isSubmitting ? (
-                                    <>
-                                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                        Creating GRNs...
-                                    </>
+                                    <RotateCw className="h-4 w-4 animate-spin" />
                                 ) : (
-                                    <>
-                                        <CheckCircle className="h-4 w-4 mr-2" />
-                                        Confirm Delivery
-                                    </>
+                                    <CheckCircle className="h-4 w-4" />
                                 )}
+                                <span className="font-semibold text-sm">Confirm Delivery</span>
                             </Button>
                         </div>
                     </div>

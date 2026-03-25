@@ -202,12 +202,14 @@ function EditableTalk({
 interface PendingPOViewProps {
     onBack: () => void;
     onViewPO: (poNumber: string, requestId: string) => void;
-    onCreateDirectPO: () => void;
+    onCreateDirectPO?: () => void;
+    requests?: any[];
 }
 
 /* ─────────────── Main Component ─────────────── */
-export function PendingPODialog({ onBack, onViewPO, onCreateDirectPO }: PendingPOViewProps) {
-    const allRequests = useQuery(api.requests.getPurchaseRequestsByStatus, {});
+export function PendingPODialog({ onBack, onViewPO, onCreateDirectPO, requests: propRequests }: PendingPOViewProps) {
+    const fetchedRequests = useQuery(api.requests.getPurchaseRequestsByStatus, propRequests ? "skip" : { status: "pending_po" });
+    const allRequests = propRequests || fetchedRequests;
     const vendors = useQuery(api.vendors.getAllVendors);
     const allPOs = useQuery(api.purchaseOrders.getAllPurchaseOrders);
     const updateLastTalkDate = useMutation(api.requests.updateLastTalkDate);
@@ -635,13 +637,15 @@ export function PendingPODialog({ onBack, onViewPO, onCreateDirectPO }: PendingP
                         <Download className="h-4 w-4" />
                         Download XL
                     </Button>
-                    <Button
-                        onClick={onCreateDirectPO}
-                        className="bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white shadow-lg hover:shadow-xl transition-all duration-200 h-9 sm:h-10"
-                    >
-                        <Zap className="h-4 w-4 mr-2" />
-                        Create Direct PO
-                    </Button>
+                    {onCreateDirectPO && (
+                        <Button
+                            onClick={onCreateDirectPO}
+                            className="bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white shadow-lg hover:shadow-xl transition-all duration-200 h-9 sm:h-10"
+                        >
+                            <Zap className="h-4 w-4 mr-2" />
+                            Create Direct PO
+                        </Button>
+                    )}
                 </div>
             </div>
 

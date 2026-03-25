@@ -1688,7 +1688,7 @@ export function PurchaseRequestGroupCard({
                 <Button
                   variant="outline"
                   onClick={() => setShowReadyForDeliveryConfirm(null)}
-                  className="w-full h-11 font-medium border-gray-200 hover:bg-gray-50 hover:text-gray-900 dark:border-gray-700 dark:hover:bg-gray-800 dark:hover:text-white transition-colors"
+                  className="w-full h-11 font-medium border-slate-200 hover:bg-slate-50 hover:text-slate-900 dark:border-slate-800 dark:hover:bg-slate-800 dark:hover:text-white transition-colors"
                 >
                   Cancel
                 </Button>
@@ -1699,9 +1699,10 @@ export function PurchaseRequestGroupCard({
                       setShowReadyForDeliveryConfirm(null);
                     }
                   }}
-                  className="w-full h-11 font-medium bg-orange-600 hover:bg-orange-700 text-white shadow-lg shadow-orange-500/20 transition-all hover:scale-[1.02]"
+                  className="w-full h-11 font-semibold bg-orange-600 hover:bg-orange-700 text-white shadow-lg shadow-orange-500/20 transition-all active:scale-95 flex items-center justify-center gap-2"
                 >
-                  Confirm Delivery
+                  <CheckCircle className="h-4 w-4" />
+                  Confirm Direct
                 </Button>
               </div>
             </div>

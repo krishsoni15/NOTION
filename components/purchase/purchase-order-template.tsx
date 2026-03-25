@@ -41,79 +41,57 @@ export interface POData {
 
 // Helper to convert number to words (Indian numbering system)
 function numberToWords(num: number): string {
-    const a = [
-        "",
-        "one ",
-        "two ",
-        "three ",
-        "four ",
-        "five ",
-        "six ",
-        "seven ",
-        "eight ",
-        "nine ",
-        "ten ",
-        "eleven ",
-        "twelve ",
-        "thirteen ",
-        "fourteen ",
-        "fifteen ",
-        "sixteen ",
-        "seventeen ",
-        "eighteen ",
-        "nineteen ",
-    ];
-    const b = [
-        "",
-        "",
-        "twenty",
-        "thirty",
-        "forty",
-        "fifty",
-        "sixty",
-        "seventy",
-        "eighty",
-        "ninety",
-    ];
+    const a = ["", "one ", "two ", "three ", "four ", "five ", "six ", "seven ", "eight ", "nine ", "ten ", "eleven ", "twelve ", "thirteen ", "fourteen ", "fifteen ", "sixteen ", "seventeen ", "eighteen ", "nineteen "];
+    const b = ["", "", "twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety"];
 
-    const [int, dec] = num.toFixed(2).split('.');
-    const paddedInt = ("0000000000" + int).slice(-10); // Ensure exactly 10 digits for integer part
-    const n = (paddedInt + "." + dec).match(/^(\d{1})(\d{2})(\d{2})(\d{2})(\d{1})(\d{2})(?:\.(\d{2}))?$/);
+    const format2 = (n: number) => {
+        if (n < 20) return a[n];
+        return b[Math.floor(n / 10)] + (n % 10 !== 0 ? " " + a[n % 10] : "");
+    };
 
-    if (!n) return "";
+    const n = Math.floor(num);
+    if (n === 0) return "Rupees Zero Only";
 
     let str = "";
-    str += Number(n[1]) !== 0 ? (a[Number(n[1])] || b[Number(n[1][0])] + " " + a[Number(n[1][1])]) + "crore " : "";
-    str += Number(n[2]) !== 0 ? (a[Number(n[2])] || b[Number(n[2][0])] + " " + a[Number(n[2][1])]) + "lakh " : "";
-    str += Number(n[3]) !== 0 ? (a[Number(n[3])] || b[Number(n[3][0])] + " " + a[Number(n[3][1])]) + "thousand " : "";
-    str += Number(n[4]) !== 0 ? (a[Number(n[4])] || b[Number(n[4][0])] + " " + a[Number(n[4][1])]) + "hundred " : "";
 
-    const lastTwo = Number(n[5] + n[6]); // Combine hundreds digit position? Wait. 
-    // n[5] is single digit, n[6] is two digits.
-    // The regex groups:
-    // 1: digit (crore tens? no, 10 digit total. 10^9 max? 100 crore?)
-    // 2: 2 digits (crore)
-    // 3: 2 digits (lakh)
-    // 4: 2 digits (thousand)
-    // 5: 1 digit (hundred)
-    // 6: 2 digits (tens/units)
+    // Arab (10^9) - handles up to 99 Arab
+    const arab = Math.floor(n / 1000000000);
+    if (arab > 0) {
+        str += format2(arab) + " arab ";
+    }
 
-    // n[5] corresponds to Hundred position.
-    str += Number(n[5]) !== 0 ? (str !== "" ? "and " : "") + (a[Number(n[5])] || b[Number(n[5][0])] + " " + a[Number(n[5][1])]) + "hundred " : "";
+    // Crore (10^7)
+    const crore = Math.floor((n % 1000000000) / 10000000);
+    if (crore > 0) {
+        str += format2(crore) + " crore ";
+    }
 
-    // n[6] corresponds to last two digits (00-99).
-    const lastPart = Number(n[6]);
-    str += lastPart !== 0 ? (str !== "" || Number(n[5]) !== 0 ? "and " : "") + (a[lastPart] || b[Number(n[6][0])] + " " + a[Number(n[6][1])]) : "";
+    // Lakh (10^5)
+    const lakh = Math.floor((n % 10000000) / 100000);
+    if (lakh > 0) {
+        str += format2(lakh) + " lakh ";
+    }
 
-    str += "Rupees Only";
+    // Thousand (10^3)
+    const thousand = Math.floor((n % 100000) / 1000);
+    if (thousand > 0) {
+        str += format2(thousand) + " thousand ";
+    }
 
-    // Add paise if needed, but 'only' usually implies integer. 
-    // If decimals exist:
-    // User typically wants "Rupees X Only" or "Rupees X and Y Paise Only".
-    // Existing code did: `str += Number(n[6]) !== 0 ? "paise " ... : "only";`
-    // Let's stick closer to the intent but fix logic.
+    // Hundred (10^2)
+    const hundred = Math.floor((n % 1000) / 100);
+    if (hundred > 0) {
+        str += format2(hundred) + " hundred ";
+    }
 
-    return "Rupees " + capitalize(str.trim());
+    // Units and Tens
+    const units = n % 100;
+    if (units > 0) {
+        if (str !== "") str += "and ";
+        str += format2(units);
+    }
+
+    return "Rupees " + capitalize(str.trim()) + " Only";
 }
 
 function capitalize(s: string) {
@@ -266,6 +244,7 @@ export function PurchaseOrderTemplate({ data }: { data: POData }) {
                                             <div className="mt-2 border rounded p-1 bg-slate-50/50">
                                                 <img
                                                     src={item.imageUrl}
+                                                    crossOrigin="anonymous"
                                                     alt={item.itemDescription?.split('\n')[0] || "Item"}
                                                     style={{ width: '100%', maxHeight: '200px', objectFit: 'contain' }}
                                                 />
@@ -333,6 +312,7 @@ export function PurchaseOrderTemplate({ data }: { data: POData }) {
                             {data.approver?.signatureUrl ? (
                                 <img
                                     src={data.approver.signatureUrl}
+                                    crossOrigin="anonymous"
                                     alt="Signature"
                                     style={{ maxHeight: '40px', maxWidth: '120px', objectFit: 'contain' }}
                                 />

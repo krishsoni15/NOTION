@@ -332,12 +332,31 @@ export const createGRNFromDelivery = mutation({
             });
         }
 
-        // Update request status to delivered
-        await ctx.db.patch(args.requestId, {
-            status: "delivered",
-            deliveryMarkedAt: now,
-            updatedAt: now,
-        });
+        // Update request status - Handle split if partial delivery
+        if (args.deliveryQuantity < request.quantity) {
+            // SPLIT: Create new request for the DELIVERED portion
+            const { _id, _creationTime, ...requestData } = request;
+            await ctx.db.insert("requests", {
+                ...requestData,
+                quantity: args.deliveryQuantity,
+                status: "delivered",
+                deliveryMarkedAt: now,
+                updatedAt: now,
+            });
+
+            // REDUCE original request (stays in pending_po/current status)
+            await ctx.db.patch(request._id, {
+                quantity: request.quantity - args.deliveryQuantity,
+                updatedAt: now,
+            });
+        } else {
+            // FULL delivery - Update existing request
+            await ctx.db.patch(args.requestId, {
+                status: "delivered",
+                deliveryMarkedAt: now,
+                updatedAt: now,
+            });
+        }
 
         // Add to log
         await ctx.db.insert("request_notes", {

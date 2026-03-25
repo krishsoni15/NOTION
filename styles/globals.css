@@ -32,11 +32,11 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
-  
+
   /* Fonts */
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
-  
+
   /* Radius utilities */
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
@@ -45,7 +45,7 @@
   --radius-2xl: calc(var(--radius) + 8px);
   --radius-3xl: calc(var(--radius) + 12px);
   --radius-4xl: calc(var(--radius) + 16px);
-  
+
   /* Sidebar (if needed) */
   --color-sidebar: var(--surface);
   --color-sidebar-foreground: var(--foreground);
@@ -55,7 +55,7 @@
   --color-sidebar-accent-foreground: var(--accent-foreground);
   --color-sidebar-border: var(--border);
   --color-sidebar-ring: var(--ring);
-  
+
   /* Chart colors (optional, can be theme-specific) */
   --color-chart-1: var(--primary);
   --color-chart-2: var(--accent);
@@ -66,6 +66,7 @@
 
 /* Base Styles */
 @layer base {
+
   /* Premium smooth transitions for theme switching */
   * {
     @apply border-border outline-ring/50;
@@ -76,12 +77,12 @@
       fill 250ms ease,
       stroke 250ms ease;
   }
-  
+
   body {
     @apply bg-background text-foreground;
     font-feature-settings: "rlig" 1, "calt" 1;
   }
-  
+
   /* Global button hover cursor pointer */
   button:hover {
     cursor: pointer;
@@ -92,6 +93,7 @@
 /* Modern browsers: Chrome, Edge, Safari 18+ */
 /* Animation starts from button position */
 @supports (view-transition-name: none) {
+
   ::view-transition-old(root),
   ::view-transition-new(root) {
     animation: none;
@@ -109,7 +111,7 @@
       clip-path: circle(150% at var(--theme-toggle-x, 50%) var(--theme-toggle-y, 50%));
     }
   }
-  
+
   /* Smooth button animation during transition */
   ::view-transition-group(*) {
     animation-duration: 500ms;
@@ -119,12 +121,14 @@
 
 /* Chat Animations */
 @layer components {
+
   /* Message slide-in animation */
   @keyframes slideInMessage {
     from {
       opacity: 0;
       transform: translateY(10px);
     }
+
     to {
       opacity: 1;
       transform: translateY(0);
@@ -133,19 +137,23 @@
 
   /* Pulse animation for online indicator */
   @keyframes pulse {
-    0%, 100% {
+
+    0%,
+    100% {
       opacity: 1;
     }
+
     50% {
       opacity: 0.5;
     }
   }
 
-  /* Fade in animation */
+  /* Fade in animation (removed duplicate at line 221) */
   @keyframes fadeIn {
     from {
       opacity: 0;
     }
+
     to {
       opacity: 1;
     }
@@ -156,6 +164,7 @@
     from {
       transform: translateX(100%);
     }
+
     to {
       transform: translateX(0);
     }
@@ -163,9 +172,12 @@
 
   /* Bounce animation for notification badge */
   @keyframes bounce {
-    0%, 100% {
+
+    0%,
+    100% {
       transform: scale(1);
     }
+
     50% {
       transform: scale(1.1);
     }
@@ -198,19 +210,10 @@
       opacity: 0;
       transform: translateY(-20px) scale(0.95);
     }
+
     to {
       opacity: 1;
       transform: translateY(0) scale(1);
-    }
-  }
-
-  /* Fade in animation */
-  @keyframes fadeIn {
-    from {
-      opacity: 0;
-    }
-    to {
-      opacity: 1;
     }
   }
 
@@ -219,9 +222,11 @@
     0% {
       background-color: transparent;
     }
+
     50% {
-      background-color: hsl(var(--primary) / 0.1);
+      background-color: color-mix(in srgb, var(--primary), transparent 90%);
     }
+
     100% {
       background-color: transparent;
     }
@@ -233,6 +238,7 @@
       opacity: 0;
       transform: translateY(-30px) scale(0.98);
     }
+
     to {
       opacity: 1;
       transform: translateY(0) scale(1);
@@ -249,7 +255,11 @@
 
   /* Enhanced table styling for grouped items */
   .grouped-item-row {
-    @apply bg-gradient-to-r from-primary/5 to-transparent hover:from-primary/10 hover:to-muted/30;
+    @apply bg-gradient-to-r from-primary/5 to-transparent;
+
+    &:hover {
+      @apply from-primary/10 to-muted/30;
+    }
   }
 
   .grouped-item-border {
@@ -358,4 +368,3 @@ html {
 .scrollbar-hide::-webkit-scrollbar {
   display: none;
 }
-

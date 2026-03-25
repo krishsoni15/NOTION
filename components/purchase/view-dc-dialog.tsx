@@ -431,11 +431,13 @@ export function ViewDCDialog({ open, onOpenChange, deliveryId }: ViewDCDialogPro
             </Dialog>
 
             {/* PDF Preview Dialog */}
-            {deliveryData?.po?.poNumber && (
+            {deliveryData?._id && (
                 <PDFPreviewDialog
                     open={showPdfPreview}
                     onOpenChange={setShowPdfPreview}
-                    poNumber={deliveryData.po.poNumber}
+                    poNumber={deliveryData.po?.poNumber || null}
+                    deliveryId={deliveryData._id}
+                    type="dc"
                 />
             )}
         </>

@@ -139,6 +139,11 @@ export function DirectPOManagement() {
     const [createDialogInitialData, setCreateDialogInitialData] = useState<DirectPOInitialData | null>(null);
     const [rejectReason, setRejectReason] = useState("");
     const [isLoading, setIsLoading] = useState(false);
+    const [isHydrated, setIsHydrated] = useState(false);
+
+    React.useEffect(() => {
+        setIsHydrated(true);
+    }, []);
 
     const isManager = currentUser?.role === "manager";
 
@@ -397,145 +402,156 @@ export function DirectPOManagement() {
 
                             {/* Status Filter */}
                             <div className="w-full sm:w-[250px]">
-                                <Popover>
-                                    <PopoverTrigger asChild>
-                                        <Button
-                                            variant="outline"
-                                            role="combobox"
-                                            className="w-full justify-between"
-                                        >
-                                            {filterStatus.length > 0
-                                                ? filterStatus.length === 1
-                                                    ? filterStatus[0] === "pending_approval"
-                                                        ? "Pending"
-                                                        : filterStatus[0] === "ordered"
-                                                            ? "Pending PO"
-                                                            : filterStatus[0] === "rejected"
-                                                                ? "PO Rejected"
-                                                                : `${filterStatus.length} status selected`
-                                                    : `${filterStatus.length} status selected`
-                                                : "Filter by status"}
-                                            <Filter className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                                        </Button>
-                                    </PopoverTrigger>
-                                    <PopoverContent className="w-[200px] p-0" align="start">
-                                        <Command>
-                                            <CommandInput placeholder="Search status..." />
-                                            <CommandList>
-                                                <CommandEmpty>No status found.</CommandEmpty>
-                                                <CommandGroup>
-                                                    <CommandItem
-                                                        onSelect={() => setFilterStatus([])}
-                                                        className="font-medium"
-                                                    >
-                                                        <div
-                                                            className={cn(
-                                                                "mr-2 flex h-4 w-4 items-center justify-center rounded-full border border-primary",
-                                                                filterStatus.length === 0
-                                                                    ? "bg-primary text-primary-foreground"
-                                                                    : "opacity-50 [&_svg]:invisible"
-                                                            )}
-                                                        >
-                                                            <Check className={cn("h-4 w-4")} />
-                                                        </div>
-                                                        All Statuses
-                                                    </CommandItem>
-                                                    {/* Quick Filter: Pending */}
-                                                    <CommandItem
-                                                        onSelect={() => setFilterStatus(["pending_approval"])}
-                                                        className="font-medium text-amber-600"
-                                                    >
-                                                        <div
-                                                            className={cn(
-                                                                "mr-2 flex h-4 w-4 items-center justify-center rounded-full border border-primary",
-                                                                filterStatus.length === 1 && filterStatus[0] === "pending_approval"
-                                                                    ? "bg-primary text-primary-foreground"
-                                                                    : "opacity-50 [&_svg]:invisible"
-                                                            )}
-                                                        >
-                                                            <Check className={cn("h-4 w-4")} />
-                                                        </div>
-                                                        Pending
-                                                    </CommandItem>
-                                                    {/* Quick Filter: Pending PO */}
-                                                    <CommandItem
-                                                        onSelect={() => setFilterStatus(["ordered"])}
-                                                        className="font-medium text-blue-600"
-                                                    >
-                                                        <div
-                                                            className={cn(
-                                                                "mr-2 flex h-4 w-4 items-center justify-center rounded-full border border-primary",
-                                                                filterStatus.length === 1 && filterStatus[0] === "ordered"
-                                                                    ? "bg-primary text-primary-foreground"
-                                                                    : "opacity-50 [&_svg]:invisible"
-                                                            )}
-                                                        >
-                                                            <Check className={cn("h-4 w-4")} />
-                                                        </div>
-                                                        Pending PO
-                                                    </CommandItem>
-                                                    {/* Quick Filter: PO Rejected */}
-                                                    <CommandItem
-                                                        onSelect={() => setFilterStatus(["rejected"])}
-                                                        className="font-medium text-red-600"
-                                                    >
-                                                        <div
-                                                            className={cn(
-                                                                "mr-2 flex h-4 w-4 items-center justify-center rounded-full border border-primary",
-                                                                filterStatus.length === 1 && filterStatus[0] === "rejected"
-                                                                    ? "bg-primary text-primary-foreground"
-                                                                    : "opacity-50 [&_svg]:invisible"
-                                                            )}
-                                                        >
-                                                            <Check className={cn("h-4 w-4")} />
-                                                        </div>
-                                                        PO Rejected
-                                                    </CommandItem>
-                                                </CommandGroup>
-                                                <CommandSeparator />
-                                                <CommandGroup>
-                                                    {Object.entries(statusConfig).map(([key, config]) => (
+                                {isHydrated ? (
+                                    <Popover>
+                                        <PopoverTrigger asChild>
+                                            <Button
+                                                variant="outline"
+                                                role="combobox"
+                                                className="w-full justify-between"
+                                            >
+                                                {filterStatus.length > 0
+                                                    ? filterStatus.length === 1
+                                                        ? filterStatus[0] === "pending_approval"
+                                                            ? "Pending"
+                                                            : filterStatus[0] === "ordered"
+                                                                ? "Pending PO"
+                                                                : filterStatus[0] === "rejected"
+                                                                    ? "PO Rejected"
+                                                                    : `${filterStatus.length} status selected`
+                                                        : `${filterStatus.length} status selected`
+                                                    : "Filter by status"}
+                                                <Filter className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                            </Button>
+                                        </PopoverTrigger>
+                                        <PopoverContent className="w-[200px] p-0" align="start">
+                                            <Command>
+                                                <CommandInput placeholder="Search status..." />
+                                                <CommandList>
+                                                    <CommandEmpty>No status found.</CommandEmpty>
+                                                    <CommandGroup>
                                                         <CommandItem
-                                                            key={key}
-                                                            onSelect={() => {
-                                                                setFilterStatus((prev) =>
-                                                                    prev.includes(key)
-                                                                        ? prev.filter((s) => s !== key)
-                                                                        : [...prev, key]
-                                                                );
-                                                            }}
+                                                            onSelect={() => setFilterStatus([])}
+                                                            className="font-medium"
                                                         >
                                                             <div
                                                                 className={cn(
                                                                     "mr-2 flex h-4 w-4 items-center justify-center rounded-full border border-primary",
-                                                                    filterStatus.includes(key)
+                                                                    filterStatus.length === 0
                                                                         ? "bg-primary text-primary-foreground"
                                                                         : "opacity-50 [&_svg]:invisible"
                                                                 )}
                                                             >
                                                                 <Check className={cn("h-4 w-4")} />
                                                             </div>
-                                                            {config.label}
+                                                            All Statuses
                                                         </CommandItem>
-                                                    ))}
-                                                </CommandGroup>
-                                                {filterStatus.length > 0 && (
-                                                    <>
-                                                        <CommandSeparator />
-                                                        <CommandGroup>
-                                                            <CommandItem
-                                                                onSelect={() => setFilterStatus([])}
-                                                                className="justify-center text-center"
+                                                        {/* Quick Filter: Pending */}
+                                                        <CommandItem
+                                                            onSelect={() => setFilterStatus(["pending_approval"])}
+                                                            className="font-medium text-amber-600"
+                                                        >
+                                                            <div
+                                                                className={cn(
+                                                                    "mr-2 flex h-4 w-4 items-center justify-center rounded-full border border-primary",
+                                                                    filterStatus.length === 1 && filterStatus[0] === "pending_approval"
+                                                                        ? "bg-primary text-primary-foreground"
+                                                                        : "opacity-50 [&_svg]:invisible"
+                                                                )}
                                                             >
-                                                                Clear filters
+                                                                <Check className={cn("h-4 w-4")} />
+                                                            </div>
+                                                            Pending
+                                                        </CommandItem>
+                                                        {/* Quick Filter: Pending PO */}
+                                                        <CommandItem
+                                                            onSelect={() => setFilterStatus(["ordered"])}
+                                                            className="font-medium text-blue-600"
+                                                        >
+                                                            <div
+                                                                className={cn(
+                                                                    "mr-2 flex h-4 w-4 items-center justify-center rounded-full border border-primary",
+                                                                    filterStatus.length === 1 && filterStatus[0] === "ordered"
+                                                                        ? "bg-primary text-primary-foreground"
+                                                                        : "opacity-50 [&_svg]:invisible"
+                                                                )}
+                                                            >
+                                                                <Check className={cn("h-4 w-4")} />
+                                                            </div>
+                                                            Pending PO
+                                                        </CommandItem>
+                                                        {/* Quick Filter: PO Rejected */}
+                                                        <CommandItem
+                                                            onSelect={() => setFilterStatus(["rejected"])}
+                                                            className="font-medium text-red-600"
+                                                        >
+                                                            <div
+                                                                className={cn(
+                                                                    "mr-2 flex h-4 w-4 items-center justify-center rounded-full border border-primary",
+                                                                    filterStatus.length === 1 && filterStatus[0] === "rejected"
+                                                                        ? "bg-primary text-primary-foreground"
+                                                                        : "opacity-50 [&_svg]:invisible"
+                                                                )}
+                                                            >
+                                                                <Check className={cn("h-4 w-4")} />
+                                                            </div>
+                                                            PO Rejected
+                                                        </CommandItem>
+                                                    </CommandGroup>
+                                                    <CommandSeparator />
+                                                    <CommandGroup>
+                                                        {Object.entries(statusConfig).map(([key, config]) => (
+                                                            <CommandItem
+                                                                key={key}
+                                                                onSelect={() => {
+                                                                    setFilterStatus((prev) =>
+                                                                        prev.includes(key)
+                                                                            ? prev.filter((s) => s !== key)
+                                                                            : [...prev, key]
+                                                                    );
+                                                                }}
+                                                            >
+                                                                <div
+                                                                    className={cn(
+                                                                        "mr-2 flex h-4 w-4 items-center justify-center rounded-full border border-primary",
+                                                                        filterStatus.includes(key)
+                                                                            ? "bg-primary text-primary-foreground"
+                                                                            : "opacity-50 [&_svg]:invisible"
+                                                                    )}
+                                                                >
+                                                                    <Check className={cn("h-4 w-4")} />
+                                                                </div>
+                                                                {config.label}
                                                             </CommandItem>
-                                                        </CommandGroup>
-                                                    </>
-                                                )}
-                                            </CommandList>
-                                        </Command>
-                                    </PopoverContent>
-                                </Popover>
+                                                        ))}
+                                                    </CommandGroup>
+                                                    {filterStatus.length > 0 && (
+                                                        <>
+                                                            <CommandSeparator />
+                                                            <CommandGroup>
+                                                                <CommandItem
+                                                                    onSelect={() => setFilterStatus([])}
+                                                                    className="justify-center text-center"
+                                                                >
+                                                                    Clear filters
+                                                                </CommandItem>
+                                                            </CommandGroup>
+                                                        </>
+                                                    )}
+                                                </CommandList>
+                                            </Command>
+                                        </PopoverContent>
+                                    </Popover>
+                                ) : (
+                                    <Button
+                                        variant="outline"
+                                        className="w-full justify-between opacity-50"
+                                        disabled
+                                    >
+                                        Filter by status
+                                        <Filter className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                    </Button>
+                                )}
                             </div>
                         </div>
                     </CardContent>

@@ -366,8 +366,8 @@ export const getPurchaseRequestsByStatus = query({
 
     if (!currentUser) return [];
 
-    // Only purchase officers can view these requests
-    if (currentUser.role !== "purchase_officer") {
+    // Only purchase officers and managers can view these requests
+    if (currentUser.role !== "purchase_officer" && currentUser.role !== "manager") {
       return [];
     }
 
@@ -637,8 +637,43 @@ export const getAllRequests = query({
           }
         }
 
+        // Fetch related Purchase Order linkage
+        let poId: Id<"purchaseOrders"> | null = null;
+        let poNumber: string | null = null;
+        if (["pending_po", "ready_for_delivery", "delivery_stage", "delivery_processing", "out_for_delivery", "delivered", "sign_pending", "sign_rejected"].includes(request.status)) {
+          let po = await ctx.db
+            .query("purchaseOrders")
+            .withIndex("by_request_id", (q) => q.eq("requestId", request._id))
+            .first();
+
+          // Fallback: If not found (e.g. split item), check siblings by requestNumber
+          if (!po) {
+            const siblings = await ctx.db.query("requests")
+              .withIndex("by_request_number", (q) => q.eq("requestNumber", request.requestNumber))
+              .collect();
+
+            for (const sibling of siblings) {
+              if (sibling._id === request._id) continue;
+              const siblingPO = await ctx.db.query("purchaseOrders")
+                .withIndex("by_request_id", (q) => q.eq("requestId", sibling._id))
+                .first();
+              if (siblingPO) {
+                po = siblingPO;
+                break;
+              }
+            }
+          }
+
+          if (po) {
+            poId = po._id;
+            poNumber = po.poNumber;
+          }
+        }
+
         return {
           ...request,
+          poId,
+          poNumber,
           site: site
             ? {
               _id: site._id,

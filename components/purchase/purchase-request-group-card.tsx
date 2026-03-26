@@ -1423,7 +1423,7 @@ export function PurchaseRequestGroupCard({
                           {["out_for_delivery", "delivery_processing", "delivery_stage", "delivered", "partially_processed", "ready_for_delivery"].includes(item.status) && (item.deliveryId || fallbackDeliveryId) && (
                             <Button
                               size="sm"
-                              onClick={() => setViewDCId(item.deliveryId || fallbackDeliveryId)}
+                              onClick={() => setViewDCId((item.deliveryId || fallbackDeliveryId)!)}
                               className="h-7 text-xs font-semibold bg-sky-600 hover:bg-sky-700 text-white flex-1 sm:flex-none shadow-sm"
                             >
                               <Eye className="h-3.5 w-3.5 mr-1.5" /> View DC

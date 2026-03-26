@@ -2188,7 +2188,7 @@ function ViewDCFallbackButton({ item, setViewDCId, className }: { item: any, set
     <Button
       size="sm"
       className={className}
-      onClick={(e) => { e.stopPropagation(); setViewDCId(item.deliveryId || fallbackId!); }}
+      onClick={(e) => { e.stopPropagation(); setViewDCId((item.deliveryId || fallbackId)!); }}
       title="View DC"
     >
       <Eye className="h-3 w-3 mr-1" />

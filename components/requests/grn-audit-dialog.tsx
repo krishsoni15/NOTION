@@ -33,6 +33,7 @@ import {
     Activity,
     Shield,
     Layers,
+    Eye,
 } from "lucide-react";
 import type { Id } from "@/convex/_generated/dataModel";
 
@@ -45,6 +46,7 @@ interface GRNAuditDialogProps {
     poNumber?: string;
     onOpenCC?: (requestId: Id<"requests">, requestIds?: Id<"requests">[]) => void;
     onViewPDF?: (poNumber: string, requestId: Id<"requests">) => void;
+    onViewDC?: (deliveryId: Id<"deliveries">) => void;
 }
 
 // Status → color & icon mapping
@@ -91,11 +93,16 @@ export function GRNAuditDialog({
     poNumber,
     onOpenCC,
     onViewPDF,
+    onViewDC,
 }: GRNAuditDialogProps) {
     const auditLogs = useQuery(api.notes.getAuditLogs, { requestNumber });
     const requestsList = useQuery(api.requests.getRequestsByRequestNumber, { requestNumber });
     const sortedLogs = auditLogs ?? [];
     const isLoading = auditLogs === undefined;
+
+    const poIdOpt = useQuery(api.purchaseOrders.getPOIdByNumber, poNumber ? { poNumber } : "skip");
+    const poDeliveries = useQuery(api.deliveries.getDeliveriesByPO, poIdOpt ? { poId: poIdOpt } : "skip");
+    const fallbackDeliveryId = poDeliveries?.[0]?._id;
 
     const totalUsers = new Set(sortedLogs.map(n => n.userName)).size;
     const totalRoles = new Set(sortedLogs.map(n => n.userRole)).size;
@@ -255,12 +262,25 @@ export function GRNAuditDialog({
                                                                     <Layers className="h-3 w-3 mr-1" /> View CC
                                                                 </button>
                                                             )}
-                                                            {onViewPDF && ["ready_for_po", "direct_po", "sign_pending", "sign_rejected", "pending_po", "rejected_po", "ready_for_delivery", "out_for_delivery", "delivery_stage", "delivery_processing", "delivered", "ordered", "partially_processed"].includes(status) && poNumber && requestId && (
+                                                            {onViewPDF && ["ready_for_po", "direct_po", "sign_pending", "sign_rejected", "pending_po", "rejected_po", "ordered"].includes(status) && poNumber && requestId && (
                                                                 <button
                                                                     onClick={(e) => { e.stopPropagation(); onViewPDF(poNumber, requestId); }}
                                                                     className="inline-flex items-center justify-center rounded-md text-[10px] font-bold border border-orange-200 bg-orange-50 text-orange-700 hover:bg-orange-100 dark:border-orange-800 dark:bg-orange-900/30 dark:text-orange-400 dark:hover:bg-orange-900/50 h-5 px-2 transition-colors shadow-sm"
                                                                 >
-                                                                    <FileText className="h-3 w-3 mr-1" /> View PDF
+                                                                    <FileText className="h-3 w-3 mr-1" /> View PO
+                                                                </button>
+                                                            )}
+                                                            {onViewDC && ["out_for_delivery", "delivery_stage", "delivery_processing", "delivered", "partially_processed", "ready_for_delivery"].includes(status) && (requestsList?.some(r => r.deliveryId) || fallbackDeliveryId) && (
+                                                                <button
+                                                                    onClick={(e) => {
+                                                                        e.stopPropagation();
+                                                                        const reqWithDC = requestsList?.find(r => r.deliveryId);
+                                                                        const finalDcId = reqWithDC?.deliveryId || fallbackDeliveryId;
+                                                                        if (finalDcId) onViewDC(finalDcId as Id<"deliveries">);
+                                                                    }}
+                                                                    className="inline-flex items-center justify-center rounded-md text-[10px] font-bold border border-sky-200 bg-sky-50 text-sky-700 hover:bg-sky-100 dark:border-sky-800 dark:bg-sky-900/30 dark:text-sky-400 dark:hover:bg-sky-900/50 h-5 px-2 transition-colors shadow-sm"
+                                                                >
+                                                                    <Eye className="h-3 w-3 mr-1" /> View DC
                                                                 </button>
                                                             )}
                                                         </div>

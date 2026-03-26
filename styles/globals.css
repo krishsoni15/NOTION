@@ -256,10 +256,10 @@
   /* Enhanced table styling for grouped items */
   .grouped-item-row {
     @apply bg-gradient-to-r from-primary/5 to-transparent;
+  }
 
-    &:hover {
-      @apply from-primary/10 to-muted/30;
-    }
+  .grouped-item-row:hover {
+    @apply from-primary/10 to-muted/30;
   }
 
   .grouped-item-border {

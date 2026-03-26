@@ -494,6 +494,13 @@ export function PurchaseRequestGroupCard({
   const vendors = useQuery(api.vendors.getAllVendors);
   const updateRequestDetails = useMutation(api.requests.updateRequestDetails);
 
+  // Fallback if schema hasn't fully updated deliveryId
+  const poDeliveries = useQuery(
+    api.deliveries.getDeliveriesByPO,
+    firstItem.poId ? { poId: firstItem.poId } : "skip"
+  );
+  const fallbackDeliveryId = poDeliveries?.[0]?._id;
+
   // Collect all unique item names from items
   const uniqueItemNames = useMemo(() => {
     const names = new Set<string>();
@@ -1413,10 +1420,10 @@ export function PurchaseRequestGroupCard({
 
 
                           {/* View DC Button - For Out for Delivery / Delivered items */}
-                          {["out_for_delivery", "delivery_processing", "delivery_stage", "delivered"].includes(item.status) && item.deliveryId && (
+                          {["out_for_delivery", "delivery_processing", "delivery_stage", "delivered", "partially_processed", "ready_for_delivery"].includes(item.status) && (item.deliveryId || fallbackDeliveryId) && (
                             <Button
                               size="sm"
-                              onClick={() => setViewDCId(item.deliveryId!)}
+                              onClick={() => setViewDCId(item.deliveryId || fallbackDeliveryId)}
                               className="h-7 text-xs font-semibold bg-sky-600 hover:bg-sky-700 text-white flex-1 sm:flex-none shadow-sm"
                             >
                               <Eye className="h-3.5 w-3.5 mr-1.5" /> View DC
@@ -1564,6 +1571,7 @@ export function PurchaseRequestGroupCard({
         poNumber={firstItem.poNumber}
         onOpenCC={onOpenCC}
         onViewPDF={onViewPDF}
+        onViewDC={(deliveryId) => setViewDCId(deliveryId)}
       />
 
       {

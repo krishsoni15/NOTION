@@ -60,7 +60,7 @@ export const createDelivery = mutation({
         approvedByRole: v.optional(v.union(v.literal("manager"), v.literal("pe"))),
         paymentAmount: v.optional(v.number()),
         paymentStatus: v.optional(v.union(v.literal("pending"), v.literal("paid"), v.literal("partial"))),
-        directDelivery: v.optional(v.boolean()),
+        directDelivery: v.optional(v.boolean()), // Added to support direct delivery
     },
     handler: async (ctx, args) => {
         const user = await ctx.auth.getUserIdentity();
@@ -77,7 +77,7 @@ export const createDelivery = mutation({
             throw new ConvexError("User not found");
         }
 
-        const { items, ...deliveryData } = args;
+        const { items, directDelivery, ...deliveryData } = args;
         const now = Date.now();
 
         // 1. Create Delivery Record

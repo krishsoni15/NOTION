@@ -1610,16 +1610,8 @@ export function RequestsTable({
                                   </Button>
                                 )}
                                 {/* View DC Button - Collapsed Row */}
-                                {!isExpanded && ["out_for_delivery", "delivery_processing", "delivery_stage", "delivered"].includes(firstItem.status) && firstItem.deliveryId && (
-                                  <Button
-                                    size="sm"
-                                    className="h-7 px-3 text-xs font-semibold bg-sky-600 hover:bg-sky-700 text-white shadow-sm mr-1"
-                                    onClick={(e) => { e.stopPropagation(); setViewDCId(firstItem.deliveryId!); }}
-                                    title="View DC"
-                                  >
-                                    <Eye className="h-3 w-3 mr-1" />
-                                    View DC
-                                  </Button>
+                                {!isExpanded && ["out_for_delivery", "delivery_processing", "delivery_stage", "delivered", "partially_processed", "ready_for_delivery"].includes(firstItem.status) && (
+                                  <ViewDCFallbackButton item={firstItem} setViewDCId={setViewDCId} className="h-7 px-3 text-xs font-semibold bg-sky-600 hover:bg-sky-700 text-white shadow-sm mr-1" />
                                 )}
                                 {onConfirmDelivery && ["out_for_delivery", "delivery_processing", "delivery_stage"].includes(firstItem.status) && (
                                   <Button
@@ -2015,6 +2007,7 @@ export function RequestsTable({
             poNumber={requests?.find(r => r.requestNumber === selectedRequestNumberForGRN)?.poNumber}
             onOpenCC={onOpenCC}
             onViewPDF={onViewPDF}
+            onViewDC={(deliveryId) => setViewDCId(deliveryId)}
           />
         )
       }
@@ -2182,5 +2175,24 @@ export function RequestsTable({
         deliveryId={viewDCId}
       />
     </>
+  );
+}
+
+function ViewDCFallbackButton({ item, setViewDCId, className }: { item: any, setViewDCId: (id: Id<"deliveries">) => void, className?: string }) {
+  const deliveries = useQuery(api.deliveries.getDeliveriesByPO, item.poId ? { poId: item.poId } : "skip");
+  const fallbackId = deliveries?.[0]?._id;
+
+  if (!item.deliveryId && !fallbackId) return null;
+
+  return (
+    <Button
+      size="sm"
+      className={className}
+      onClick={(e) => { e.stopPropagation(); setViewDCId(item.deliveryId || fallbackId!); }}
+      title="View DC"
+    >
+      <Eye className="h-3 w-3 mr-1" />
+      View DC
+    </Button>
   );
 }

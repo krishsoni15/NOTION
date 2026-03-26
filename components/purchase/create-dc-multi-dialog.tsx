@@ -192,11 +192,10 @@ export function CreateDCMultiDialog({
                 receiverName,
                 purchaserName: "",
                 loadingPhoto: loadingPhotoData || undefined,
-                invoicePhoto: invoicePhotoData || undefined,
-                directDelivery: isDirectDelivery
+                invoicePhoto: invoicePhotoData || undefined
             });
 
-            toast.success(`Delivery Challan created explicitly. Status: ${isDirectDelivery ? 'Delivered' : 'Out for Delivery'}`);
+            toast.success(`Delivery Challan created successfully.`);
             onOpenChange(false);
         } catch (error) {
             toast.error("Failed to create delivery challan");
@@ -478,19 +477,10 @@ export function CreateDCMultiDialog({
                                 <Button
                                     onClick={() => handleSubmit(false)}
                                     disabled={isSubmitting}
-                                    variant="secondary"
-                                    className="h-10 px-4 whitespace-nowrap shadow-sm"
+                                    className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg shadow-emerald-600/20 h-10 px-4 whitespace-nowrap transition-all active:scale-95"
                                 >
                                     {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Truck className="h-4 w-4 mr-2" />}
                                     <span className="font-semibold">Confirm Delivery</span>
-                                </Button>
-                                <Button
-                                    onClick={() => handleSubmit(true)}
-                                    disabled={isSubmitting}
-                                    className="bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg shadow-emerald-600/20 h-10 px-4 whitespace-nowrap transition-all active:scale-95"
-                                >
-                                    {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <CheckCircle className="h-4 w-4 mr-2" />}
-                                    <span className="font-semibold">Direct Delivery</span>
                                 </Button>
                             </div>
                         </div>

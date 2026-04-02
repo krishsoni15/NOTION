@@ -822,7 +822,7 @@ export function RequestsTable({
                       {itemIndex && (
                         <span className="text-[10px] font-black text-primary/50 font-mono">#{String(itemIndex).padStart(2, '0')}</span>
                       )}
-                      <span className="text-[9px] uppercase font-bold text-muted-foreground tracking-[0.15em] opacity-60">Material Required</span>
+                      <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-[0.15em] opacity-60">Material Required</span>
                     </div>
                     <button
                       onClick={(e) => { e.stopPropagation(); setSelectedItemName(item.itemName); }}
@@ -842,23 +842,23 @@ export function RequestsTable({
                   {/* Site Location */}
                   {item.site && (
                     <div className="flex flex-col items-start sm:items-center gap-1">
-                      <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest opacity-50">Site</span>
+                      <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest opacity-70">Site</span>
                       <div
                         className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-400/10 border border-transparent hover:border-primary/20 hover:text-primary transition-all cursor-pointer group/site"
                         onClick={(e) => { e.stopPropagation(); setSelectedSiteId(item.siteId); }}
                       >
-                        <MapPin className="h-3 w-3 shrink-0" />
-                        <span className="text-[10px] font-black uppercase truncate max-w-[100px] tracking-wide">{item.site.name}</span>
+                        <MapPin className="h-3.5 w-3.5 shrink-0" />
+                        <span className="text-xs font-black uppercase truncate max-w-[120px] tracking-wide">{item.site.name}</span>
                       </div>
                     </div>
                   )}
 
                   {/* Quantity Block */}
                   <div className="flex flex-col items-end gap-1 px-2">
-                    <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest opacity-50">Quantity</span>
+                    <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest opacity-70">Quantity</span>
                     <div className="flex items-baseline gap-1 bg-black/5 dark:bg-white/5 px-3 py-1 rounded-lg border border-border/20">
                       <span className="text-xl sm:text-2xl font-black text-foreground tracking-tighter tabular-nums">{item.quantity}</span>
-                      <span className="text-[10px] font-black text-muted-foreground/70 uppercase ml-1">{item.unit}</span>
+                      <span className="text-xs font-black text-muted-foreground/70 uppercase ml-1">{item.unit}</span>
                     </div>
                   </div>
                 </div>

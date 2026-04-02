@@ -126,7 +126,7 @@ export function PDFPreviewDialog({
                     letterRendering: true,
                     windowWidth: 794,
                     allowTaint: false,
-                    onclone: (clonedDoc) => {
+                    onclone: (clonedDoc: Document) => {
                         const styleElements = clonedDoc.querySelectorAll('style');
                         styleElements.forEach(el => {
                             if (el.textContent?.includes('oklch') || el.textContent?.includes('oklab')) {
@@ -246,7 +246,7 @@ Notion Electronica Pvt. Ltd.`;
                     letterRendering: true,
                     windowWidth: 794,
                     allowTaint: false,
-                    onclone: (clonedDoc) => {
+                    onclone: (clonedDoc: Document) => {
                         const styleElements = clonedDoc.querySelectorAll('style');
                         styleElements.forEach(el => {
                             if (el.textContent?.includes('oklch') || el.textContent?.includes('oklab')) {

@@ -1088,7 +1088,7 @@ export function RequestsTable({
                     )}
                   </Button>
 
-                  {/* GRN Button - New */}
+                  {/* Logs Button */}
                   <Button
                     variant="ghost"
                     size="sm"
@@ -1097,7 +1097,7 @@ export function RequestsTable({
                     title="View Request Logs"
                   >
                     <ScrollText className="h-4 w-4" />
-                    <span className="text-xs font-semibold">GRN</span>
+                    <span className="text-xs font-semibold">Logs</span>
                   </Button>
 
                   {/* Draft Actions */}

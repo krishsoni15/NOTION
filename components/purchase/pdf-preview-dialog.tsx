@@ -125,7 +125,27 @@ export function PDFPreviewDialog({
                     logging: false,
                     letterRendering: true,
                     windowWidth: 794,
-                    allowTaint: false
+                    allowTaint: false,
+                    onclone: (clonedDoc) => {
+                        const styleElements = clonedDoc.querySelectorAll('style');
+                        styleElements.forEach(el => {
+                            if (el.textContent?.includes('oklch') || el.textContent?.includes('oklab')) {
+                                el.textContent = el.textContent
+                                    .replace(/oklch\([^)]+\)/g, '#000000')
+                                    .replace(/oklab\([^)]+\)/g, '#000000');
+                            }
+                        });
+                        const elements = clonedDoc.getElementsByTagName('*');
+                        for (let i = 0; i < elements.length; i++) {
+                            const el = elements[i] as HTMLElement;
+                            if (el.style) {
+                                if (el.style.color?.includes('okl') || el.style.backgroundColor?.includes('okl')) {
+                                    el.style.color = '#000000';
+                                    el.style.backgroundColor = '#ffffff';
+                                }
+                            }
+                        }
+                    }
                 },
                 jsPDF: { unit: "mm", format: "a4", orientation: "portrait", compress: true },
             };
@@ -225,7 +245,27 @@ Notion Electronica Pvt. Ltd.`;
                     logging: false,
                     letterRendering: true,
                     windowWidth: 794,
-                    allowTaint: false
+                    allowTaint: false,
+                    onclone: (clonedDoc) => {
+                        const styleElements = clonedDoc.querySelectorAll('style');
+                        styleElements.forEach(el => {
+                            if (el.textContent?.includes('oklch') || el.textContent?.includes('oklab')) {
+                                el.textContent = el.textContent
+                                    .replace(/oklch\([^)]+\)/g, '#000000')
+                                    .replace(/oklab\([^)]+\)/g, '#000000');
+                            }
+                        });
+                        const elements = clonedDoc.getElementsByTagName('*');
+                        for (let i = 0; i < elements.length; i++) {
+                            const el = elements[i] as HTMLElement;
+                            if (el.style) {
+                                if (el.style.color?.includes('okl') || el.style.backgroundColor?.includes('okl')) {
+                                    el.style.color = '#000000';
+                                    el.style.backgroundColor = '#ffffff';
+                                }
+                            }
+                        }
+                    }
                 },
                 jsPDF: { unit: "mm", format: "a4", orientation: "portrait", compress: true },
             };

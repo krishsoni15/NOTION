@@ -177,7 +177,7 @@ export function DeliveryChallanTemplate({ data }: { data: DCData }) {
                                 <td className="border-r border-black px-1.5 pt-1">
                                     <div className="font-bold uppercase">{item.itemName}</div>
                                     {item.description && (
-                                        <div className="text-[8px] text-gray-600 italic mt-0.5 whitespace-pre-wrap">{item.description}</div>
+                                        <div className="text-[8px] italic mt-0.5 whitespace-pre-wrap" style={{ color: '#4b5563' }}>{item.description}</div>
                                     )}
                                 </td>
                                 <td className="border-r border-black text-center pt-1 font-mono">{item.hsnSacCode || '-'}</td>

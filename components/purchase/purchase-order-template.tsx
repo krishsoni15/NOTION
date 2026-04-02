@@ -241,7 +241,7 @@ export function PurchaseOrderTemplate({ data }: { data: POData }) {
                                             </div>
                                         )}
                                         {item.imageUrl && (
-                                            <div className="mt-2 border rounded p-1 bg-slate-50/50">
+                                            <div className="mt-2 border rounded p-1" style={{ backgroundColor: '#f8fafc' }}>
                                                 <img
                                                     src={item.imageUrl}
                                                     crossOrigin="anonymous"

@@ -800,109 +800,90 @@ export function RequestsTable({
           };
 
           // Helper to render a single item row
-          const renderItemRow = (item: Request, isFirst: boolean = false, showBadges: boolean = true, itemIndex?: number) => (
-            <div className="group/item relative flex flex-col lg:flex-row lg:items-center gap-6 lg:gap-10 min-h-[120px] w-full py-4 px-2">
-              {/* Decorative Accent Background Index */}
-              {itemIndex && (
-                <div className="absolute -left-12 lg:-left-20 top-1/2 -translate-y-1/2 font-mono text-[100px] lg:text-[140px] font-black text-foreground/[0.03] dark:text-white/[0.03] select-none pointer-events-none tracking-tighter">
-                  {String(itemIndex).padStart(2, '0')}
-                </div>
-              )}
+          const renderItemRow = (item: Request, isFirst: boolean = false, showBadges: boolean = true, itemIndex?: number) => {
+            const photos = getItemPhotos(item);
+            const hasPhotos = photos && photos.length > 0;
 
-              {/* Photo & Identity Section */}
-              <div className="flex items-center gap-5 shrink-0 z-10">
-                <div className="relative group/canvas">
-                  <div className="absolute -inset-2 bg-gradient-to-tr from-primary/30 via-purple-500/20 to-transparent rounded-[2rem] blur-xl opacity-0 group-hover/item:opacity-70 transition-opacity duration-700"></div>
-                  <div className="relative p-1 rounded-2xl bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm border border-white/20 dark:border-white/5 shadow-2xl transition-transform duration-500 group-hover/item:scale-105">
-                    <div className="rounded-xl overflow-hidden ring-1 ring-black/5 dark:ring-white/5">
-                      <CompactImageGallery images={getItemPhotos(item)} maxDisplay={1} size="lg" />
-                    </div>
-                  </div>
-                  {itemIndex && (
-                    <div className="absolute -top-3 -right-3 w-8 h-8 rounded-full bg-primary text-white text-xs font-black flex items-center justify-center shadow-xl border-4 border-background lg:hidden">
-                      {itemIndex}
+            return (
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 w-full group/item">
+                <div className="flex items-center gap-4 flex-1 min-w-0">
+                  {/* Item Image - Only if exists */}
+                  {hasPhotos && (
+                    <div className="shrink-0">
+                      <div className="p-0.5 rounded-lg bg-slate-200 dark:bg-slate-800">
+                        <CompactImageGallery images={photos} maxDisplay={1} size="md" />
+                      </div>
                     </div>
                   )}
-                </div>
-              </div>
 
-              {/* Core Content: Identity & Metadata */}
-              <div className="flex-1 min-w-0 flex flex-col lg:flex-row lg:items-center gap-6 lg:gap-16 z-10">
-
-                {/* 1. Item Typography */}
-                <div className="flex-1 min-w-0 flex flex-col">
-                  <div className="flex items-center gap-3 mb-2">
-                    <span className="text-[10px] font-black uppercase tracking-[0.3em] text-primary/60">Material Spec</span>
-                    <div className="h-[1px] flex-1 bg-gradient-to-r from-primary/30 to-transparent"></div>
-                  </div>
-                  <button
-                    onClick={(e) => { e.stopPropagation(); setSelectedItemName(item.itemName); }}
-                    className="font-black text-3xl sm:text-5xl text-foreground dark:text-white hover:text-primary transition-all text-left block w-full truncate tracking-tighter leading-[0.8] py-2 mb-1"
-                  >
-                    {item.itemName}
-                  </button>
-                  {item.description && !minimalDashboardView && (
-                    <div className="mt-1 max-w-2xl border-l-2 border-primary/10 pl-4">
-                      <ExpandableText text={item.description} className="text-sm sm:text-base text-muted-foreground/80 leading-relaxed italic" limit={90} />
+                  {/* Name and Index */}
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 mb-0.5">
+                      {itemIndex && (
+                        <span className="text-[10px] font-black text-primary/50 font-mono">#{String(itemIndex).padStart(2, '0')}</span>
+                      )}
+                      <span className="text-[9px] uppercase font-bold text-muted-foreground tracking-[0.15em] opacity-60">Material Required</span>
                     </div>
-                  )}
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setSelectedItemName(item.itemName); }}
+                      className="font-black text-xl sm:text-2xl text-foreground dark:text-white hover:text-primary transition-colors text-left block w-full truncate leading-tight tracking-tight"
+                    >
+                      {item.itemName}
+                    </button>
+                    {item.description && !minimalDashboardView && (
+                      <div className="mt-1">
+                        <ExpandableText text={item.description} className="text-xs text-muted-foreground/80 leading-relaxed line-clamp-1 italic" limit={50} />
+                      </div>
+                    )}
+                  </div>
                 </div>
 
-                {/* 2. Enhanced Meta-grid */}
-                <div className="flex items-center gap-6 sm:gap-12 shrink-0 pt-6 lg:pt-0 border-t lg:border-t-0 border-border/10">
-
-                  {/* Site Fragment */}
+                <div className="flex items-center gap-4 sm:gap-6 shrink-0 justify-between sm:justify-end border-t sm:border-t-0 border-border/10 pt-3 sm:pt-0">
+                  {/* Site Location */}
                   {item.site && (
-                    <div className="flex flex-col items-start lg:items-center gap-2">
-                      <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/40 leading-none">Destination</span>
+                    <div className="flex flex-col items-start sm:items-center gap-1">
+                      <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest opacity-50">Site</span>
                       <div
-                        className="flex items-center gap-2.5 px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-800/50 hover:bg-primary hover:text-white transition-all cursor-pointer border border-transparent shadow-sm group/site"
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-400/10 border border-transparent hover:border-primary/20 hover:text-primary transition-all cursor-pointer group/site"
                         onClick={(e) => { e.stopPropagation(); setSelectedSiteId(item.siteId); }}
                       >
-                        <MapPin className="h-4 w-4 shrink-0 group-hover/site:animate-bounce" />
-                        <span className="text-xs font-black uppercase tracking-wider truncate max-w-[140px]">{item.site.name}</span>
+                        <MapPin className="h-3 w-3 shrink-0" />
+                        <span className="text-[10px] font-black uppercase truncate max-w-[100px] tracking-wide">{item.site.name}</span>
                       </div>
                     </div>
                   )}
 
                   {/* Quantity Block */}
-                  <div className="flex flex-col items-end lg:items-center gap-1">
-                    <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/40 leading-none mb-1">Total Unit</span>
-                    <div className="flex items-baseline gap-2">
-                      <span className="text-4xl sm:text-6xl font-black text-foreground tracking-tighter tabular-nums leading-none">{item.quantity}</span>
-                      <span className="text-xs font-black text-muted-foreground uppercase tracking-[0.2em]">{item.unit}</span>
+                  <div className="flex flex-col items-end gap-1 px-2">
+                    <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest opacity-50">Quantity</span>
+                    <div className="flex items-baseline gap-1 bg-black/5 dark:bg-white/5 px-3 py-1 rounded-lg border border-border/20">
+                      <span className="text-xl sm:text-2xl font-black text-foreground tracking-tighter tabular-nums">{item.quantity}</span>
+                      <span className="text-[10px] font-black text-muted-foreground/70 uppercase ml-1">{item.unit}</span>
                     </div>
                   </div>
-
                 </div>
+
+                {showBadges && (
+                  <div className="flex items-center gap-2 mt-4 sm:mt-0 sm:ml-4 sm:pl-4 sm:border-l border-border/20">
+                    {item.isUrgent && (
+                      <Badge variant="destructive" className="h-5 px-1.5 text-[8px] font-black uppercase ring-2 ring-red-500/10">Urgent</Badge>
+                    )}
+                    {getStatusBadge(item.status)}
+                    {onConfirmDelivery && ["out_for_delivery", "delivery_processing", "delivery_stage"].includes(item.status) && (
+                      <Button
+                        size="sm"
+                        onClick={(e) => { e.stopPropagation(); onConfirmDelivery(item._id); }}
+                        className="h-7 px-3 text-[10px] font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm border border-emerald-500 animate-pulse ml-auto"
+                      >
+                        <CheckCircle2 className="h-3 w-3 mr-1" />
+                        Confirm Receipt
+                      </Button>
+                    )}
+                  </div>
+                )}
               </div>
-
-              {/* Status & Quick Actions */}
-              {showBadges && (
-                <div className="flex flex-wrap items-center gap-3 lg:ml-8 lg:pl-8 lg:border-l lg:border-border/10">
-                  {item.isUrgent && item.status !== "direct_po" && item.directAction !== "po" && (
-                    <div className="flex items-center gap-1.5 px-3 py-1 bg-red-500 text-white rounded-full text-[10px] font-black shadow-lg animate-pulse ring-4 ring-red-500/10">
-                      <AlertCircle className="h-3 w-3" />
-                      PRIORITY
-                    </div>
-                  )}
-                  {getStatusBadge(item.status)}
-
-                  {/* Action Group */}
-                  {onConfirmDelivery && ["out_for_delivery", "delivery_processing", "delivery_stage"].includes(item.status) && (
-                    <Button
-                      size="sm"
-                      onClick={(e) => { e.stopPropagation(); onConfirmDelivery(item._id); }}
-                      className="h-10 px-6 text-xs font-black bg-emerald-600 hover:bg-emerald-700 text-white shadow-xl shadow-emerald-500/20 rounded-xl transition-all hover:-translate-y-1 active:scale-95"
-                    >
-                      <CheckCircle2 className="h-4 w-4 mr-2" />
-                      ACKNOWLEDGE
-                    </Button>
-                  )}
-                </div>
-              )}
-            </div>
-          );
+            );
+          };
 
           return (
             <div

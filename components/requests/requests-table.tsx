@@ -801,109 +801,106 @@ export function RequestsTable({
 
           // Helper to render a single item row
           const renderItemRow = (item: Request, isFirst: boolean = false, showBadges: boolean = true, itemIndex?: number) => (
-            <div className="flex gap-3 relative">
-              <div className="shrink-0 pt-1">
-                <CompactImageGallery images={getItemPhotos(item)} maxDisplay={1} size="sm" />
+            <div className="group/item relative flex flex-col lg:flex-row lg:items-center gap-6 lg:gap-10 min-h-[120px] w-full py-4 px-2">
+              {/* Decorative Accent Background Index */}
+              {itemIndex && (
+                <div className="absolute -left-12 lg:-left-20 top-1/2 -translate-y-1/2 font-mono text-[100px] lg:text-[140px] font-black text-foreground/[0.03] dark:text-white/[0.03] select-none pointer-events-none tracking-tighter">
+                  {String(itemIndex).padStart(2, '0')}
+                </div>
+              )}
+
+              {/* Photo & Identity Section */}
+              <div className="flex items-center gap-5 shrink-0 z-10">
+                <div className="relative group/canvas">
+                  <div className="absolute -inset-2 bg-gradient-to-tr from-primary/30 via-purple-500/20 to-transparent rounded-[2rem] blur-xl opacity-0 group-hover/item:opacity-70 transition-opacity duration-700"></div>
+                  <div className="relative p-1 rounded-2xl bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm border border-white/20 dark:border-white/5 shadow-2xl transition-transform duration-500 group-hover/item:scale-105">
+                    <div className="rounded-xl overflow-hidden ring-1 ring-black/5 dark:ring-white/5">
+                      <CompactImageGallery images={getItemPhotos(item)} maxDisplay={1} size="lg" />
+                    </div>
+                  </div>
+                  {itemIndex && (
+                    <div className="absolute -top-3 -right-3 w-8 h-8 rounded-full bg-primary text-white text-xs font-black flex items-center justify-center shadow-xl border-4 border-background lg:hidden">
+                      {itemIndex}
+                    </div>
+                  )}
+                </div>
               </div>
 
-              <div className="flex-1 min-w-0 space-y-1.5">
-                <div className="flex justify-between items-start gap-3">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2 mb-0.5">
-                      {itemIndex && (
-                        <span className="bg-primary/10 text-primary dark:text-white text-xs font-black font-mono px-2 py-0.5 rounded border border-primary/20 dark:border-primary/40 shadow-sm">
-                          #{itemIndex}
-                        </span>
-                      )}
-                      <span className="text-sm uppercase font-bold text-muted-foreground tracking-wider">Item Name</span>
-                    </div>
-                    <button
-                      onClick={(e) => { e.stopPropagation(); setSelectedItemName(item.itemName); }}
-                      className="font-bold text-xl text-foreground dark:text-white hover:text-primary dark:hover:text-primary hover:underline leading-tight text-left block w-full truncate"
-                    >
-                      {item.itemName}
-                    </button>
-                  </div>
+              {/* Core Content: Identity & Metadata */}
+              <div className="flex-1 min-w-0 flex flex-col lg:flex-row lg:items-center gap-6 lg:gap-16 z-10">
 
-                  <div className="flex flex-col items-end shrink-0">
-                    <span className="text-sm uppercase font-bold text-muted-foreground tracking-wider mb-1">Quantity</span>
-                    <div className="flex items-baseline gap-1 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 px-2.5 py-1 rounded-lg shadow-sm">
-                      <span className="text-lg font-black text-slate-900 dark:text-slate-100 tracking-tight">{item.quantity}</span>
-                      <span className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase">{item.unit}</span>
-                    </div>
+                {/* 1. Item Typography */}
+                <div className="flex-1 min-w-0 flex flex-col">
+                  <div className="flex items-center gap-3 mb-2">
+                    <span className="text-[10px] font-black uppercase tracking-[0.3em] text-primary/60">Material Spec</span>
+                    <div className="h-[1px] flex-1 bg-gradient-to-r from-primary/30 to-transparent"></div>
                   </div>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setSelectedItemName(item.itemName); }}
+                    className="font-black text-3xl sm:text-5xl text-foreground dark:text-white hover:text-primary transition-all text-left block w-full truncate tracking-tighter leading-[0.8] py-2 mb-1"
+                  >
+                    {item.itemName}
+                  </button>
+                  {item.description && !minimalDashboardView && (
+                    <div className="mt-1 max-w-2xl border-l-2 border-primary/10 pl-4">
+                      <ExpandableText text={item.description} className="text-sm sm:text-base text-muted-foreground/80 leading-relaxed italic" limit={90} />
+                    </div>
+                  )}
                 </div>
 
-                {item.description && !minimalDashboardView && (
-                  <div className="relative group/desc">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="text-sm uppercase font-bold text-muted-foreground tracking-wider">Description</span>
-                    </div>
-                    <div className="bg-muted/20 p-2 rounded-md border border-transparent">
-                      <ExpandableText text={item.description} className="text-lg text-muted-foreground leading-relaxed" limit={50} />
-                    </div>
-                  </div>
-                )}
+                {/* 2. Enhanced Meta-grid */}
+                <div className="flex items-center gap-6 sm:gap-12 shrink-0 pt-6 lg:pt-0 border-t lg:border-t-0 border-border/10">
 
-                {showBadges && (
-                  <div className="flex flex-wrap items-center gap-2 pt-2">
-                    {item.isUrgent && item.status !== "direct_po" && item.directAction !== "po" && (
-                      <Badge variant="destructive" className="h-5 px-2 text-[9px] font-black gap-1.5 shadow-md shadow-red-500/10 border-red-400/50 uppercase">
-                        <AlertCircle className="h-3 w-3" />
-                        Urgent
-                      </Badge>
-                    )}
-                    {getStatusBadge(item.status)}
-                    {onConfirmDelivery && ["out_for_delivery", "delivery_processing", "delivery_stage"].includes(item.status) && (
-                      <Button
-                        size="sm"
-                        onClick={(e) => { e.stopPropagation(); onConfirmDelivery(item._id); }}
-                        className="h-7 px-3 text-[10px] font-bold bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm border border-emerald-500 animate-pulse ml-auto"
+                  {/* Site Fragment */}
+                  {item.site && (
+                    <div className="flex flex-col items-start lg:items-center gap-2">
+                      <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/40 leading-none">Destination</span>
+                      <div
+                        className="flex items-center gap-2.5 px-4 py-2 rounded-xl bg-slate-100 dark:bg-slate-800/50 hover:bg-primary hover:text-white transition-all cursor-pointer border border-transparent shadow-sm group/site"
+                        onClick={(e) => { e.stopPropagation(); setSelectedSiteId(item.siteId); }}
                       >
-                        <CheckCircle2 className="h-3 w-3 mr-1" />
-                        Confirm Delivery
-                      </Button>
-                    )}
-                    {userRole === "manager" && item.status === "cc_pending" && onOpenCC && (
-                      <Button
-                        size="sm"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          // Pass just this item ID, or maybe we still want the group context?
-                          // Usually on item level, we open just that item if possible.
-                          // But the dialog takes (requestId, allRequestIds).
-                          // We should probably pass the group context if we can access it, 
-                          // but renderItemRow is isolated from the group 'items' array unless we pass it.
-                          // However, we can just pass the single item ID and let the parent handle it or pass a simplified list.
-                          // Given renderItemRow scope, we assume passing just the ID is safer unless we change signature.
-                          // BUT, 'onOpenCC' signature is (id, allIds).
-                          // To keep it simple in this isolated function, we pass [item._id] as the second arg if we can't access siblings.
-                          // Actually, we are inside 'CardView' scope closure, but 'renderItemRow' is defined inside CardView?
-                          // Yes, line 776 is inside CardView (line 674). 
-                          // Wait, CardView maps groups. 'renderItemRow' is defined inside the map? 
-                          // No, 'renderItemRow' definition (line 776) appears to be inside CardView which starts at 674.
-                          // BUT it is defined before the map loop?
-                          // Let's check where 'groupedRequestsArray.map' starts. It starts at 682.
-                          // So 'renderItemRow' is defined inside the map loop?
-                          // No, looking at lines 739-775, it's defined inside the map loop (based on context view).
-                          // If so, it has access to 'items' from the closure! (line 683).
-                          // Let's verify indentation or closure.
-                          // Line 682: {groupedRequestsArray.map((group) => {
-                          // Line 776: const renderItemRow = ...
-                          // YES. It captures 'items' from line 683.
-                          // So we can pass the full pending list.
-                          const pendingItems = items.filter(i => i.status === "cc_pending");
-                          onOpenCC(item._id, pendingItems.map(i => i._id));
-                        }}
-                        className="h-6 px-2.5 text-[10px] font-bold bg-purple-600 hover:bg-purple-700 text-white shadow-sm border border-purple-500"
-                      >
-                        <CheckCircle2 className="h-3 w-3 mr-1" />
-                        Review CC
-                      </Button>
-                    )}
+                        <MapPin className="h-4 w-4 shrink-0 group-hover/site:animate-bounce" />
+                        <span className="text-xs font-black uppercase tracking-wider truncate max-w-[140px]">{item.site.name}</span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Quantity Block */}
+                  <div className="flex flex-col items-end lg:items-center gap-1">
+                    <span className="text-[10px] font-black uppercase tracking-widest text-muted-foreground/40 leading-none mb-1">Total Unit</span>
+                    <div className="flex items-baseline gap-2">
+                      <span className="text-4xl sm:text-6xl font-black text-foreground tracking-tighter tabular-nums leading-none">{item.quantity}</span>
+                      <span className="text-xs font-black text-muted-foreground uppercase tracking-[0.2em]">{item.unit}</span>
+                    </div>
                   </div>
-                )}
+
+                </div>
               </div>
+
+              {/* Status & Quick Actions */}
+              {showBadges && (
+                <div className="flex flex-wrap items-center gap-3 lg:ml-8 lg:pl-8 lg:border-l lg:border-border/10">
+                  {item.isUrgent && item.status !== "direct_po" && item.directAction !== "po" && (
+                    <div className="flex items-center gap-1.5 px-3 py-1 bg-red-500 text-white rounded-full text-[10px] font-black shadow-lg animate-pulse ring-4 ring-red-500/10">
+                      <AlertCircle className="h-3 w-3" />
+                      PRIORITY
+                    </div>
+                  )}
+                  {getStatusBadge(item.status)}
+
+                  {/* Action Group */}
+                  {onConfirmDelivery && ["out_for_delivery", "delivery_processing", "delivery_stage"].includes(item.status) && (
+                    <Button
+                      size="sm"
+                      onClick={(e) => { e.stopPropagation(); onConfirmDelivery(item._id); }}
+                      className="h-10 px-6 text-xs font-black bg-emerald-600 hover:bg-emerald-700 text-white shadow-xl shadow-emerald-500/20 rounded-xl transition-all hover:-translate-y-1 active:scale-95"
+                    >
+                      <CheckCircle2 className="h-4 w-4 mr-2" />
+                      ACKNOWLEDGE
+                    </Button>
+                  )}
+                </div>
+              )}
             </div>
           );
 
@@ -911,9 +908,9 @@ export function RequestsTable({
             <div
               key={requestNumber}
               className={cn(
-                getCardStyles(overallStatus || firstItem.status),
+                getCardStyles(overallStatus || (firstItem.status as any)),
                 isNewlySent && "ring-2 ring-primary ring-offset-2",
-                "!border-l-transparent" // Always transparent to use gradient
+                "!border-l-transparent"
               )}
               style={{
                 backgroundImage: getLeftBorderGradient(items) || undefined,
@@ -1755,10 +1752,22 @@ export function RequestsTable({
                                     </div>
                                   </div>
 
-                                  {/* Quantity */}
-                                  <div className="flex flex-col items-center justify-center">
-                                    <span className="text-base font-black text-foreground tracking-tight">{item.quantity}</span>
-                                    <span className="text-[10px] uppercase text-muted-foreground font-bold tracking-wider">{item.unit}</span>
+                                  {/* Quantity & Location */}
+                                  <div className="flex flex-col items-center justify-center gap-2">
+                                    <div className="flex flex-col items-center">
+                                      <span className="text-base font-black text-foreground tracking-tight">{item.quantity}</span>
+                                      <span className="text-[10px] uppercase text-muted-foreground font-bold tracking-wider">{item.unit}</span>
+                                    </div>
+                                    {item.site && (
+                                      <div
+                                        className="flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-primary/5 border border-primary/10 text-primary hover:bg-primary/10 transition-colors cursor-pointer whitespace-nowrap group/site"
+                                        onClick={(e) => { e.stopPropagation(); setSelectedSiteId(item.siteId); }}
+                                        title={item.site.name}
+                                      >
+                                        <MapPin className="h-2.5 w-2.5 shrink-0 group-hover:scale-110 transition-transform" />
+                                        <span className="text-[9px] font-bold truncate max-w-[80px]">{item.site.name}</span>
+                                      </div>
+                                    )}
                                   </div>
 
                                   {/* Tags (Urgent Only) */}

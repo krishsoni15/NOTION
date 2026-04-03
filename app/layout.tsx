@@ -22,6 +22,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Notion App",
   description: "Notion app with secure custom authentication",
+  manifest: "/manifest.json",
   icons: {
     icon: [
       { url: '/fav.svg', type: 'image/svg+xml' },

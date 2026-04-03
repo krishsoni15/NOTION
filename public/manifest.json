@@ -1,0 +1,17 @@
+{
+    "name": "Notion App",
+    "short_name": "Notion",
+    "description": "Notion app with secure custom authentication",
+    "start_url": "/dashboard",
+    "display": "standalone",
+    "background_color": "#ffffff",
+    "theme_color": "#ffffff",
+    "icons": [
+        {
+            "src": "/fav.svg",
+            "sizes": "any",
+            "type": "image/svg+xml",
+            "purpose": "any maskable"
+        }
+    ]
+}

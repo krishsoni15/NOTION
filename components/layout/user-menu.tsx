@@ -27,9 +27,11 @@ import {
   ChevronDown,
   Shield,
   Phone,
-  Maximize
+  Maximize,
+  Download
 } from "lucide-react";
 import { ROLE_LABELS } from "@/lib/auth/roles";
+import { usePWA } from "@/hooks/use-pwa";
 
 
 export function UserMenu() {
@@ -38,6 +40,7 @@ export function UserMenu() {
   const setOffline = useMutation(api.presence.setOffline);
   const [isMounted, setIsMounted] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const { isInstallable, installPWA } = usePWA();
 
   useEffect(() => {
     setIsMounted(true);
@@ -157,6 +160,13 @@ export function UserMenu() {
           <Settings className="mr-2 h-4 w-4" />
           <span>Settings</span>
         </DropdownMenuItem>
+
+        {isInstallable && (
+          <DropdownMenuItem onClick={installPWA} className="text-primary font-medium focus:text-primary focus:bg-primary/10">
+            <Download className="mr-2 h-4 w-4" />
+            <span>Install Web App</span>
+          </DropdownMenuItem>
+        )}
 
         <DropdownMenuItem
           onClick={() => {

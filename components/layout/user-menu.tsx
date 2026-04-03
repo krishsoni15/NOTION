@@ -40,7 +40,7 @@ export function UserMenu() {
   const setOffline = useMutation(api.presence.setOffline);
   const [isMounted, setIsMounted] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const { isInstallable, installPWA } = usePWA();
+  const { shouldShowInstall, installPWA } = usePWA();
 
   useEffect(() => {
     setIsMounted(true);
@@ -161,10 +161,10 @@ export function UserMenu() {
           <span>Settings</span>
         </DropdownMenuItem>
 
-        {isInstallable && (
+        {shouldShowInstall && (
           <DropdownMenuItem onClick={installPWA} className="text-primary font-medium focus:text-primary focus:bg-primary/10">
             <Download className="mr-2 h-4 w-4" />
-            <span>Install Web App</span>
+            <span>Install Notion App</span>
           </DropdownMenuItem>
         )}
 

@@ -24,9 +24,11 @@ import {
   Building2,
   ScrollText,
   Package,
+  Download,
 } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
+import { usePWA } from "@/hooks/use-pwa";
 import { useSidebar } from "./sidebar-provider";
 import {
   Tooltip,
@@ -172,6 +174,7 @@ export function Sidebar({ userRole }: SidebarProps) {
   const pathname = usePathname();
   const { isCollapsed, toggle, isMounted } = useSidebar();
   const [logoError, setLogoError] = useState(false);
+  const { shouldShowInstall, installPWA } = usePWA();
 
   // Filter navigation items based on user role
   const filteredItems = navigationItems.filter((item) =>
@@ -352,7 +355,17 @@ export function Sidebar({ userRole }: SidebarProps) {
 
         {/* Footer */}
         {!isCollapsed && (
-          <footer className="p-4 border-t shrink-0">
+          <footer className="p-4 border-t shrink-0 space-y-3">
+            {shouldShowInstall && (
+              <Button
+                onClick={installPWA}
+                className="w-full gap-2 bg-primary/10 text-primary hover:bg-primary/20"
+                variant="ghost"
+              >
+                <Download className="h-4 w-4" />
+                Install Notion App
+              </Button>
+            )}
             <p className="text-xs text-muted-foreground text-center">
               v1.0.0 © {new Date().getFullYear()}
             </p>

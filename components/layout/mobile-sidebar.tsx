@@ -22,8 +22,11 @@ import {
   Building2,
   Package,
   ScrollText,
+  Download,
 } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
+import { Button } from "@/components/ui/button";
+import { usePWA } from "@/hooks/use-pwa";
 
 interface NavigationItem {
   label: string;
@@ -161,6 +164,7 @@ interface MobileSidebarProps {
 export function MobileSidebar({ userRole }: MobileSidebarProps) {
   const pathname = usePathname();
   const [logoError, setLogoError] = useState(false);
+  const { shouldShowInstall, installPWA } = usePWA();
 
   // Filter navigation items based on user role
   const filteredItems = navigationItems.filter((item) =>
@@ -223,21 +227,33 @@ export function MobileSidebar({ userRole }: MobileSidebarProps) {
               key={item.href}
               href={item.href}
               className={cn(
-                "flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors",
+                "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all cursor-pointer",
+                "hover:translate-x-1 active:scale-[0.98]",
                 isActive
-                  ? "bg-primary text-primary-foreground"
-                  : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                  ? "bg-primary text-primary-foreground shadow-md"
+                  : "text-muted-foreground hover:bg-accent hover:text-accent-foreground hover:shadow-sm"
               )}
+              aria-current={isActive ? "page" : undefined}
             >
-              <Icon className="h-5 w-5" />
-              {item.label}
+              <Icon className="h-5 w-5 shrink-0" aria-hidden="true" />
+              <span className="truncate">{item.label}</span>
             </Link>
           );
         })}
       </nav>
 
       {/* Footer */}
-      <div className="p-4 border-t">
+      <div className="p-4 border-t space-y-3">
+        {shouldShowInstall && (
+          <Button
+            onClick={installPWA}
+            className="w-full gap-2 bg-primary/10 text-primary hover:bg-primary/20"
+            variant="ghost"
+          >
+            <Download className="h-4 w-4" />
+            Install Notion App
+          </Button>
+        )}
         <p className="text-xs text-muted-foreground text-center">
           v1.0.0 © {new Date().getFullYear()}
         </p>

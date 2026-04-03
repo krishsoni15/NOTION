@@ -40,7 +40,7 @@ export function UserMenu() {
   const setOffline = useMutation(api.presence.setOffline);
   const [isMounted, setIsMounted] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const { shouldShowInstall, installPWA } = usePWA();
+  const { shouldShowInstall, installState, installPWA } = usePWA();
 
   useEffect(() => {
     setIsMounted(true);

@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { toast } from 'sonner';
 
 interface BeforeInstallPromptEvent extends Event {
     readonly platforms: string[];
@@ -10,17 +9,23 @@ interface BeforeInstallPromptEvent extends Event {
     prompt(): Promise<void>;
 }
 
+export type InstallState = 'idle' | 'prompting' | 'installing' | 'installed';
+
 export function usePWA() {
     const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
+    const [installState, setInstallState] = useState<InstallState>('idle');
     const [isInstallable, setIsInstallable] = useState(false);
-    const [isInstalled, setIsInstalled] = useState(true); // default true to avoid hydration flicker, check in useEffect
+    const [isInstalled, setIsInstalled] = useState(true);
+    const [isIOS, setIsIOS] = useState(false);
 
     useEffect(() => {
-        // Check if already installed
+        setIsIOS(/iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream);
+
         const isStandalone = window.matchMedia('(display-mode: standalone)').matches ||
             (window.navigator as any).standalone === true;
 
         setIsInstalled(isStandalone);
+        if (isStandalone) setInstallState('installed');
 
         const handleBeforeInstallPrompt = (e: Event) => {
             e.preventDefault();
@@ -31,6 +36,7 @@ export function usePWA() {
         const handleAppInstalled = () => {
             setIsInstallable(false);
             setIsInstalled(true);
+            setInstallState('installed');
             setDeferredPrompt(null);
         };
 
@@ -44,26 +50,28 @@ export function usePWA() {
     }, []);
 
     const installPWA = async () => {
+        if (installState === 'installed') return; // Do nothing if already installed
+
         if (!deferredPrompt) {
-            // Fallback for iOS or unsupported browsers
-            const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as any).MSStream;
-            if (isIOS) {
-                toast.info("To install on iOS: tap the Share icon at the bottom of Safari, then tap 'Add to Home Screen'.", { duration: 6000 });
-            } else {
-                toast.info("To install this app, look for the 'Add to Home Screen' or 'Install' option in your browser's menu.", { duration: 6000 });
-            }
             return;
         }
+
+        setInstallState('prompting');
         deferredPrompt.prompt();
         const { outcome } = await deferredPrompt.userChoice;
+
         if (outcome === 'accepted') {
+            setInstallState('installing');
             setIsInstallable(false);
+        } else {
+            setInstallState('idle');
         }
+
         setDeferredPrompt(null);
     };
 
-    // We should show the install button if it's NOT installed (regardless of deferredPrompt, because of iOS fallback)
-    const shouldShowInstall = !isInstalled;
+    // Safest, simplest UX: If it's already installed, or if it's iOS (which doesn't natively support 1-click), completely hide the button so there's zero bugs or confusion.
+    const shouldShowInstall = !isInstalled && !isIOS;
 
-    return { isInstallable, isInstalled, shouldShowInstall, installPWA };
+    return { isInstallable, isInstalled, shouldShowInstall, installState, installPWA };
 }

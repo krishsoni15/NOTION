@@ -36,7 +36,7 @@ interface NavigationItem {
 }
 
 const navigationItems: NavigationItem[] = [
-  // Site Engineer - Logical sequence: Dashboard → Requests → Inventory → GRN → Logs
+  // Site Engineer - Logical sequence: Dashboard → Requests → Inventory
   {
     label: "Dashboard",
     href: "/dashboard/site",
@@ -53,18 +53,6 @@ const navigationItems: NavigationItem[] = [
     label: "Inventory",
     href: "/dashboard/inventory",
     icon: Warehouse,
-    roles: [ROLES.SITE_ENGINEER],
-  },
-  {
-    label: "GRN",
-    href: "/dashboard/grn",
-    icon: Package,
-    roles: [ROLES.SITE_ENGINEER],
-  },
-  {
-    label: "Logs",
-    href: "/dashboard/grn-logs",
-    icon: ScrollText,
     roles: [ROLES.SITE_ENGINEER],
   },
 
@@ -164,7 +152,7 @@ interface MobileSidebarProps {
 export function MobileSidebar({ userRole }: MobileSidebarProps) {
   const pathname = usePathname();
   const [logoError, setLogoError] = useState(false);
-  const { shouldShowInstall, installPWA } = usePWA();
+  const { shouldShowInstall, installState, installPWA } = usePWA();
 
   // Filter navigation items based on user role
   const filteredItems = navigationItems.filter((item) =>
@@ -247,11 +235,25 @@ export function MobileSidebar({ userRole }: MobileSidebarProps) {
         {shouldShowInstall && (
           <Button
             onClick={installPWA}
-            className="w-full gap-2 bg-primary/10 text-primary hover:bg-primary/20"
+            disabled={installState === 'installing' || installState === 'prompting'}
+            className="w-full relative overflow-hidden bg-primary/10 text-primary hover:bg-primary/20"
             variant="ghost"
           >
-            <Download className="h-4 w-4" />
-            Install Notion App
+            {/* Progress Background */}
+            <div
+              className="absolute left-0 top-0 bottom-0 bg-primary/20 transition-all duration-1000 ease-in-out"
+              style={{
+                width: installState === 'idle' ? '0%' :
+                  installState === 'prompting' ? '30%' :
+                    installState === 'installing' ? '85%' : '100%'
+              }}
+            />
+            <div className="relative flex items-center justify-center gap-2 w-full">
+              <Download className="h-4 w-4" />
+              {installState === 'idle' && 'Install Notion App'}
+              {installState === 'prompting' && 'Confirming...'}
+              {installState === 'installing' && 'Installing...'}
+            </div>
           </Button>
         )}
         <p className="text-xs text-muted-foreground text-center">

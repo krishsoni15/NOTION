@@ -1,0 +1,1447 @@
+"use client";
+
+/**
+ * Direct PO Dialog Component
+ * 
+ * Creates a Purchase Order instantly, bypassing the Manager approval workflow.
+ * Use for emergency procurements.
+ */
+
+import { useState, useEffect, useMemo, useRef } from "react";
+import { useMutation, useQuery } from "convex/react";
+import { api } from "@/convex/_generated/api";
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from "@/components/ui/dialog";
+import {
+    Tooltip,
+    TooltipContent,
+    TooltipProvider,
+    TooltipTrigger,
+} from "@/components/ui/tooltip";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
+import { toast } from "sonner";
+import { AlertCircle, Plus, Search, X, Info, ChevronDown, ChevronUp, Copy, Camera, Upload, ImageIcon } from "lucide-react";
+import { CameraDialog } from "@/components/inventory/camera-dialog";
+import type { Id } from "@/convex/_generated/dataModel";
+import { AddressAutocomplete } from "@/components/vendors/address-autocomplete";
+import { VendorFormDialog } from "@/components/vendors/vendor-form-dialog";
+import { VendorInfoDialog } from "@/components/purchase/vendor-info-dialog";
+import { ItemInfoDialog } from "@/components/requests/item-info-dialog";
+import { LocationInfoDialog } from "@/components/locations/location-info-dialog";
+import { LocationFormDialog } from "@/components/locations/location-form-dialog";
+import { cn } from "@/lib/utils";
+import { Checkbox } from "@/components/ui/checkbox";
+
+export interface DirectPOInitialData {
+    requestNumber?: string;
+    vendorId?: Id<"vendors">;
+    deliverySiteId?: Id<"sites">;
+    deliverySiteName?: string;
+    items?: {
+        requestId?: Id<"requests">;
+        itemDescription: string;
+        description?: string;
+        quantity: number;
+        originalQuantity?: number; // Add originalQuantity
+        unit: string;
+        unitPrice: number;
+        discountPercent?: number; // Add discountPercent
+        sgst?: number;            // Add SGST
+        cgst?: number;            // Add CGST
+        hsnCode?: string;
+        imageUrl?: string;
+    }[];
+    vendorDetails?: {
+        name: string;
+        email?: string;
+        phone?: string;
+        contactName?: string;
+        gstNumber?: string;
+        address?: string;
+    };
+    notes?: string;
+    validTill?: string;
+}
+
+interface DirectPODialogProps {
+    open: boolean;
+    onOpenChange: (open: boolean) => void;
+    initialData?: DirectPOInitialData | null;
+    mode?: "standard" | "direct";
+}
+
+// Common units for construction materials
+const COMMON_UNITS = [
+    "pcs",
+    "bags",
+    "kg",
+    "ton",
+    "mm",
+    "gm",
+    "nos",
+    "ltr",
+    "sqft",
+    "cft",
+    "box",
+    "bundle",
+    "roll",
+];
+
+// Common tax rates
+const TAX_RATES = [
+    { value: "0", label: "0%" },
+    { value: "5", label: "5%" },
+    { value: "12", label: "12%" },
+    { value: "18", label: "18%" },
+    { value: "28", label: "28%" },
+];
+
+export function DirectPODialog({ open, onOpenChange, initialData, mode = "standard" }: DirectPODialogProps) {
+    const createDirectPO = useMutation(api.purchaseOrders.createDirectPO);
+    const inventoryItems = useQuery(api.inventory.getAllInventoryItems);
+    const vendors = useQuery(api.vendors.getAllVendors);
+
+    const sites = useQuery(api.sites.getAllSites, {});
+
+    const [isLoading, setIsLoading] = useState(false);
+    const [showVendorDialog, setShowVendorDialog] = useState(false);
+    const [showLocationDialog, setShowLocationDialog] = useState(false);
+    const [vendorSearchQuery, setVendorSearchQuery] = useState("");
+    const [itemSearchQuery, setItemSearchQuery] = useState("");
+    const [siteSearchQuery, setSiteSearchQuery] = useState("");
+
+    const [showItemSuggestions, setShowItemSuggestions] = useState(false);
+    const [showVendorSuggestions, setShowVendorSuggestions] = useState(false);
+    const [showSiteSuggestions, setShowSiteSuggestions] = useState(false);
+    const [showUnitSuggestions, setShowUnitSuggestions] = useState(false);
+    const [showPerUnitSuggestions, setShowPerUnitSuggestions] = useState(false);
+    const [selectedVendorIndex, setSelectedVendorIndex] = useState(0);
+
+    const [infoItemName, setInfoItemName] = useState<string | null>(null);
+    const [infoSiteId, setInfoSiteId] = useState<Id<"sites"> | null>(null);
+    const [infoVendorId, setInfoVendorId] = useState<Id<"vendors"> | null>(null);
+
+    const [activeItemIndex, setActiveItemIndex] = useState<number | null>(null);
+    const [selectedItemSuggestionIndex, setSelectedItemSuggestionIndex] = useState<number>(0);
+    const [selectedSiteSuggestionIndex, setSelectedSiteSuggestionIndex] = useState<number>(0);
+    const [roundOff, setRoundOff] = useState(false);
+
+    // Set poType based on mode prop
+    const [poType, setPoType] = useState<"standard" | "direct">(mode);
+
+    // Sync poType when mode prop changes
+    useEffect(() => {
+        setPoType(mode);
+    }, [mode]);
+
+    const [commonData, setCommonData] = useState({
+        requestNumber: "",
+        vendorId: "" as Id<"vendors"> | "",
+        vendorName: "",
+        contactName: "",
+        vendorEmail: "",
+        vendorPhone: "",
+        gstNumber: "",
+        vendorAddress: "",
+        deliverySite: "",
+        validTill: "",
+        notes: "",
+    });
+
+    const [items, setItems] = useState([
+        {
+            id: Date.now().toString(),
+            requestId: undefined as Id<"requests"> | undefined,
+            itemDescription: "",
+            description: "",
+            itemSearchQuery: "",
+            hsnCode: "",
+            quantity: 0,
+            originalQuantity: 0,
+            unit: "pcs",
+            unitPrice: 0,
+            perUnitBasis: 1,
+            perUnitBasisUnit: "pcs",
+            discountPercent: "0",
+            sgst: "0",
+            cgst: "0",
+            // Photo fields
+            photoFile: null as File | null,
+            photoPreview: null as string | null,
+            inventoryImageUrl: null as string | null, // from inventory item
+        }
+    ]);
+
+    // Camera state (shared, per active item index)
+    const [cameraOpenForItem, setCameraOpenForItem] = useState<number | null>(null);
+    const itemPhotoInputRefs = useRef<(HTMLInputElement | null)[]>([]);
+
+    // Refs for scrolling to items
+    const itemRefs = useRef<(HTMLDivElement | null)[]>([]);
+
+    // Function to scroll to a specific item
+    const scrollToItem = (index: number) => {
+        itemRefs.current[index]?.scrollIntoView({
+            behavior: 'smooth',
+            block: 'center',
+        });
+    };
+
+    const filteredInventoryItems = useMemo(() => {
+        if (activeItemIndex === null || !inventoryItems) return [];
+        const query = items[activeItemIndex]?.itemSearchQuery || "";
+        if (!query.trim()) return [];
+
+        return inventoryItems
+            .filter((item) => item.itemName.toLowerCase().includes(query.toLowerCase()))
+            .slice(0, 5);
+    }, [inventoryItems, items, activeItemIndex]);
+
+    const filteredVendors = useMemo(() => {
+        if (!vendors) return [];
+        if (!vendorSearchQuery.trim()) return vendors.slice(0, 5);
+        const query = vendorSearchQuery.toLowerCase();
+        return vendors
+            .filter((vendor) =>
+                vendor.companyName.toLowerCase().includes(query)
+            )
+            .slice(0, 5);
+    }, [vendors, vendorSearchQuery]);
+
+    const filteredSites = useMemo(() => {
+        if (!sites) return [];
+        // If no query, return first 5 sites
+        if (!siteSearchQuery.trim()) return sites.slice(0, 5);
+
+        const query = siteSearchQuery.toLowerCase();
+        return sites
+            .filter((site) =>
+                site.name.toLowerCase().includes(query)
+            )
+            .slice(0, 5);
+    }, [sites, siteSearchQuery]);
+
+    useEffect(() => {
+        if (commonData.vendorId && vendors) {
+            const selectedVendor = vendors.find((v) => v._id === commonData.vendorId);
+            if (selectedVendor) {
+                setCommonData((prev) => ({
+                    ...prev,
+                    vendorName: selectedVendor.companyName,
+                    contactName: selectedVendor.contactName || selectedVendor.companyName,
+                    vendorEmail: selectedVendor.email || "",
+                    vendorPhone: selectedVendor.phone || "",
+                    gstNumber: selectedVendor.gstNumber || "",
+                    vendorAddress: selectedVendor.address || "",
+                }));
+                // Only set search query if not already set (e.g. by initialData)
+                setVendorSearchQuery(prev => prev || selectedVendor.companyName);
+            }
+        }
+    }, [commonData.vendorId, vendors]);
+
+    const calculateItemTotal = (item: typeof items[0]) => {
+        const basis = item.perUnitBasis || 1;
+        const discount = parseFloat(item.discountPercent) || 0;
+        const quantity = item.quantity;
+        const rate = item.unitPrice;
+
+        const baseAmount = (quantity / basis) * rate;
+        const discountAmount = (baseAmount * discount) / 100;
+        const taxable = baseAmount - discountAmount;
+        const totalTaxRate = (parseFloat(item.sgst) || 0) + (parseFloat(item.cgst) || 0);
+        const tax = (taxable * totalTaxRate) / 100;
+        return taxable + tax;
+    };
+
+    const calculateGrandTotal = () => {
+        const total = items.reduce((sum, item) => sum + calculateItemTotal(item), 0);
+        return roundOff ? Math.round(total) : total;
+    };
+
+    useEffect(() => {
+        if (open && initialData) {
+            // Populate form with initial data
+            setCommonData(prev => {
+                const newData = {
+                    ...prev,
+                    requestNumber: initialData.requestNumber || "",
+                    vendorId: (initialData.vendorId || "") as Id<"vendors"> | "",
+                    deliverySite: initialData.deliverySiteId || "",
+                    notes: initialData.notes || "",
+                    validTill: initialData.validTill || "",
+                };
+
+                // Pre-fill vendor details if provided (avoids waiting for vendors query)
+                if (initialData.vendorDetails) {
+                    newData.vendorName = initialData.vendorDetails?.name || prev.vendorName;
+                    newData.vendorEmail = initialData.vendorDetails?.email || prev.vendorEmail;
+                    newData.vendorPhone = initialData.vendorDetails?.phone || prev.vendorPhone;
+                    newData.contactName = initialData.vendorDetails?.contactName || prev.contactName;
+                    newData.gstNumber = initialData.vendorDetails?.gstNumber || prev.gstNumber;
+                    newData.vendorAddress = initialData.vendorDetails?.address || prev.vendorAddress;
+                    newData.notes = initialData.notes || prev.notes;
+                }
+
+                return newData;
+            });
+
+            if (initialData.vendorDetails) {
+                setVendorSearchQuery(initialData.vendorDetails.name);
+            }
+
+            if (initialData.deliverySiteName) {
+                setSiteSearchQuery(initialData.deliverySiteName);
+            }
+
+            if (initialData.items && initialData.items.length > 0) {
+                setItems(initialData.items.map((item) => {
+                    // Smart Split: If itemDescription has newlines, split it to Title and Description
+                    // This handles cases where data was previously saved as concatenated string
+                    const lines = (item.itemDescription || "").split('\n');
+                    const cleanName = lines[0] || "";
+                    const cleanDescFromName = lines.length > 1 ? lines.slice(1).join('\n') : "";
+
+                    // Try to find matching inventory item for details like HSN
+                    const matchingInvItem = inventoryItems?.find(inv =>
+                        inv.itemName.toLowerCase() === cleanName.toLowerCase()
+                    );
+
+                    return {
+                        id: Date.now().toString() + Math.random().toString(),
+                        requestId: item.requestId,
+                        itemDescription: cleanName, // Only the first line
+                        description: cleanDescFromName || item.description || matchingInvItem?.description || "",
+                        itemSearchQuery: cleanName,
+                        hsnCode: item.hsnCode || (matchingInvItem as any)?.hsnSacCode || "",
+                        quantity: item.quantity,
+                        originalQuantity: item.originalQuantity || item.quantity,
+                        unit: item.unit || matchingInvItem?.unit || "pcs",
+                        unitPrice: item.unitPrice,
+                        perUnitBasis: 1, // Default to 1
+                        perUnitBasisUnit: item.unit || matchingInvItem?.unit || "pcs",
+                        discountPercent: item.discountPercent?.toString() || "0", // Auto-fill discount
+                        sgst: item.sgst?.toString() || "0",                       // Auto-fill SGST
+                        cgst: item.cgst?.toString() || "0",                       // Auto-fill CGST
+                        photoFile: null,
+                        photoPreview: null,
+                        inventoryImageUrl: item.imageUrl || (matchingInvItem as any)?.images?.[0]?.imageUrl || null,
+                    };
+                }));
+            }
+        }
+    }, [open, initialData, inventoryItems]);
+
+    const handleReset = () => {
+        // Only reset if we're not using initialData or if we want to fully clear
+        // ensuring we don't accidentally clear just populated data
+        // For now, standard reset
+        setCommonData({
+            requestNumber: "",
+            vendorId: "",
+            vendorName: "",
+            contactName: "",
+            vendorEmail: "",
+            vendorPhone: "",
+            gstNumber: "",
+            vendorAddress: "",
+            deliverySite: "",
+            validTill: "",
+            notes: "",
+        });
+        setItems([{
+            id: Date.now().toString(),
+            requestId: undefined,
+            itemDescription: "",
+            description: "",
+            itemSearchQuery: "",
+            hsnCode: "",
+            quantity: 0,
+            originalQuantity: 0,
+            unit: "pcs",
+            unitPrice: 0,
+            perUnitBasis: 1,
+            perUnitBasisUnit: "pcs",
+            discountPercent: "0",
+            sgst: "0",
+            cgst: "0",
+            photoFile: null,
+            photoPreview: null,
+            inventoryImageUrl: null,
+        }]);
+        setVendorSearchQuery("");
+        setItemSearchQuery("");
+        setSiteSearchQuery("");
+        setInfoItemName(null);
+        setInfoSiteId(null);
+        setActiveItemIndex(null);
+    };
+
+    const handleOpenChange = (newOpen: boolean) => {
+        if (!newOpen) {
+            handleReset();
+        }
+        onOpenChange(newOpen);
+    };
+
+    const handleAddItem = () => {
+        setItems(prev => [
+            ...prev,
+            {
+                id: Date.now().toString(),
+                requestId: undefined,
+                itemDescription: "",
+                description: "",
+                itemSearchQuery: "",
+                hsnCode: "",
+                quantity: 0,
+                originalQuantity: 0,
+                unit: "pcs",
+                unitPrice: 0,
+                perUnitBasis: 1,
+                perUnitBasisUnit: "pcs",
+                discountPercent: "0",
+                sgst: "0",
+                cgst: "0",
+                photoFile: null,
+                photoPreview: null,
+                inventoryImageUrl: null,
+            }
+        ]);
+    };
+
+    const handleItemPhotoSelect = (index: number, file: File) => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const result = e.target?.result as string;
+            if (result) {
+                setItems(prev => {
+                    const next = [...prev];
+                    next[index] = { ...next[index], photoFile: file, photoPreview: result };
+                    return next;
+                });
+            }
+        };
+        reader.readAsDataURL(file);
+    };
+
+    const handleItemCameraCapture = (index: number, file: File) => {
+        handleItemPhotoSelect(index, file);
+        setCameraOpenForItem(null);
+    };
+
+    const handleItemPhotoRemove = (index: number) => {
+        setItems(prev => {
+            const next = [...prev];
+            next[index] = { ...next[index], photoFile: null, photoPreview: null, inventoryImageUrl: null };
+            return next;
+        });
+    };
+
+    const handleDuplicateItem = (index: number) => {
+        const itemToDuplicate = items[index];
+        setItems(prev => [
+            ...prev,
+            {
+                ...itemToDuplicate,
+                id: Date.now().toString(), // New unique ID
+                requestId: undefined, // Clear request ID for new item
+            }
+        ]);
+        // Scroll to the new duplicated item
+        setTimeout(() => scrollToItem(items.length), 100);
+    };
+
+    const handleRemoveItem = (index: number) => {
+        if (items.length === 1) return; // Prevent removing the last item
+        setItems(prev => prev.filter((_, i) => i !== index));
+    };
+
+    const handleItemChange = (index: number, field: keyof typeof items[0], value: any) => {
+        setItems(prev => {
+            const newItems = [...prev];
+            newItems[index] = { ...newItems[index], [field]: value };
+            return newItems;
+        });
+    };
+
+    const uploadImage = async (file: File) => {
+        const formData = new FormData();
+        formData.append("file", file);
+        formData.append("itemId", "direct-po-item");
+
+        const resp = await fetch("/api/upload/image", {
+            method: "POST",
+            body: formData,
+        });
+
+        if (!resp.ok) {
+            const error = await resp.json().catch(() => ({}));
+            throw new Error(error.error || "Image upload failed");
+        }
+
+        return await resp.json() as { imageUrl: string; imageKey: string };
+    };
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setIsLoading(true);
+
+        try {
+            if (!commonData.deliverySite) throw new Error("Delivery site is required");
+            if (!commonData.vendorId) throw new Error("Vendor is required");
+            if (!commonData.validTill) throw new Error("PO expiry date is required");
+
+            // Handle image uploads and format all items
+            const toastId = toast.loading("Processing items and images...");
+
+            const formattedItems = await Promise.all(items.map(async (item, idx) => {
+                if (!item.itemDescription.trim()) throw new Error(`Item ${idx + 1}: Description is required`);
+                if (item.quantity <= 0) throw new Error(`Item ${idx + 1}: Quantity must be greater than 0`);
+                if (item.unitPrice <= 0) throw new Error(`Item ${idx + 1}: Unit price must be greater than 0`);
+
+                let finalImageUrl = item.inventoryImageUrl || undefined;
+                let finalImageKey = undefined;
+
+                // Priority to user-uploaded/captured photo
+                if (item.photoFile) {
+                    try {
+                        const uploadResult = await uploadImage(item.photoFile);
+                        finalImageUrl = uploadResult.imageUrl;
+                        finalImageKey = uploadResult.imageKey;
+                    } catch (uploadErr) {
+                        console.error(`Upload error for item ${idx + 1}:`, uploadErr);
+                        // We throw to prevent PO creation if upload fails (safe approach)
+                        throw new Error(`Failed to upload photo for item ${idx + 1}`);
+                    }
+                }
+
+                const cleanName = item.itemDescription.trim();
+                const cleanDesc = (item.description || "").trim();
+                let fullDescription = cleanName;
+
+                if (cleanDesc) {
+                    if (cleanDesc.toLowerCase().startsWith(cleanName.toLowerCase())) {
+                        fullDescription = cleanDesc;
+                    } else {
+                        fullDescription = `${cleanName}\n${cleanDesc}`;
+                    }
+                }
+
+                return {
+                    requestId: item.requestId,
+                    itemDescription: fullDescription,
+                    hsnSacCode: item.hsnCode || undefined,
+                    quantity: item.quantity,
+                    unit: item.unit,
+                    unitRate: item.unitPrice,
+                    gstTaxRate: (parseFloat(item.sgst) || 0) + (parseFloat(item.cgst) || 0),
+                    discountPercent: parseFloat(item.discountPercent) || 0,
+                    perUnitBasis: item.perUnitBasis || 1,
+                    perUnitBasisUnit: item.perUnitBasisUnit || item.unit,
+                    imageUrl: finalImageUrl,
+                    imageKey: finalImageKey,
+                };
+            }));
+
+            toast.loading("Generating Purchase Order...", { id: toastId });
+
+            await createDirectPO({
+                existingRequestNumber: commonData.requestNumber || undefined,
+                deliverySiteId: commonData.deliverySite as Id<"sites">,
+                vendorId: commonData.vendorId as Id<"vendors">,
+                validTill: new Date(commonData.validTill).getTime(),
+                notes: commonData.notes || undefined,
+                items: formattedItems,
+                isDirect: poType === "direct",
+                isUrgent: false,
+            });
+
+            toast.success(`${poType === "direct" ? "Direct PO" : "Purchase Order"} generated successfully!`, {
+                id: toastId,
+                description: "The PO is now pending approval.",
+            });
+
+            handleOpenChange(false);
+        } catch (err) {
+            const errorMessage = err instanceof Error ? err.message : "Failed to create Direct PO";
+            toast.error(errorMessage);
+        } finally {
+            setIsLoading(false);
+        }
+    };
+
+
+
+    return (
+        <>
+            <Dialog open={open} onOpenChange={handleOpenChange}>
+                <DialogContent
+                    className="sm:max-w-[800px] max-h-[90vh] overflow-y-auto"
+                    onOpenAutoFocus={(e) => e.preventDefault()}
+                >
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                            {poType === "direct" ? (
+                                <>
+                                    <AlertCircle className="h-5 w-5 text-orange-500" />
+                                    Create Direct PO
+                                </>
+                            ) : (
+                                <>
+                                    <div className="h-5 w-5 rounded-full bg-blue-100 flex items-center justify-center">
+                                        <div className="h-2.5 w-2.5 rounded-full bg-blue-600" />
+                                    </div>
+                                    Create Purchase Order
+                                </>
+                            )}
+                        </DialogTitle>
+                    </DialogHeader>
+
+                    <form onSubmit={handleSubmit} className="space-y-6 py-2">
+                        {/* 1. Vendor Details Section */}
+                        <div className="space-y-4">
+                            <h3 className="text-sm font-semibold text-foreground border-b pb-2">Vendor Details</h3>
+
+                            {/* Row 1: Vendor Name */}
+                            <div className="space-y-1.5 relative">
+                                <Label htmlFor="vendorName" className="text-sm">Vendor Name *</Label>
+                                <div className="relative flex gap-2">
+                                    <div className="relative flex-1">
+                                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                                        <Input
+                                            id="vendorName"
+                                            placeholder="Start typing vendor name..."
+                                            value={vendorSearchQuery}
+                                            onChange={(e) => {
+                                                setVendorSearchQuery(e.target.value);
+                                                setShowVendorSuggestions(true);
+                                                setSelectedVendorIndex(0);
+                                                if (commonData.vendorId) setCommonData(p => ({ ...p, vendorId: "", vendorEmail: "", vendorPhone: "", gstNumber: "", vendorAddress: "" }));
+                                            }}
+                                            onKeyDown={(e) => {
+                                                if (!showVendorSuggestions || filteredVendors.length === 0) return;
+                                                if (e.key === "ArrowDown") {
+                                                    e.preventDefault();
+                                                    setSelectedVendorIndex(prev => (prev + 1) % filteredVendors.length);
+                                                } else if (e.key === "ArrowUp") {
+                                                    e.preventDefault();
+                                                    setSelectedVendorIndex(prev => (prev - 1 + filteredVendors.length) % filteredVendors.length);
+                                                } else if (e.key === "Enter") {
+                                                    e.preventDefault();
+                                                    if (filteredVendors[selectedVendorIndex]) {
+                                                        const vendor = filteredVendors[selectedVendorIndex];
+                                                        setCommonData(p => ({ ...p, vendorId: vendor._id }));
+                                                        setShowVendorSuggestions(false);
+                                                    }
+                                                }
+                                            }}
+                                            onFocus={() => setShowVendorSuggestions(true)}
+                                            onClick={() => setShowVendorSuggestions(true)}
+                                            onBlur={() => setTimeout(() => setShowVendorSuggestions(false), 200)}
+                                            className="h-9 pl-9 pr-16"
+                                        />
+                                        {vendorSearchQuery && (
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    setVendorSearchQuery("");
+                                                    setCommonData(p => ({ ...p, vendorId: "", vendorEmail: "", vendorPhone: "", gstNumber: "", vendorAddress: "" }));
+                                                }}
+                                                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                                            >
+                                                <X className="h-4 w-4" />
+                                            </button>
+                                        )}
+                                        {showVendorSuggestions && (filteredVendors.length > 0 || vendorSearchQuery.trim().length > 0) && (
+                                            <div className="absolute z-[100] w-full mt-1 bg-popover border rounded-md shadow-lg max-h-60 overflow-y-auto flex flex-col">
+                                                {filteredVendors.length > 0 ? (
+                                                    filteredVendors.map((vendor, index) => (
+                                                        <div
+                                                            key={vendor._id}
+                                                            className={cn("w-full px-3 py-2 flex items-center justify-between hover:bg-accent transition-colors cursor-pointer", index === selectedVendorIndex && "bg-accent")}
+                                                            onClick={() => { setCommonData(p => ({ ...p, vendorId: vendor._id })); setShowVendorSuggestions(false); }}
+                                                        >
+                                                            <div className="flex-1 overflow-hidden">
+                                                                <div className="font-medium truncate">{vendor.companyName}</div>
+                                                                <div className="text-xs text-muted-foreground truncate">{vendor.email}</div>
+                                                            </div>
+                                                            <button
+                                                                type="button"
+                                                                className="p-1 hover:bg-background rounded-full ml-2 text-muted-foreground hover:text-foreground"
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    setInfoVendorId(vendor._id);
+                                                                }}
+                                                                title="View Details"
+                                                            >
+                                                                <Info className="h-4 w-4" />
+                                                            </button>
+                                                        </div>
+                                                    ))
+                                                ) : (
+                                                    <div className="p-4 text-center text-sm text-muted-foreground">
+                                                        No vendors found.
+                                                    </div>
+                                                )}
+
+                                                <div className="p-1 border-t mt-auto sticky bottom-0 bg-popover">
+                                                    <Button
+                                                        variant="ghost"
+                                                        className="w-full justify-start h-8 text-xs font-medium text-primary"
+                                                        onClick={() => { setShowVendorDialog(true); setShowVendorSuggestions(false); }}
+                                                    >
+                                                        <Plus className="h-3.5 w-3.5 mr-2" />
+                                                        Create New Vendor {vendorSearchQuery ? `"${vendorSearchQuery}"` : ""}
+                                                    </Button>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                    <Button type="button" variant="outline" size="icon" className="h-9 w-9 shrink-0" onClick={() => setShowVendorDialog(true)}>
+                                        <Plus className="h-4 w-4" />
+                                    </Button>
+                                </div>
+                            </div>
+
+                            {/* Row 2: Contact Info Grid (Email, Phone, Address, GST) */}
+                            {commonData.vendorId && (
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                    <div className="space-y-1.5">
+                                        <Label className="text-sm">Contact Person</Label>
+                                        <Input
+                                            value={commonData.contactName}
+                                            onChange={(e) => setCommonData(p => ({ ...p, contactName: e.target.value }))}
+                                            className="h-9"
+                                            placeholder="Contact Person Name"
+                                        />
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <Label className="text-sm">Vendor Email</Label>
+                                        <Input
+                                            value={commonData.vendorEmail}
+                                            onChange={(e) => setCommonData(p => ({ ...p, vendorEmail: e.target.value }))}
+                                            className="h-9"
+                                            placeholder="vendor@email.com"
+                                        />
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <Label className="text-sm">Vendor Phone</Label>
+                                        <Input
+                                            value={commonData.vendorPhone}
+                                            onChange={(e) => setCommonData(p => ({ ...p, vendorPhone: e.target.value }))}
+                                            className="h-9"
+                                            placeholder="+91..."
+                                        />
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <Label className="text-sm">GST Number</Label>
+                                        <Input
+                                            value={commonData.gstNumber}
+                                            onChange={(e) => setCommonData(p => ({ ...p, gstNumber: e.target.value }))}
+                                            className="h-9"
+                                            placeholder="GST Number"
+                                        />
+                                    </div>
+                                    <div className="col-span-1 sm:col-span-2 space-y-1.5">
+                                        <AddressAutocomplete
+                                            id="vendorAddress"
+                                            label="Vendor Address"
+                                            value={commonData.vendorAddress}
+                                            onChange={(address) => setCommonData(p => ({ ...p, vendorAddress: address }))}
+                                            placeholder="Search vendor address..."
+                                        />
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* 2. General Info Section */}
+                        <div className="space-y-4">
+                            <h3 className="text-sm font-semibold text-foreground border-b pb-2">General Info</h3>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="space-y-1.5 relative">
+                                    <Label htmlFor="deliverySite" className="text-sm">Delivery Location *</Label>
+                                    <div className="relative">
+                                        <Input
+                                            id="deliverySite"
+                                            placeholder="Search location..."
+                                            value={siteSearchQuery}
+                                            onChange={(e) => {
+                                                setSiteSearchQuery(e.target.value);
+                                                setShowSiteSuggestions(true);
+                                                setSelectedSiteSuggestionIndex(0);
+                                            }}
+                                            onFocus={() => { setShowSiteSuggestions(true); setSelectedSiteSuggestionIndex(0); }}
+                                            onClick={() => setShowSiteSuggestions(true)}
+                                            onBlur={() => setTimeout(() => setShowSiteSuggestions(false), 200)}
+                                            onKeyDown={(e) => {
+                                                if (!showSiteSuggestions) return;
+
+                                                if (e.key === 'ArrowDown') {
+                                                    e.preventDefault();
+                                                    setSelectedSiteSuggestionIndex(prev =>
+                                                        prev < filteredSites.length ? prev + 1 : prev
+                                                    );
+                                                } else if (e.key === 'ArrowUp') {
+                                                    e.preventDefault();
+                                                    setSelectedSiteSuggestionIndex(prev => prev > 0 ? prev - 1 : 0);
+                                                } else if (e.key === 'Enter' && filteredSites.length > 0) {
+                                                    e.preventDefault();
+                                                    if (selectedSiteSuggestionIndex < filteredSites.length) {
+                                                        const selectedSite = filteredSites[selectedSiteSuggestionIndex];
+                                                        setCommonData(p => ({ ...p, deliverySite: selectedSite._id }));
+                                                        setSiteSearchQuery(selectedSite.name);
+                                                        setShowSiteSuggestions(false);
+                                                    } else {
+                                                        // "Add New Location" option selected
+                                                        setShowLocationDialog(true);
+                                                        setShowSiteSuggestions(false);
+                                                    }
+                                                } else if (e.key === 'Escape') {
+                                                    setShowSiteSuggestions(false);
+                                                }
+                                            }}
+                                            className="h-9 pr-9"
+                                        />
+                                        {commonData.deliverySite ? (
+                                            <Button
+                                                type="button"
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={() => {
+                                                    setCommonData(p => ({ ...p, deliverySite: "" }));
+                                                    setSiteSearchQuery("");
+                                                }}
+                                                className="absolute right-0 top-0 h-9 w-9 p-0 hover:bg-transparent"
+                                            >
+                                                <X className="h-3 w-3 text-muted-foreground" />
+                                            </Button>
+                                        ) : (
+                                            <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+                                        )}
+                                        {showSiteSuggestions && (filteredSites.length > 0 || siteSearchQuery) && (
+                                            <div className="absolute z-[100] w-full mt-1 bg-popover border rounded-md shadow-lg max-h-48 overflow-y-auto flex flex-col">
+                                                {filteredSites.length > 0 ? (
+                                                    filteredSites.map((site, siteIdx) => (
+                                                        <div
+                                                            key={site._id}
+                                                            className={cn(
+                                                                "w-full px-3 py-2 flex items-center justify-between hover:bg-accent transition-colors cursor-pointer",
+                                                                siteIdx === selectedSiteSuggestionIndex && "bg-accent"
+                                                            )}
+                                                            onClick={() => {
+                                                                setCommonData(p => ({ ...p, deliverySite: site._id }));
+                                                                setSiteSearchQuery(site.name);
+                                                                setShowSiteSuggestions(false);
+                                                            }}
+                                                        >
+                                                            <div className="flex-1 overflow-hidden">
+                                                                <div className="font-medium truncate">{site.name}</div>
+                                                                {site.address && (
+                                                                    <div className="text-xs text-muted-foreground truncate">{site.address}</div>
+                                                                )}
+                                                            </div>
+                                                            <button
+                                                                type="button"
+                                                                className="p-1 hover:bg-background rounded-full ml-2 text-muted-foreground hover:text-foreground"
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    setInfoSiteId(site._id);
+                                                                }}
+                                                                title="View Details"
+                                                            >
+                                                                <Info className="h-4 w-4" />
+                                                            </button>
+                                                        </div>
+                                                    ))
+                                                ) : (
+                                                    <div className="p-3 text-center text-sm text-muted-foreground">
+                                                        No locations found
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                                <div className="space-y-1.5">
+                                    <Label htmlFor="validTill" className="text-sm">PO Expiry Date *</Label>
+                                    <Input id="validTill" type="date" value={commonData.validTill} onChange={(e) => setCommonData(p => ({ ...p, validTill: e.target.value }))} required className="h-9" min={new Date().toISOString().split("T")[0]} />
+                                </div>
+                            </div>
+                        </div>
+
+
+                        {/* 3. Items Section */}
+                        <div className="space-y-4">
+                            <div className="flex flex-col gap-2 border-b pb-2">
+                                <div className="flex items-center justify-between">
+                                    <h3 className="text-sm font-semibold text-foreground">Order Items</h3>
+                                    {items.length > 1 && (
+                                        <div className="flex items-center gap-1">
+                                            <span className="text-xs text-muted-foreground mr-2">{items.length} items</span>
+                                            <TooltipProvider>
+                                                <Tooltip>
+                                                    <TooltipTrigger asChild>
+                                                        <Button
+                                                            type="button"
+                                                            variant="outline"
+                                                            size="icon"
+                                                            className="h-7 w-7"
+                                                            onClick={() => scrollToItem(0)}
+                                                        >
+                                                            <ChevronUp className="h-4 w-4" />
+                                                        </Button>
+                                                    </TooltipTrigger>
+                                                    <TooltipContent>Scroll to first item</TooltipContent>
+                                                </Tooltip>
+                                            </TooltipProvider>
+                                            <TooltipProvider>
+                                                <Tooltip>
+                                                    <TooltipTrigger asChild>
+                                                        <Button
+                                                            type="button"
+                                                            variant="outline"
+                                                            size="icon"
+                                                            className="h-7 w-7"
+                                                            onClick={() => scrollToItem(items.length - 1)}
+                                                        >
+                                                            <ChevronDown className="h-4 w-4" />
+                                                        </Button>
+                                                    </TooltipTrigger>
+                                                    <TooltipContent>Scroll to last item</TooltipContent>
+                                                </Tooltip>
+                                            </TooltipProvider>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+
+                            {items.map((item, index) => (
+                                <div
+                                    key={item.id}
+                                    ref={(el) => { itemRefs.current[index] = el; }}
+                                    className="relative p-4 border rounded-lg bg-card shadow-sm space-y-4"
+                                >
+                                    {/* Item Header */}
+                                    <div className="flex items-center justify-between pb-3 border-b">
+                                        <div className="flex items-center gap-2">
+                                            <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
+                                                <span className="text-sm font-bold text-primary">{index + 1}</span>
+                                            </div>
+                                            <h4 className="font-semibold text-base">Item {index + 1}</h4>
+                                        </div>
+                                        {items.length > 1 && (
+                                            <Button
+                                                type="button"
+                                                variant="ghost"
+                                                size="sm"
+                                                className="h-8 px-3 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                                                onClick={() => handleRemoveItem(index)}
+                                                title="Remove Item"
+                                            >
+                                                <X className="h-4 w-4 mr-1" />
+                                                <span className="text-xs">Remove</span>
+                                            </Button>
+                                        )}
+                                    </div>
+
+                                    {/* Row 1: Item Name */}
+                                    <div className="space-y-1.5 relative">
+                                        <Label className="text-sm">Item Name *</Label>
+                                        <div className="relative">
+                                            <Input
+                                                placeholder="Item Name (e.g. Cement)"
+                                                value={item.itemSearchQuery || item.itemDescription}
+                                                onChange={(e) => {
+                                                    const val = e.target.value;
+                                                    handleItemChange(index, 'itemSearchQuery', val);
+                                                    handleItemChange(index, 'itemDescription', val);
+                                                    setActiveItemIndex(index);
+                                                    setShowItemSuggestions(true);
+                                                    setSelectedItemSuggestionIndex(0);
+                                                }}
+                                                onFocus={() => { setActiveItemIndex(index); setShowItemSuggestions(true); setSelectedItemSuggestionIndex(0); }}
+                                                onBlur={() => setTimeout(() => setShowItemSuggestions(false), 200)}
+                                                onKeyDown={(e) => {
+                                                    if (!showItemSuggestions || activeItemIndex !== index) return;
+
+                                                    if (e.key === 'ArrowDown') {
+                                                        e.preventDefault();
+                                                        setSelectedItemSuggestionIndex(prev =>
+                                                            prev < filteredInventoryItems.length ? prev + 1 : prev
+                                                        );
+                                                    } else if (e.key === 'ArrowUp') {
+                                                        e.preventDefault();
+                                                        setSelectedItemSuggestionIndex(prev => prev > 0 ? prev - 1 : 0);
+                                                    } else if (e.key === 'Enter' && filteredInventoryItems.length > 0) {
+                                                        e.preventDefault();
+                                                        if (selectedItemSuggestionIndex < filteredInventoryItems.length) {
+                                                            const selectedItem = filteredInventoryItems[selectedItemSuggestionIndex];
+                                                            handleItemChange(index, 'itemDescription', selectedItem.itemName);
+                                                            handleItemChange(index, 'description', selectedItem.description || "");
+                                                            handleItemChange(index, 'itemSearchQuery', selectedItem.itemName);
+                                                            handleItemChange(index, 'unit', selectedItem.unit || item.unit);
+                                                            handleItemChange(index, 'perUnitBasisUnit', selectedItem.unit || item.unit);
+                                                            handleItemChange(index, 'hsnCode', (selectedItem as any).hsnSacCode || "");
+                                                            // Auto-set inventory image if available
+                                                            handleItemChange(index, 'inventoryImageUrl', (selectedItem as any).images?.[0]?.imageUrl || null);
+                                                            setActiveItemIndex(null);
+                                                            setShowItemSuggestions(false);
+                                                        } else {
+                                                            // "Use as New Item" option selected
+                                                            setShowItemSuggestions(false);
+                                                            setActiveItemIndex(null);
+                                                        }
+                                                    } else if (e.key === 'Escape') {
+                                                        setShowItemSuggestions(false);
+                                                    }
+                                                }}
+                                                className="h-9 pr-8"
+                                            />
+                                            {(item.itemSearchQuery || item.itemDescription) && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        handleItemChange(index, 'itemSearchQuery', '');
+                                                        handleItemChange(index, 'itemDescription', '');
+                                                        handleItemChange(index, 'description', '');
+                                                        handleItemChange(index, 'hsnCode', '');
+                                                        setShowItemSuggestions(false);
+                                                    }}
+                                                    className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                                                    title="Clear item"
+                                                >
+                                                    <X className="h-4 w-4" />
+                                                </button>
+                                            )}
+                                            {activeItemIndex === index && showItemSuggestions && (item.itemSearchQuery?.trim() || item.itemDescription?.trim()) && (
+                                                <div className="absolute z-[100] w-full mt-1 bg-popover border rounded-md shadow-lg max-h-48 overflow-y-auto flex flex-col">
+                                                    {filteredInventoryItems.length > 0 ? (
+                                                        filteredInventoryItems.map((invItem, suggestionIdx) => (
+                                                            <div
+                                                                key={invItem._id}
+                                                                onClick={() => {
+                                                                    handleItemChange(index, 'itemDescription', invItem.itemName);
+                                                                    handleItemChange(index, 'description', invItem.description || "");
+                                                                    handleItemChange(index, 'itemSearchQuery', invItem.itemName);
+                                                                    handleItemChange(index, 'unit', invItem.unit || item.unit);
+                                                                    handleItemChange(index, 'perUnitBasisUnit', invItem.unit || item.unit);
+                                                                    handleItemChange(index, 'hsnCode', (invItem as any).hsnSacCode || "");
+                                                                    // Auto-set inventory image if available
+                                                                    handleItemChange(index, 'inventoryImageUrl', (invItem as any).images?.[0]?.imageUrl || null);
+                                                                    setActiveItemIndex(null);
+                                                                    setShowItemSuggestions(false);
+                                                                }}
+                                                                className={cn(
+                                                                    "w-full px-3 py-2 text-left text-sm hover:bg-accent flex items-center justify-between cursor-pointer",
+                                                                    selectedItemSuggestionIndex === suggestionIdx && "bg-accent"
+                                                                )}
+                                                            >
+                                                                <div className="flex items-center gap-2 flex-1 min-w-0">
+                                                                    {/* Inventory image thumbnail */}
+                                                                    {(invItem as any).images?.[0]?.imageUrl ? (
+                                                                        <img
+                                                                            src={(invItem as any).images[0].imageUrl}
+                                                                            alt={invItem.itemName}
+                                                                            className="w-8 h-8 object-cover rounded border flex-shrink-0"
+                                                                        />
+                                                                    ) : (
+                                                                        <div className="w-8 h-8 rounded border bg-muted flex items-center justify-center flex-shrink-0">
+                                                                            <ImageIcon className="h-3.5 w-3.5 text-muted-foreground" />
+                                                                        </div>
+                                                                    )}
+                                                                    <span className="truncate">{invItem.itemName}</span>
+                                                                </div>
+                                                                <div className="flex items-center gap-2">
+                                                                    {invItem.unit && <span className="text-xs text-muted-foreground">{invItem.unit}</span>}
+                                                                    <button
+                                                                        type="button"
+                                                                        className="p-1 hover:bg-background rounded-full text-muted-foreground hover:text-foreground"
+                                                                        onClick={(e) => { e.stopPropagation(); setInfoItemName(invItem.itemName); }}
+                                                                        title="View Details"
+                                                                    >
+                                                                        <Info className="h-3.5 w-3.5" />
+                                                                    </button>
+                                                                </div>
+                                                            </div>
+                                                        ))
+                                                    ) : (
+                                                        <div className="p-3 text-center text-sm text-muted-foreground">
+                                                            No items found in inventory
+                                                        </div>
+                                                    )}
+
+                                                    <div className="p-1 border-t mt-auto sticky bottom-0 bg-popover">
+                                                        <Button
+                                                            type="button"
+                                                            variant="ghost"
+                                                            className={cn(
+                                                                "w-full justify-start h-8 text-xs font-medium text-primary",
+                                                                selectedItemSuggestionIndex === filteredInventoryItems.length && "bg-accent"
+                                                            )}
+                                                            onClick={() => {
+                                                                // Keep the current input as the item name
+                                                                setShowItemSuggestions(false);
+                                                                setActiveItemIndex(null);
+                                                            }}
+                                                        >
+                                                            <Plus className="h-3.5 w-3.5 mr-2" />
+                                                            Use &quot;{item.itemSearchQuery || item.itemDescription}&quot; as New Item
+                                                        </Button>
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {/* Row 1.5: Description */}
+                                    <div className="space-y-1.5">
+                                        <Label className="text-sm">Description <span className="text-muted-foreground text-xs">(optional)</span></Label>
+                                        <Textarea
+                                            placeholder="Additional details, specs, etc."
+                                            value={item.description || ""}
+                                            onChange={(e) => handleItemChange(index, 'description', e.target.value)}
+                                            className="min-h-[60px]"
+                                        />
+                                    </div>
+
+                                    {/* Row 1.6: Item Photo */}
+                                    <div className="space-y-1.5">
+                                        <Label className="text-sm flex items-center gap-1.5">
+                                            <ImageIcon className="h-3.5 w-3.5" />
+                                            Item Photo
+                                            <span className="text-muted-foreground text-xs">(optional)</span>
+                                        </Label>
+
+                                        {/* Show current photo (user-captured OR inventory image) */}
+                                        {(item.photoPreview || item.inventoryImageUrl) ? (
+                                            <div className="flex gap-3 items-start">
+                                                <div className="relative group">
+                                                    <img
+                                                        src={item.photoPreview || item.inventoryImageUrl!}
+                                                        alt="Item photo"
+                                                        className="w-20 h-20 object-cover rounded-lg border-2 border-border shadow-sm"
+                                                    />
+                                                    {item.photoPreview && (
+                                                        <div className="absolute top-0.5 left-0.5 bg-blue-500 text-white text-[9px] px-1 rounded font-medium">
+                                                            New
+                                                        </div>
+                                                    )}
+                                                    {!item.photoPreview && item.inventoryImageUrl && (
+                                                        <div className="absolute top-0.5 left-0.5 bg-green-500 text-white text-[9px] px-1 rounded font-medium shadow-sm">
+                                                            Inv
+                                                        </div>
+                                                    )}
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleItemPhotoRemove(index)}
+                                                        className="absolute -top-1 -right-1 bg-destructive text-destructive-foreground rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity ring-2 ring-background"
+                                                        title="Remove photo"
+                                                    >
+                                                        <X className="h-3 w-3" />
+                                                    </button>
+                                                </div>
+                                                <div className="flex flex-col gap-1.5 pt-1">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setCameraOpenForItem(index)}
+                                                        className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-blue-600 transition-colors font-medium"
+                                                    >
+                                                        <Camera className="h-3.5 w-3.5" />
+                                                        Capture
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => itemPhotoInputRefs.current[index]?.click()}
+                                                        className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-blue-600 transition-colors font-medium"
+                                                    >
+                                                        <Upload className="h-3.5 w-3.5" />
+                                                        Upload
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <div className="flex flex-wrap gap-2">
+                                                <input
+                                                    type="file"
+                                                    accept="image/*"
+                                                    ref={(el: HTMLInputElement | null) => {
+                                                        itemPhotoInputRefs.current[index] = el;
+                                                    }}
+                                                    onChange={(e) => {
+                                                        const file = e.target.files?.[0];
+                                                        if (file) handleItemPhotoSelect(index, file);
+                                                    }}
+                                                    className="hidden"
+                                                />
+                                                <Button
+                                                    type="button"
+                                                    variant="outline"
+                                                    size="sm"
+                                                    className="h-9 px-3 gap-1.5 border-dashed border-2 hover:border-blue-500 hover:text-blue-600 hover:bg-blue-50/50"
+                                                    onClick={() => setCameraOpenForItem(index)}
+                                                >
+                                                    <Camera className="h-4 w-4" />
+                                                    Camera
+                                                </Button>
+                                                <Button
+                                                    type="button"
+                                                    variant="outline"
+                                                    size="sm"
+                                                    className="h-9 px-3 gap-1.5 border-dashed border-2 hover:border-blue-500 hover:text-blue-600 hover:bg-blue-50/50"
+                                                    onClick={() => itemPhotoInputRefs.current[index]?.click()}
+                                                >
+                                                    <Upload className="h-4 w-4" />
+                                                    Upload
+                                                </Button>
+                                                <Button
+                                                    type="button"
+                                                    variant="outline"
+                                                    size="sm"
+                                                    className="h-9 px-3 gap-1.5 border-dashed border-2 hover:border-orange-500 hover:text-orange-600 hover:bg-orange-50/50"
+                                                    onClick={() => {
+                                                        const itemName = item.itemDescription.trim();
+                                                        if (!itemName) {
+                                                            toast.error("Enter item name first");
+                                                            return;
+                                                        }
+                                                        const match = (inventoryItems || []).find(
+                                                            (i: any) => i.itemName.toLowerCase() === itemName.toLowerCase() ||
+                                                                itemName.toLowerCase().includes(i.itemName.toLowerCase())
+                                                        );
+
+                                                        const invImageUrl = (match as any)?.images?.[0]?.imageUrl;
+                                                        if (invImageUrl) {
+                                                            handleItemChange(index, 'inventoryImageUrl', invImageUrl);
+                                                            toast.success("Matched inventory image found!");
+                                                        } else {
+                                                            toast.info("No matching inventory photo found", {
+                                                                description: "Try camera or manual upload."
+                                                            });
+                                                        }
+                                                    }}
+                                                >
+                                                    <Search className="h-4 w-4" />
+                                                    Inv. Photo
+                                                </Button>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* Row 2: Qty, Unit, Price, HSN */}
+                                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                        <div className="space-y-1.5 relative">
+                                            <div className="flex justify-between items-center">
+                                                <Label className="text-sm">Quantity *</Label>
+                                                {(item.originalQuantity && item.quantity > item.originalQuantity) ? (
+                                                    <span className="text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded font-medium">
+                                                        +{(item.quantity - item.originalQuantity).toFixed(2).replace(/\.00$/, '')} Extra
+                                                    </span>
+                                                ) : null}
+                                            </div>
+                                            <Input type="number" min="0" step="0.01" value={item.quantity || ""} onChange={(e) => handleItemChange(index, 'quantity', parseFloat(e.target.value) || 0)} className="h-9" />
+                                        </div>
+                                        <div className="space-y-1.5 relative">
+                                            <Label className="text-sm">Unit</Label>
+                                            <div className="relative">
+                                                <Input
+                                                    value={item.unit}
+                                                    onChange={(e) => {
+                                                        handleItemChange(index, 'unit', e.target.value);
+                                                        handleItemChange(index, 'perUnitBasisUnit', e.target.value);
+                                                        setActiveItemIndex(index);
+                                                        setShowUnitSuggestions(true);
+                                                    }}
+                                                    onFocus={() => { setActiveItemIndex(index); setShowUnitSuggestions(true); }}
+                                                    onBlur={() => setTimeout(() => setShowUnitSuggestions(false), 200)}
+                                                    className="h-9"
+                                                />
+                                                {activeItemIndex === index && showUnitSuggestions && (
+                                                    (() => {
+                                                        const filteredUnits = COMMON_UNITS.filter(u => u.toLowerCase().includes(item.unit.toLowerCase()));
+                                                        if (filteredUnits.length === 0) return null;
+                                                        return (
+                                                            <div className="absolute z-[100] w-full mt-1 bg-popover border rounded-md shadow-lg max-h-48 overflow-y-auto">
+                                                                {filteredUnits.map(u => (
+                                                                    <button
+                                                                        key={u}
+                                                                        type="button"
+                                                                        onClick={() => {
+                                                                            handleItemChange(index, 'unit', u);
+                                                                            handleItemChange(index, 'perUnitBasisUnit', u);
+                                                                            setShowUnitSuggestions(false);
+                                                                        }}
+                                                                        className="w-full px-3 py-2 text-left text-sm hover:bg-accent"
+                                                                    >
+                                                                        {u}
+                                                                    </button>
+                                                                ))}
+                                                            </div>
+                                                        );
+                                                    })()
+                                                )}
+                                            </div>
+                                        </div>
+                                        <div className="space-y-1.5">
+                                            <Label className="text-sm">Price (₹) *</Label>
+                                            <Input type="number" min="0" step="0.01" value={item.unitPrice || ""} onChange={(e) => handleItemChange(index, 'unitPrice', parseFloat(e.target.value) || 0)} className="h-9" />
+                                        </div>
+                                        <div className="space-y-1.5">
+                                            <Label className="text-sm">HSN Code</Label>
+                                            <Input value={item.hsnCode} onChange={(e) => handleItemChange(index, 'hsnCode', e.target.value)} className="h-9" />
+                                        </div>
+                                    </div>
+
+                                    {/* Row 3: Taxes */}
+                                    <div className="grid grid-cols-3 gap-4 relative">
+                                        <div className="space-y-1.5">
+                                            <Label className="text-sm">Discount (%)</Label>
+                                            <Input type="number" min="0" max="100" step="0.1" value={item.discountPercent} onChange={(e) => handleItemChange(index, 'discountPercent', e.target.value)} className="h-9" />
+                                        </div>
+                                        <div className="space-y-1.5 relative">
+                                            <div className="flex items-center justify-between">
+                                                <Label className="text-sm">SGST (%)</Label>
+                                                <div className="flex items-center gap-1.5">
+                                                    <Checkbox
+                                                        id={`apply-18-${index}`}
+                                                        className="h-3.5 w-3.5"
+                                                        checked={parseFloat(item.sgst || "0") === 9 && parseFloat(item.cgst || "0") === 9}
+                                                        onCheckedChange={(checked) => {
+                                                            if (checked) {
+                                                                handleItemChange(index, 'sgst', '9');
+                                                                handleItemChange(index, 'cgst', '9');
+                                                            } else {
+                                                                handleItemChange(index, 'sgst', '0');
+                                                                handleItemChange(index, 'cgst', '0');
+                                                            }
+                                                        }}
+                                                    />
+                                                    <label
+                                                        htmlFor={`apply-18-${index}`}
+                                                        className="text-[10px] font-medium text-blue-600 dark:text-blue-400 cursor-pointer select-none"
+                                                    >
+                                                        18% GST
+                                                    </label>
+                                                </div>
+                                            </div>
+                                            <Input type="number" min="0" max="100" step="0.1" value={item.sgst} onChange={(e) => handleItemChange(index, 'sgst', e.target.value)} className="h-9" />
+                                        </div>
+                                        <div className="space-y-1.5">
+                                            <Label className="text-sm">CGST (%)</Label>
+                                            <Input type="number" min="0" max="100" step="0.1" value={item.cgst} onChange={(e) => handleItemChange(index, 'cgst', e.target.value)} className="h-9" />
+                                        </div>
+                                    </div>
+
+                                    {/* Item Total */}
+                                    <div className="text-right text-xs text-muted-foreground pt-1">
+                                        Item Total: <span className="font-bold text-primary">₹{calculateItemTotal(item).toFixed(2)}</span>
+                                    </div>
+                                </div>
+                            ))}
+
+                            <Button type="button" variant="outline" className="w-full border-dashed" onClick={handleAddItem}>
+                                <Plus className="h-4 w-4 mr-2" />
+                                Add Another Item
+                            </Button>
+
+                            {/* Camera dialog for item photos */}
+                            {cameraOpenForItem !== null && (
+                                <CameraDialog
+                                    open={true}
+                                    onOpenChange={(open) => { if (!open) setCameraOpenForItem(null); }}
+                                    onCapture={(file) => handleItemCameraCapture(cameraOpenForItem, file)}
+                                    multiple={false}
+                                />
+                            )}
+
+
+
+                            <div className="flex justify-end pt-2">
+                                <div className="bg-muted/50 p-3 rounded-lg flex flex-col items-end gap-2">
+                                    <div className="flex gap-4 items-center">
+                                        <span className="text-sm font-semibold">Grand Total:</span>
+                                        <span className="text-xl font-bold text-primary">₹{calculateGrandTotal().toFixed(2)}</span>
+                                    </div>
+                                    <div className="flex items-center space-x-2">
+                                        <Checkbox
+                                            id="roundOff"
+                                            checked={roundOff}
+                                            onCheckedChange={(checked) => setRoundOff(checked as boolean)}
+                                        />
+                                        <Label htmlFor="roundOff" className="text-xs font-medium cursor-pointer">
+                                            Round Off Total
+                                        </Label>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Internal Notes */}
+                            <div className="space-y-1.5 pt-2">
+                                <Label htmlFor="notes" className="text-sm">Internal Notes</Label>
+                                <Textarea id="notes" placeholder="Internal notes..." value={commonData.notes} onChange={(e) => setCommonData(p => ({ ...p, notes: e.target.value }))} className="resize-none" rows={2} />
+                            </div>
+                        </div>
+
+                        <DialogFooter className="gap-2 sm:gap-0">
+                            <Button type="button" variant="outline" onClick={() => handleOpenChange(false)} disabled={isLoading}>Cancel</Button>
+                            <Button type="submit" disabled={isLoading}>{isLoading ? "Generate..." : "Generate Direct PO"}</Button>
+                        </DialogFooter>
+                    </form>
+                </DialogContent>
+            </Dialog >
+
+            <VendorFormDialog
+                open={showVendorDialog}
+                onOpenChange={setShowVendorDialog}
+                initialData={!commonData.vendorId ? { companyName: vendorSearchQuery, email: "", phone: "", gstNumber: "", address: "" } : undefined}
+            />
+            <LocationFormDialog
+                open={showLocationDialog}
+                onOpenChange={setShowLocationDialog}
+                initialData={!commonData.deliverySite ? { name: siteSearchQuery } : undefined}
+            />
+
+            <ItemInfoDialog
+                open={!!infoItemName}
+                onOpenChange={(open) => {
+                    if (!open) setInfoItemName(null);
+                }}
+                itemName={infoItemName}
+            />
+
+            <LocationInfoDialog
+                open={!!infoSiteId}
+                onOpenChange={(open) => {
+                    if (!open) setInfoSiteId(null);
+                }}
+                locationId={infoSiteId}
+            />
+
+            <VendorInfoDialog
+                open={!!infoVendorId}
+                onOpenChange={(open) => {
+                    if (!open) setInfoVendorId(null);
+                }}
+                vendorId={infoVendorId}
+            />
+        </>
+    );
+
+}

@@ -1,0 +1,370 @@
+/**
+ * Global Styles
+ * 
+ * This file imports Tailwind CSS and theme definitions.
+ * Base styles and shadcn/ui compatibility are defined here.
+ */
+
+@import "tailwindcss";
+@import "./themes.css";
+
+@custom-variant dark (&:is(.dark *));
+
+/* Tailwind Theme Configuration */
+@theme inline {
+  /* Color mappings for shadcn/ui compatibility */
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  /* Fonts */
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+
+  /* Radius utilities */
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --radius-3xl: calc(var(--radius) + 12px);
+  --radius-4xl: calc(var(--radius) + 16px);
+
+  /* Sidebar (if needed) */
+  --color-sidebar: var(--surface);
+  --color-sidebar-foreground: var(--foreground);
+  --color-sidebar-primary: var(--primary);
+  --color-sidebar-primary-foreground: var(--primary-foreground);
+  --color-sidebar-accent: var(--accent);
+  --color-sidebar-accent-foreground: var(--accent-foreground);
+  --color-sidebar-border: var(--border);
+  --color-sidebar-ring: var(--ring);
+
+  /* Chart colors (optional, can be theme-specific) */
+  --color-chart-1: var(--primary);
+  --color-chart-2: var(--accent);
+  --color-chart-3: var(--secondary);
+  --color-chart-4: var(--muted);
+  --color-chart-5: var(--border);
+}
+
+/* Base Styles */
+@layer base {
+
+  /* Premium smooth transitions for theme switching */
+  * {
+    @apply border-border outline-ring/50;
+    transition:
+      background-color 250ms ease,
+      color 250ms ease,
+      border-color 250ms ease,
+      fill 250ms ease,
+      stroke 250ms ease;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+
+  /* Global button hover cursor pointer */
+  button:hover {
+    cursor: pointer;
+  }
+}
+
+/* Circular Reveal Animation (View Transition API) */
+/* Modern browsers: Chrome, Edge, Safari 18+ */
+/* Animation starts from button position */
+@supports (view-transition-name: none) {
+
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation: none;
+  }
+
+  ::view-transition-new(root) {
+    /* Start from button position (set via JS) */
+    clip-path: circle(0% at var(--theme-toggle-x, 50%) var(--theme-toggle-y, 50%));
+    animation: reveal 500ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
+  }
+
+  @keyframes reveal {
+    to {
+      /* Expand to cover entire viewport from button position */
+      clip-path: circle(150% at var(--theme-toggle-x, 50%) var(--theme-toggle-y, 50%));
+    }
+  }
+
+  /* Smooth button animation during transition */
+  ::view-transition-group(*) {
+    animation-duration: 500ms;
+    animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  }
+}
+
+/* Chat Animations */
+@layer components {
+
+  /* Message slide-in animation */
+  @keyframes slideInMessage {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  /* Pulse animation for online indicator */
+  @keyframes pulse {
+
+    0%,
+    100% {
+      opacity: 1;
+    }
+
+    50% {
+      opacity: 0.5;
+    }
+  }
+
+  /* Fade in animation (removed duplicate at line 221) */
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+    }
+
+    to {
+      opacity: 1;
+    }
+  }
+
+  /* Slide in from right (for chat sheet) */
+  @keyframes slideInRight {
+    from {
+      transform: translateX(100%);
+    }
+
+    to {
+      transform: translateX(0);
+    }
+  }
+
+  /* Bounce animation for notification badge */
+  @keyframes bounce {
+
+    0%,
+    100% {
+      transform: scale(1);
+    }
+
+    50% {
+      transform: scale(1.1);
+    }
+  }
+
+  /* Apply animations */
+  .animate-message-in {
+    animation: slideInMessage 0.3s ease-out;
+  }
+
+  .animate-pulse-slow {
+    animation: pulse 2s ease-in-out infinite;
+  }
+
+  .animate-fade-in {
+    animation: fadeIn 0.2s ease-out;
+  }
+
+  .animate-slide-in-right {
+    animation: slideInRight 0.3s ease-out;
+  }
+
+  .animate-bounce-subtle {
+    animation: bounce 0.5s ease-in-out;
+  }
+
+  /* Slide in from top animation for new requests */
+  @keyframes slideIn {
+    from {
+      opacity: 0;
+      transform: translateY(-20px) scale(0.95);
+    }
+
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+
+  /* Highlight animation for newly sent requests */
+  @keyframes highlight {
+    0% {
+      background-color: transparent;
+    }
+
+    50% {
+      background-color: color-mix(in srgb, var(--primary), transparent 90%);
+    }
+
+    100% {
+      background-color: transparent;
+    }
+  }
+
+  /* Slide down animation for new requests appearing at top */
+  @keyframes slideDown {
+    from {
+      opacity: 0;
+      transform: translateY(-30px) scale(0.98);
+    }
+
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+
+  .animate-highlight {
+    animation: highlight 2s ease-in-out;
+  }
+
+  .animate-slide-down {
+    animation: slideDown 0.6s ease-out;
+  }
+
+  /* Enhanced table styling for grouped items */
+  .grouped-item-row {
+    @apply bg-gradient-to-r from-primary/5 to-transparent;
+  }
+
+  .grouped-item-row:hover {
+    @apply from-primary/10 to-muted/30;
+  }
+
+  .grouped-item-border {
+    @apply border-l-4 border-l-primary/30;
+  }
+
+  .grouped-item-indicator {
+    @apply w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center;
+  }
+
+  .grouped-item-indicator span {
+    @apply text-xs font-medium text-primary;
+  }
+
+  /* Mobile-friendly touch targets */
+  .touch-manipulation {
+    touch-action: manipulation;
+  }
+
+  /* Improved card hover effects */
+  .grouped-card-hover {
+    @apply hover:shadow-lg hover:scale-[1.02] transition-all duration-200;
+  }
+}
+
+/* Modern Scrollbar Styling - Works with all themes and light/dark mode */
+/* Firefox */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(128, 128, 128, 0.4) transparent;
+}
+
+/* Webkit browsers (Chrome, Safari, Edge) */
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background-color: rgba(128, 128, 128, 0.4);
+  border-radius: 5px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+  transition: background-color 0.2s ease;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(128, 128, 128, 0.6);
+}
+
+*::-webkit-scrollbar-thumb:active {
+  background-color: rgba(128, 128, 128, 0.8);
+}
+
+/* Dark mode - more visible scrollbar */
+.dark * {
+  scrollbar-color: rgba(200, 200, 200, 0.5) transparent;
+}
+
+.dark *::-webkit-scrollbar-thumb {
+  background-color: rgba(200, 200, 200, 0.5);
+}
+
+.dark *::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(200, 200, 200, 0.7);
+}
+
+.dark *::-webkit-scrollbar-thumb:active {
+  background-color: rgba(200, 200, 200, 0.9);
+}
+
+/* Light mode - subtle but visible */
+:not(.dark) * {
+  scrollbar-color: rgba(100, 100, 100, 0.4) transparent;
+}
+
+:not(.dark) *::-webkit-scrollbar-thumb {
+  background-color: rgba(100, 100, 100, 0.4);
+}
+
+:not(.dark) *::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(100, 100, 100, 0.6);
+}
+
+:not(.dark) *::-webkit-scrollbar-thumb:active {
+  background-color: rgba(100, 100, 100, 0.8);
+}
+
+/* Smooth scrolling */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Hide scrollbar but keep scrolling functionality */
+.scrollbar-hide {
+  /* Firefox */
+  scrollbar-width: none;
+  /* Safari and Chrome */
+  -ms-overflow-style: none;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}

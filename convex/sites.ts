@@ -171,9 +171,9 @@ export const updateSite = mutation({
 
     if (!currentUser) throw new ConvexError("User not found");
 
-    // Check if user is a manager
-    if (currentUser.role !== "manager") {
-      throw new ConvexError("Unauthorized: Only managers can update sites");
+    // Check if user is a manager or purchase officer
+    if (currentUser.role !== "manager" && currentUser.role !== "purchase_officer") {
+      throw new ConvexError("Unauthorized: Only managers and purchase officers can update sites");
     }
 
     // Get site
@@ -245,9 +245,9 @@ export const toggleSiteStatus = mutation({
 
     if (!currentUser) throw new ConvexError("User not found");
 
-    // Check if user is a manager
-    if (currentUser.role !== "manager") {
-      throw new ConvexError("Unauthorized: Only managers can toggle site status");
+    // Check if user is a manager or purchase officer
+    if (currentUser.role !== "manager" && currentUser.role !== "purchase_officer") {
+      throw new ConvexError("Unauthorized: Only managers and purchase officers can toggle site status");
     }
 
     // Get site
@@ -297,9 +297,9 @@ export const deleteSite = mutation({
 
     if (!currentUser) throw new ConvexError("User not found");
 
-    // Check if user is a manager
-    if (currentUser.role !== "manager") {
-      throw new ConvexError("Unauthorized: Only managers can delete sites");
+    // Check if user is a manager or purchase officer
+    if (currentUser.role !== "manager" && currentUser.role !== "purchase_officer") {
+      throw new ConvexError("Unauthorized: Only managers and purchase officers can delete sites");
     }
 
     // Get site

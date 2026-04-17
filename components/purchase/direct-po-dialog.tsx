@@ -504,7 +504,6 @@ export function DirectPODialog({ open, onOpenChange, initialData, mode = "standa
         setIsLoading(true);
 
         try {
-            if (!commonData.deliverySite) throw new Error("Delivery site is required");
             if (!commonData.vendorId) throw new Error("Vendor is required");
             if (!commonData.validTill) throw new Error("PO expiry date is required");
 
@@ -564,7 +563,8 @@ export function DirectPODialog({ open, onOpenChange, initialData, mode = "standa
 
             await createDirectPO({
                 existingRequestNumber: commonData.requestNumber || undefined,
-                deliverySiteId: commonData.deliverySite as Id<"sites">,
+                deliverySiteId: commonData.deliverySite ? (commonData.deliverySite as Id<"sites">) : undefined,
+                deliverySiteName: siteSearchQuery.trim(),
                 vendorId: commonData.vendorId as Id<"vendors">,
                 validTill: new Date(commonData.validTill).getTime(),
                 notes: commonData.notes || undefined,
@@ -777,7 +777,7 @@ export function DirectPODialog({ open, onOpenChange, initialData, mode = "standa
                             <h3 className="text-sm font-semibold text-foreground border-b pb-2">General Info</h3>
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="space-y-1.5 relative">
-                                    <Label htmlFor="deliverySite" className="text-sm">Delivery Location *</Label>
+                                    <Label htmlFor="deliverySite" className="text-sm">Delivery Location</Label>
                                     <div className="relative">
                                         <Input
                                             id="deliverySite"

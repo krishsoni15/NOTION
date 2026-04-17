@@ -88,17 +88,18 @@ const navigationItems: NavigationItem[] = [
     roles: [ROLES.MANAGER],
   },
   {
-    label: "User Management",
-    href: "/dashboard/manager/users",
-    icon: Users,
-    roles: [ROLES.MANAGER],
-  },
-  {
     label: "Locations",
     href: "/dashboard/locations",
     icon: Building2,
     roles: [ROLES.MANAGER],
   },
+  {
+    label: "User Management",
+    href: "/dashboard/manager/users",
+    icon: Users,
+    roles: [ROLES.MANAGER],
+  },
+
   {
     label: "Logs",
     href: "/dashboard/grn-logs",
@@ -135,6 +136,12 @@ const navigationItems: NavigationItem[] = [
     label: "GRN",
     href: "/dashboard/grn",
     icon: Package,
+    roles: [ROLES.PURCHASE_OFFICER],
+  },
+  {
+    label: "Locations",
+    href: "/dashboard/locations",
+    icon: Building2,
     roles: [ROLES.PURCHASE_OFFICER],
   },
   {

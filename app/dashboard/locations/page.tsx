@@ -14,8 +14,8 @@ async function requireRole(allowedRoles: string[]) {
 }
 
 export default async function LocationPage() {
-    // Check if user is Manager
-    await requireRole([ROLES.MANAGER]);
+    // Check if user is Manager or Purchase Officer
+    await requireRole([ROLES.MANAGER, ROLES.PURCHASE_OFFICER]);
 
     return (
         <div className="space-y-6">

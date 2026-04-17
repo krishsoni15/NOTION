@@ -605,7 +605,8 @@ export const getPOsForRequestNumber = query({
  */
 export const createDirectPO = mutation({
     args: {
-        deliverySiteId: v.id("sites"),
+        deliverySiteId: v.optional(v.id("sites")),
+        deliverySiteName: v.optional(v.string()),
         vendorId: v.id("vendors"),
         validTill: v.number(),
         notes: v.optional(v.string()),
@@ -641,10 +642,34 @@ export const createDirectPO = mutation({
             throw new ConvexError("Vendor not found or inactive");
         }
 
-        // Validate site exists
-        const site = await ctx.db.get(args.deliverySiteId);
-        if (!site || !site.isActive) {
-            throw new ConvexError("Site not found or inactive");
+        // Resolve Delivery Site (Auto-create if needed)
+        let finalSiteId: Id<"sites">;
+        const siteName = args.deliverySiteName?.trim() || "Not Provided";
+
+        if (!args.deliverySiteId) {
+            const existingSite = await ctx.db
+                .query("sites")
+                .withIndex("by_name", (q) => q.eq("name", siteName))
+                .first();
+
+            if (existingSite) {
+                finalSiteId = existingSite._id;
+            } else {
+                finalSiteId = await ctx.db.insert("sites", {
+                    name: siteName,
+                    isActive: true,
+                    type: "site",
+                    createdBy: currentUser._id,
+                    createdAt: Date.now(),
+                    updatedAt: Date.now(),
+                });
+            }
+        } else {
+            finalSiteId = args.deliverySiteId;
+            const site = await ctx.db.get(finalSiteId);
+            if (!site || !site.isActive) {
+                throw new ConvexError("Selected site not found or inactive");
+            }
         }
 
         // Always generate a NEW unique PO number for each PO creation
@@ -699,7 +724,7 @@ export const createDirectPO = mutation({
                 requestId = await ctx.db.insert("requests", {
                     requestNumber: reqNumber,
                     createdBy: currentUser._id,
-                    siteId: args.deliverySiteId,
+                    siteId: finalSiteId,
                     itemName: item.itemDescription.split('\n')[0], // Use first line as title
                     description: item.itemDescription,
                     quantity: item.quantity,
@@ -739,7 +764,7 @@ export const createDirectPO = mutation({
                 await ctx.db.patch(existingRejectedPO._id, {
                     // Update all fields that might have changed
                     poNumber: poNumber, // Use new unique PO number
-                    deliverySiteId: args.deliverySiteId,
+                    deliverySiteId: finalSiteId,
                     vendorId: args.vendorId,
                     itemDescription: item.itemDescription,
                     quantity: item.quantity,
@@ -769,7 +794,7 @@ export const createDirectPO = mutation({
                 poId = await ctx.db.insert("purchaseOrders", {
                     poNumber: poNumber,
                     requestId: requestId!, // We know we have it now
-                    deliverySiteId: args.deliverySiteId,
+                    deliverySiteId: finalSiteId,
                     vendorId: args.vendorId,
                     createdBy: currentUser._id,
                     itemDescription: item.itemDescription,

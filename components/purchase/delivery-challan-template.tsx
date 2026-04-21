@@ -29,6 +29,7 @@ export interface DCData {
         description?: string;
         hsnSacCode?: string;
         unitRate?: number;
+        rate?: number;
         discountPercent?: number;
         gstTaxRate?: number;
     }>;
@@ -45,9 +46,31 @@ export function DeliveryChallanTemplate({ data }: { data: DCData }) {
     // Let's implement the layout from the screenshot
 
     return (
-        <div className="bg-white text-black font-sans text-[10px] leading-tight" style={{ width: '210mm', minHeight: '297mm', padding: '0', margin: '0', boxSizing: 'border-box', border: '1px solid #000' }}>
-            {/* Header Title */}
-            <div className="text-center py-1 border-b border-black font-bold text-sm">
+        <>
+            <style>{`
+                @media print {
+                    * {
+                        -webkit-print-color-adjust: exact !important;
+                        print-color-adjust: exact !important;
+                        color-adjust: exact !important;
+                    }
+                    body {
+                        margin: 0;
+                        padding: 0;
+                        background: white;
+                    }
+                    .delivery-challan-print {
+                        width: 210mm;
+                        height: 297mm;
+                        margin: 0;
+                        padding: 0;
+                        page-break-after: always;
+                    }
+                }
+            `}</style>
+            <div className="bg-white text-black font-sans text-[10px] leading-tight delivery-challan-print" style={{ width: '210mm', minHeight: '297mm', padding: '0', margin: '0', boxSizing: 'border-box', border: '1px solid #000' }} data-print-content>
+                {/* Header Title */}
+                <div className="text-center py-1 border-b border-black font-bold text-sm">
                 Delivery Challan
             </div>
 
@@ -171,29 +194,31 @@ export function DeliveryChallanTemplate({ data }: { data: DCData }) {
                         </tr>
                     </thead>
                     <tbody>
-                        {data.items.map((item, index) => (
-                            <tr key={item._id} className="h-10 align-top">
-                                <td className="border-r border-black text-center pt-1">{index + 1}</td>
-                                <td className="border-r border-black px-1.5 pt-1">
-                                    <div className="font-bold uppercase">{item.itemName}</div>
-                                    {item.description && (
-                                        <div className="text-[8px] italic mt-0.5 whitespace-pre-wrap" style={{ color: '#4b5563' }}>{item.description}</div>
-                                    )}
-                                </td>
-                                <td className="border-r border-black text-center pt-1 font-mono">{item.hsnSacCode || '-'}</td>
-                                <td className="border-r border-black text-center pt-1">
-                                    <span className="font-bold">{item.quantity.toFixed(2)} {item.unit}</span>
-                                </td>
-                                <td className="border-r border-black text-center pt-1">{item.unitRate?.toFixed(2) || ''}</td>
-                                <td className="border-r border-black text-center pt-1">{item.unitRate ? item.unit : ''}</td>
-                                <td className="border-r border-black text-center pt-1">{item.discountPercent ? `${item.discountPercent}%` : ''}</td>
-                                <td className="text-right px-1.5 pt-1 font-bold">
-                                    {item.unitRate ? (item.quantity * item.unitRate).toFixed(2) : ''}
-                                </td>
-                            </tr>
-                        ))}
+                        {data.items && data.items.length > 0 ? (
+                            data.items.map((item, index) => (
+                                <tr key={item._id || index} className="h-10 align-top">
+                                    <td className="border-r border-black text-center pt-1">{index + 1}</td>
+                                    <td className="border-r border-black px-1.5 pt-1">
+                                        <div className="font-bold uppercase">{item.itemName || ''}</div>
+                                        {item.description && (
+                                            <div className="text-[8px] italic mt-0.5 whitespace-pre-wrap" style={{ color: '#4b5563' }}>{item.description}</div>
+                                        )}
+                                    </td>
+                                    <td className="border-r border-black text-center pt-1 font-mono">{item.hsnSacCode || '-'}</td>
+                                    <td className="border-r border-black text-center pt-1">
+                                        <span className="font-bold">{(item.quantity || 0).toFixed(2)} {item.unit || ''}</span>
+                                    </td>
+                                    <td className="border-r border-black text-center pt-1">{item.unitRate ? item.unitRate.toFixed(2) : (item.rate ? item.rate.toFixed(2) : '')}</td>
+                                    <td className="border-r border-black text-center pt-1">{item.unitRate || item.rate ? item.unit : ''}</td>
+                                    <td className="border-r border-black text-center pt-1">{item.discountPercent ? `${item.discountPercent}%` : ''}</td>
+                                    <td className="text-right px-1.5 pt-1 font-bold">
+                                        {item.unitRate ? (item.quantity * item.unitRate).toFixed(2) : (item.rate ? (item.quantity * item.rate).toFixed(2) : '')}
+                                    </td>
+                                </tr>
+                            ))
+                        ) : null}
                         {/* Empty rows to fill space */}
-                        {Array.from({ length: Math.max(0, 10 - data.items.length) }).map((_, i) => (
+                        {Array.from({ length: Math.max(0, 10 - (data.items?.length || 0)) }).map((_, i) => (
                             <tr key={`empty-${i}`} className="h-10 align-top">
                                 <td className="border-r border-black"></td>
                                 <td className="border-r border-black"></td>
@@ -211,14 +236,14 @@ export function DeliveryChallanTemplate({ data }: { data: DCData }) {
                             <td className="border-r border-black text-right px-1.5">Total</td>
                             <td className="border-r border-black"></td>
                             <td className="border-r border-black text-center">
-                                {data.items.reduce((sum, item) => sum + item.quantity, 0).toFixed(2)} {data.items[0]?.unit}
+                                {data.items ? data.items.reduce((sum, item) => sum + (item.quantity || 0), 0).toFixed(2) : '0.00'} {data.items?.[0]?.unit || ''}
                             </td>
                             <td className="border-r border-black"></td>
                             <td className="border-r border-black"></td>
                             <td className="border-r border-black"></td>
                             <td className="text-right px-1.5">
-                                {data.items.some(i => i.unitRate)
-                                    ? data.items.reduce((sum, item) => sum + (item.quantity * (item.unitRate || 0)), 0).toFixed(2)
+                                {data.items && data.items.some(i => i.unitRate || i.rate)
+                                    ? data.items.reduce((sum, item) => sum + ((item.quantity || 0) * ((item.unitRate || item.rate) || 0)), 0).toFixed(2)
                                     : ''}
                             </td>
                         </tr>
@@ -287,6 +312,7 @@ export function DeliveryChallanTemplate({ data }: { data: DCData }) {
                 <div>SUBJECT TO AHMEDABAD JURISDICTION</div>
                 <div className="mt-1">This is a Computer Generated Document</div>
             </div>
-        </div>
+            </div>
+        </>
     );
 }

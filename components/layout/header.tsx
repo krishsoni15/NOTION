@@ -63,6 +63,43 @@ function HeaderContent({ userRole }: HeaderProps) {
     }
   }, [searchParams, setIsStickyNotesOpen, setIsChatOpen, router, pathname]);
 
+  // Suppress hydration warning for currentUser conditional rendering
+  // currentUser is undefined on server but populated on client
+  if (!currentUser) {
+    return (
+      <header className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+        <div className="flex h-16 items-center justify-between px-4 md:px-6">
+          {/* Mobile menu (< md) */}
+          <div className="md:hidden">
+            <Sheet>
+              <SheetTrigger asChild>
+                <Button variant="ghost" size="icon">
+                  <Menu className="h-5 w-5" />
+                  <span className="sr-only">Toggle menu</span>
+                </Button>
+              </SheetTrigger>
+              <SheetContent side="left" className="p-0 w-64">
+                <VisuallyHidden>
+                  <SheetTitle>Navigation Menu</SheetTitle>
+                </VisuallyHidden>
+                <MobileSidebar userRole={userRole} />
+              </SheetContent>
+            </Sheet>
+          </div>
+
+          {/* Desktop: Empty space (brand is in sidebar) */}
+          <div className="hidden md:block" />
+
+          {/* Right side: Theme toggle + User Menu only (no chat/sticky notes) */}
+          <div className="flex items-center gap-2 md:gap-4">
+            <ThemeToggle />
+            <UserMenu />
+          </div>
+        </div>
+      </header>
+    );
+  }
+
   return (
     <header className="sticky top-0 z-40 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
       <div className="flex h-16 items-center justify-between px-4 md:px-6">
@@ -87,41 +124,37 @@ function HeaderContent({ userRole }: HeaderProps) {
         {/* Desktop: Empty space (brand is in sidebar) */}
         <div className="hidden md:block" />
 
-        {/* Mobile: No brand shown on small screens */}
-
         {/* Right side: Sticky Notes + Chat + Theme toggle + User Menu */}
         <div className="flex items-center gap-2 md:gap-4">
-          {currentUser && (
-            <>
-              <NotificationBell />
-              <StickyNotesIcon
-                onClick={() => {
-                  if (isStickyNotesOpen) {
-                    // If open, close it
-                    setIsStickyNotesOpen(false);
-                  } else {
-                    // If closed, open it and close chat
-                    setIsStickyNotesOpen(true);
-                    setIsChatOpen(false);
-                  }
-                }}
-                isActive={isStickyNotesOpen}
-              />
-              <ChatIcon
-                onClick={() => {
-                  if (isChatOpen) {
-                    // If open, close it
-                    setIsChatOpen(false);
-                  } else {
-                    // If closed, open it and close sticky notes
-                    setIsChatOpen(true);
-                    setIsStickyNotesOpen(false);
-                  }
-                }}
-                isActive={isChatOpen}
-              />
-            </>
-          )}
+          <>
+            <NotificationBell />
+            <StickyNotesIcon
+              onClick={() => {
+                if (isStickyNotesOpen) {
+                  // If open, close it
+                  setIsStickyNotesOpen(false);
+                } else {
+                  // If closed, open it and close chat
+                  setIsStickyNotesOpen(true);
+                  setIsChatOpen(false);
+                }
+              }}
+              isActive={isStickyNotesOpen}
+            />
+            <ChatIcon
+              onClick={() => {
+                if (isChatOpen) {
+                  // If open, close it
+                  setIsChatOpen(false);
+                } else {
+                  // If closed, open it and close sticky notes
+                  setIsChatOpen(true);
+                  setIsStickyNotesOpen(false);
+                }
+              }}
+              isActive={isChatOpen}
+            />
+          </>
 
           <ThemeToggle />
           <UserMenu />
@@ -129,31 +162,27 @@ function HeaderContent({ userRole }: HeaderProps) {
       </div>
 
       {/* Chat Sheet with Resizable Left Border */}
-      {currentUser && (
-        <ResizableChatSheet open={isChatOpen} onOpenChange={setIsChatOpen}>
-          <ChatWindow
-            currentUserId={currentUser._id}
-            onClose={() => setIsChatOpen(false)}
-          />
-        </ResizableChatSheet>
-      )}
+      <ResizableChatSheet open={isChatOpen} onOpenChange={setIsChatOpen}>
+        <ChatWindow
+          currentUserId={currentUser._id}
+          onClose={() => setIsChatOpen(false)}
+        />
+      </ResizableChatSheet>
 
       {/* Sticky Notes Sheet with Resizable Left Border */}
-      {currentUser && (
-        <>
-          <ResizableStickyNotesSheet open={isStickyNotesOpen} onOpenChange={setIsStickyNotesOpen}>
-            <StickyNotesWindow
-              currentUserId={currentUser._id}
-              onClose={() => setIsStickyNotesOpen(false)}
-            />
-          </ResizableStickyNotesSheet>
-
-          {/* Floating Sticky Notes - Always visible if any notes have been dragged out */}
-          <FloatingStickyNotes
+      <>
+        <ResizableStickyNotesSheet open={isStickyNotesOpen} onOpenChange={setIsStickyNotesOpen}>
+          <StickyNotesWindow
             currentUserId={currentUser._id}
+            onClose={() => setIsStickyNotesOpen(false)}
           />
-        </>
-      )}
+        </ResizableStickyNotesSheet>
+
+        {/* Floating Sticky Notes - Always visible if any notes have been dragged out */}
+        <FloatingStickyNotes
+          currentUserId={currentUser._id}
+        />
+      </>
     </header>
   );
 }

@@ -38,10 +38,10 @@ async function getCurrentUser(ctx: any) {
  * Get cost comparison by request ID
  */
 export const getCostComparisonByRequestId = query({
-  args: { requestId: v.id("requests") },
+  args: { requestId: v.optional(v.id("requests")) },
   handler: async (ctx, args) => {
     const userId = await getAuthUserId(ctx);
-    if (!userId) return null;
+    if (!userId || !args.requestId) return null;
 
     const currentUser = await ctx.db
       .query("users")
@@ -149,7 +149,7 @@ export const getPendingCostComparisons = query({
     // Fetch request and vendor details
     const enrichedComparisons = await Promise.all(
       costComparisons.map(async (cc) => {
-        const request = await ctx.db.get(cc.requestId);
+        const request = cc.requestId ? await ctx.db.get(cc.requestId) : null;
         const vendorQuotes = await Promise.all(
           cc.vendorQuotes.map(async (quote) => {
             const vendor = await ctx.db.get(quote.vendorId);
@@ -183,7 +183,7 @@ export const getPendingCostComparisons = query({
 
         return {
           ...cc,
-          request: request
+          request: request && "requestNumber" in request
             ? {
               _id: request._id,
               requestNumber: request.requestNumber,
@@ -635,6 +635,182 @@ export const approveSplitFulfillment = mutation({
         });
       }
     }
+
+    return { success: true };
+  },
+});
+
+
+/**
+ * Create direct cost comparison without request context
+ * Allows purchase officers to create standalone CC records
+ */
+export const createDirectCostComparison = mutation({
+  args: {
+    itemName: v.string(),
+    quantity: v.number(),
+    unit: v.string(),
+    vendorId: v.id("vendors"),
+    unitPrice: v.number(),
+  },
+  handler: async (ctx, args) => {
+    const currentUser = await getCurrentUser(ctx);
+
+    // Only purchase officers can create direct CC
+    if (currentUser.role !== "purchase_officer") {
+      throw new ConvexError("Unauthorized: Only purchase officers can create cost comparisons");
+    }
+
+    const now = Date.now();
+
+    // Create direct cost comparison without request linkage
+    const costComparisonId = await ctx.db.insert("costComparisons", {
+      requestId: undefined, // No request for direct CC
+      createdBy: currentUser._id,
+      itemName: args.itemName,
+      quantity: args.quantity,
+      unit: args.unit,
+      vendorQuotes: [
+        {
+          vendorId: args.vendorId,
+          unitPrice: args.unitPrice,
+          amount: args.quantity,
+          unit: args.unit,
+        },
+      ],
+      status: "draft",
+      isDirectDelivery: false,
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    // Log the direct action with standardized ID
+    const allCCs = await ctx.db.query("costComparisons").collect();
+    const sortedCCs = allCCs.sort((a, b) => a.createdAt - b.createdAt);
+    const ccIndex = sortedCCs.findIndex(cc => cc._id === costComparisonId);
+    const standardizedId = `CC-${(ccIndex + 1).toString().padStart(3, '0')}`;
+    
+    await ctx.db.insert("request_notes", {
+      requestNumber: `DIRECT-${standardizedId}`,
+      userId: currentUser._id,
+      role: currentUser.role,
+      status: "draft",
+      type: "log",
+      content: `Direct Cost Comparison ${standardizedId} created: ${args.itemName} (${args.quantity} ${args.unit}) - Initial quote from vendor`,
+      createdAt: now,
+    });
+
+    return costComparisonId;
+  },
+});
+
+/**
+ * Get all cost comparisons for Direct Actions view
+ */
+export const getAllCostComparisons = query({
+  args: {},
+  handler: async (ctx) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) return [];
+
+    const currentUser = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_user_id", (q: any) => q.eq("clerkUserId", userId))
+      .first();
+
+    if (!currentUser) return [];
+
+    // Only purchase officers and managers can view cost comparisons
+    if (currentUser.role !== "purchase_officer" && currentUser.role !== "manager") {
+      return [];
+    }
+
+    const costComparisons = await ctx.db
+      .query("costComparisons")
+      .withIndex("by_created_at")
+      .order("desc")
+      .collect();
+
+    // Fetch request and vendor details
+    const enrichedComparisons = await Promise.all(
+      costComparisons.map(async (cc) => {
+        const request = cc.requestId ? await ctx.db.get(cc.requestId) : null;
+        const vendorQuotes = await Promise.all(
+          cc.vendorQuotes.map(async (quote) => {
+            const vendor = await ctx.db.get(quote.vendorId);
+            return {
+              vendorId: quote.vendorId,
+              unitPrice: quote.unitPrice,
+              amount: quote.amount,
+              unit: quote.unit,
+              discountPercent: quote.discountPercent,
+              gstPercent: quote.gstPercent,
+              perUnitBasis: quote.perUnitBasis,
+              contact: quote.contact,
+              reference: quote.reference,
+              date: quote.date,
+              deliveryPeriod: quote.deliveryPeriod,
+              paymentTerms: quote.paymentTerms,
+              pastPerformance: quote.pastPerformance,
+              freight: quote.freight,
+              vendor: vendor
+                ? {
+                  _id: vendor._id,
+                  companyName: vendor.companyName,
+                  email: vendor.email,
+                  phone: vendor.phone,
+                  address: vendor.address,
+                }
+                : null,
+            };
+          })
+        );
+
+        return {
+          ...cc,
+          request: request && "requestNumber" in request
+            ? {
+              _id: request._id,
+              requestNumber: request.requestNumber,
+              itemName: request.itemName,
+              quantity: request.quantity,
+              unit: request.unit,
+              description: request.description,
+            }
+            : null,
+          vendorQuotes,
+        };
+      })
+    );
+
+    return enrichedComparisons;
+  },
+});
+/**
+ * Update cost comparison title
+ */
+export const updateCostComparisonTitle = mutation({
+  args: {
+    ccId: v.id("costComparisons"),
+    title: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const currentUser = await getCurrentUser(ctx);
+
+    // Only purchase officers and managers can update titles
+    if (currentUser.role !== "purchase_officer" && currentUser.role !== "manager") {
+      throw new ConvexError("Unauthorized: Only purchase officers and managers can update titles");
+    }
+
+    const cc = await ctx.db.get(args.ccId);
+    if (!cc) {
+      throw new ConvexError("Cost comparison not found");
+    }
+
+    await ctx.db.patch(args.ccId, {
+      ccTitle: args.title.trim() || undefined,
+      updatedAt: Date.now(),
+    });
 
     return { success: true };
   },

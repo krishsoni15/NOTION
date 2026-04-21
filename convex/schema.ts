@@ -74,6 +74,7 @@ export default defineSchema({
       v.literal("cc_pending"),
       v.literal("cc_approved"),
       v.literal("cc_rejected"),
+      v.literal("direct_cc"), // Direct cost comparison (legacy status)
       v.literal("ready_for_po"),
       v.literal("pending_po"),
       v.literal("direct_po"),
@@ -129,6 +130,7 @@ export default defineSchema({
     vendorId: v.id("vendors"),
     createdBy: v.id("users"), // Purchase Officer
     itemDescription: v.string(), // Item description
+    customTitle: v.optional(v.string()), // User-defined title
     quantity: v.number(),
     unit: v.string(),
     hsnSacCode: v.optional(v.string()), // HSN/SAC Code
@@ -335,8 +337,14 @@ export default defineSchema({
   // Cost Comparisons Table
   // ============================================================================
   costComparisons: defineTable({
-    requestId: v.id("requests"), // Linked request
+    requestId: v.optional(v.id("requests")), // Linked request (optional for direct CC)
     createdBy: v.id("users"), // Purchase Officer
+    ccNumber: v.optional(v.string()), // Cost comparison number (legacy field for backward compatibility)
+    ccTitle: v.optional(v.string()), // Cost comparison title (legacy field for backward compatibility)
+    itemName: v.optional(v.string()), // Item name (for direct CC)
+    quantity: v.optional(v.number()), // Quantity (for direct CC)
+    unit: v.optional(v.string()), // Unit (for direct CC)
+    description: v.optional(v.string()), // Description (legacy field)
     vendorQuotes: v.array(
       v.object({
         vendorId: v.id("vendors"),
@@ -387,6 +395,7 @@ export default defineSchema({
   deliveries: defineTable({
     deliveryId: v.string(), // Auto-generated unique identifier (DC-XXXX)
     poId: v.optional(v.id("purchaseOrders")), // Linked purchase order (Optional for direct delivery)
+    customTitle: v.optional(v.string()), // User-defined title
     // Delivery Type
     deliveryType: v.union(
       v.literal("private"), // Internal/Private vehicle
@@ -438,6 +447,9 @@ export default defineSchema({
       v.literal("delivered"),
       v.literal("cancelled")
     ),
+
+    // Direct Delivery Items (stored as JSON for direct delivery challans)
+    directItems: v.optional(v.string()), // JSON stringified array of items for direct delivery
 
     createdBy: v.id("users"), // Purchase Officer
     createdAt: v.number(),

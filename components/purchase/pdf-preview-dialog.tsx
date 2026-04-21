@@ -30,6 +30,93 @@ const getHtml2Pdf = async () => {
     return html2pdf;
 };
 
+/**
+ * Sanitize a cloned document to remove modern CSS color functions
+ * (lab, oklch, oklab, lch, color) that html2canvas cannot parse.
+ * This covers: <style> text, CSSStyleSheet rules, and computed styles.
+ */
+function sanitizeClonedDoc(clonedDoc: Document) {
+    const unsupportedColorRegex = /oklch\([^)]*\)|oklab\([^)]*\)|\blch\([^)]*\)|\blab\([^)]*\)|\bcolor\([^)]*\)/gi;
+
+    // 1) Sanitize all <style> element text content
+    clonedDoc.querySelectorAll('style').forEach(el => {
+        if (el.textContent) {
+            el.textContent = el.textContent.replace(unsupportedColorRegex, '#000000');
+            unsupportedColorRegex.lastIndex = 0;
+        }
+    });
+
+    // 2) Sanitize CSSStyleSheet rules (covers Tailwind-injected sheets)
+    try {
+        for (const sheet of Array.from(clonedDoc.styleSheets)) {
+            try {
+                const rules = sheet.cssRules || sheet.rules;
+                if (!rules) continue;
+                for (let r = 0; r < rules.length; r++) {
+                    const rule = rules[r];
+                    unsupportedColorRegex.lastIndex = 0;
+                    if (rule.cssText && unsupportedColorRegex.test(rule.cssText)) {
+                        unsupportedColorRegex.lastIndex = 0;
+                        const newCssText = rule.cssText.replace(unsupportedColorRegex, '#000000');
+                        try {
+                            sheet.deleteRule(r);
+                            sheet.insertRule(newCssText, r);
+                        } catch { /* skip rules that can't be replaced */ }
+                    }
+                }
+            } catch { /* cross-origin or inaccessible sheet, skip */ }
+        }
+    } catch { /* styleSheets access failed, skip */ }
+
+    // 3) Walk every element – use getComputedStyle to detect unsupported values
+    //    and forcibly override with safe inline styles
+    const colorProps = [
+        'color', 'background-color', 'border-color',
+        'border-top-color', 'border-right-color', 'border-bottom-color', 'border-left-color',
+        'outline-color', 'fill', 'stroke', 'text-decoration-color', 'caret-color', 'column-rule-color'
+    ];
+    const fallbacks: Record<string, string> = {
+        'color': '#000000',
+        'background-color': 'transparent',
+        'border-color': '#000000',
+        'border-top-color': '#000000',
+        'border-right-color': '#000000',
+        'border-bottom-color': '#000000',
+        'border-left-color': '#000000',
+        'outline-color': '#000000',
+        'fill': '#000000',
+        'stroke': '#000000',
+        'text-decoration-color': '#000000',
+        'caret-color': '#000000',
+        'column-rule-color': '#000000',
+    };
+
+    const win = clonedDoc.defaultView;
+    clonedDoc.querySelectorAll('*').forEach(node => {
+        const el = node as HTMLElement;
+        if (!el.style) return;
+        const computed = win?.getComputedStyle(el);
+        if (!computed) return;
+        for (const prop of colorProps) {
+            try {
+                const val = computed.getPropertyValue(prop);
+                unsupportedColorRegex.lastIndex = 0;
+                if (val && unsupportedColorRegex.test(val)) {
+                    el.style.setProperty(prop, fallbacks[prop] || '#000000', 'important');
+                }
+            } catch { /* skip */ }
+        }
+
+        // Also sanitize inline CSS text (covers CSS variables in inline styles)
+        unsupportedColorRegex.lastIndex = 0;
+        const inlineCss = el.style.cssText || '';
+        if (unsupportedColorRegex.test(inlineCss)) {
+            unsupportedColorRegex.lastIndex = 0;
+            el.style.cssText = inlineCss.replace(unsupportedColorRegex, '#000000');
+        }
+    });
+}
+
 interface PDFPreviewDialogProps {
     open: boolean;
     onOpenChange: (open: boolean) => void;
@@ -96,7 +183,7 @@ export function PDFPreviewDialog({
     }, [open, poNumber]);
 
     const handleDownload = async () => {
-        if (!pdfContentRef.current || !poNumber) return;
+        if (!pdfContentRef.current) return;
 
         setIsDownloading(true);
         try {
@@ -126,26 +213,7 @@ export function PDFPreviewDialog({
                     letterRendering: true,
                     windowWidth: 794,
                     allowTaint: false,
-                    onclone: (clonedDoc: Document) => {
-                        const styleElements = clonedDoc.querySelectorAll('style');
-                        styleElements.forEach(el => {
-                            if (el.textContent?.includes('oklch') || el.textContent?.includes('oklab')) {
-                                el.textContent = el.textContent
-                                    .replace(/oklch\([^)]+\)/g, '#000000')
-                                    .replace(/oklab\([^)]+\)/g, '#000000');
-                            }
-                        });
-                        const elements = clonedDoc.getElementsByTagName('*');
-                        for (let i = 0; i < elements.length; i++) {
-                            const el = elements[i] as HTMLElement;
-                            if (el.style) {
-                                if (el.style.color?.includes('okl') || el.style.backgroundColor?.includes('okl')) {
-                                    el.style.color = '#000000';
-                                    el.style.backgroundColor = '#ffffff';
-                                }
-                            }
-                        }
-                    }
+                    onclone: sanitizeClonedDoc
                 },
                 jsPDF: { unit: "mm", format: "a4", orientation: "portrait", compress: true },
             };
@@ -161,11 +229,71 @@ export function PDFPreviewDialog({
     };
 
     const handlePrint = () => {
+        if (!pdfContentRef.current) return;
+        
         setIsPrinting(true);
-        setTimeout(() => {
-            window.print();
+        
+        // Create a hidden iframe for printing
+        const printFrame = document.createElement('iframe');
+        printFrame.style.display = 'none';
+        document.body.appendChild(printFrame);
+        
+        const frameDoc = printFrame.contentDocument || printFrame.contentWindow?.document;
+        if (!frameDoc) {
             setIsPrinting(false);
-        }, 100);
+            return;
+        }
+        
+        // Clone the document content
+        const content = pdfContentRef.current.cloneNode(true) as HTMLElement;
+        
+        // Write HTML to iframe
+        frameDoc.write(`
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="UTF-8">
+                <title>${documentName}</title>
+                <style>
+                    * {
+                        margin: 0;
+                        padding: 0;
+                        box-sizing: border-box;
+                    }
+                    body {
+                        font-family: Arial, sans-serif;
+                        background: white;
+                    }
+                    @media print {
+                        body {
+                            margin: 0;
+                            padding: 0;
+                        }
+                        .print-surface {
+                            width: 210mm;
+                            height: 297mm;
+                            margin: 0;
+                            padding: 0;
+                        }
+                    }
+                </style>
+            </head>
+            <body>
+                ${content.outerHTML}
+            </body>
+            </html>
+        `);
+        frameDoc.close();
+        
+        // Wait for content to load, then print
+        setTimeout(() => {
+            printFrame.contentWindow?.print();
+            // Remove iframe after printing
+            setTimeout(() => {
+                document.body.removeChild(printFrame);
+                setIsPrinting(false);
+            }, 500);
+        }, 250);
     };
 
     const handleShareWhatsApp = () => {
@@ -246,26 +374,7 @@ Notion Electronica Pvt. Ltd.`;
                     letterRendering: true,
                     windowWidth: 794,
                     allowTaint: false,
-                    onclone: (clonedDoc: Document) => {
-                        const styleElements = clonedDoc.querySelectorAll('style');
-                        styleElements.forEach(el => {
-                            if (el.textContent?.includes('oklch') || el.textContent?.includes('oklab')) {
-                                el.textContent = el.textContent
-                                    .replace(/oklch\([^)]+\)/g, '#000000')
-                                    .replace(/oklab\([^)]+\)/g, '#000000');
-                            }
-                        });
-                        const elements = clonedDoc.getElementsByTagName('*');
-                        for (let i = 0; i < elements.length; i++) {
-                            const el = elements[i] as HTMLElement;
-                            if (el.style) {
-                                if (el.style.color?.includes('okl') || el.style.backgroundColor?.includes('okl')) {
-                                    el.style.color = '#000000';
-                                    el.style.backgroundColor = '#ffffff';
-                                }
-                            }
-                        }
-                    }
+                    onclone: sanitizeClonedDoc
                 },
                 jsPDF: { unit: "mm", format: "a4", orientation: "portrait", compress: true },
             };
@@ -358,7 +467,7 @@ Notion Electronica Pvt. Ltd.`;
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent
-                className="max-w-[1200px] w-[98vw] h-[95vh] flex flex-col p-0 overflow-hidden border-0 shadow-2xl bg-slate-900 rounded-xl"
+                className="max-w-5xl w-full h-[95vh] flex flex-col p-0 overflow-hidden border-0 shadow-2xl bg-slate-900 rounded-xl"
                 showCloseButton={false}
             >
                 {/* Header - Compact, No Overflow */}
@@ -410,33 +519,12 @@ Notion Electronica Pvt. Ltd.`;
 
                         {/* Actions - Icon buttons */}
                         <div className="flex items-center gap-0.5 shrink-0">
-                            {/* Send Dropdown */}
-                            <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                    <button
-                                        className="h-7 w-7 flex items-center justify-center rounded-md text-slate-300 hover:text-white hover:bg-slate-700"
-                                        disabled={!isDataLoaded}
-                                    >
-                                        <Send className="h-3.5 w-3.5" />
-                                    </button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end" className="w-40">
-                                    <DropdownMenuItem onClick={handleShareWhatsApp} className="gap-2 cursor-pointer text-sm">
-                                        <MessageCircle className="h-4 w-4 text-green-500" />
-                                        WhatsApp
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem onClick={handleShareEmail} className="gap-2 cursor-pointer text-sm">
-                                        <Mail className="h-4 w-4 text-blue-500" />
-                                        Email
-                                    </DropdownMenuItem>
-                                </DropdownMenuContent>
-                            </DropdownMenu>
-
                             {/* Print */}
                             <button
                                 className="h-7 w-7 flex items-center justify-center rounded-md text-slate-300 hover:text-white hover:bg-slate-700 hidden sm:flex"
                                 onClick={handlePrint}
                                 disabled={!isDataLoaded || isPrinting}
+                                title="Print document only"
                             >
                                 {isPrinting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Printer className="h-3.5 w-3.5" />}
                             </button>
@@ -541,18 +629,20 @@ Notion Electronica Pvt. Ltd.`;
                     </div>
 
                     {/* Send */}
-                    <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                            <Button variant="outline" size="sm" className="h-9 flex-1 border-slate-600 text-slate-200 bg-transparent">
-                                <Send className="h-4 w-4 mr-1" />
-                                Send
-                            </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="center">
-                            <DropdownMenuItem onClick={handleShareWhatsApp}><MessageCircle className="h-4 w-4 mr-2 text-green-500" />WhatsApp</DropdownMenuItem>
-                            <DropdownMenuItem onClick={handleShareEmail}><Mail className="h-4 w-4 mr-2 text-blue-500" />Email</DropdownMenuItem>
-                        </DropdownMenuContent>
-                    </DropdownMenu>
+                    {type === "po" && (
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button variant="outline" size="sm" className="h-9 flex-1 border-slate-600 text-slate-200 bg-transparent">
+                                    <Send className="h-4 w-4 mr-1" />
+                                    Send
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="center">
+                                <DropdownMenuItem onClick={handleShareWhatsApp}><MessageCircle className="h-4 w-4 mr-2 text-green-500" />WhatsApp</DropdownMenuItem>
+                                <DropdownMenuItem onClick={handleShareEmail}><Mail className="h-4 w-4 mr-2 text-blue-500" />Email</DropdownMenuItem>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
+                    )}
 
                     {/* Download */}
                     <Button onClick={handleDownload} disabled={!isDataLoaded || isDownloading} className="h-9 flex-1 bg-blue-600 text-white font-semibold">

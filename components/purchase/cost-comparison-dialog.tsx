@@ -51,8 +51,9 @@ import jsPDF from "jspdf";
 interface CostComparisonDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  requestId: Id<"requests">; // Main request ID (used when opening single item)
+  requestId?: Id<"requests"> | null; // Main request ID (used when opening single item)
   requestIds?: Id<"requests">[]; // Multiple request IDs for batch CC viewing
+  isDirectCreation?: boolean; // Flag for direct CC creation without request
 }
 
 interface VendorQuote {
@@ -2213,6 +2214,16 @@ export function CostComparisonDialog({
                       size="sm"
                     >
                       Cancel
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={() => handleSave(false)}
+                      disabled={isSaving || vendorQuotes.length === 0}
+                      size="sm"
+                      className="flex-1"
+                    >
+                      <Save className="h-3.5 w-3.5 mr-1.5" />
+                      Save Draft
                     </Button>
                     <Button
                       onClick={() => setShowSubmitConfirm(true)}

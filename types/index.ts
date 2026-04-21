@@ -58,6 +58,7 @@ export type RequestStatus =
   | "cc_pending"
   | "cc_approved"
   | "cc_rejected"
+  | "direct_cc"
   | "ready_for_po"
   | "pending_po"
   | "rejected_po"

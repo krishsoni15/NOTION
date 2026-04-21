@@ -133,8 +133,43 @@ export const getAllPurchaseOrders = query({
 });
 
 /**
- * Get Direct POs only
+ * Get Recent Purchase Orders for Quick Selection
  */
+export const getRecentPurchaseOrders = query({
+    args: { limit: v.optional(v.number()) },
+    handler: async (ctx, args) => {
+        const currentUser = await getCurrentUserOrNull(ctx);
+        if (!currentUser) return [];
+
+        // Only Purchase Officers and Managers can view POs
+        if (
+            currentUser.role !== "purchase_officer" &&
+            currentUser.role !== "manager"
+        ) {
+            return [];
+        }
+
+        const limit = args.limit || 10;
+        const pos = await ctx.db
+            .query("purchaseOrders")
+            .withIndex("by_created_at")
+            .order("desc")
+            .take(limit);
+
+        // Enrich with vendor data
+        const enrichedPOs = await Promise.all(
+            pos.map(async (po) => {
+                const vendor = await ctx.db.get(po.vendorId);
+                return {
+                    ...po,
+                    vendor,
+                };
+            })
+        );
+
+        return enrichedPOs;
+    },
+});
 export const getDirectPurchaseOrders = query({
     args: {},
     handler: async (ctx) => {
@@ -1266,3 +1301,44 @@ export const getPOIdByNumber = query({
     },
 });
 
+/**
+ * Update purchase order title
+ */
+export const updatePurchaseOrderTitle = mutation({
+  args: {
+    poId: v.id("purchaseOrders"),
+    title: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) {
+      throw new ConvexError("Not authenticated");
+    }
+
+    const currentUser = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_user_id", (q: any) => q.eq("clerkUserId", userId))
+      .first();
+
+    if (!currentUser) {
+      throw new ConvexError("User not found");
+    }
+
+    // Only purchase officers and managers can update titles
+    if (currentUser.role !== "purchase_officer" && currentUser.role !== "manager") {
+      throw new ConvexError("Unauthorized: Only purchase officers and managers can update titles");
+    }
+
+    const po = await ctx.db.get(args.poId);
+    if (!po) {
+      throw new ConvexError("Purchase order not found");
+    }
+
+    await ctx.db.patch(args.poId, {
+      customTitle: args.title.trim() || undefined,
+      updatedAt: Date.now(),
+    });
+
+    return { success: true };
+  },
+});

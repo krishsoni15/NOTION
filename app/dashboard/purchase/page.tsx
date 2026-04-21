@@ -6,6 +6,7 @@
 
 import { requireRole } from "@/lib/auth/redirect";
 import { ROLES } from "@/lib/auth/roles";
+import { DirectActionsSection } from "@/components/direct-actions/direct-actions-section";
 
 export default async function PurchaseOfficerDashboard() {
   // Ensure user has purchase_officer role
@@ -13,7 +14,12 @@ export default async function PurchaseOfficerDashboard() {
 
   return (
     <div className="space-y-8 p-8">
-      <h1 className="text-3xl font-bold tracking-tight">Welcome Purchase</h1>
+      <div>
+        <h1 className="text-3xl font-bold tracking-tight">Purchase Dashboard</h1>
+        <p className="text-muted-foreground mt-2">Manage your purchase operations</p>
+      </div>
+
+      <DirectActionsSection />
     </div>
   );
 }

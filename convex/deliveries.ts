@@ -2,36 +2,28 @@ import { v, ConvexError } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { Id } from "./_generated/dataModel";
 
-// Generate Delivery ID (DC-YYYYMMDD-XXXX)
+// Generate Delivery ID (DC-XXX)
 const generateDeliveryId = async (ctx: any) => {
-    const date = new Date();
-    const dateStr = date.toISOString().split("T")[0].replace(/-/g, ""); // YYYYMMDD
-
-    // Find last delivery created today to increment counter
-    const lastDelivery = await ctx.db
-        .query("deliveries")
-        .withIndex("by_created_at", (q: any) => q.gt("createdAt", new Date().setHours(0, 0, 0, 0)))
-        .order("desc")
-        .first();
-
-    let nextSequence = 1;
-    if (lastDelivery) {
-        const parts = lastDelivery.deliveryId.split("-");
-        const lastSeq = parseInt(parts[2] || "0");
-        nextSequence = lastSeq + 1;
-    }
-
-    return `DC-${dateStr}-${nextSequence.toString().padStart(4, "0")}`;
+    const deliveries = await ctx.db.query("deliveries").collect();
+    const nextSequence = deliveries.length + 1;
+    return `DC-${nextSequence.toString().padStart(3, "0")}`;
 };
 
 export const createDelivery = mutation({
     args: {
         poId: v.optional(v.id("purchaseOrders")),
-        // Request Items for this delivery (quantities)
+        // Request Items for this delivery (quantities/manual details)
         items: v.array(v.object({
-            requestId: v.id("requests"),
+            requestId: v.optional(v.id("requests")),
+            itemName: v.optional(v.string()),
+            description: v.optional(v.string()),
             quantity: v.number(), // Delivery quantity
+            unit: v.optional(v.string()),
+            rate: v.optional(v.number()),
         })),
+
+        // Add status field
+        status: v.optional(v.union(v.literal("pending"), v.literal("delivered"), v.literal("cancelled"))),
 
         // Delivery Details
         deliveryType: v.union(v.literal("private"), v.literal("public"), v.literal("vendor")),
@@ -83,49 +75,58 @@ export const createDelivery = mutation({
         // 1. Create Delivery Record
         const deliveryIdStr = await generateDeliveryId(ctx);
 
-        const deliveryId = await ctx.db.insert("deliveries", {
+        const deliveryInsertData: any = {
             ...deliveryData,
             deliveryId: deliveryIdStr,
-            status: "pending",
+            status: args.status || "pending",
             createdBy: officer._id,
             createdAt: now,
             updatedAt: now,
+        };
+
+        if (args.directDelivery) {
+            deliveryInsertData.directItems = JSON.stringify(items);
+        }
+
+        const deliveryId = await ctx.db.insert("deliveries", deliveryInsertData);
+
+        // Log the direct action with standardized ID
+        let logRequestNumber: string;
+        let logContent: string;
+        
+        if (args.directDelivery || items.every(item => !item.requestId)) {
+            // Generate standardized DC ID for logging
+            const allDCs = await ctx.db.query("deliveries").collect();
+            const sortedDCs = allDCs.sort((a, b) => a.createdAt - b.createdAt);
+            const dcIndex = sortedDCs.findIndex(dc => dc._id === deliveryId);
+            const standardizedId = `DC-${(dcIndex + 1).toString().padStart(3, '0')}`;
+            
+            logRequestNumber = `DIRECT-${standardizedId}`;
+            logContent = `Direct Delivery Challan ${standardizedId} created - ${args.receiverName}`;
+        } else {
+            const firstRequestId = items.find(item => item.requestId)?.requestId;
+            logRequestNumber = firstRequestId ? `REQ-${firstRequestId.slice(-6)}` : `DC-${deliveryIdStr}`;
+            logContent = `Delivery Challan created: ${deliveryIdStr} for ${items.length} item(s)`;
+        }
+        
+        await ctx.db.insert("request_notes", {
+            requestNumber: logRequestNumber,
+            userId: officer._id,
+            role: officer.role,
+            status: "pending",
+            type: "log",
+            content: logContent,
+            createdAt: now,
         });
 
         // 2. Update Items (Requests) linked to this delivery
-        // Logic: 
-        // - Check if partial or full delivery for each item.
-        // - If Item Status is 'pending_po' or 'ordered', we might need to split it if handled here.
-        // - User asked to "create delivery linked to pending PO". 
-        // - If the quantity matches the PO/Request quantity, we just update status to 'delivered' (or 'delivery_stage').
-        // - If partial, we split the request (if not already split by `markReadyForDelivery`).
-        // Assuming `markReadyForDelivery` was the PRECURSOR step (splitting items to 'ready_for_delivery'), 
-        // OR this dialog handles the split itself.
-        // Note: The user said "Delivery Creation from Pending PO... Support for creating multiple deliveries (partial)".
-        // This implies getting items which are in 'ordered'/'pending_po' status (technically 'ordered' creates the PO).
-        // Let's assume the items passed are capable of being delivered.
-
-        // Simplest approach: Update status to 'delivered' or 'delivery_stage' and link to deliveryId? 
-        // Schema for Requests doesn't have `deliveryId` link directly, but we can rely on `poId`.
-        // Actually, `requests` don't have `deliveryId`.
-        // Maybe we should store `items` in the `deliveries` table if we need to know WHICH items were in this DC?
-        // Wait, `deliveries` table I defined doesn't have `items`. It links to `poId`.
-        // But a PO can have multiple deliveries.
-        // So distinct items need to be tracked.
-        // I should add `items` array to `deliveries` table OR a join table.
-        // Or, assume simpler flow: Updates status of Requests. If request is split, new request has `deliveryId`?
-        // Current Request Schema doesn't have `deliveryId`.
-        // I should add `deliveryId` to `requests` table to link specific request chunks to a DC.
-
-        // Let's UPDATE SCHEMA first if I want to link Requests to Delivery Challans accurately.
-        // Re-reading Schema: `deliveryChallans` had `requestId` (singular).
-        // My new `deliveries` has `poId`.
-        // If a DC covers multiple items, `poId` is good for grouping, but strictly, we want to know WHICH items.
-        // Adding `deliveryId` to `requests` table is logical.
-
+        // Only process items that have a requestId (skip direct delivery items)
         const targetStatus = args.directDelivery ? "delivered" : "out_for_delivery";
 
         for (const item of items) {
+            // Skip items without requestId (direct delivery items)
+            if (!item.requestId) continue;
+
             const request = await ctx.db.get(item.requestId);
             if (!request) continue;
 
@@ -165,6 +166,9 @@ export const createDelivery = mutation({
 
         // GRN Log for each item in the delivery
         for (const item of items) {
+            // Skip items without requestId (direct delivery items)
+            if (!item.requestId) continue;
+
             const request = await ctx.db.get(item.requestId);
             if (request) {
                 await ctx.db.insert("request_notes", {
@@ -180,6 +184,16 @@ export const createDelivery = mutation({
         }
 
         return deliveryId;
+    },
+});
+
+export const getAllDeliveries = query({
+    args: {},
+    handler: async (ctx) => {
+        return await ctx.db
+            .query("deliveries")
+            .order("desc")
+            .collect();
     },
 });
 
@@ -250,25 +264,39 @@ export const getDeliveryWithItems = query({
                 .collect();
         }
 
-        const items = deliveryRequests.map(item => {
-            // Find corresponding PO item to get financial details
-            const poItem = poItems.find(p => p.requestId === item._id);
+        // CRITICAL: Check for direct items stored as JSON (for direct delivery edits)
+        let items: any[] = [];
+        
+        if ((delivery as any).directItems) {
+            // Parse stored direct items
+            try {
+                items = JSON.parse((delivery as any).directItems);
+            } catch (e) {
+                console.error("Failed to parse directItems:", e);
+                items = [];
+            }
+        } else if (deliveryRequests.length > 0) {
+            // Fall back to request-based items
+            items = deliveryRequests.map(item => {
+                // Find corresponding PO item to get financial details
+                const poItem = poItems.find(p => p.requestId === item._id);
 
-            return {
-                _id: item._id,
-                itemName: item.itemName,
-                quantity: item.quantity,
-                unit: item.unit,
-                description: item.description,
-                status: item.status,
-                deliveryPhotos: item.deliveryPhotos,
-                deliveryNotes: item.deliveryNotes,
-                hsnSacCode: poItem?.hsnSacCode || item.specsBrand, // Fallback
-                unitRate: poItem?.unitRate,
-                discountPercent: poItem?.discountPercent,
-                gstTaxRate: poItem?.gstTaxRate,
-            };
-        });
+                return {
+                    _id: item._id,
+                    itemName: item.itemName,
+                    quantity: item.quantity,
+                    unit: item.unit,
+                    description: item.description,
+                    status: item.status,
+                    deliveryPhotos: item.deliveryPhotos,
+                    deliveryNotes: item.deliveryNotes,
+                    hsnSacCode: poItem?.hsnSacCode || item.specsBrand, // Fallback
+                    unitRate: poItem?.unitRate,
+                    discountPercent: poItem?.discountPercent,
+                    gstTaxRate: poItem?.gstTaxRate,
+                };
+            });
+        }
 
         // Get creator details
         const creator = await ctx.db.get(delivery.createdBy);
@@ -347,4 +375,124 @@ export const confirmDelivery = mutation({
 
         return { success: true };
     },
+});
+/**
+ * Update delivery challan (for direct delivery editing)
+ * CRITICAL: This mutation stores items as a JSON array in the delivery record
+ */
+export const updateDelivery = mutation({
+  args: {
+    deliveryId: v.id("deliveries"),
+    items: v.array(v.object({
+      itemName: v.string(),
+      description: v.optional(v.string()),
+      quantity: v.number(),
+      rate: v.number(),
+      unit: v.string(),
+    })),
+    deliveryType: v.union(v.literal("private"), v.literal("public"), v.literal("vendor")),
+    deliveryPerson: v.optional(v.string()),
+    deliveryContact: v.string(),
+    vehicleNumber: v.optional(v.string()),
+    receiverName: v.string(),
+    status: v.optional(v.union(v.literal("pending"), v.literal("delivered"), v.literal("cancelled"))),
+    loadingPhoto: v.optional(v.object({
+      imageUrl: v.string(),
+      imageKey: v.string(),
+    })),
+    invoicePhoto: v.optional(v.object({
+      imageUrl: v.string(),
+      imageKey: v.string(),
+    })),
+  },
+  handler: async (ctx, args) => {
+    const user = await ctx.auth.getUserIdentity();
+    if (!user) {
+      throw new ConvexError("Not authenticated");
+    }
+
+    const currentUser = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_user_id", (q) => q.eq("clerkUserId", user.subject))
+      .first();
+
+    if (!currentUser) {
+      throw new ConvexError("User not found");
+    }
+
+    const delivery = await ctx.db.get(args.deliveryId);
+    if (!delivery) {
+      throw new ConvexError("Delivery not found");
+    }
+
+    // Update delivery record with items stored as JSON
+    await ctx.db.patch(args.deliveryId, {
+      deliveryType: args.deliveryType,
+      deliveryPerson: args.deliveryPerson || undefined,
+      deliveryContact: args.deliveryContact,
+      vehicleNumber: args.vehicleNumber || undefined,
+      receiverName: args.receiverName,
+      loadingPhoto: args.loadingPhoto || undefined,
+      invoicePhoto: args.invoicePhoto || undefined,
+      status: args.status || "delivered", // Default to delivered (finalized)
+      // CRITICAL: Store items array as JSON to prevent data loss
+      directItems: JSON.stringify(args.items),
+      updatedAt: Date.now(),
+    });
+
+    // Log the update
+    await ctx.db.insert("request_notes", {
+      requestNumber: `DIRECT-DC-${delivery.deliveryId}`,
+      userId: currentUser._id,
+      role: currentUser.role,
+      status: args.status || "delivered",
+      type: "log",
+      content: `Direct Delivery Challan updated - ${args.receiverName}. Items: ${args.items.length}. Status: ${args.status || 'delivered'}`,
+      createdAt: Date.now(),
+    });
+
+    return { success: true };
+  },
+});
+
+/**
+ * Update delivery challan title
+ */
+export const updateDeliveryTitle = mutation({
+  args: {
+    deliveryId: v.id("deliveries"),
+    title: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const user = await ctx.auth.getUserIdentity();
+    if (!user) {
+      throw new ConvexError("Not authenticated");
+    }
+
+    const currentUser = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_user_id", (q) => q.eq("clerkUserId", user.subject))
+      .first();
+
+    if (!currentUser) {
+      throw new ConvexError("User not found");
+    }
+
+    // Only purchase officers and managers can update titles
+    if (currentUser.role !== "purchase_officer" && currentUser.role !== "manager") {
+      throw new ConvexError("Unauthorized: Only purchase officers and managers can update titles");
+    }
+
+    const delivery = await ctx.db.get(args.deliveryId);
+    if (!delivery) {
+      throw new ConvexError("Delivery not found");
+    }
+
+    await ctx.db.patch(args.deliveryId, {
+      customTitle: args.title.trim() || undefined,
+      updatedAt: Date.now(),
+    });
+
+    return { success: true };
+  },
 });

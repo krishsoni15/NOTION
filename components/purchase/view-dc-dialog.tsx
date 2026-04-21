@@ -38,10 +38,14 @@ import {
     Clock,
     ChevronRight,
     X,
-    Eye
+    Eye,
+    Printer,
+    Download,
+    Loader2
 } from "lucide-react";
 import { PDFPreviewDialog } from "./pdf-preview-dialog";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
 import type { Id } from "@/convex/_generated/dataModel";
 
 interface ViewDCDialogProps {
@@ -52,10 +56,90 @@ interface ViewDCDialogProps {
 
 export function ViewDCDialog({ open, onOpenChange, deliveryId }: ViewDCDialogProps) {
     const [showPdfPreview, setShowPdfPreview] = useState(false);
+    const [isDownloading, setIsDownloading] = useState(false);
     const deliveryData = useQuery(
         api.deliveries.getDeliveryWithItems,
         deliveryId ? { deliveryId } : "skip"
     );
+
+    const handleDownload = async () => {
+        if (!deliveryData) return;
+        
+        setIsDownloading(true);
+        try {
+            // The formal PDF with Notion Electronics letterhead is in PDFPreviewDialog
+            // This provides the professional document for download
+            toast.info("Opening PDF preview for download...");
+            setShowPdfPreview(true);
+        } catch (error) {
+            console.error("Download error:", error);
+            toast.error("Failed to open PDF preview");
+        } finally {
+            setIsDownloading(false);
+        }
+    };
+
+    const handlePrint = () => {
+        if (!deliveryId) return;
+        
+        // Create a hidden iframe for printing
+        const printFrame = document.createElement('iframe');
+        printFrame.style.display = 'none';
+        document.body.appendChild(printFrame);
+        
+        const frameDoc = printFrame.contentDocument || printFrame.contentWindow?.document;
+        if (!frameDoc) return;
+        
+        // Get the delivery challan template content
+        const templateContent = document.querySelector('[data-print-content]');
+        if (!templateContent) {
+            document.body.removeChild(printFrame);
+            return;
+        }
+        
+        const content = templateContent.cloneNode(true) as HTMLElement;
+        
+        // Write HTML to iframe
+        frameDoc.write(`
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <meta charset="UTF-8">
+                <title>Delivery Challan - ${deliveryData?.deliveryId}</title>
+                <style>
+                    * {
+                        margin: 0;
+                        padding: 0;
+                        box-sizing: border-box;
+                    }
+                    body {
+                        font-family: Arial, sans-serif;
+                        background: white;
+                    }
+                    @media print {
+                        body {
+                            margin: 0;
+                            padding: 0;
+                        }
+                    }
+                </style>
+            </head>
+            <body>
+                ${content.innerHTML}
+            </body>
+            </html>
+        `);
+        frameDoc.close();
+        
+        // Wait for content to load, then print
+        setTimeout(() => {
+            printFrame.contentWindow?.print();
+            // Remove iframe after printing
+            setTimeout(() => {
+                document.body.removeChild(printFrame);
+            }, 500);
+        }, 250);
+    };
 
     if (!deliveryData && open) {
         return (
@@ -102,15 +186,33 @@ export function ViewDCDialog({ open, onOpenChange, deliveryId }: ViewDCDialogPro
     return (
         <>
             <Dialog open={open} onOpenChange={onOpenChange}>
-                <DialogContent className="sm:max-w-[700px] max-h-[90vh] p-0 overflow-hidden">
+                <DialogContent className="sm:max-w-[90vw] max-w-5xl max-h-[90vh] p-0 overflow-hidden">
                     {/* Header with gradient */}
                     <div className="relative bg-gradient-to-br from-blue-600 via-indigo-600 to-purple-700 px-6 py-5 text-white">
-                        <button
-                            onClick={() => onOpenChange(false)}
-                            className="absolute top-4 right-4 p-1.5 rounded-full bg-white/10 hover:bg-white/20 transition-colors"
-                        >
-                            <X className="h-4 w-4" />
-                        </button>
+                        <div className="absolute top-4 right-4 flex items-center gap-2">
+                            <button
+                                onClick={handlePrint}
+                                className="p-1.5 rounded-full bg-white/10 hover:bg-white/20 transition-colors"
+                                title="Print delivery challan"
+                            >
+                                <Printer className="h-4 w-4" />
+                            </button>
+                            <button
+                                onClick={handleDownload}
+                                disabled={isDownloading}
+                                className="h-7 px-2.5 flex items-center gap-1.5 rounded-md bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold disabled:opacity-50"
+                                title="Download as PDF"
+                            >
+                                {isDownloading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+                                <span className="hidden sm:inline">Download</span>
+                            </button>
+                            <button
+                                onClick={() => onOpenChange(false)}
+                                className="p-1.5 rounded-full bg-white/10 hover:bg-white/20 transition-colors"
+                            >
+                                <X className="h-4 w-4" />
+                            </button>
+                        </div>
 
                         <div className="flex items-start justify-between">
                             <div className="flex items-center gap-3">
@@ -218,7 +320,7 @@ export function ViewDCDialog({ open, onOpenChange, deliveryId }: ViewDCDialogPro
                                                                     Proof of Delivery
                                                                 </span>
                                                                 <div className="grid grid-cols-3 gap-2">
-                                                                    {item.deliveryPhotos.map((photo, idx) => (
+                                                                    {item.deliveryPhotos.map((photo: any, idx: number) => (
                                                                         <div
                                                                             key={idx}
                                                                             className="aspect-square rounded-md overflow-hidden border border-border cursor-pointer hover:ring-2 hover:ring-primary/50 transition-all"

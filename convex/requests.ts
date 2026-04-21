@@ -2547,3 +2547,81 @@ export const confirmDelivery = mutation({
     });
   },
 });
+
+/**
+ * Create a lightweight "direct CC" request record (Purchase Officer only)
+ * Used when creating a Cost Comparison without a site engineer request.
+ * The request is created in "ready_for_cc" status so the CC dialog works normally.
+ */
+export const createDirectCCRequest = mutation({
+  args: {
+    itemName: v.string(),
+    description: v.string(),
+    quantity: v.number(),
+    unit: v.string(),
+    notes: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const currentUser = await getCurrentUser(ctx);
+
+    if (currentUser.role !== "purchase_officer") {
+      throw new ConvexError("Unauthorized: Only purchase officers can create direct CC requests");
+    }
+
+    // Find any active site to use as placeholder (required by schema)
+    const anySite = await ctx.db
+      .query("sites")
+      .withIndex("by_is_active", (q) => q.eq("isActive", true))
+      .first();
+
+    if (!anySite) {
+      throw new ConvexError("No active site found. Please create a site first.");
+    }
+
+    const now = Date.now();
+
+    // Generate a unique request number
+    const allRequests = await ctx.db.query("requests").collect();
+    let maxNumber = 0;
+    for (const r of allRequests) {
+      const num = parseInt(r.requestNumber, 10);
+      if (!isNaN(num) && num > maxNumber) maxNumber = num;
+    }
+    const requestNumber = String(maxNumber + 1).padStart(3, "0");
+
+    const requestId = await ctx.db.insert("requests", {
+      requestNumber,
+      createdBy: currentUser._id,
+      siteId: anySite._id,
+      itemName: args.itemName.trim(),
+      description: args.description.trim(),
+      quantity: args.quantity,
+      unit: args.unit.trim(),
+      requiredBy: now + 7 * 24 * 60 * 60 * 1000, // 7 days from now
+      isUrgent: false,
+      status: "ready_for_cc",
+      notes: args.notes?.trim() || undefined,
+      itemOrder: 1,
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    // Log the direct action with standardized ID format
+    // Generate CC ID based on all existing CCs
+    const allCCs = await ctx.db.query("costComparisons").collect();
+    const ccCount = allCCs.length + 1; // This will be the next CC number
+    const standardizedId = `CC-${ccCount.toString().padStart(3, '0')}`;
+    
+    await ctx.db.insert("request_notes", {
+      requestNumber: `DIRECT-${standardizedId}`,
+      userId: currentUser._id,
+      role: currentUser.role,
+      status: "ready_for_cc",
+      type: "log",
+      content: `Direct Cost Comparison request ${standardizedId} created: ${args.itemName} (${args.quantity} ${args.unit})`,
+      createdAt: now,
+    });
+
+    return requestId;
+  },
+});

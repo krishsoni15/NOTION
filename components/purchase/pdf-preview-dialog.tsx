@@ -120,7 +120,7 @@ function sanitizeClonedDoc(clonedDoc: Document) {
 interface PDFPreviewDialogProps {
     open: boolean;
     onOpenChange: (open: boolean) => void;
-    poNumber: string | null;
+    poNumber?: string | null;
     requestId?: string | null; // Optional: filter to single item
     requestIds?: string[] | null; // Optional: filter to multiple items
     deliveryId?: string | null; // For DC preview
@@ -230,23 +230,23 @@ export function PDFPreviewDialog({
 
     const handlePrint = () => {
         if (!pdfContentRef.current) return;
-        
+
         setIsPrinting(true);
-        
+
         // Create a hidden iframe for printing
         const printFrame = document.createElement('iframe');
         printFrame.style.display = 'none';
         document.body.appendChild(printFrame);
-        
+
         const frameDoc = printFrame.contentDocument || printFrame.contentWindow?.document;
         if (!frameDoc) {
             setIsPrinting(false);
             return;
         }
-        
+
         // Clone the document content
         const content = pdfContentRef.current.cloneNode(true) as HTMLElement;
-        
+
         // Write HTML to iframe
         frameDoc.write(`
             <!DOCTYPE html>
@@ -284,7 +284,7 @@ export function PDFPreviewDialog({
             </html>
         `);
         frameDoc.close();
-        
+
         // Wait for content to load, then print
         setTimeout(() => {
             printFrame.contentWindow?.print();

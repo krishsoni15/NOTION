@@ -40,26 +40,29 @@ type SortOption = "newest" | "oldest" | "items_desc" | "items_asc";
 type RequestStatus =
     | "draft"
     | "pending"
+    | "sign_pending"
     | "approved"
     | "rejected"
+    | "sign_rejected"
     | "recheck"
     | "ready_for_cc"
-    | "cc_rejected"
     | "cc_pending"
     | "cc_approved"
+    | "cc_rejected"
+    | "direct_cc"
     | "ready_for_po"
     | "pending_po"
     | "rejected_po"
     | "ready_for_delivery"
-    | "delivery_stage"
     | "delivery_processing"
-    | "out_for_delivery"
     | "delivered"
+    | "recheck_requested"
     | "partially_processed"
     | "direct_po"
-    | "sign_pending"
-    | "sign_rejected"
-    | "ordered";
+    | "ordered"
+    | "out_for_delivery"
+    | "delivery_stage"
+    | "po_rejected";
 
 export function ManagerRequestsContent() {
     const [selectedRequestId, setSelectedRequestId] = useState<Id<"requests"> | null>(null);

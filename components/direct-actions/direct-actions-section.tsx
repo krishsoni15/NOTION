@@ -96,7 +96,7 @@ export function DirectActionsSection({
 
   const handleEditItem = (item: DirectActionItem, resetCallback: () => void) => {
     setResetEditingState(() => resetCallback);
-    
+
     switch (item.type) {
       case "cc":
         if (item.requestId) {
@@ -143,7 +143,7 @@ export function DirectActionsSection({
 
   const handleViewPO = (item: DirectActionItem) => {
     // Extract PO number from the raw data
-    const poNumber = item.rawData?.poNumber || item.displayId;
+    const poNumber = (item.rawData as any)?.poNumber || item.displayId;
     setSelectedPONumber(poNumber);
     setPoPreviewOpen(true);
   };

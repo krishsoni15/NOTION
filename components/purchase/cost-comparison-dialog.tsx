@@ -540,6 +540,7 @@ export function CostComparisonDialog({
 
   // Save cost comparison (silent mode for auto-save, accepts quotes parameter for immediate save)
   const handleSave = async (silent: boolean = false, quotesToSave?: VendorQuote[], purchaseQuantityOverride?: number) => {
+    if (!activeRequestId) return;
     const quotes = quotesToSave || vendorQuotes;
     const qtyToBuy = purchaseQuantityOverride !== undefined ? purchaseQuantityOverride : quantityToBuy;
 
@@ -572,6 +573,7 @@ export function CostComparisonDialog({
 
   // Submit for approval
   const handleSubmit = async () => {
+    if (!activeRequestId) return;
     if (vendorQuotes.length === 0) {
       toast.error("Please add at least one vendor quote");
       return;
@@ -648,7 +650,7 @@ export function CostComparisonDialog({
   };
 
   const handleSaveItemDetails = async () => {
-    if (!request) return;
+    if (!request || !activeRequestId) return;
 
     const quantity = parseFloat(editQuantity);
     if (isNaN(quantity) || quantity <= 0) {
@@ -864,7 +866,7 @@ export function CostComparisonDialog({
   };
 
   const handleDirectDelivery = async () => {
-    if (!request) return;
+    if (!request || !activeRequestId) return;
 
     // Determine quantity to take from inventory
     const deliveryQuantity = hasSufficientInventory
@@ -1544,7 +1546,7 @@ export function CostComparisonDialog({
                               }
                               setIsReviewing(true);
                               try {
-                                await reviewCC({ requestId, action: "reject", notes: managerNotes.trim() });
+                                await reviewCC({ requestId: activeRequestId!, action: "reject", notes: managerNotes.trim() });
                                 toast.success("Cost comparison rejected");
                                 onOpenChange(false);
                               } catch (error: any) { toast.error(error.message || "Failed to reject"); }
@@ -1563,7 +1565,7 @@ export function CostComparisonDialog({
                               }
                               setIsReviewing(true);
                               try {
-                                await reviewCC({ requestId, action: "approve", selectedVendorId: selectedFinalVendor as Id<"vendors">, notes: managerNotes.trim() || undefined });
+                                await reviewCC({ requestId: activeRequestId!, action: "approve", selectedVendorId: selectedFinalVendor as Id<"vendors">, notes: managerNotes.trim() || undefined });
                                 toast.success("Cost comparison approved");
                                 onOpenChange(false);
                               } catch (error: any) { toast.error(error.message || "Failed to approve"); }
@@ -2141,7 +2143,7 @@ export function CostComparisonDialog({
                         setIsReviewing(true);
                         try {
                           await reviewCC({
-                            requestId,
+                            requestId: activeRequestId!,
                             action: "reject",
                             notes: managerNotes.trim(),
                           });
@@ -2169,7 +2171,7 @@ export function CostComparisonDialog({
                         setIsReviewing(true);
                         try {
                           await reviewCC({
-                            requestId,
+                            requestId: activeRequestId!,
                             action: "approve",
                             selectedVendorId: selectedFinalVendor as Id<"vendors">,
                             notes: managerNotes.trim() || undefined,

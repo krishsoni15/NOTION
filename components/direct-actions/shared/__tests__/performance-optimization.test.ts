@@ -44,9 +44,9 @@ function createMockItem(
     customTitle: `Test ${type.toUpperCase()}`,
     status,
     createdDate: createdAt,
-    createdBy: "test-user",
+    createdBy: "test-user" as any,
     isDirect: true,
-    rawData: { _id: id, createdAt, status },
+    rawData: { _id: id, createdAt, status } as any,
   };
 }
 

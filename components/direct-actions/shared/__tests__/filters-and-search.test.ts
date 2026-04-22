@@ -41,7 +41,7 @@ function createMockItem(
     customTitle,
     status,
     createdDate: Date.now(),
-    createdBy: "test-user",
+    createdBy: "test-user" as any,
     isDirect,
     requestId: requestId as any,
     rawData,

@@ -16,7 +16,8 @@
  * - Validation only on final "Create DC" click
  */
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import {
@@ -46,22 +47,135 @@ import type { Id } from "@/convex/_generated/dataModel";
 import { DeliveryChallanTemplate, type DCData } from "./delivery-challan-template";
 
 interface DirectDeliveryItem {
-    id: string; // Temporary ID for UI
+    id: string;
     itemName: string;
     description: string;
     quantity: number;
     rate: number;
     unit: string;
-    total: number; // Auto-calculated: quantity × rate
+    total: number;
 }
+
+// ── Portal-based suggestion dropdown ──────────────────────────────────────────
+// Renders into document.body so NO overflow/scroll/stacking context can clip it.
+// Close strategy: document mousedown listener — fires BEFORE click, so we can
+// distinguish "clicked inside dropdown" (skip) vs "clicked outside" (close).
+function InventorySuggestPortal({
+    inputRef,
+    items,
+    query,
+    onSelect,
+    onClose,
+}: {
+    inputRef: React.RefObject<HTMLInputElement>;
+    items: any[];
+    query: string;
+    onSelect: (inv: any) => void;
+    onClose: () => void;
+}) {
+    const dropdownRef = useRef<HTMLDivElement>(null);
+    const [pos, setPos] = useState<{ top: number; left: number; width: number } | null>(null);
+
+    const updatePos = useCallback(() => {
+        if (inputRef.current) {
+            const r = inputRef.current.getBoundingClientRect();
+            // Use fixed positioning — viewport-relative, no scroll offset needed
+            setPos({ top: r.bottom + 4, left: r.left, width: Math.max(r.width, 260) });
+        }
+    }, [inputRef]);
+
+    useEffect(() => {
+        updatePos();
+        window.addEventListener("resize", updatePos);
+        window.addEventListener("scroll", updatePos, true);
+        return () => {
+            window.removeEventListener("resize", updatePos);
+            window.removeEventListener("scroll", updatePos, true);
+        };
+    }, [updatePos, query]);
+
+    // Close when mousedown fires OUTSIDE both the input AND the dropdown
+    useEffect(() => {
+        const handler = (e: MouseEvent) => {
+            const target = e.target as Node;
+            if (
+                inputRef.current?.contains(target) ||
+                dropdownRef.current?.contains(target)
+            ) return; // inside — do nothing
+            onClose();
+        };
+        document.addEventListener("mousedown", handler, true);
+        return () => document.removeEventListener("mousedown", handler, true);
+    }, [inputRef, onClose]);
+
+    const matches = items.filter(inv =>
+        inv.itemName.toLowerCase().includes(query.toLowerCase())
+    );
+
+    if (!pos || matches.length === 0 || !query.trim()) return null;
+
+    return createPortal(
+        <div
+            ref={dropdownRef}
+            style={{
+                position: "fixed",
+                top: pos.top,
+                left: pos.left,
+                width: pos.width,
+                zIndex: 999999,
+            }}
+            className="rounded-xl border bg-popover shadow-2xl overflow-hidden"
+        >
+            <div className="px-3 py-1.5 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider bg-muted/60 border-b">
+                Inventory — click to fill
+            </div>
+            <div className="max-h-56 overflow-y-auto">
+                {matches.map((inv) => (
+                    <button
+                        key={inv._id}
+                        type="button"
+                        className="w-full text-left px-3 py-2.5 hover:bg-muted/70 transition-colors border-b last:border-0 flex items-center gap-2"
+                        onMouseDown={(e) => {
+                            // Prevent input blur so the chain stays alive
+                            e.preventDefault();
+                        }}
+                        onClick={() => {
+                            // onClick fires AFTER mousedown; input is still focused
+                            onSelect(inv);
+                            onClose();
+                        }}
+                    >
+                        <Package className="h-3.5 w-3.5 text-violet-500 shrink-0" />
+                        <div className="flex flex-col min-w-0">
+                            <span className="text-sm font-medium leading-tight">{inv.itemName}</span>
+                            <span className="text-[10px] text-muted-foreground truncate">
+                                {(inv as any).description || (inv as any).specification || "No description"}
+                                {inv.unit && ` · ${inv.unit}`}
+                                {(inv.centralStock ?? 0) > 0 && (
+                                    <span className="text-emerald-500 font-semibold ml-1">
+                                        ({inv.centralStock} in stock)
+                                    </span>
+                                )}
+                            </span>
+                        </div>
+                    </button>
+                ))}
+            </div>
+        </div>,
+        document.body
+    );
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
 
 interface DirectDeliveryDialogProps {
     open: boolean;
     onOpenChange: (open: boolean) => void;
     onSuccess?: () => void;
-    editingDeliveryId?: Id<"deliveries"> | null; // For edit mode
-    onViewDC?: (deliveryId: Id<"deliveries">) => void; // Callback to open view modal
+    editingDeliveryId?: Id<"deliveries"> | null;
+    onViewDC?: (deliveryId: Id<"deliveries">) => void;
 }
+
 
 export function DirectDeliveryDialog({
     open,
@@ -72,7 +186,7 @@ export function DirectDeliveryDialog({
 }: DirectDeliveryDialogProps) {
     const createDelivery = useMutation(api.deliveries.createDelivery);
     const updateDelivery = useMutation(api.deliveries.updateDelivery);
-    
+
     // Load existing delivery if in edit mode
     const existingDelivery = useQuery(
         api.deliveries.getDeliveryWithItems,
@@ -102,6 +216,11 @@ export function DirectDeliveryDialog({
             total: 0,
         },
     ]);
+
+    const inventoryItems = useQuery(api.inventory.getAllInventoryItems, {});
+    const [activeRowId, setActiveRowId] = useState<string | null>(null);
+    // Map of item.id → ref to the name input (for portal positioning)
+    const inputRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
     // Preview State
     const [showPreview, setShowPreview] = useState(false);
@@ -140,7 +259,7 @@ export function DirectDeliveryDialog({
             setNotes("");
             setLoadingPhotos(null);
             setInvoiceFile(null);
-            
+
             // Load items from existing delivery
             if (existingDelivery.items && existingDelivery.items.length > 0) {
                 setItems(
@@ -170,6 +289,15 @@ export function DirectDeliveryDialog({
             setShowPreview(false);
         }
     }, [open, editingDeliveryId, existingDelivery]);
+
+    // Close suggestions on outside click
+    useEffect(() => {
+        const handler = () => setActiveRowId(null);
+        if (activeRowId) {
+            window.addEventListener("click", handler);
+            return () => window.removeEventListener("click", handler);
+        }
+    }, [activeRowId]);
 
     // Calculate total for an item
     const calculateTotal = (quantity: number, rate: number): number => {
@@ -362,7 +490,7 @@ export function DirectDeliveryDialog({
 
             // TRANSITION PROTOCOL: Close form → Open viewer
             onOpenChange(false);
-            
+
             // Trigger the view modal with the delivery ID
             if (onViewDC) {
                 // Small delay to ensure dialog closes first
@@ -411,15 +539,15 @@ export function DirectDeliveryDialog({
                 <DialogHeader>
                     <DialogTitle className="flex items-center gap-2">
                         <Truck className="h-5 w-5" />
-                        {showPreview 
-                            ? "Preview Delivery Challan" 
+                        {showPreview
+                            ? "Preview Delivery Challan"
                             : (editingDeliveryId ? "Edit Delivery Challan" : "Create Direct Delivery Challan")
                         }
                     </DialogTitle>
                     <DialogDescription>
                         {showPreview
                             ? "Review the generated Delivery Challan format before dispatching"
-                            : (editingDeliveryId 
+                            : (editingDeliveryId
                                 ? "Update delivery details and items"
                                 : "Enter delivery details and items for direct dispatch")
                         }
@@ -528,7 +656,7 @@ export function DirectDeliveryDialog({
                                 </div>
 
                                 {/* Items Table */}
-                                <div className="border rounded-lg overflow-hidden">
+                                <div className="border rounded-lg overflow-visible">
                                     <Table>
                                         <TableHeader>
                                             <TableRow className="bg-muted/50">
@@ -546,13 +674,35 @@ export function DirectDeliveryDialog({
                                                 <TableRow key={item.id} className="hover:bg-muted/30">
                                                     <TableCell>
                                                         <Input
+                                                            ref={(el) => { inputRefs.current[item.id] = el; }}
                                                             value={item.itemName}
-                                                            onChange={(e) =>
-                                                                updateItem(item.id, "itemName", e.target.value)
-                                                            }
+                                                            onChange={(e) => {
+                                                                updateItem(item.id, "itemName", e.target.value);
+                                                                setActiveRowId(item.id);
+                                                            }}
+                                                            onFocus={() => setActiveRowId(item.id)}
+                                                            onKeyDown={(e) => { if (e.key === "Escape") setActiveRowId(null); }}
                                                             placeholder="Item name"
                                                             className="h-8 text-sm"
+                                                            autoComplete="off"
                                                         />
+                                                        {/* Portal-based suggestion dropdown — renders at body level */}
+                                                        {activeRowId === item.id && item.itemName.trim().length > 0 && inventoryItems && inputRefs.current[item.id] && (
+                                                            <InventorySuggestPortal
+                                                                inputRef={{ current: inputRefs.current[item.id]! } as React.RefObject<HTMLInputElement>}
+                                                                items={inventoryItems}
+                                                                query={item.itemName}
+                                                                onSelect={(inv) => {
+                                                                    setItems(prev => prev.map(p => p.id === item.id ? {
+                                                                        ...p,
+                                                                        itemName: inv.itemName,
+                                                                        description: (inv as any).description || (inv as any).specification || "",
+                                                                        unit: inv.unit || "",
+                                                                    } : p));
+                                                                }}
+                                                                onClose={() => setActiveRowId(null)}
+                                                            />
+                                                        )}
                                                     </TableCell>
                                                     <TableCell>
                                                         <Input
@@ -727,10 +877,7 @@ export function DirectDeliveryDialog({
                                     <Truck className="h-4 w-4" />
                                 )}
                                 <span className="font-semibold">
-                                    {showPreview 
-                                        ? (editingDeliveryId ? "Save & View" : "Create DC")
-                                        : (editingDeliveryId ? "Preview & Save" : "Preview & Create")
-                                    }
+                                    {editingDeliveryId ? "Save Changes" : "Create DC"}
                                 </span>
                             </Button>
                         </div>

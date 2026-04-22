@@ -115,7 +115,7 @@ const navigationItems: NavigationItem[] = [
     roles: [ROLES.PURCHASE_OFFICER],
   },
   {
-    label: "Approved Requests",
+    label: "Requests",
     href: "/dashboard/purchase/requests",
     icon: CheckCircle,
     roles: [ROLES.PURCHASE_OFFICER],

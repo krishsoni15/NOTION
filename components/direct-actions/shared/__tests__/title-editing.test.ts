@@ -19,9 +19,9 @@ function createMockItem(
     customTitle: customTitle || undefined,
     status: "draft",
     createdDate: Date.now(),
-    createdBy: "test-user",
+    createdBy: "test-user" as any,
     isDirect: true,
-    rawData: {},
+    rawData: {} as any,
   };
 }
 

@@ -13,7 +13,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { toast } from "sonner";
 import { BulkDeliveryDialog } from "@/components/purchase/bulk-delivery-dialog";
@@ -48,6 +49,7 @@ import {
     Mail,
     Send,
     MessageCircle,
+    Ban,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
@@ -208,13 +210,20 @@ interface PendingPOViewProps {
 
 /* ─────────────── Main Component ─────────────── */
 export function PendingPODialog({ onBack, onViewPO, onCreateDirectPO, requests: propRequests }: PendingPOViewProps) {
-    const fetchedRequests = useQuery(api.requests.getPurchaseRequestsByStatus, propRequests ? "skip" : { status: "pending_po" });
+    const fetchedRequests = useQuery(api.requests.getPurchaseRequestsByStatus, propRequests ? "skip" : {});
     const allRequests = propRequests || fetchedRequests;
     const vendors = useQuery(api.vendors.getAllVendors);
     const allPOs = useQuery(api.purchaseOrders.getAllPurchaseOrders);
     const updateLastTalkDate = useMutation(api.requests.updateLastTalkDate);
     const updateLastTalkText = useMutation(api.requests.updateLastTalkText);
     const updateCommittedDate = useMutation(api.requests.updateCommittedDate);
+    const closePurchaseRequest = useMutation(api.requests.closePurchaseRequest);
+    const reopenPurchaseRequest = useMutation(api.requests.reopenPurchaseRequest);
+
+    const [closeConfirmGroup, setCloseConfirmGroup] = useState<any | null>(null);
+    const [reopenConfirmGroup, setReopenConfirmGroup] = useState<any | null>(null);
+    const [closeNotes, setCloseNotes] = useState("");
+    const [reopenNotes, setReopenNotes] = useState("");
 
 
     // Bulk delivery dialog state
@@ -229,6 +238,7 @@ export function PendingPODialog({ onBack, onViewPO, onCreateDirectPO, requests: 
     const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
     const [filterSite, setFilterSite] = useState<string[]>([]);
     const [timeFilter, setTimeFilter] = useState("all");
+    const [statusFilter, setStatusFilter] = useState("all"); // all, pending, unsigned, rejected
 
     // Pagination
     const [currentPage, setCurrentPage] = useState(1);
@@ -263,7 +273,7 @@ export function PendingPODialog({ onBack, onViewPO, onCreateDirectPO, requests: 
 
     /* Pending items */
     const pendingItems = useMemo(
-        () => (allRequests ?? []).filter((r) => r.status === "pending_po"),
+        () => (allRequests ?? []).filter((r) => r.status === "pending_po" || r.status === "sign_pending" || r.status === "sign_rejected" || r.status === "po_rejected"),
         [allRequests]
     );
 
@@ -384,8 +394,19 @@ export function PendingPODialog({ onBack, onViewPO, onCreateDirectPO, requests: 
                 return true;
             });
         }
+
+        if (statusFilter !== "all") {
+            result = result.filter((g) => {
+                if (statusFilter === "pending") return g.firstItem.status === "pending_po";
+                if (statusFilter === "unsigned") return g.firstItem.status === "sign_pending";
+                if (statusFilter === "rejected") return g.firstItem.status === "sign_rejected";
+                if (statusFilter === "closed") return g.firstItem.status === "po_rejected";
+                return true;
+            });
+        }
+
         return result;
-    }, [groups, search, filterSite, timeFilter, poExpiryMap]);
+    }, [groups, search, filterSite, timeFilter, statusFilter, poExpiryMap]);
 
     /* Pagination */
     const totalItems = filtered.length;
@@ -538,6 +559,38 @@ export function PendingPODialog({ onBack, onViewPO, onCreateDirectPO, requests: 
         window.open(`mailto:${vendorEmail}?subject=${subject}&body=${body}`);
     };
 
+    /* ── Close PO ── */
+    const handleConfirmClose = async () => {
+        if (!closeConfirmGroup) return;
+        const toastId = toast.loading("Closing PO...");
+        try {
+            const requestIds = closeConfirmGroup.items.map((i: any) => i._id);
+            await Promise.all(requestIds.map((id: Id<"requests">) => closePurchaseRequest({ requestId: id, notes: closeNotes.trim() || undefined })));
+            toast.success("PO closed successfully", { id: toastId });
+            setCloseConfirmGroup(null);
+            setCloseNotes("");
+        } catch (err: any) {
+            console.error("Failed to close PO:", err);
+            toast.error(err.message || "Failed to close PO", { id: toastId });
+        }
+    };
+
+    /* ── Reopen PO ── */
+    const handleConfirmReopen = async () => {
+        if (!reopenConfirmGroup) return;
+        const toastId = toast.loading("Reopening PO...");
+        try {
+            const requestIds = reopenConfirmGroup.items.map((i: any) => i._id);
+            await Promise.all(requestIds.map((id: Id<"requests">) => reopenPurchaseRequest({ requestId: id, notes: reopenNotes.trim() || undefined })));
+            toast.success("PO reopened successfully", { id: toastId });
+            setReopenConfirmGroup(null);
+            setReopenNotes("");
+        } catch (err: any) {
+            console.error("Failed to reopen PO:", err);
+            toast.error(err.message || "Failed to reopen PO", { id: toastId });
+        }
+    };
+
     /* ── Render ── */
     return (
         <div className="space-y-4">
@@ -608,6 +661,56 @@ export function PendingPODialog({ onBack, onViewPO, onCreateDirectPO, requests: 
                                                 <Check className="h-4 w-4" />
                                             </div>
                                             Last 30 Days
+                                        </CommandItem>
+                                    </CommandGroup>
+                                </CommandList>
+                            </Command>
+                        </PopoverContent>
+                    </Popover>
+                </div>
+
+                {/* Status Filter */}
+                <div className="flex-1 sm:flex-none sm:w-[150px]">
+                    <Popover>
+                        <PopoverTrigger asChild>
+                            <Button variant="outline" className="w-full justify-between h-9 sm:h-10">
+                                {statusFilter === "all" ? "All Status" : statusFilter === "unsigned" ? "Unsigned" : statusFilter === "rejected" ? "Rejected Sign" : "Signed PO"}
+                                <Filter className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                            </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-[180px] p-0" align="start">
+                            <Command>
+                                <CommandList>
+                                    <CommandGroup>
+                                        <CommandItem onSelect={() => setStatusFilter("all")} className="font-medium">
+                                            <div className={cn("mr-2 flex h-4 w-4 items-center justify-center rounded-sm border", statusFilter === "all" ? "bg-primary text-primary-foreground border-primary" : "opacity-50 [&_svg]:invisible")}>
+                                                <Check className="h-4 w-4" />
+                                            </div>
+                                            All Status
+                                        </CommandItem>
+                                        <CommandItem onSelect={() => setStatusFilter("unsigned")}>
+                                            <div className={cn("mr-2 flex h-4 w-4 items-center justify-center rounded-sm border", statusFilter === "unsigned" ? "bg-primary text-primary-foreground border-primary" : "opacity-50 [&_svg]:invisible")}>
+                                                <Check className="h-4 w-4" />
+                                            </div>
+                                            Unsigned
+                                        </CommandItem>
+                                        <CommandItem onSelect={() => setStatusFilter("rejected")}>
+                                            <div className={cn("mr-2 flex h-4 w-4 items-center justify-center rounded-sm border", statusFilter === "rejected" ? "bg-primary text-primary-foreground border-primary" : "opacity-50 [&_svg]:invisible")}>
+                                                <Check className="h-4 w-4" />
+                                            </div>
+                                            Rejected Sign
+                                        </CommandItem>
+                                        <CommandItem onSelect={() => setStatusFilter("pending")}>
+                                            <div className={cn("mr-2 flex h-4 w-4 items-center justify-center rounded-sm border", statusFilter === "pending" ? "bg-primary text-primary-foreground border-primary" : "opacity-50 [&_svg]:invisible")}>
+                                                <Check className="h-4 w-4" />
+                                            </div>
+                                            Signed PO
+                                        </CommandItem>
+                                        <CommandItem onSelect={() => setStatusFilter("closed")}>
+                                            <div className={cn("mr-2 flex h-4 w-4 items-center justify-center rounded-sm border", statusFilter === "closed" ? "bg-primary text-primary-foreground border-primary" : "opacity-50 [&_svg]:invisible")}>
+                                                <Check className="h-4 w-4" />
+                                            </div>
+                                            Closed
                                         </CommandItem>
                                     </CommandGroup>
                                 </CommandList>
@@ -696,8 +799,10 @@ export function PendingPODialog({ onBack, onViewPO, onCreateDirectPO, requests: 
                                 const lastTalkDate = (firstItem as any)?.lastTalkDate ?? null;
                                 const committedDate = (firstItem as any)?.committedDate ?? null;
 
+                                const isClosed = firstItem.status === "po_rejected";
+
                                 return (
-                                    <div key={key} className="rounded-xl border bg-card shadow-sm hover:shadow-md transition-shadow overflow-hidden">
+                                    <div key={key} className={cn("rounded-xl border shadow-sm hover:shadow-md transition-shadow overflow-hidden", isClosed ? "bg-red-50/30 border-red-100 dark:bg-red-950/10 dark:border-red-900/30 opacity-75" : "bg-card")}>
                                         {/* Card Header */}
                                         <div className="flex items-center justify-between px-5 py-3 border-b bg-muted/20">
                                             <div className="flex items-center gap-3">
@@ -709,18 +814,31 @@ export function PendingPODialog({ onBack, onViewPO, onCreateDirectPO, requests: 
                                                     )}
                                                     <span className="text-xs text-muted-foreground ml-2">Req #{requestNumber}</span>
                                                 </div>
+                                                {firstItem.status === "sign_pending" && (
+                                                    <Badge variant="outline" className="bg-orange-500/10 text-orange-600 border-orange-500/20 text-[10px] px-2">Unsigned</Badge>
+                                                )}
+                                                {firstItem.status === "sign_rejected" && (
+                                                    <Badge variant="outline" className="bg-red-500/10 text-red-600 border-red-500/20 text-[10px] px-2">Rejected Sign</Badge>
+                                                )}
+                                                {firstItem.status === "pending_po" && (
+                                                    <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20 text-[10px] px-2">Signed PO</Badge>
+                                                )}
                                                 {hasMultiple && (
                                                     <Badge className="bg-blue-500/10 text-blue-500 border-blue-500/20 text-[10px] px-2 gap-1">
                                                         <Layers className="h-3 w-3" />{items.length} items
                                                     </Badge>
                                                 )}
                                             </div>
-                                            <div className="flex items-center gap-2">
-                                                {poNumber && (
+                                            <div className="flex items-center gap-2 flex-wrap">
+                                                {/* View PO — show for all non-closed when PO exists */}
+                                                {poNumber && !isClosed && (
+                                                    <Button size="sm" variant="outline" onClick={() => onViewPO(poNumber, firstItem._id)} className="h-7 text-xs px-2.5 gap-1 border-blue-500/30 text-blue-500 hover:bg-blue-500/10 hover:border-blue-500">
+                                                        <Eye className="h-3 w-3" /> View PO
+                                                    </Button>
+                                                )}
+                                                {/* Available + Send — only for Signed PO */}
+                                                {poNumber && firstItem.status === "pending_po" && (
                                                     <>
-                                                        <Button size="sm" variant="outline" onClick={() => onViewPO(poNumber, firstItem._id)} className="h-7 text-xs px-2.5 gap-1 border-blue-500/30 text-blue-500 hover:bg-blue-500/10 hover:border-blue-500">
-                                                            <Eye className="h-3 w-3" /> View PO
-                                                        </Button>
                                                         <Button size="sm" variant="outline" onClick={() => handleOpenAvailable(group)} className="h-7 text-xs px-2.5 gap-1 border-emerald-500/30 text-emerald-600 hover:bg-emerald-500/10 hover:border-emerald-500">
                                                             <CheckCircle className="h-3 w-3" /> Available
                                                         </Button>
@@ -732,19 +850,35 @@ export function PendingPODialog({ onBack, onViewPO, onCreateDirectPO, requests: 
                                                             </DropdownMenuTrigger>
                                                             <DropdownMenuContent align="end" className="w-40">
                                                                 <DropdownMenuItem onClick={() => handleShareWhatsApp(group)} className="gap-2 cursor-pointer text-sm">
-                                                                    <MessageCircle className="h-4 w-4 text-green-500" />
-                                                                    WhatsApp
+                                                                    <MessageCircle className="h-4 w-4 text-green-500" /> WhatsApp
                                                                 </DropdownMenuItem>
                                                                 <DropdownMenuItem onClick={() => handleShareEmail(group)} className="gap-2 cursor-pointer text-sm">
-                                                                    <Mail className="h-4 w-4 text-blue-500" />
-                                                                    Email
+                                                                    <Mail className="h-4 w-4 text-blue-500" /> Email
                                                                 </DropdownMenuItem>
                                                             </DropdownMenuContent>
                                                         </DropdownMenu>
                                                     </>
                                                 )}
+                                                {/* Close / Unclose */}
+                                                {!isClosed ? (
+                                                    <Button size="sm" variant="outline" onClick={() => setCloseConfirmGroup(group)} className="h-7 text-xs px-2.5 gap-1 border-red-500/30 text-red-600 hover:bg-red-500/10 hover:border-red-500 dark:text-red-400">
+                                                        <Ban className="h-3 w-3" /> Close
+                                                    </Button>
+                                                ) : (
+                                                    <Button size="sm" variant="outline" onClick={() => setReopenConfirmGroup(group)} className="h-7 text-xs px-2.5 gap-1 border-orange-500/30 text-orange-600 hover:bg-orange-500/10 hover:border-orange-500 dark:text-orange-400">
+                                                        <RefreshCw className="h-3 w-3" /> Unclose
+                                                    </Button>
+                                                )}
                                             </div>
                                         </div>
+
+                                        {/* Closed banner */}
+                                        {isClosed && (
+                                            <div className="mx-4 mb-3 flex items-center gap-2 rounded-md border border-red-200 bg-red-50 dark:bg-red-950/30 dark:border-red-800/40 px-3 py-1.5">
+                                                <Ban className="h-3.5 w-3.5 text-red-500 shrink-0" />
+                                                <span className="text-xs font-medium text-red-600 dark:text-red-400">This PO has been closed. No further actions available.</span>
+                                            </div>
+                                        )}
 
                                         {/* Card Body — CRM style */}
                                         <div className="px-5 py-4 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
@@ -868,9 +1002,10 @@ export function PendingPODialog({ onBack, onViewPO, onCreateDirectPO, requests: 
                                     const lastTalkDate = (firstItem as any)?.lastTalkDate ?? null;
                                     const committedDate = (firstItem as any)?.committedDate ?? null;
                                     const poc = (firstItem as any)?.creator?.fullName ?? "—";
+                                    const isClosed = firstItem.status === "po_rejected";
 
                                     return (
-                                        <div key={key} className="group hover:bg-muted/20 transition-colors border-b last:border-0 border-border">
+                                        <div key={key} className={cn("group hover:bg-muted/20 transition-colors border-b last:border-0 border-border", isClosed ? "bg-red-50/50 dark:bg-red-950/20 opacity-75" : "")}>
                                             <div className="grid grid-cols-[1fr_120px_120px_250px_130px_130px] items-center min-h-[64px]">
 
                                                 {/* Vendor */}
@@ -931,7 +1066,21 @@ export function PendingPODialog({ onBack, onViewPO, onCreateDirectPO, requests: 
                                                 {/* Source — PO # */}
                                                 <div className="px-3 py-2.5 border-r h-full flex flex-col justify-center">
                                                     <p className="text-[13px] font-mono font-medium">{poNumber ? `#${poNumber}` : "—"}</p>
-                                                    <p className="text-[10px] text-muted-foreground mt-0.5">Req #{requestNumber}</p>
+                                                    <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                                                        <span className="text-[10px] text-muted-foreground mr-1">Req #{requestNumber}</span>
+                                                        {firstItem.status === "sign_pending" && (
+                                                            <Badge variant="outline" className="bg-orange-500/10 text-orange-600 border-orange-500/20 text-[9px] px-1.5 py-0 h-4">Unsigned</Badge>
+                                                        )}
+                                                        {firstItem.status === "sign_rejected" && (
+                                                            <Badge variant="outline" className="bg-red-500/10 text-red-600 border-red-500/20 text-[9px] px-1.5 py-0 h-4">Rejected Sign</Badge>
+                                                        )}
+                                                        {firstItem.status === "pending_po" && (
+                                                            <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20 text-[9px] px-1.5 py-0 h-4">Signed PO</Badge>
+                                                        )}
+                                                        {firstItem.status === "po_rejected" && (
+                                                            <Badge variant="outline" className="bg-red-500/10 text-red-600 border-red-500/20 text-[9px] px-1.5 py-0 h-4">Closed</Badge>
+                                                        )}
+                                                    </div>
                                                 </div>
 
                                                 {/* Since — created date */}
@@ -951,11 +1100,15 @@ export function PendingPODialog({ onBack, onViewPO, onCreateDirectPO, requests: 
 
                                                 {/* Actions */}
                                                 <div className="px-3 py-2.5 h-full flex flex-col justify-center gap-1.5">
-                                                    {poNumber && (
+                                                    {/* View PO — all non-closed when PO exists */}
+                                                    {poNumber && !isClosed && (
+                                                        <Button size="sm" variant="outline" onClick={() => onViewPO(poNumber, firstItem._id)} className="h-7 text-xs px-2.5 gap-1 border-blue-500/30 text-blue-500 hover:bg-blue-500/10 hover:border-blue-500 w-full">
+                                                            <Eye className="h-3 w-3" /> View PO
+                                                        </Button>
+                                                    )}
+                                                    {/* Available + Send — only for Signed PO */}
+                                                    {poNumber && firstItem.status === "pending_po" && (
                                                         <>
-                                                            <Button size="sm" variant="outline" onClick={() => onViewPO(poNumber, firstItem._id)} className="h-7 text-xs px-2.5 gap-1 border-blue-500/30 text-blue-500 hover:bg-blue-500/10 hover:border-blue-500 w-full">
-                                                                <Eye className="h-3 w-3" /> View PO
-                                                            </Button>
                                                             <Button size="sm" variant="outline" onClick={() => handleOpenAvailable(group)} className="h-7 text-xs px-2.5 gap-1 border-emerald-500/30 text-emerald-600 hover:bg-emerald-500/10 hover:border-emerald-500 w-full">
                                                                 <CheckCircle className="h-3 w-3" /> Available
                                                             </Button>
@@ -967,16 +1120,24 @@ export function PendingPODialog({ onBack, onViewPO, onCreateDirectPO, requests: 
                                                                 </DropdownMenuTrigger>
                                                                 <DropdownMenuContent align="end" className="w-40">
                                                                     <DropdownMenuItem onClick={() => handleShareWhatsApp(group)} className="gap-2 cursor-pointer text-sm">
-                                                                        <MessageCircle className="h-4 w-4 text-green-500" />
-                                                                        WhatsApp
+                                                                        <MessageCircle className="h-4 w-4 text-green-500" /> WhatsApp
                                                                     </DropdownMenuItem>
                                                                     <DropdownMenuItem onClick={() => handleShareEmail(group)} className="gap-2 cursor-pointer text-sm">
-                                                                        <Mail className="h-4 w-4 text-blue-500" />
-                                                                        Email
+                                                                        <Mail className="h-4 w-4 text-blue-500" /> Email
                                                                     </DropdownMenuItem>
                                                                 </DropdownMenuContent>
                                                             </DropdownMenu>
                                                         </>
+                                                    )}
+                                                    {/* Close / Unclose */}
+                                                    {!isClosed ? (
+                                                        <Button size="sm" variant="outline" onClick={() => setCloseConfirmGroup(group)} className="h-7 text-xs px-2.5 gap-1 border-red-500/30 text-red-600 hover:bg-red-500/10 hover:border-red-500 w-full dark:text-red-400">
+                                                            <Ban className="h-3 w-3" /> Close
+                                                        </Button>
+                                                    ) : (
+                                                        <Button size="sm" variant="outline" onClick={() => setReopenConfirmGroup(group)} className="h-7 text-xs px-2.5 gap-1 border-orange-500/30 text-orange-600 hover:bg-orange-500/10 hover:border-orange-500 w-full dark:text-orange-400">
+                                                            <RefreshCw className="h-3 w-3" /> Unclose
+                                                        </Button>
                                                     )}
                                                 </div>
                                             </div>
@@ -1022,6 +1183,54 @@ export function PendingPODialog({ onBack, onViewPO, onCreateDirectPO, requests: 
                     poNumber={bulkDeliveryData.poNumber}
                 />
             )}
+            {/* Close PO Confirm Dialog */}
+            <Dialog open={!!closeConfirmGroup} onOpenChange={(open) => !open && setCloseConfirmGroup(null)}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Confirm Close PO</DialogTitle>
+                        <DialogDescription>
+                            Are you sure you want to close this PO? It will remain visible but marked as Closed. You can unclose it later if needed.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="py-2">
+                        <textarea
+                            value={closeNotes}
+                            onChange={(e) => setCloseNotes(e.target.value)}
+                            placeholder="Reason for closing (optional)..."
+                            className="w-full min-h-[90px] p-2 rounded-md border bg-background text-sm resize-y"
+                        />
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => { setCloseConfirmGroup(null); setCloseNotes(""); }}>Cancel</Button>
+                        <Button variant="destructive" onClick={handleConfirmClose}>Confirm Close</Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Reopen PO Confirm Dialog */}
+            <Dialog open={!!reopenConfirmGroup} onOpenChange={(open) => !open && setReopenConfirmGroup(null)}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Reopen PO</DialogTitle>
+                        <DialogDescription>
+                            This will reopen the closed PO and set it back to "Rejected Sign" status so it can be processed again.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="py-2">
+                        <textarea
+                            value={reopenNotes}
+                            onChange={(e) => setReopenNotes(e.target.value)}
+                            placeholder="Reason for reopening (optional)..."
+                            className="w-full min-h-[90px] p-2 rounded-md border bg-background text-sm resize-y"
+                        />
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => { setReopenConfirmGroup(null); setReopenNotes(""); }}>Cancel</Button>
+                        <Button onClick={handleConfirmReopen}>Confirm Reopen</Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
         </div>
     );
 }

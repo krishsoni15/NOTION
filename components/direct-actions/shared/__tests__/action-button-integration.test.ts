@@ -32,7 +32,7 @@ function createMockDirectActionItem(
       createdAt: Date.now(),
       updatedAt: Date.now(),
       createdBy: "user-123" as any,
-    },
+    } as any,
   };
 }
 

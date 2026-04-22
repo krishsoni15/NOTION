@@ -2087,17 +2087,18 @@ export const updatePurchaseRequestStatus = mutation({
     }
 
     // Validate status transitions
+    // Allow pending_po, recheck, ready_for_cc etc.
     const validTransitions: Record<string, string[]> = {
-      recheck: ["ready_for_cc", "rejected", "ready_for_po", "ready_for_delivery", "delivery_stage"],
-      ready_for_cc: ["cc_pending", "cc_rejected", "ready_for_po", "delivery_stage", "ready_for_delivery"],
-      cc_pending: ["cc_approved", "cc_rejected", "ready_for_cc"],
-      cc_approved: ["ready_for_po"],
-      cc_rejected: ["ready_for_cc"],
-      ready_for_po: ["pending_po", "delivery_stage", "ready_for_delivery"],
+      recheck: ["ready_for_cc", "rejected", "ready_for_po", "ready_for_delivery", "delivery_stage", "rejected_po"],
+      ready_for_cc: ["cc_pending", "cc_rejected", "ready_for_po", "delivery_stage", "ready_for_delivery", "rejected_po"],
+      cc_pending: ["cc_approved", "cc_rejected", "ready_for_cc", "rejected_po"],
+      cc_approved: ["ready_for_po", "rejected_po"],
+      cc_rejected: ["ready_for_cc", "rejected_po"],
+      ready_for_po: ["pending_po", "delivery_stage", "ready_for_delivery", "rejected_po"],
       pending_po: ["ready_for_delivery", "rejected_po"],
       rejected_po: ["ready_for_po"],
-      ready_for_delivery: ["delivered"],
-      delivery_stage: ["delivered", "ready_for_delivery"],
+      ready_for_delivery: ["delivered", "rejected_po"],
+      delivery_stage: ["delivered", "ready_for_delivery", "rejected_po"],
     };
 
     const currentStatus = request.status;
@@ -2611,7 +2612,7 @@ export const createDirectCCRequest = mutation({
     const allCCs = await ctx.db.query("costComparisons").collect();
     const ccCount = allCCs.length + 1; // This will be the next CC number
     const standardizedId = `CC-${ccCount.toString().padStart(3, '0')}`;
-    
+
     await ctx.db.insert("request_notes", {
       requestNumber: `DIRECT-${standardizedId}`,
       userId: currentUser._id,
@@ -2623,5 +2624,80 @@ export const createDirectCCRequest = mutation({
     });
 
     return requestId;
+  },
+});
+
+export const closePurchaseRequest = mutation({
+  args: {
+    requestId: v.id("requests"),
+    notes: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const currentUser = await getCurrentUser(ctx);
+    if (currentUser.role !== "purchase_officer" && currentUser.role !== "manager") {
+      throw new ConvexError("Unauthorized: Only purchase officers and managers can close PO requests");
+    }
+
+    const request = await ctx.db.get(args.requestId);
+    if (!request) {
+      throw new ConvexError("Request not found");
+    }
+
+    await ctx.db.patch(args.requestId, {
+      status: "rejected_po",
+    });
+
+    const noteText = args.notes ? `Closed PO: ${args.notes}` : `PO Closed manually`;
+
+    await ctx.db.insert("request_notes", {
+      requestNumber: request.requestNumber,
+      userId: currentUser._id,
+      role: currentUser.role,
+      content: noteText,
+      type: "log",
+      createdAt: Date.now(),
+    });
+
+    // Cancel related PO if it exists
+    const po = await ctx.db
+      .query("purchaseOrders")
+      .withIndex("by_request_id", (q) => q.eq("requestId", args.requestId))
+      .first();
+
+    if (po && po.status !== "cancelled" && po.status !== "delivered") {
+      await ctx.db.patch(po._id, {
+        status: "cancelled",
+      });
+    }
+  },
+});
+
+export const reopenPurchaseRequest = mutation({
+  args: {
+    requestId: v.id("requests"),
+    notes: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const currentUser = await getCurrentUser(ctx);
+    if (currentUser.role !== "purchase_officer" && currentUser.role !== "manager") {
+      throw new ConvexError("Unauthorized");
+    }
+
+    const request = await ctx.db.get(args.requestId);
+    if (!request) throw new ConvexError("Request not found");
+    if (request.status !== "rejected_po") throw new ConvexError("Request is not closed");
+
+    // Reopen to sign_rejected so it goes back to pending signing
+    await ctx.db.patch(args.requestId, { status: "sign_rejected" });
+
+    const noteText = args.notes ? `PO Reopened: ${args.notes}` : `PO Reopened manually`;
+    await ctx.db.insert("request_notes", {
+      requestNumber: request.requestNumber,
+      userId: currentUser._id,
+      role: currentUser.role,
+      content: noteText,
+      type: "log",
+      createdAt: Date.now(),
+    });
   },
 });

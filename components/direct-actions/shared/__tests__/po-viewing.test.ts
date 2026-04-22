@@ -19,13 +19,13 @@ function createMockPOItem(
     customTitle: "Test PO",
     status,
     createdDate: Date.now(),
-    createdBy: "test-user",
+    createdBy: "test-user" as any,
     isDirect: true,
     rawData: {
       poNumber,
       status,
       itemDescription: "Test Item",
-    },
+    } as any,
   };
 }
 
@@ -33,14 +33,16 @@ function createMockPOItem(
 export const poViewingTests = {
   "Should extract PO number from item": () => {
     const item = createMockPOItem("001");
-    const poNumber = item.rawData?.poNumber || item.displayId;
+    const rawData = item.rawData as any;
+    const poNumber = rawData?.poNumber || item.displayId;
     if (poNumber !== "001") throw new Error(`Expected PO number 001, got ${poNumber}`);
   },
 
   "Should extract PO number from displayId if not in rawData": () => {
     const item = createMockPOItem("002");
-    item.rawData.poNumber = undefined;
-    const poNumber = item.rawData?.poNumber || item.displayId;
+    (item.rawData as any).poNumber = undefined;
+    const rawData = item.rawData as any;
+    const poNumber = rawData?.poNumber || item.displayId;
     if (poNumber !== "PO-002") throw new Error(`Expected PO-002, got ${poNumber}`);
   },
 
@@ -89,7 +91,7 @@ export const poViewingTests = {
 
   "Should preserve PO item description": () => {
     const item = createMockPOItem("009");
-    if (item.rawData?.itemDescription !== "Test Item") {
+    if ((item.rawData as any)?.itemDescription !== "Test Item") {
       throw new Error("Item description should be preserved");
     }
   },
@@ -110,7 +112,7 @@ export const poViewingTests = {
   "Should have rawData for PO viewing": () => {
     const item = createMockPOItem("012");
     if (!item.rawData) throw new Error("rawData should exist");
-    if (!item.rawData.poNumber) throw new Error("poNumber should exist in rawData");
+    if (!(item.rawData as any).poNumber) throw new Error("poNumber should exist in rawData");
   },
 
   "Should handle multiple PO items": () => {
@@ -128,12 +130,12 @@ export const poViewingTests = {
 
   "Should maintain PO data integrity": () => {
     const item = createMockPOItem("016");
-    const originalPoNumber = item.rawData?.poNumber;
+    const originalPoNumber = (item.rawData as any)?.poNumber;
     const originalStatus = item.status;
 
     // Simulate viewing (should not modify data)
     const viewedItem = { ...item };
-    if (viewedItem.rawData?.poNumber !== originalPoNumber) {
+    if ((viewedItem.rawData as any)?.poNumber !== originalPoNumber) {
       throw new Error("PO number should not change");
     }
     if (viewedItem.status !== originalStatus) {

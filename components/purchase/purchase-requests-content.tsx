@@ -39,6 +39,8 @@ import { ConfirmDeliveryDialog } from "@/components/requests/confirm-delivery-di
 import { PaginationControls } from "@/components/ui/pagination-controls";
 import { Table2, X } from "lucide-react";
 import { PendingPODialog } from "./pending-po-dialog";
+import { DirectCCSetupDialog } from "./direct-cc-setup-dialog";
+import { DirectDeliveryDialog } from "./direct-delivery-dialog";
 
 // Enhanced status configuration with better visual hierarchy
 const statusConfig: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline"; icon: any; color: string }> = {
@@ -91,6 +93,8 @@ export function PurchaseRequestsContent() {
   const [pdfPreviewPoNumber, setPdfPreviewPoNumber] = useState<string | null>(null);
   const [pdfPreviewRequestId, setPdfPreviewRequestId] = useState<string | null>(null);
   const [showPendingPODialog, setShowPendingPODialog] = useState(false);
+  const [showDirectCCDialog, setShowDirectCCDialog] = useState(false);
+  const [showDirectDCDialog, setShowDirectDCDialog] = useState(false);
 
   // Pagination State
   const [currentPage, setCurrentPage] = useState(1);
@@ -628,7 +632,6 @@ export function PurchaseRequestsContent() {
               </Button>
             </div>
 
-            {/* Row 2: Status Filter and Action Buttons */}
             <div className="flex gap-2 items-center">
               {/* Status Filter */}
               <div className="flex-1 sm:flex-none sm:w-[250px]">
@@ -737,36 +740,57 @@ export function PurchaseRequestsContent() {
                     </PopoverContent>
                   </Popover>
                 ) : (
-                  <Button
-                    variant="outline"
-                    className="w-full justify-between h-9 sm:h-10 opacity-50"
-                    disabled
-                  >
+                  <Button variant="outline" className="w-full justify-between h-9 sm:h-10 opacity-50" disabled>
                     Filter by status
                     <Filter className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                   </Button>
                 )}
               </div>
 
+              {/* Pending PO Button - Left side after filter */}
               <Button
                 variant="outline"
                 onClick={() => setShowPendingPODialog(true)}
                 className={cn(
-                  "h-9 sm:h-10 transition-all",
-                  "border-amber-500/60 text-amber-600 hover:bg-amber-50 hover:text-amber-700 hover:border-amber-500 dark:hover:bg-amber-900/20 dark:text-amber-400 dark:border-amber-500/50"
+                  "h-9 sm:h-10 transition-all ml-1",
+                  "border-amber-500/60 text-amber-600 hover:bg-amber-50 hover:text-amber-700 hover:border-amber-500 dark:hover:bg-amber-900/20 dark:text-amber-400 dark:border-amber-500/50 flex-shrink-0"
                 )}
               >
                 <Clock className="h-4 w-4 mr-2" />
                 Pending PO
               </Button>
 
-              <Button
-                onClick={handleOpenDirectPO}
-                className="bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white shadow-lg hover:shadow-xl transition-all duration-200 h-9 sm:h-10 ml-auto"
-              >
-                <Zap className="h-4 w-4 mr-2" />
-                Create Direct PO
-              </Button>
+              {/* Direct Action Buttons - Pushed to the right side */}
+              <div className="flex items-center gap-2 flex-wrap ml-auto">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowDirectCCDialog(true)}
+                  className="h-9 sm:h-10 gap-1.5 border-violet-500/40 text-violet-600 hover:bg-violet-500/10 hover:border-violet-500 dark:text-violet-400"
+                >
+                  <FileText className="h-4 w-4" />
+                  Direct CC
+                </Button>
+
+                <Button
+                  onClick={handleOpenDirectPO}
+                  size="sm"
+                  className="h-9 sm:h-10 gap-1.5 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white shadow-sm hover:shadow-md transition-all duration-200"
+                >
+                  <Zap className="h-4 w-4" />
+                  Direct PO
+                </Button>
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowDirectDCDialog(true)}
+                  className="h-9 sm:h-10 gap-1.5 border-emerald-500/40 text-emerald-600 hover:bg-emerald-500/10 hover:border-emerald-500 dark:text-emerald-400"
+                >
+                  <Truck className="h-4 w-4" />
+                  Direct DC
+                </Button>
+              </div>
             </div>
           </div>
 
@@ -942,6 +966,18 @@ export function PurchaseRequestsContent() {
         onOpenChange={(open) => { if (!open) { setPdfPreviewPoNumber(null); setPdfPreviewRequestId(null); } }}
         poNumber={pdfPreviewPoNumber}
         requestId={pdfPreviewRequestId}
+      />
+
+      {/* Direct CC Dialog */}
+      <DirectCCSetupDialog
+        open={showDirectCCDialog}
+        onOpenChange={setShowDirectCCDialog}
+      />
+
+      {/* Direct DC Dialog */}
+      <DirectDeliveryDialog
+        open={showDirectDCDialog}
+        onOpenChange={setShowDirectDCDialog}
       />
     </>
   );

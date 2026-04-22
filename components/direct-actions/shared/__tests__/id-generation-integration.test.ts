@@ -465,7 +465,7 @@ export const concurrentCreationTests = {
   },
 
   "Should handle rapid sequential creation without conflicts": () => {
-    const createdItems = [];
+    const createdItems: { _id: string; createdAt: number }[] = [];
     
     // Simulate rapid creation
     for (let i = 0; i < 10; i++) {

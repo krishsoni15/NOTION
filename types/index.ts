@@ -70,8 +70,7 @@ export type RequestStatus =
   | "direct_po"
   | "ordered"
   | "out_for_delivery"
-  | "delivery_stage"
-  | "po_rejected";
+  | "delivery_stage";
 
 export interface RequestItem {
   name: string;

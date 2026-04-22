@@ -98,12 +98,19 @@ export function DirectActionsSection({
     setResetEditingState(() => resetCallback);
 
     switch (item.type) {
-      case "cc":
-        if (item.requestId) {
-          setSelectedCCRequestId(item.requestId);
+      case "cc": {
+        // Use item.requestId first; fall back to rawData.requestId (for direct CCs)
+        const reqId = item.requestId ?? (item.rawData as any)?.requestId;
+        if (reqId) {
+          setSelectedCCRequestId(reqId);
           setCCDialogOpen(true);
+        } else {
+          // Truly direct CC with no request — open the DirectCC setup dialog
+          setDirectCCSetupOpen(true);
+          resetCallback();
         }
         break;
+      }
       case "dc":
         // For direct DCs, open the Direct Delivery dialog in edit mode
         if (item.id) {
@@ -195,38 +202,30 @@ export function DirectActionsSection({
 
   return (
     <>
-      <Card>
+      <div className="rounded-2xl border bg-card overflow-hidden">
         {showHeader && (
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-4">
+          <div className="flex items-center justify-between px-5 py-4 border-b bg-muted/30">
             <div>
-              <CardTitle>Direct Actions</CardTitle>
-              <CardDescription>
-                Manage Cost Comparisons, Delivery Challans, and Purchase Orders
-              </CardDescription>
+              <h3 className="text-sm font-semibold">Direct Actions</h3>
+              <p className="text-[11px] text-muted-foreground mt-0.5">Manage Cost Comparisons, Delivery Challans &amp; Purchase Orders</p>
             </div>
             {showCreateButton && (
               <ClientWrapper fallback={<Button size="sm" disabled>Loading...</Button>}>
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
-                    <Button size="sm" className="gap-2">
-                      <Plus className="h-4 w-4" />
+                    <Button size="sm" className="gap-1.5 h-8 text-xs">
+                      <Plus className="h-3.5 w-3.5" />
                       Create
                     </Button>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-56">
-                    <DropdownMenuItem
-                      onClick={handleCreateCC}
-                      className="gap-2 cursor-pointer"
-                    >
+                  <DropdownMenuContent align="end" className="w-52">
+                    <DropdownMenuItem onClick={handleCreateCC} className="gap-2 cursor-pointer py-2.5">
                       <div>
                         <div className="font-medium text-sm">Cost Comparison</div>
                         <div className="text-xs text-muted-foreground">Compare vendor quotes</div>
                       </div>
                     </DropdownMenuItem>
-                    <DropdownMenuItem
-                      onClick={handleCreateDirectDelivery}
-                      className="gap-2 cursor-pointer"
-                    >
+                    <DropdownMenuItem onClick={handleCreateDirectDelivery} className="gap-2 cursor-pointer py-2.5">
                       <div>
                         <div className="font-medium text-sm">Direct Delivery</div>
                         <div className="text-xs text-muted-foreground">Create dispatch record</div>
@@ -236,10 +235,10 @@ export function DirectActionsSection({
                 </DropdownMenu>
               </ClientWrapper>
             )}
-          </CardHeader>
+          </div>
         )}
 
-        <CardContent className="space-y-4">
+        <div className="p-4 space-y-4">
           {/* Filters */}
           <DirectActionsFilters filters={filters} onFiltersChange={setFilters} />
 
@@ -256,8 +255,8 @@ export function DirectActionsSection({
                 : "No records found"
             }
           />
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
       {/* Dialogs */}
       <ClientWrapper>

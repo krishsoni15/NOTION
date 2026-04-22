@@ -4,12 +4,11 @@
  * Direct CC Setup Dialog
  *
  * Step 1 of creating a Cost Comparison without a request.
- * Collects: Item Name, Description, Quantity, Unit, Notes
- * On submit → creates a real request record → opens the full CostComparisonDialog
+ * Item Name field has live inventory suggestions — clicking one auto-fills all fields.
  */
 
-import { useState } from "react";
-import { useMutation } from "convex/react";
+import { useState, useRef, useEffect } from "react";
+import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import {
   Dialog,
@@ -24,7 +23,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { ArrowRight, Loader2 } from "lucide-react";
+import { ArrowRight, Loader2, Package, Zap } from "lucide-react";
+import { cn } from "@/lib/utils";
 import type { Id } from "@/convex/_generated/dataModel";
 import { CostComparisonDialog } from "./cost-comparison-dialog";
 
@@ -40,12 +40,32 @@ export function DirectCCSetupDialog({ open, onOpenChange }: DirectCCSetupDialogP
   const [unit, setUnit] = useState("");
   const [notes, setNotes] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const suggestionRef = useRef<HTMLDivElement>(null);
 
   // After creating the request, hold its ID and open the CC dialog
   const [ccRequestId, setCCRequestId] = useState<Id<"requests"> | null>(null);
   const [ccDialogOpen, setCCDialogOpen] = useState(false);
 
   const createDirectCCRequest = useMutation(api.requests.createDirectCCRequest);
+  const inventoryItems = useQuery(api.inventory.getAllInventoryItems, {});
+
+  // Filtered suggestions based on typed name
+  const suggestions = (inventoryItems ?? []).filter((inv) =>
+    itemName.trim().length > 0 &&
+    inv.itemName.toLowerCase().includes(itemName.toLowerCase())
+  );
+
+  // Close suggestions on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (suggestionRef.current && !suggestionRef.current.contains(e.target as Node)) {
+        setShowSuggestions(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
 
   const reset = () => {
     setItemName("");
@@ -53,6 +73,15 @@ export function DirectCCSetupDialog({ open, onOpenChange }: DirectCCSetupDialogP
     setQuantity("");
     setUnit("");
     setNotes("");
+    setShowSuggestions(false);
+  };
+
+  const handleSelectSuggestion = (inv: any) => {
+    setItemName(inv.itemName);
+    setDescription(inv.description || inv.specification || "");
+    setUnit(inv.unit || "");
+    // Keep quantity empty so user fills it
+    setShowSuggestions(false);
   };
 
   const handleSubmit = async () => {
@@ -71,7 +100,6 @@ export function DirectCCSetupDialog({ open, onOpenChange }: DirectCCSetupDialogP
         notes: notes.trim() || undefined,
       });
 
-      // Close this dialog, open the full CC dialog with the new request
       onOpenChange(false);
       reset();
       setCCRequestId(requestId);
@@ -86,27 +114,72 @@ export function DirectCCSetupDialog({ open, onOpenChange }: DirectCCSetupDialogP
   return (
     <>
       <Dialog open={open} onOpenChange={(v) => { if (!isSubmitting) { onOpenChange(v); if (!v) reset(); } }}>
-        <DialogContent className="sm:max-w-[480px]">
+        <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>
-            <DialogTitle>Create Cost Comparison</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              <div className="h-7 w-7 rounded-lg bg-violet-500/10 flex items-center justify-center">
+                <Zap className="h-4 w-4 text-violet-500" />
+              </div>
+              Create Cost Comparison
+            </DialogTitle>
             <DialogDescription>
-              Enter item details to start a cost comparison
+              Enter item details — or pick from inventory to auto-fill
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-4 py-2">
-            <div className="space-y-1.5">
+          <div className="space-y-4 py-1">
+
+            {/* ── Item Name with suggestions ── */}
+            <div className="space-y-1.5 relative" ref={suggestionRef}>
               <Label htmlFor="dc-item">Item Name</Label>
               <Input
                 id="dc-item"
                 value={itemName}
-                onChange={(e) => setItemName(e.target.value)}
+                onChange={(e) => { setItemName(e.target.value); setShowSuggestions(true); }}
+                onFocus={() => itemName.trim() && setShowSuggestions(true)}
                 placeholder="e.g. Cement, Steel Rod, MCB"
                 disabled={isSubmitting}
                 autoFocus
+                autoComplete="off"
               />
+
+              {/* Dropdown suggestions */}
+              {showSuggestions && suggestions.length > 0 && (
+                <div className="absolute z-50 top-full mt-1 left-0 right-0 rounded-xl border bg-popover shadow-xl overflow-hidden">
+                  <div className="px-2 py-1.5 text-[10px] text-muted-foreground font-semibold uppercase tracking-wider border-b bg-muted/40">
+                    Inventory — click to auto-fill
+                  </div>
+                  <div className="max-h-52 overflow-y-auto">
+                    {suggestions.map((inv) => (
+                      <button
+                        key={inv._id}
+                        type="button"
+                        onMouseDown={(e) => { e.preventDefault(); handleSelectSuggestion(inv); }}
+                        className="w-full flex items-start gap-3 px-3 py-2.5 hover:bg-muted/60 transition-colors text-left"
+                      >
+                        <div className="h-8 w-8 rounded-lg bg-violet-500/10 flex items-center justify-center shrink-0 mt-0.5">
+                          <Package className="h-4 w-4 text-violet-500" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium leading-snug truncate">{inv.itemName}</p>
+                          <p className="text-[11px] text-muted-foreground truncate">
+                            {inv.description || inv.specification || "No description"}
+                            {inv.unit && <> · <span className="font-medium">{inv.unit}</span></>}
+                            {(inv.centralStock ?? 0) > 0 && (
+                              <span className="ml-1.5 text-emerald-500 font-semibold">
+                                ({inv.centralStock} in stock)
+                              </span>
+                            )}
+                          </p>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
 
+            {/* ── Description ── */}
             <div className="space-y-1.5">
               <Label htmlFor="dc-desc">Description</Label>
               <Input
@@ -118,6 +191,7 @@ export function DirectCCSetupDialog({ open, onOpenChange }: DirectCCSetupDialogP
               />
             </div>
 
+            {/* ── Quantity + Unit ── */}
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label htmlFor="dc-qty">Quantity</Label>
@@ -144,6 +218,7 @@ export function DirectCCSetupDialog({ open, onOpenChange }: DirectCCSetupDialogP
               </div>
             </div>
 
+            {/* ── Notes ── */}
             <div className="space-y-1.5">
               <Label htmlFor="dc-notes">
                 Notes <span className="text-muted-foreground text-xs">(optional)</span>
@@ -160,17 +235,11 @@ export function DirectCCSetupDialog({ open, onOpenChange }: DirectCCSetupDialogP
           </div>
 
           <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => { onOpenChange(false); reset(); }}
-              disabled={isSubmitting}
-            >
+            <Button variant="outline" onClick={() => { onOpenChange(false); reset(); }} disabled={isSubmitting}>
               Cancel
             </Button>
             <Button onClick={handleSubmit} disabled={isSubmitting} className="gap-2">
-              {isSubmitting
-                ? <Loader2 className="h-4 w-4 animate-spin" />
-                : <ArrowRight className="h-4 w-4" />}
+              {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />}
               Continue to CC
             </Button>
           </DialogFooter>
@@ -181,10 +250,7 @@ export function DirectCCSetupDialog({ open, onOpenChange }: DirectCCSetupDialogP
       {ccRequestId && (
         <CostComparisonDialog
           open={ccDialogOpen}
-          onOpenChange={(v) => {
-            setCCDialogOpen(v);
-            if (!v) setCCRequestId(null);
-          }}
+          onOpenChange={(v) => { setCCDialogOpen(v); if (!v) setCCRequestId(null); }}
           requestId={ccRequestId}
         />
       )}

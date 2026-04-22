@@ -7,10 +7,8 @@
 
 import {
   combineDirectActions,
-  filterDirectActions,
-  sortByDate,
-  formatEntityId,
 } from "../data-fetcher";
+import { filterDirectActions, sortByDate } from "../utils";
 import { resetGlobalIDCache, getGlobalIDCache } from "../id-cache";
 import { resetGlobalMemoizationCaches, getGlobalFilterCache, getGlobalSortCache } from "../memoization";
 import type { DirectActionFilters } from "../types";
@@ -20,11 +18,13 @@ function createMockCC(id: string, createdAt: number, status: string = "draft") {
   return {
     _id: id,
     createdAt,
+    updatedAt: createdAt,
     status,
     itemName: `Item ${id}`,
     ccTitle: `CC Title ${id}`,
     createdBy: "test-user",
-  };
+    vendorQuotes: [],
+  } as any;
 }
 
 function createMockPO(id: string, createdAt: number, status: string = "approved") {
@@ -36,7 +36,7 @@ function createMockPO(id: string, createdAt: number, status: string = "approved"
     customTitle: `PO Title ${id}`,
     createdBy: "test-user",
     isDirect: true,
-  };
+  } as any;
 }
 
 function createMockDC(id: string, createdAt: number, status: string = "pending") {
@@ -47,7 +47,7 @@ function createMockDC(id: string, createdAt: number, status: string = "pending")
     receiverName: `Receiver ${id}`,
     customTitle: `DC Title ${id}`,
     createdBy: "test-user",
-  };
+  } as any;
 }
 
 export const performanceIntegrationTests = {

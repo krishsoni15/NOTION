@@ -20,9 +20,9 @@ function createMockItem(
     customTitle: "Test Item",
     status,
     createdDate: Date.now(),
-    createdBy: "test-user",
+    createdBy: "test-user" as any,
     isDirect: true,
-    rawData: {},
+    rawData: {} as any,
   };
 }
 

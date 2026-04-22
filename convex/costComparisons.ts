@@ -731,57 +731,66 @@ export const getAllCostComparisons = query({
       .order("desc")
       .collect();
 
-    // Fetch request and vendor details
-    const enrichedComparisons = await Promise.all(
+    // Fetch request and vendor details - handle old documents gracefully
+    const enrichedComparisons = (await Promise.all(
       costComparisons.map(async (cc) => {
-        const request = cc.requestId ? await ctx.db.get(cc.requestId) : null;
-        const vendorQuotes = await Promise.all(
-          cc.vendorQuotes.map(async (quote) => {
-            const vendor = await ctx.db.get(quote.vendorId);
-            return {
-              vendorId: quote.vendorId,
-              unitPrice: quote.unitPrice,
-              amount: quote.amount,
-              unit: quote.unit,
-              discountPercent: quote.discountPercent,
-              gstPercent: quote.gstPercent,
-              perUnitBasis: quote.perUnitBasis,
-              contact: quote.contact,
-              reference: quote.reference,
-              date: quote.date,
-              deliveryPeriod: quote.deliveryPeriod,
-              paymentTerms: quote.paymentTerms,
-              pastPerformance: quote.pastPerformance,
-              freight: quote.freight,
-              vendor: vendor
-                ? {
-                  _id: vendor._id,
-                  companyName: vendor.companyName,
-                  email: vendor.email,
-                  phone: vendor.phone,
-                  address: vendor.address,
-                }
-                : null,
-            };
-          })
-        );
+        try {
+          const request = cc.requestId ? await ctx.db.get(cc.requestId) : null;
+          const vendorQuotes = await Promise.all(
+            (cc.vendorQuotes ?? []).map(async (quote) => {
+              try {
+                const vendor = await ctx.db.get(quote.vendorId);
+                return {
+                  vendorId: quote.vendorId,
+                  unitPrice: quote.unitPrice ?? 0,
+                  amount: quote.amount,
+                  unit: quote.unit,
+                  discountPercent: quote.discountPercent,
+                  gstPercent: quote.gstPercent,
+                  perUnitBasis: quote.perUnitBasis,
+                  contact: quote.contact,
+                  reference: quote.reference,
+                  date: quote.date,
+                  deliveryPeriod: quote.deliveryPeriod,
+                  paymentTerms: quote.paymentTerms,
+                  pastPerformance: quote.pastPerformance,
+                  freight: quote.freight,
+                  vendor: vendor
+                    ? {
+                      _id: vendor._id,
+                      companyName: vendor.companyName,
+                      email: vendor.email,
+                      phone: vendor.phone,
+                      address: vendor.address,
+                    }
+                    : null,
+                };
+              } catch {
+                return null;
+              }
+            })
+          );
 
-        return {
-          ...cc,
-          request: request && "requestNumber" in request
-            ? {
-              _id: request._id,
-              requestNumber: request.requestNumber,
-              itemName: request.itemName,
-              quantity: request.quantity,
-              unit: request.unit,
-              description: request.description,
-            }
-            : null,
-          vendorQuotes,
-        };
+          return {
+            ...cc,
+            isDirectDelivery: cc.isDirectDelivery ?? false,
+            request: request && "requestNumber" in request
+              ? {
+                _id: request._id,
+                requestNumber: request.requestNumber,
+                itemName: request.itemName,
+                quantity: request.quantity,
+                unit: request.unit,
+                description: request.description,
+              }
+              : null,
+            vendorQuotes: vendorQuotes.filter(Boolean),
+          };
+        } catch {
+          return null;
+        }
       })
-    );
+    )).filter(Boolean);
 
     return enrichedComparisons;
   },

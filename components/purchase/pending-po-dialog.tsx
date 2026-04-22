@@ -273,7 +273,7 @@ export function PendingPODialog({ onBack, onViewPO, onCreateDirectPO, requests: 
 
     /* Pending items */
     const pendingItems = useMemo(
-        () => (allRequests ?? []).filter((r) => r.status === "pending_po" || r.status === "sign_pending" || r.status === "sign_rejected" || r.status === "rejected_po"),
+        () => (allRequests ?? []).filter((r) => r.status === "pending_po" || r.status === "sign_pending" || r.status === "sign_rejected" || r.status === "po_rejected"),
         [allRequests]
     );
 
@@ -400,7 +400,7 @@ export function PendingPODialog({ onBack, onViewPO, onCreateDirectPO, requests: 
                 if (statusFilter === "pending") return g.firstItem.status === "pending_po";
                 if (statusFilter === "unsigned") return g.firstItem.status === "sign_pending";
                 if (statusFilter === "rejected") return g.firstItem.status === "sign_rejected";
-                if (statusFilter === "closed") return g.firstItem.status === "rejected_po";
+                if (statusFilter === "closed") return g.firstItem.status === "po_rejected";
                 return true;
             });
         }
@@ -799,7 +799,7 @@ export function PendingPODialog({ onBack, onViewPO, onCreateDirectPO, requests: 
                                 const lastTalkDate = (firstItem as any)?.lastTalkDate ?? null;
                                 const committedDate = (firstItem as any)?.committedDate ?? null;
 
-                                const isClosed = firstItem.status === "rejected_po";
+                                const isClosed = firstItem.status === "po_rejected";
 
                                 return (
                                     <div key={key} className={cn("rounded-xl border shadow-sm hover:shadow-md transition-shadow overflow-hidden", isClosed ? "bg-red-50/30 border-red-100 dark:bg-red-950/10 dark:border-red-900/30 opacity-75" : "bg-card")}>
@@ -1002,7 +1002,7 @@ export function PendingPODialog({ onBack, onViewPO, onCreateDirectPO, requests: 
                                     const lastTalkDate = (firstItem as any)?.lastTalkDate ?? null;
                                     const committedDate = (firstItem as any)?.committedDate ?? null;
                                     const poc = (firstItem as any)?.creator?.fullName ?? "—";
-                                    const isClosed = firstItem.status === "rejected_po";
+                                    const isClosed = firstItem.status === "po_rejected";
 
                                     return (
                                         <div key={key} className={cn("group hover:bg-muted/20 transition-colors border-b last:border-0 border-border", isClosed ? "bg-red-50/50 dark:bg-red-950/20 opacity-75" : "")}>
@@ -1077,7 +1077,7 @@ export function PendingPODialog({ onBack, onViewPO, onCreateDirectPO, requests: 
                                                         {firstItem.status === "pending_po" && (
                                                             <Badge variant="outline" className="bg-emerald-500/10 text-emerald-600 border-emerald-500/20 text-[9px] px-1.5 py-0 h-4">Signed PO</Badge>
                                                         )}
-                                                        {firstItem.status === "rejected_po" && (
+                                                        {firstItem.status === "po_rejected" && (
                                                             <Badge variant="outline" className="bg-red-500/10 text-red-600 border-red-500/20 text-[9px] px-1.5 py-0 h-4">Closed</Badge>
                                                         )}
                                                     </div>

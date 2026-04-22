@@ -265,7 +265,7 @@ export function CostComparisonDialog({
           freight: q.freight,
         }))
       );
-      setIsDirectDelivery(existingCC.isDirectDelivery);
+      setIsDirectDelivery(existingCC.isDirectDelivery ?? false);
       // If there are vendor quotes, user chose external purchase
       setUseInventoryStock(existingCC.vendorQuotes.length === 0);
 

@@ -375,7 +375,7 @@ export default defineSchema({
     approvedAt: v.optional(v.number()),
     approvedBy: v.optional(v.id("users")), // Manager who approved/rejected
     counterOfferPercent: v.optional(v.number()), // Configurable user counter offer percentage
-    isDirectDelivery: v.boolean(), // If item is in inventory, can go directly to delivery
+    isDirectDelivery: v.optional(v.boolean()), // If item is in inventory, can go directly to delivery
     inventoryFulfillmentQuantity: v.optional(v.number()), // Quantity to be fulfilled from inventory in a split/mixed plan
     purchaseQuantity: v.optional(v.number()), // Quantity to buy (may be > required for extra inventory)
     createdAt: v.number(),

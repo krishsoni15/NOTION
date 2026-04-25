@@ -467,9 +467,11 @@ Notion Electronica Pvt. Ltd.`;
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent
-                className="max-w-5xl w-full h-[95vh] flex flex-col p-0 overflow-hidden border-0 shadow-2xl bg-slate-900 rounded-xl"
+                className="max-w-6xl w-full h-[95vh] flex flex-col p-0 overflow-hidden border-0 shadow-2xl bg-slate-900 rounded-xl"
                 showCloseButton={false}
             >
+                {/* Main PDF side */}
+                <div className="flex-1 flex flex-col overflow-hidden">
                 {/* Header - Compact, No Overflow */}
                 <DialogHeader className="px-2 py-2 border-b border-slate-700/50 bg-slate-800 shrink-0 overflow-hidden">
                     <div className="flex items-center gap-1.5 w-full overflow-hidden">
@@ -649,6 +651,7 @@ Notion Electronica Pvt. Ltd.`;
                         {isDownloading ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Download className="h-4 w-4 mr-1" />}
                         Download
                     </Button>
+                </div>
                 </div>
             </DialogContent>
         </Dialog>

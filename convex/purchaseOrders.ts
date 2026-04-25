@@ -233,20 +233,43 @@ export const getPurchaseOrderDetails = query({
             .collect();
 
         if (pos.length === 0) {
+            console.log(`[getPurchaseOrderDetails] No POs found for poNumber: ${args.poNumber}`);
             return null;
         }
 
+        console.log(`[getPurchaseOrderDetails] Found ${pos.length} POs for poNumber: ${args.poNumber}`);
+        console.log(`[getPurchaseOrderDetails] Filter requestId: ${args.requestId || 'none'}`);
+        console.log(`[getPurchaseOrderDetails] PO requestIds: ${pos.map(po => po.requestId || 'null').join(', ')}`);
+
         // Filter logic:
-        // 1. If requestId (singular) is provided, filter to just that item
+        // 1. If requestId (singular) is provided, TRY to filter to just that item
         // 2. If requestIds (plural) is provided, filter to any of those items
+        // 3. If filtering results in no POs, fall back to showing all POs with that poNumber
+        //    (this handles cases where requestId linkage is missing or incorrect)
+        const originalPosCount = pos.length;
+        
         if (args.requestId) {
-            pos = pos.filter(po => po.requestId === args.requestId);
+            const filtered = pos.filter(po => po.requestId === args.requestId);
+            console.log(`[getPurchaseOrderDetails] Filtered by requestId: ${filtered.length} matches`);
+            // Only apply filter if we found matching POs, otherwise show all
+            if (filtered.length > 0) {
+                pos = filtered;
+            } else {
+                console.log(`[getPurchaseOrderDetails] No matches for requestId, showing all ${originalPosCount} POs`);
+            }
         } else if (args.requestIds && args.requestIds.length > 0) {
-            // Convert to Set for faster lookup if needed, but array.includes is fine for small lists
-            pos = pos.filter(po => po.requestId && args.requestIds!.includes(po.requestId));
+            const filtered = pos.filter(po => po.requestId && args.requestIds!.includes(po.requestId));
+            console.log(`[getPurchaseOrderDetails] Filtered by requestIds: ${filtered.length} matches`);
+            // Only apply filter if we found matching POs, otherwise show all
+            if (filtered.length > 0) {
+                pos = filtered;
+            } else {
+                console.log(`[getPurchaseOrderDetails] No matches for requestIds, showing all ${originalPosCount} POs`);
+            }
         }
 
         if (pos.length === 0) {
+            console.log(`[getPurchaseOrderDetails] No POs after filtering - this should not happen!`);
             return null;
         }
 

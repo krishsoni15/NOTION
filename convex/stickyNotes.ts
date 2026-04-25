@@ -190,6 +190,11 @@ export const create = mutation({
     positionY: v.optional(v.number()),
     width: v.optional(v.number()),
     height: v.optional(v.number()),
+    // Task extensions
+    priority: v.optional(v.union(v.literal("high"), v.literal("medium"), v.literal("low"))),
+    dueDate: v.optional(v.number()),
+    linkedEntityId: v.optional(v.string()),
+    linkedEntityType: v.optional(v.union(v.literal("cc"), v.literal("dc"), v.literal("po"))),
   },
   handler: async (ctx, args) => {
     const userId = await getAuthUserId(ctx);
@@ -227,6 +232,11 @@ export const create = mutation({
       positionY: args.positionY,
       width: args.width,
       height: args.height,
+      priority: args.priority,
+      dueDate: args.dueDate,
+      linkedEntityId: args.linkedEntityId,
+      linkedEntityType: args.linkedEntityType,
+      acceptedStatus: args.assignedTo === currentUser._id ? "seen" : "pending",
       isCompleted: false,
       isDeleted: false,
       reminderTriggered: false,
@@ -239,14 +249,14 @@ export const create = mutation({
     if (args.assignedTo !== currentUser._id) {
       await ctx.db.insert("notifications", {
         userId: args.assignedTo,
-        title: "New Sticky Note Assigned",
-        message: `${currentUser.fullName} assigned you a new sticky note: "${args.title}"`,
+        title: "New Task Assigned",
+        message: `${currentUser.fullName} assigned you a new task: "${args.title}"`,
         type: "assignment",
         isRead: false,
-        link: "/dashboard?sticky-notes=true", // Query param to trigger opening sticky notes
+        link: "/dashboard?tasks=true", // Query param to trigger opening sticky notes
         metadata: {
           entityId: noteId,
-          entityType: "stickyNote",
+          entityType: "task",
         },
         createdAt: now,
       });
@@ -284,6 +294,11 @@ export const update = mutation({
     positionY: v.optional(v.number()),
     width: v.optional(v.number()),
     height: v.optional(v.number()),
+    // Task extensions
+    priority: v.optional(v.union(v.literal("high"), v.literal("medium"), v.literal("low"))),
+    dueDate: v.optional(v.number()),
+    linkedEntityId: v.optional(v.string()),
+    linkedEntityType: v.optional(v.union(v.literal("cc"), v.literal("dc"), v.literal("po"))),
   },
   handler: async (ctx, args) => {
     const userId = await getAuthUserId(ctx);
@@ -318,7 +333,11 @@ export const update = mutation({
       args.content !== undefined ||
       args.color !== undefined ||
       args.reminderAt !== undefined ||
-      args.checklistItems !== undefined;
+      args.checklistItems !== undefined ||
+      args.priority !== undefined ||
+      args.dueDate !== undefined ||
+      args.linkedEntityId !== undefined ||
+      args.linkedEntityType !== undefined;
 
     // For position/size updates: Allow anyone who can view the note
     if (isOnlyPositionUpdate && !hasContentUpdate) {
@@ -333,7 +352,7 @@ export const update = mutation({
     }
 
     // Update note
-    await ctx.db.patch(args.noteId, {
+    const patchData: any = {
       ...(args.title !== undefined && { title: args.title }),
       ...(args.content !== undefined && { content: args.content }),
       ...(args.color !== undefined && { color: args.color }),
@@ -346,8 +365,14 @@ export const update = mutation({
       ...(args.positionY !== undefined && { positionY: args.positionY }),
       ...(args.width !== undefined && { width: args.width }),
       ...(args.height !== undefined && { height: args.height }),
+      ...(args.priority !== undefined && { priority: args.priority }),
+      ...(args.dueDate !== undefined && { dueDate: args.dueDate }),
+      ...(args.linkedEntityId !== undefined && { linkedEntityId: args.linkedEntityId }),
+      ...(args.linkedEntityType !== undefined && { linkedEntityType: args.linkedEntityType }),
       updatedAt: Date.now(),
-    });
+    };
+
+    await ctx.db.patch(args.noteId, patchData);
 
     return { success: true };
   },
@@ -385,8 +410,25 @@ export const complete = mutation({
     // Update note
     await ctx.db.patch(args.noteId, {
       isCompleted: args.isCompleted,
+      completedAt: args.isCompleted ? Date.now() : undefined,
       updatedAt: Date.now(),
     });
+
+    if (args.isCompleted && note.createdBy !== currentUser._id) {
+        await ctx.db.insert("notifications", {
+            userId: note.createdBy,
+            title: "Task Completed",
+            message: `${currentUser.fullName} completed task: "${note.title}"`,
+            type: "success",
+            isRead: false,
+            link: "/dashboard?tasks=true",
+            metadata: {
+                entityId: note._id,
+                entityType: "task",
+            },
+            createdAt: Date.now(),
+        });
+    }
 
     return { success: true };
   },
@@ -509,3 +551,135 @@ export const markAllRead = mutation({
   },
 });
 
+/**
+ * Bulk complete tasks
+ */
+export const bulkComplete = mutation({
+  args: {
+    noteIds: v.array(v.id("stickyNotes")),
+  },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new ConvexError("Not authenticated");
+
+    const currentUser = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_user_id", (q) => q.eq("clerkUserId", userId))
+      .first();
+
+    if (!currentUser) throw new ConvexError("User not found");
+
+    for (const noteId of args.noteIds) {
+      const note = await ctx.db.get(noteId);
+      if (!note || note.assignedTo !== currentUser._id) continue;
+
+      await ctx.db.patch(noteId, {
+        isCompleted: true,
+        completedAt: Date.now(),
+        updatedAt: Date.now(),
+      });
+      
+      // Send notification to creator
+      if (note.createdBy !== currentUser._id) {
+        await ctx.db.insert("notifications", {
+            userId: note.createdBy,
+            title: "Task Completed",
+            message: `${currentUser.fullName} completed task: "${note.title}"`,
+            type: "success",
+            isRead: false,
+            link: "/dashboard?tasks=true",
+            metadata: {
+                entityId: note._id,
+                entityType: "task",
+            },
+            createdAt: Date.now(),
+        });
+      }
+    }
+
+    return { success: true };
+  },
+});
+
+/**
+ * Bulk assign tasks
+ */
+export const bulkAssign = mutation({
+  args: {
+    noteIds: v.array(v.id("stickyNotes")),
+    assignTo: v.id("users"),
+  },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new ConvexError("Not authenticated");
+
+    const currentUser = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_user_id", (q) => q.eq("clerkUserId", userId))
+      .first();
+
+    if (!currentUser || currentUser.role !== "manager") throw new ConvexError("Unauthorized");
+
+    for (const noteId of args.noteIds) {
+      const note = await ctx.db.get(noteId);
+      if (!note) continue;
+
+      await ctx.db.patch(noteId, {
+        assignedTo: args.assignTo,
+        acceptedStatus: args.assignTo === currentUser._id ? "seen" : "pending",
+        updatedAt: Date.now(),
+      });
+      
+      if (args.assignTo !== currentUser._id) {
+          await ctx.db.insert("notifications", {
+            userId: args.assignTo,
+            title: "New Task Assigned",
+            message: `${currentUser.fullName} assigned you a new task: "${note.title}"`,
+            type: "assignment",
+            isRead: false,
+            link: "/dashboard?tasks=true",
+            metadata: {
+              entityId: noteId,
+              entityType: "task",
+            },
+            createdAt: Date.now(),
+          });
+      }
+    }
+
+    return { success: true };
+  },
+});
+
+/**
+ * Get linked tasks
+ */
+export const getLinkedTasks = query({
+  args: {
+    linkedEntityType: v.union(v.literal("cc"), v.literal("dc"), v.literal("po")),
+    linkedEntityId: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const notes = await ctx.db
+      .query("stickyNotes")
+      .withIndex("by_linked_entity", (q) => 
+        q.eq("linkedEntityType", args.linkedEntityType).eq("linkedEntityId", args.linkedEntityId)
+      )
+      .filter((q) => q.eq(q.field("isDeleted"), false))
+      .order("desc")
+      .collect();
+      
+    // Populate users
+    return Promise.all(
+      notes.map(async (note) => {
+        const creator = await ctx.db.get(note.createdBy);
+        const assignee = await ctx.db.get(note.assignedTo);
+        return {
+          ...note,
+          creator: creator ? { _id: creator._id, fullName: creator.fullName } : null,
+          assignee: assignee ? { _id: assignee._id, fullName: assignee.fullName } : null,
+        };
+      })
+    );
+  },
+});

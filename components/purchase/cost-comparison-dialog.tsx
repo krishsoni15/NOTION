@@ -2248,6 +2248,7 @@ export function CostComparisonDialog({
                 </p>
               )
             }
+
           </div></DialogContent>
       </Dialog>
 

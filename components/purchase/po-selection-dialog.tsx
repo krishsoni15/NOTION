@@ -33,14 +33,16 @@ export function POSelectionDialog({
 
     const [hasAutoSelected, setHasAutoSelected] = useState(false);
 
+    // Determine loading state: pos is undefined when query is loading
+    const isLoading = pos === undefined;
+    const posArray = pos || [];
+
     // Auto-select if only one PDF found
     useEffect(() => {
         if (pos && !hasAutoSelected) {
             if (pos.length === 1) {
                 setHasAutoSelected(true);
                 onSelectPO(pos[0].poNumber);
-            } else if (pos.length === 0) {
-                // No POs found - handle gracefully (maybe keep open to show empty state or close)
             }
         }
     }, [pos, hasAutoSelected, onSelectPO]);
@@ -60,10 +62,13 @@ export function POSelectionDialog({
     if (!requestNumber) return null;
 
     // If loading or auto-selecting single item, show loader
-    if (!pos || (pos.length === 1 && !hasAutoSelected)) {
+    if (isLoading || (posArray.length === 1 && !hasAutoSelected)) {
         return (
             <Dialog open={!!requestNumber} onOpenChange={handleOpenChange}>
                 <DialogContent className="sm:max-w-md flex flex-col items-center justify-center min-h-[200px]">
+                    <DialogHeader className="sr-only">
+                        <DialogTitle>Loading Purchase Orders</DialogTitle>
+                    </DialogHeader>
                     <Loader2 className="h-8 w-8 animate-spin text-primary mb-4" />
                     <p className="text-sm text-muted-foreground">Fetching Purchase Orders...</p>
                 </DialogContent>
@@ -71,23 +76,33 @@ export function POSelectionDialog({
         );
     }
 
+    // Only show dialog if there are multiple POs or no POs (for empty state)
+    const shouldShowDialog = posArray.length !== 1;
+
     return (
-        <Dialog open={!!requestNumber && (pos.length > 1 || pos.length === 0)} onOpenChange={handleOpenChange}>
+        <Dialog open={!!requestNumber && shouldShowDialog} onOpenChange={handleOpenChange}>
             <DialogContent className="sm:max-w-lg">
                 <DialogHeader>
-                    <DialogTitle>Select Purchase Order</DialogTitle>
+                    <DialogTitle>
+                        {posArray.length === 0 ? "No Purchase Orders Found" : "Select Purchase Order"}
+                    </DialogTitle>
                     <DialogDescription>
-                        Multiple Purchase Orders found for Request #{requestNumber}. Select one to view its PDF.
+                        {posArray.length === 0 
+                            ? `No Purchase Orders found for Request #${requestNumber}.`
+                            : `Multiple Purchase Orders found for Request #${requestNumber}. Select one to view its PDF.`
+                        }
                     </DialogDescription>
                 </DialogHeader>
 
                 <div className="py-4 space-y-3">
-                    {pos.length === 0 ? (
+                    {posArray.length === 0 ? (
                         <div className="text-center py-8 text-muted-foreground">
-                            No Purchase Orders found for this request.
+                            <FileText className="h-12 w-12 mx-auto mb-3 opacity-20" />
+                            <p className="font-medium">No Purchase Orders found for this request.</p>
+                            <p className="text-xs mt-1">The PO may not have been created yet.</p>
                         </div>
                     ) : (
-                        pos.map((po) => (
+                        posArray.map((po) => (
                             <div
                                 key={po._id}
                                 className="flex items-center justify-between p-4 rounded-lg border bg-card hover:bg-accent/50 cursor-pointer transition-colors group"

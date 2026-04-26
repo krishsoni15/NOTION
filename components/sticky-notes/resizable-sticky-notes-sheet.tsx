@@ -149,7 +149,7 @@ export function ResizableStickyNotesSheet({ open, onOpenChange, children }: Resi
         }}
       >
         <VisuallyHidden>
-          <SheetTitle>Sticky Notes</SheetTitle>
+          <SheetTitle>Tasks</SheetTitle>
         </VisuallyHidden>
         
         {/* Resize Handle on Left Border - Only on Desktop */}

@@ -963,7 +963,7 @@ export const createMultipleMaterialRequests = mutation({
     requiredBy: v.number(),
     items: v.array(
       v.object({
-        siteId: v.id("sites"),
+        siteId: v.union(v.id("sites"), v.string()), // Allow empty string for RFQ mode
         itemName: v.string(),
         description: v.string(),
         quantity: v.number(),
@@ -981,12 +981,13 @@ export const createMultipleMaterialRequests = mutation({
       })
     ),
     orderNote: v.optional(v.string()),
+    isRFQ: v.optional(v.boolean()), // Flag to indicate this is an RFQ
   },
   handler: async (ctx, args) => {
     const currentUser = await getCurrentUser(ctx);
 
-    // Only site engineers can create requests
-    if (currentUser.role !== "site_engineer") {
+    // Site engineers can create normal requests, purchase officers can create RFQ requests
+    if (currentUser.role !== "site_engineer" && !(args.isRFQ && currentUser.role === "purchase_officer")) {
       throw new ConvexError("Unauthorized: Only site engineers can create requests");
     }
 
@@ -1017,26 +1018,56 @@ export const createMultipleMaterialRequests = mutation({
     const now = Date.now();
     const requestIds: Id<"requests">[] = [];
 
+    // For RFQ mode, get a placeholder site if needed
+    let placeholderSite: any = null;
+    if (args.isRFQ) {
+      placeholderSite = await ctx.db
+        .query("sites")
+        .withIndex("by_is_active", (q) => q.eq("isActive", true))
+        .first();
+
+      if (!placeholderSite) {
+        throw new ConvexError("No active site found. Please create a site first.");
+      }
+    }
+
     // Create all requests with the same request number
     for (let i = 0; i < args.items.length; i++) {
       const item = args.items[i];
 
-      // Verify each item's site exists and is assigned to user
-      const site = await ctx.db.get(item.siteId);
+      // Determine which siteId to use
+      let effectiveSiteId: Id<"sites">;
+
+      // For RFQ mode, use placeholder site if no site provided
+      if (args.isRFQ && (typeof item.siteId === "string" && item.siteId === "")) {
+        effectiveSiteId = placeholderSite._id;
+      } else if (typeof item.siteId === "string") {
+        // This shouldn't happen, but handle it gracefully
+        effectiveSiteId = placeholderSite._id;
+      } else {
+        effectiveSiteId = item.siteId;
+      }
+
+      // Verify site exists and is active
+      const site = await ctx.db.get(effectiveSiteId);
       if (!site || !site.isActive) {
         throw new ConvexError(`Item ${i + 1}: Site not found or inactive`);
       }
-      if (
-        !currentUser.assignedSites ||
-        !currentUser.assignedSites.includes(item.siteId)
-      ) {
-        throw new ConvexError(`Item ${i + 1}: Site not assigned to you`);
+
+      // Only check site assignment for normal requests, not RFQ
+      if (!args.isRFQ) {
+        if (
+          !currentUser.assignedSites ||
+          !currentUser.assignedSites.includes(effectiveSiteId)
+        ) {
+          throw new ConvexError(`Item ${i + 1}: Site not assigned to you`);
+        }
       }
 
       const requestId = await ctx.db.insert("requests", {
         requestNumber,
         createdBy: currentUser._id,
-        siteId: item.siteId,
+        siteId: effectiveSiteId,
         itemName: item.itemName,
         description: item.description,
         specsBrand: undefined,
@@ -1046,8 +1077,9 @@ export const createMultipleMaterialRequests = mutation({
         isUrgent: item.isUrgent,
         photos: item.photos,
         itemOrder: i + 1, // Sequential order: 1, 2, 3...
-        status: "pending",
+        status: args.isRFQ ? "ready_for_cc" : "pending", // RFQ goes directly to ready_for_cc
         notes: item.notes,
+        isRFQ: args.isRFQ || undefined, // Mark as RFQ if applicable
         createdAt: now,
         updatedAt: now,
       });
@@ -1060,7 +1092,7 @@ export const createMultipleMaterialRequests = mutation({
         requestNumber,
         userId: currentUser._id,
         role: currentUser.role,
-        status: "pending",
+        status: args.isRFQ ? "ready_for_cc" : "pending",
         type: "note",
         content: args.orderNote,
         createdAt: now,
@@ -1072,9 +1104,11 @@ export const createMultipleMaterialRequests = mutation({
       requestNumber,
       userId: currentUser._id,
       role: currentUser.role,
-      status: "pending",
+      status: args.isRFQ ? "ready_for_cc" : "pending",
       type: "log",
-      content: `Request #${requestNumber} submitted with ${args.items.length} item(s).`,
+      content: args.isRFQ
+        ? `RFQ #${requestNumber} created with ${args.items.length} item(s). Ready for Cost Comparison.`
+        : `Request #${requestNumber} submitted with ${args.items.length} item(s).`,
       createdAt: now,
     });
 

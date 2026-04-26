@@ -23,6 +23,7 @@ import {
   Package,
   ScrollText,
   Download,
+  FolderKanban,
 } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
@@ -94,6 +95,12 @@ const navigationItems: NavigationItem[] = [
     roles: [ROLES.MANAGER],
   },
   {
+    label: "Projects",
+    href: "/dashboard/project",
+    icon: FolderKanban,
+    roles: [ROLES.MANAGER],
+  },
+  {
     label: "User Management",
     href: "/dashboard/manager/users",
     icon: Users,
@@ -142,6 +149,12 @@ const navigationItems: NavigationItem[] = [
     label: "Locations",
     href: "/dashboard/locations",
     icon: Building2,
+    roles: [ROLES.PURCHASE_OFFICER],
+  },
+  {
+    label: "Projects",
+    href: "/dashboard/project",
+    icon: FolderKanban,
     roles: [ROLES.PURCHASE_OFFICER],
   },
   {

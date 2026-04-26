@@ -7,10 +7,10 @@
 "use client";
 
 import { useState, useMemo, useRef, useEffect } from "react";
-import { Check, Trash2, Edit, Clock, ListTodo, Pencil } from "lucide-react";
+import { Check, Trash2, Edit, Clock, ListTodo, Pencil, ChevronsUp, Equal, ChevronsDown, Bell } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { format } from "date-fns";
+import { format, isToday, isTomorrow, isYesterday, differenceInDays } from "date-fns";
 import type { Id } from "@/convex/_generated/dataModel";
 import { Checklist, type ChecklistItem } from "./checklist";
 import {
@@ -35,8 +35,12 @@ interface StickyNoteCardProps {
     createdAt: number;
     updatedAt: number;
     checklistItems?: ChecklistItem[];
+    assignedTo?: Id<"users">;
+    createdBy?: Id<"users">;
     creator?: { _id: Id<"users">; fullName: string } | null;
     assignee?: { _id: Id<"users">; fullName: string } | null;
+    priority?: "high" | "medium" | "low";
+    dueDate?: number;
   };
   onComplete: (noteId: Id<"stickyNotes">, isCompleted: boolean) => void;
   onDelete: (noteId: Id<"stickyNotes">) => void;
@@ -47,27 +51,10 @@ interface StickyNoteCardProps {
   isManager?: boolean;
   currentUserId?: Id<"users">;
   isFloating?: boolean;
+  isNew?: boolean;
 }
 
-const colorClasses = {
-  yellow: "bg-gradient-to-br from-yellow-50 via-yellow-50/90 to-yellow-100/70 dark:from-yellow-950/50 dark:via-yellow-900/30 dark:to-yellow-800/20 border-2 border-yellow-300/80 dark:border-yellow-700/60 text-yellow-900 dark:text-yellow-100 shadow-lg shadow-yellow-200/30 dark:shadow-yellow-900/20 hover:shadow-xl hover:shadow-yellow-400/50 dark:hover:shadow-yellow-700/40 hover:border-yellow-400/100 dark:hover:border-yellow-600/80 hover:scale-[1.02] hover:from-yellow-50 hover:via-yellow-50 hover:to-yellow-100 dark:hover:from-yellow-950/60 dark:hover:via-yellow-900/40 dark:hover:to-yellow-800/30 hover:ring-2 hover:ring-yellow-300/30 dark:hover:ring-yellow-700/30",
-  pink: "bg-gradient-to-br from-pink-50 via-pink-50/90 to-pink-100/70 dark:from-pink-950/50 dark:via-pink-900/30 dark:to-pink-800/20 border-2 border-pink-300/80 dark:border-pink-700/60 text-pink-900 dark:text-pink-100 shadow-lg shadow-pink-200/30 dark:shadow-pink-900/20 hover:shadow-xl hover:shadow-pink-400/50 dark:hover:shadow-pink-700/40 hover:border-pink-400/100 dark:hover:border-pink-600/80 hover:scale-[1.02] hover:from-pink-50 hover:via-pink-50 hover:to-pink-100 dark:hover:from-pink-950/60 dark:hover:via-pink-900/40 dark:hover:to-pink-800/30 hover:ring-2 hover:ring-pink-300/30 dark:hover:ring-pink-700/30",
-  blue: "bg-gradient-to-br from-blue-50 via-blue-50/90 to-blue-100/70 dark:from-blue-950/50 dark:via-blue-900/30 dark:to-blue-800/20 border-2 border-blue-300/80 dark:border-blue-700/60 text-blue-900 dark:text-blue-100 shadow-lg shadow-blue-200/30 dark:shadow-blue-900/20 hover:shadow-xl hover:shadow-blue-400/50 dark:hover:shadow-blue-700/40 hover:border-blue-400/100 dark:hover:border-blue-600/80 hover:scale-[1.02] hover:from-blue-50 hover:via-blue-50 hover:to-blue-100 dark:hover:from-blue-950/60 dark:hover:via-blue-900/40 dark:hover:to-blue-800/30 hover:ring-2 hover:ring-blue-300/30 dark:hover:ring-blue-700/30",
-  green: "bg-gradient-to-br from-green-50 via-green-50/90 to-green-100/70 dark:from-green-950/50 dark:via-green-900/30 dark:to-green-800/20 border-2 border-green-300/80 dark:border-green-700/60 text-green-900 dark:text-green-100 shadow-lg shadow-green-200/30 dark:shadow-green-900/20 hover:shadow-xl hover:shadow-green-400/50 dark:hover:shadow-green-700/40 hover:border-green-400/100 dark:hover:border-green-600/80 hover:scale-[1.02] hover:from-green-50 hover:via-green-50 hover:to-green-100 dark:hover:from-green-950/60 dark:hover:via-green-900/40 dark:hover:to-green-800/30 hover:ring-2 hover:ring-green-300/30 dark:hover:ring-green-700/30",
-  purple: "bg-gradient-to-br from-purple-50 via-purple-50/90 to-purple-100/70 dark:from-purple-950/50 dark:via-purple-900/30 dark:to-purple-800/20 border-2 border-purple-300/80 dark:border-purple-700/60 text-purple-900 dark:text-purple-100 shadow-lg shadow-purple-200/30 dark:shadow-purple-900/20 hover:shadow-xl hover:shadow-purple-400/50 dark:hover:shadow-purple-700/40 hover:border-purple-400/100 dark:hover:border-purple-600/80 hover:scale-[1.02] hover:from-purple-50 hover:via-purple-50 hover:to-purple-100 dark:hover:from-purple-950/60 dark:hover:via-purple-900/40 dark:hover:to-purple-800/30 hover:ring-2 hover:ring-purple-300/30 dark:hover:ring-purple-700/30",
-  orange: "bg-gradient-to-br from-orange-50 via-orange-50/90 to-orange-100/70 dark:from-orange-950/50 dark:via-orange-900/30 dark:to-orange-800/20 border-2 border-orange-300/80 dark:border-orange-700/60 text-orange-900 dark:text-orange-100 shadow-lg shadow-orange-200/30 dark:shadow-orange-900/20 hover:shadow-xl hover:shadow-orange-400/50 dark:hover:shadow-orange-700/40 hover:border-orange-400/100 dark:hover:border-orange-600/80 hover:scale-[1.02] hover:from-orange-50 hover:via-orange-50 hover:to-orange-100 dark:hover:from-orange-950/60 dark:hover:via-orange-900/40 dark:hover:to-orange-800/30 hover:ring-2 hover:ring-orange-300/30 dark:hover:ring-orange-700/30",
-};
 
-// Enhanced color classes for floating notes - more realistic sticky note appearance
-// Enhanced color classes for floating notes - premium glassmorphism look
-const floatingColorClasses = {
-  yellow: "bg-[#FFFC9B]/90 dark:bg-yellow-950/80 backdrop-blur-md border border-yellow-400/50 dark:border-yellow-700/50 text-yellow-950 dark:text-yellow-100 shadow-[0_8px_32px_rgba(0,0,0,0.12)] hover:shadow-[0_12px_40px_rgba(0,0,0,0.2)] dark:shadow-none",
-  pink: "bg-[#FFB3D9]/90 dark:bg-pink-950/80 backdrop-blur-md border border-pink-400/50 dark:border-pink-700/50 text-pink-950 dark:text-pink-100 shadow-[0_8px_32px_rgba(0,0,0,0.12)] hover:shadow-[0_12px_40px_rgba(0,0,0,0.2)] dark:shadow-none",
-  blue: "bg-[#B3D9FF]/90 dark:bg-blue-950/80 backdrop-blur-md border border-blue-400/50 dark:border-blue-700/50 text-blue-950 dark:text-blue-100 shadow-[0_8px_32px_rgba(0,0,0,0.12)] hover:shadow-[0_12px_40px_rgba(0,0,0,0.2)] dark:shadow-none",
-  green: "bg-[#B3FFB3]/90 dark:bg-green-950/80 backdrop-blur-md border border-green-400/50 dark:border-green-700/50 text-green-950 dark:text-green-100 shadow-[0_8px_32px_rgba(0,0,0,0.12)] hover:shadow-[0_12px_40px_rgba(0,0,0,0.2)] dark:shadow-none",
-  purple: "bg-[#D9B3FF]/90 dark:bg-purple-950/80 backdrop-blur-md border border-purple-400/50 dark:border-purple-700/50 text-purple-950 dark:text-purple-100 shadow-[0_8px_32px_rgba(0,0,0,0.12)] hover:shadow-[0_12px_40px_rgba(0,0,0,0.2)] dark:shadow-none",
-  orange: "bg-[#FFD9B3]/90 dark:bg-orange-950/80 backdrop-blur-md border border-orange-400/50 dark:border-orange-700/50 text-orange-950 dark:text-orange-100 shadow-[0_8px_32px_rgba(0,0,0,0.12)] hover:shadow-[0_12px_40px_rgba(0,0,0,0.2)] dark:shadow-none",
-};
 
 export function StickyNoteCard({
   note,
@@ -80,6 +67,7 @@ export function StickyNoteCard({
   isManager = false,
   currentUserId,
   isFloating = false,
+  isNew = false,
 }: StickyNoteCardProps) {
   const [isHovered, setIsHovered] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
@@ -88,25 +76,61 @@ export function StickyNoteCard({
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const cardRef = useRef<HTMLDivElement>(null);
 
-  const colorClass = isFloating ? floatingColorClasses[note.color] : colorClasses[note.color];
 
   // Check if current user is the assignee (note is assigned to them)
-  const isAssignee = currentUserId && note.assignee?._id === currentUserId;
+  // Check both the populated assignee object AND the raw assignedTo field for reliability
+  const isAssignee = currentUserId && (
+    note.assignee?._id === currentUserId ||
+    note.assignedTo === currentUserId
+  );
 
-  // Only the assigned manager can edit and delete sticky notes
-  const canEdit = isAssignee; // Only assignee can edit
-  const canDelete = isAssignee; // Only assignee can delete
+  // Check if current user created this note
+  const isSelfCreated = currentUserId && (
+    note.creator?._id === currentUserId ||
+    note.createdBy === currentUserId
+  );
+
+  // Edit: only allowed if you created the task yourself (self-assigned)
+  // If a manager assigned the task to you, you can only Mark Done — no Edit
+  const canEdit = isAssignee && isSelfCreated;
+  const canDelete = isAssignee && isSelfCreated;
 
   // Check if note has been edited (updatedAt is different from createdAt)
   const isEdited = note.updatedAt && note.createdAt && note.updatedAt > note.createdAt + 1000; // 1 second buffer for timing differences
 
-  // Generate a consistent rotation based on note ID
-  const rotation = useMemo(() => {
-    const hash = note._id.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
-    return (hash % 7) - 3; // -3 to +3 degrees
-  }, [note._id]);
+  const isOverdue = note.dueDate ? Date.now() > note.dueDate && !note.isCompleted : false;
 
-  // Load saved position from localStorage
+  // Smart relative date label
+  const formatSmartDate = (timestamp: number, showTime = false): string => {
+    const date = new Date(timestamp);
+    const timeStr = showTime ? `, ${format(date, "h:mm a")}` : "";
+    if (isToday(date)) return `Today${timeStr}`;
+    if (isTomorrow(date)) return `Tomorrow${timeStr}`;
+    if (isYesterday(date)) return `Yesterday${timeStr}`;
+    const diff = differenceInDays(date, new Date());
+    if (diff > 0 && diff <= 6) return `${format(date, "EEEE")}${timeStr}`; // e.g. "Monday"
+    return format(date, "MMM d") + timeStr;
+  };
+  const getPriorityBorder = () => {
+    switch (note.priority) {
+      case "high": return "border-l-4 border-l-red-500 border-t-border/60 border-r-border/60 border-b-border/60";
+      case "medium": return "border-l-4 border-l-orange-500 border-t-border/60 border-r-border/60 border-b-border/60";
+      case "low": return "border-l-4 border-l-blue-500 border-t-border/60 border-r-border/60 border-b-border/60";
+      default: return "border border-border/60";
+    }
+  };
+
+  const getPriorityIcon = () => {
+    switch (note.priority) {
+      case "high": return <ChevronsUp className="w-4 h-4 text-red-500" />;
+      case "medium": return <Equal className="w-4 h-4 text-orange-500" />;
+      case "low": return <ChevronsDown className="w-4 h-4 text-blue-500" />;
+      default: return null;
+    }
+  };
+
+  const colorClass = `bg-card text-card-foreground shadow-sm hover:shadow-md transition-shadow ${getPriorityBorder()}`;
+
   useEffect(() => {
     const savedPosition = localStorage.getItem(`sticky-note-pos-${note._id}`);
     if (savedPosition) {
@@ -239,7 +263,7 @@ export function StickyNoteCard({
         "flex flex-col",
         disableDrag ? "h-full w-full" : "min-h-[220px] w-full",
         disableDrag && "max-h-none",
-        disableDrag ? "cursor-default" : "cursor-move",
+        disableDrag ? "cursor-default" : "cursor-pointer",
         colorClass,
         note.isCompleted && "opacity-60",
         isDragging && "z-50 scale-105 shadow-2xl",
@@ -248,14 +272,15 @@ export function StickyNoteCard({
         !isFloating && "backdrop-blur-sm",
         isFloating && "transform-gpu", // Better performance for floating notes
         // Ensure color is maintained during drag
-        isDragging && isFloating && "!bg-inherit"
+        isDragging && isFloating && "!bg-inherit",
+        isOverdue && "shadow-red-500/20 shadow-md dark:shadow-red-900/20"
       )}
       style={{
         transform: disableDrag
           ? 'none'
           : position.x !== 0 || position.y !== 0
-            ? `translate(${position.x}px, ${position.y}px) rotate(${rotation}deg)`
-            : `rotate(${rotation}deg)`,
+            ? `translate(${position.x}px, ${position.y}px)`
+            : `none`,
         position: disableDrag || (position.x === 0 && position.y === 0) ? 'relative' : 'absolute',
         left: disableDrag || (position.x === 0 && position.y === 0) ? 'auto' : 0,
         top: disableDrag || (position.x === 0 && position.y === 0) ? 'auto' : 0,
@@ -271,16 +296,33 @@ export function StickyNoteCard({
       <div className="flex flex-col h-full min-h-0">
         {/* Content Area */}
         <div className={cn("flex-1 min-h-0", disableDrag ? "overflow-y-auto overflow-x-hidden" : "overflow-hidden")}>
-          {/* Title */}
-          <h3 className={cn(
-            "font-bold text-base mb-2 leading-tight",
-            disableDrag ? "" : "line-clamp-2",
-            note.isCompleted && "line-through decoration-2",
-            // Ensure text color matches note color theme
-            isFloating && "text-inherit"
-          )}>
-            {note.title}
-          </h3>
+          {/* Title and Status */}
+          <div className="flex items-start justify-between gap-2 mb-2">
+            <div className="flex items-start gap-2">
+              <h3 className={cn(
+                "font-bold text-base leading-tight",
+                disableDrag ? "" : "line-clamp-2",
+                note.isCompleted && "line-through decoration-2",
+                // Ensure text color matches note color theme
+                isFloating && "text-inherit"
+              )}>
+                {note.title}
+              </h3>
+              {isNew && !note.isCompleted && (
+                <div className="px-1.5 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-400 mt-0.5 whitespace-nowrap border border-blue-200 dark:border-blue-800/40 shadow-sm animate-in fade-in zoom-in duration-300">
+                  New
+                </div>
+              )}
+            </div>
+            <div className="flex gap-1.5 shrink-0 items-center mt-0.5">
+                {isOverdue && <span className="text-[9px] font-bold text-red-700 dark:text-red-300 bg-red-100 dark:bg-red-900/50 px-1.5 py-0.5 rounded uppercase tracking-wider border border-red-200 dark:border-red-800">Overdue</span>}
+                {note.priority && (
+                    <div title={`Priority: ${note.priority}`} className="flex items-center justify-center bg-muted/50 p-1 rounded-md">
+                      {getPriorityIcon()}
+                    </div>
+                )}
+            </div>
+          </div>
 
           {/* Content */}
           {note.content && note.content.trim() && (
@@ -306,17 +348,26 @@ export function StickyNoteCard({
                   }
                 }}
                 readonly={!onChecklistUpdate}
+                canAddItems={canEdit}
               />
             </div>
           )}
 
           {/* Bottom Section */}
           <div className="space-y-1.5 mt-auto">
+            {/* Due Date */}
+            {note.dueDate && (
+              <div className={cn("flex items-center gap-1.5 text-xs px-2 py-1 rounded-md bg-black/5 dark:bg-white/5 backdrop-blur-sm", isOverdue && "text-red-700 dark:text-red-300 bg-red-100/50 dark:bg-red-900/30 border border-red-200/50 dark:border-red-800/50")}>
+                <Clock className="h-3 w-3 opacity-70" />
+                <span className="font-medium opacity-80">Due: {formatSmartDate(note.dueDate)}</span>
+              </div>
+            )}
+
             {/* Reminder */}
             {note.reminderAt && (
-              <div className="flex items-center gap-1.5 text-xs px-2 py-1 rounded-md bg-black/5 dark:bg-white/5 backdrop-blur-sm">
-                <Clock className="h-3 w-3 opacity-70" />
-                <span className="font-medium opacity-80">{format(new Date(note.reminderAt), "MMM d, h:mm a")}</span>
+              <div className="flex items-center gap-1.5 text-xs px-2 py-1 rounded-md bg-purple-100/50 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 border border-purple-200/50 dark:border-purple-800/50">
+                <Bell className="h-3 w-3" />
+                <span className="font-medium">Reminder: {formatSmartDate(note.reminderAt, true)}</span>
               </div>
             )}
 
@@ -337,7 +388,7 @@ export function StickyNoteCard({
             {/* Timestamp and Edited indicator */}
             <div className="flex items-center gap-2 flex-wrap">
               <div className="text-xs opacity-50 font-medium">
-                {format(new Date(note.createdAt), "MMM d, h:mm a")}
+                {formatSmartDate(note.createdAt, true)}
               </div>
               {isEdited && (
                 <div className="flex items-center gap-1 text-xs px-2 py-0.5 rounded-md bg-blue-100/50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border border-blue-200/50 dark:border-blue-800/50">
@@ -434,7 +485,7 @@ export function StickyNoteCard({
         <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
           <AlertDialogContent>
             <AlertDialogHeader>
-              <AlertDialogTitle>Delete Sticky Note?</AlertDialogTitle>
+              <AlertDialogTitle>Delete Task?</AlertDialogTitle>
               <AlertDialogDescription>
                 Are you sure you want to delete "{note.title}"? This action cannot be undone.
               </AlertDialogDescription>

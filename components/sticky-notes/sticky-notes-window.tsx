@@ -9,6 +9,7 @@
 // Export the component
 
 import { useState, useRef, useEffect } from "react";
+import { isToday, isTomorrow, isYesterday, format, differenceInCalendarDays } from "date-fns";
 import { Plus, Search, Check, GripVertical, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -38,6 +39,8 @@ import {
   useCompleteStickyNote,
   useDeleteStickyNote,
   useMarkStickyNotesAllRead,
+  useBulkCompleteTasks,
+  useBulkAssignTasks,
 } from "@/hooks/use-sticky-notes";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
@@ -45,7 +48,8 @@ import { toast } from "sonner";
 import type { Id } from "@/convex/_generated/dataModel";
 import { useUserRole } from "@/hooks/use-user-role";
 import { ROLES } from "@/lib/auth/roles";
-import { cn, normalizeSearchQuery, matchesAnySearchQuery } from "@/lib/utils";
+import { cn } from "@/lib/utils";
+import { TaskFilters, type ViewFilter, type PriorityFilter } from "./task-filters";
 
 // Draggable Note Card Component for the window
 function DraggableNoteCard({
@@ -59,6 +63,8 @@ function DraggableNoteCard({
   isManager,
   currentUserId,
   updateNote,
+  onClick,
+  isNew,
 }: {
   note: any;
   onComplete: (noteId: any, isCompleted: boolean) => void;
@@ -70,6 +76,8 @@ function DraggableNoteCard({
   isManager: boolean;
   currentUserId: any;
   updateNote: any;
+  onClick?: () => void;
+  isNew?: boolean;
 }) {
   const [isDragging, setIsDragging] = useState(false);
   const [dragPosition, setDragPosition] = useState({ x: 0, y: 0 });
@@ -146,10 +154,15 @@ function DraggableNoteCard({
       <div
         ref={cardRef}
         className={cn(
-          "relative",
+          "relative transition-transform duration-200",
           isDragging && "opacity-50 z-50"
         )}
         onMouseDown={handleMouseDown}
+        onClick={(e) => {
+          if (onClick) {
+             onClick();
+          }
+        }}
       >
         <StickyNoteCard
           note={note}
@@ -161,6 +174,7 @@ function DraggableNoteCard({
           disableDrag={true}
           isManager={isManager}
           currentUserId={currentUserId}
+          isNew={isNew}
         />
         {/* Drag Handle */}
         <div className="drag-handle absolute top-2 right-2 cursor-grab active:cursor-grabbing z-10 p-1 rounded hover:bg-black/10 dark:hover:bg-white/10 transition-colors">
@@ -188,6 +202,7 @@ function DraggableNoteCard({
             disableDrag={true}
             isManager={isManager}
             currentUserId={currentUserId}
+            isNew={isNew}
           />
         </div>
       )}
@@ -206,45 +221,58 @@ export function StickyNotesWindow({
   onClose,
   className,
 }: StickyNotesWindowProps) {
-  const [searchQuery, setSearchQuery] = useState("");
-  const [showForm, setShowForm] = useState(false);
-  const [editingNoteId, setEditingNoteId] = useState<Id<"stickyNotes"> | null>(null);
-  const [activeTab, setActiveTab] = useState<"active" | "completed">("active");
-  const [activeFilter, setActiveFilter] = useState<"me" | "assigned">("me");
-  const [completedFilter, setCompletedFilter] = useState<"me" | "assigned">("me");
-  const [deleteNoteId, setDeleteNoteId] = useState<Id<"stickyNotes"> | null>(null);
-  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
-
   const allNotesList = useStickyNotes(true); // Get all notes
   const currentUser = useQuery(api.users.getCurrentUser);
   const userRole = useUserRole();
   const isManager = userRole === ROLES.MANAGER;
 
+  const [searchQuery, setSearchQuery] = useState("");
+  const [showForm, setShowForm] = useState(false);
+  const [editingNoteId, setEditingNoteId] = useState<Id<"stickyNotes"> | null>(null);
+  const [activeTab, setActiveTab] = useState<"active" | "completed">("active");
+  const [viewFilter, setViewFilter] = useState<ViewFilter>("me");
+  const [priorityFilter, setPriorityFilter] = useState<PriorityFilter>("all");
+  const [deleteNoteId, setDeleteNoteId] = useState<Id<"stickyNotes"> | null>(null);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+
+  // Default all users to 'All' view on open
+  useEffect(() => {
+    setViewFilter("me");
+  }, [userRole]);
+
   // Filter notes locally
   const allActiveNotes = allNotesList?.filter(note => !note.isCompleted) || [];
   const allCompletedNotes = allNotesList?.filter(note => note.isCompleted) || [];
 
-  // Filter active notes based on selected filter
-  const activeNotes = currentUser ? allActiveNotes.filter(note => {
-    if (activeFilter === "me") {
-      // Notes assigned to me (current user)
-      return note.assignee?._id === currentUser._id;
-    } else {
-      // Notes assigned to others (for managers only)
-      return note.assignee?._id && note.assignee._id !== currentUser._id;
+  // Filter notes based on selected filters
+  const filterTask = (note: any) => {
+    if (!currentUser) return false;
+    
+    // View Filter
+    if (viewFilter === "me" && note.assignee?._id !== currentUser._id && note.assignedTo !== currentUser._id) return false;
+    if (viewFilter === "assigned" && (note.creator?._id === currentUser._id ? false : true) === false) return false;
+    if (viewFilter === "assigned" && note.createdBy === currentUser._id) return false;
+    if (viewFilter === "self") {
+      // Self = tasks the current user created AND assigned to themselves
+      const isAssignedToMe = note.assignee?._id === currentUser._id || note.assignedTo === currentUser._id;
+      const isCreatedByMe = note.creator?._id === currentUser._id || note.createdBy === currentUser._id;
+      if (!isAssignedToMe || !isCreatedByMe) return false;
     }
-  }) : [];
+    if (viewFilter === "manager_assigned") {
+      // Manager assigned = assigned to me but NOT created by me
+      const isAssignedToMe = note.assignee?._id === currentUser._id || note.assignedTo === currentUser._id;
+      const isCreatedByMe = note.creator?._id === currentUser._id || note.createdBy === currentUser._id;
+      if (!isAssignedToMe || isCreatedByMe) return false;
+    }
 
-  // Filter completed notes based on selected filter
-  const completedNotes = currentUser ? allCompletedNotes.filter(note => {
-    if (completedFilter === "me") {
-      // Notes assigned to me (current user)
-      return note.assignee?._id === currentUser._id;
-    } else {
-      // Notes assigned to others (for managers only)
-      return note.assignee?._id && note.assignee._id !== currentUser._id;
-    }
-  }) : [];
+    // Priority Filter
+    if (priorityFilter !== "all" && note.priority !== priorityFilter) return false;
+
+    return true;
+  };
+
+  const activeNotes = allActiveNotes.filter(filterTask);
+  const completedNotes = allCompletedNotes.filter(filterTask);
 
   const createNote = useCreateStickyNote();
   const updateNote = useUpdateStickyNote();
@@ -252,10 +280,25 @@ export function StickyNotesWindow({
   const deleteNote = useDeleteStickyNote();
   const markAllRead = useMarkStickyNotesAllRead();
 
-  // Mark all notes as read when window opens
+  const [sessionUnreadIds, setSessionUnreadIds] = useState<Set<string>>(new Set());
+  const hasInitializedRead = useRef(false);
+
+  // Capture unread notes for session highlighting, then mark them read
   useEffect(() => {
-    markAllRead();
-  }, []);
+    if (allActiveNotes && !hasInitializedRead.current) {
+      const unreadIds = new Set<string>();
+      allActiveNotes.forEach(note => {
+        if (note.isRead === false && note.assignedTo === currentUser?._id) {
+          unreadIds.add(note._id);
+        }
+      });
+      if (unreadIds.size > 0) {
+        setSessionUnreadIds(unreadIds);
+      }
+      markAllRead();
+      hasInitializedRead.current = true;
+    }
+  }, [allActiveNotes, currentUser]);
 
   // Get note to edit
   const editingNote = editingNoteId
@@ -265,54 +308,85 @@ export function StickyNotesWindow({
   // Filter notes by search query
   const filterNotes = (notes: typeof activeNotes) => {
     if (!notes || notes.length === 0) return [];
-    if (!searchQuery.trim()) return notes;
-    const query = searchQuery.toLowerCase();
-    return notes.filter(
-      (note) =>
-        note.title.toLowerCase().includes(query) ||
-        note.content.toLowerCase().includes(query)
-    );
+    let filtered = notes;
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      filtered = notes.filter(
+        (note) =>
+          note.title.toLowerCase().includes(query) ||
+          note.content.toLowerCase().includes(query)
+      );
+    }
+    
+    // Sort new/unread notes to the top
+    return filtered.sort((a, b) => {
+      const aIsNew = sessionUnreadIds.has(a._id);
+      const bIsNew = sessionUnreadIds.has(b._id);
+      if (aIsNew && !bIsNew) return -1;
+      if (!aIsNew && bIsNew) return 1;
+      return 0;
+    });
   };
 
   const filteredActiveNotes = filterNotes(activeNotes);
   const filteredCompletedNotes = filterNotes(completedNotes);
 
-  const handleCreate = async (data: {
-    assignedTo: Id<"users">;
-    title: string;
-    content: string;
-    color: "yellow" | "pink" | "blue" | "green" | "purple" | "orange";
-    reminderAt?: number;
-    checklistItems?: any[];
-  }) => {
+  // Group notes by due date (or createdAt) for WhatsApp-style date separators
+  const getDateLabel = (timestamp: number): string => {
+    const d = new Date(timestamp);
+    if (isToday(d)) return "Today";
+    if (isTomorrow(d)) return "Tomorrow";
+    if (isYesterday(d)) return "Yesterday";
+    const diff = differenceInCalendarDays(d, new Date());
+    if (diff > 0 && diff <= 6) return format(d, "EEEE"); // e.g. Monday
+    return format(d, "MMMM d, yyyy");
+  };
+
+  type GroupedNotes = { label: string; notes: typeof filteredActiveNotes }[];
+
+  const groupNotesByDate = (notes: typeof filteredActiveNotes): GroupedNotes => {
+    const groups = new Map<string, typeof filteredActiveNotes>();
+    for (const note of notes) {
+      const ts = note.createdAt;
+      const label = getDateLabel(ts);
+      if (!groups.has(label)) groups.set(label, []);
+      groups.get(label)!.push(note);
+    }
+    // Sort: Today first, then Tomorrow, then future, then past
+    const order = ["Today", "Tomorrow", "Yesterday"];
+    return Array.from(groups.entries())
+      .sort(([a], [b]) => {
+        const ai = order.indexOf(a);
+        const bi = order.indexOf(b);
+        if (ai !== -1 && bi !== -1) return ai - bi;
+        if (ai !== -1) return -1;
+        if (bi !== -1) return 1;
+        return a.localeCompare(b);
+      })
+      .map(([label, notes]) => ({ label, notes }));
+  };
+
+  const groupedActiveNotes = groupNotesByDate(filteredActiveNotes);
+  const groupedCompletedNotes = groupNotesByDate(filteredCompletedNotes);
+
+  const handleCreate = async (data: any) => {
     try {
       await createNote(data);
-      toast.success("Sticky note created!");
+      toast.success("Task created!");
       setShowForm(false);
     } catch (error: any) {
       toast.error(error.message || "Failed to create note");
     }
   };
 
-  const handleUpdate = async (data: {
-    assignedTo: Id<"users">;
-    title: string;
-    content: string;
-    color: "yellow" | "pink" | "blue" | "green" | "purple" | "orange";
-    reminderAt?: number;
-    checklistItems?: any[];
-  }) => {
+  const handleUpdate = async (data: any) => {
     if (!editingNoteId) return;
     try {
       await updateNote({
         noteId: editingNoteId,
-        title: data.title,
-        content: data.content,
-        color: data.color,
-        reminderAt: data.reminderAt,
-        checklistItems: data.checklistItems || [],
+        ...data,
       });
-      toast.success("Sticky note updated!");
+      toast.success("Task updated!");
       setEditingNoteId(null);
       setShowForm(false);
     } catch (error: any) {
@@ -381,7 +455,7 @@ export function StickyNotesWindow({
         </div>
         <div className="flex-1 min-w-0 pr-2">
           <h1 className="text-base sm:text-lg font-bold truncate">
-            Sticky Notes
+            Tasks
           </h1>
           <p className="text-xs text-muted-foreground truncate">
             {allActiveNotes.length} active • {allCompletedNotes.length} completed
@@ -405,7 +479,7 @@ export function StickyNotesWindow({
               size="icon"
               variant="ghost"
               className="h-8 w-8 shrink-0 hover:bg-muted/80 rounded-lg transition-colors"
-              title="Close sticky notes"
+              title="Close tasks"
             >
               <X className="h-4 w-4" />
               <span className="sr-only">Close</span>
@@ -427,59 +501,45 @@ export function StickyNotesWindow({
         </div>
       </div>
 
-      {/* Content - Scrollable */}
+      {/* Scrollable area — everything scrolls together */}
       <div className="flex-1 overflow-y-auto overflow-x-hidden min-h-0 scrollbar-hide w-full">
-        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as typeof activeTab)} className="w-full h-full flex flex-col gap-0">
-          <div className="sticky top-0 z-10 bg-background/95 backdrop-blur-sm border-b border-border/50 shrink-0 px-4 pt-4 pb-2">
-            <TabsList className="w-full bg-muted/50">
-              <TabsTrigger value="active" className="data-[state=active]:bg-background flex-1">
-                Active ({allActiveNotes.length})
+        {/* Tabs + Filters inside scroll */}
+        <div className="px-4 pt-3 pb-2 space-y-3 border-b border-border/50">
+          <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as typeof activeTab)} className="w-full">
+            <TabsList className="w-full bg-muted/40 p-1 border border-border/50 rounded-lg">
+              <TabsTrigger value="active" className="data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:text-foreground flex-1 rounded-md transition-all font-medium text-muted-foreground">
+                Active ({activeNotes.length})
               </TabsTrigger>
-              <TabsTrigger value="completed" className="data-[state=active]:bg-background flex-1">
-                Completed ({allCompletedNotes.length})
+              <TabsTrigger value="completed" className="data-[state=active]:bg-background data-[state=active]:shadow-sm data-[state=active]:text-foreground flex-1 rounded-md transition-all font-medium text-muted-foreground">
+                Completed ({completedNotes.length})
               </TabsTrigger>
             </TabsList>
-          </div>
+          </Tabs>
+          <TaskFilters
+            viewFilter={viewFilter}
+            setViewFilter={setViewFilter}
+            priorityFilter={priorityFilter}
+            setPriorityFilter={setPriorityFilter}
+            isManager={isManager}
+          />
+        </div>
+
+        {/* Notes via Tabs */}
+        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as typeof activeTab)} className="w-full">
 
           <TabsContent value="active" className="mt-0 w-full flex-1 min-h-0 flex flex-col data-[state=active]:flex">
-            {/* Filter Buttons for Active Tab */}
-            <div className="px-4 pt-3 pb-2 border-b border-border/30 shrink-0">
-              <div className="flex items-center gap-2">
-                <Button
-                  variant={activeFilter === "me" ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => setActiveFilter("me")}
-                  className="h-8 text-xs"
-                >
-                  Me
-                </Button>
-                {isManager && (
-                  <Button
-                    variant={activeFilter === "assigned" ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => setActiveFilter("assigned")}
-                    className="h-8 text-xs"
-                  >
-                    Assigned
-                  </Button>
-                )}
-              </div>
-            </div>
-
             {filteredActiveNotes.length === 0 ? (
               <div className="text-center py-16 w-full px-4">
                 <div className="inline-flex h-16 w-16 rounded-full bg-muted/50 items-center justify-center mb-4">
                   <Plus className="h-8 w-8 text-muted-foreground" />
                 </div>
                 <p className="text-lg font-semibold mb-2">
-                  {activeFilter === "me" ? "No active notes for you" : "No assigned notes"}
+                  No active tasks found
                 </p>
                 <p className="text-sm text-muted-foreground mb-4">
-                  {activeFilter === "me"
-                    ? "Create your first sticky note to get started!"
-                    : "Notes you assign to others will appear here."}
+                  Adjust filters or create a new task.
                 </p>
-                {activeFilter === "me" && (
+                {viewFilter === "me" && (
                   <Button
                     onClick={() => {
                       setEditingNoteId(null);
@@ -494,27 +554,42 @@ export function StickyNotesWindow({
               </div>
             ) : (
               <div className="flex-1 min-h-0 overflow-y-auto px-4 py-4">
-                <div className="flex flex-col gap-4 w-full">
-                  {filteredActiveNotes.map((note) => (
-                    <DraggableNoteCard
-                      key={note._id}
-                      note={note}
-                      onComplete={handleComplete}
-                      onDelete={handleDelete}
-                      onEdit={handleEdit}
-                      onDragOut={handleDragOut}
-                      onChecklistUpdate={async (noteId, items) => {
-                        try {
-                          await updateNote({ noteId, checklistItems: items });
-                        } catch (error: any) {
-                          toast.error("Failed to update checklist");
-                        }
-                      }}
-                      isCreator={isCreator(note)}
-                      isManager={isManager}
-                      currentUserId={currentUserId}
-                      updateNote={updateNote}
-                    />
+                <div className="flex flex-col gap-0 w-full">
+                  {groupedActiveNotes.map(({ label, notes }) => (
+                    <div key={label} className="mb-2">
+                      {/* Date Group Header */}
+                      <div className="flex items-center gap-3 my-3 sticky top-0 z-10">
+                        <div className="flex-1 h-px bg-border/50" />
+                        <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest px-3 py-1 rounded-full bg-muted/60 border border-border/40 shadow-sm backdrop-blur-sm">
+                          {label}
+                        </span>
+                        <div className="flex-1 h-px bg-border/50" />
+                      </div>
+                      <div className="flex flex-col gap-3">
+                        {notes.map((note) => (
+                          <DraggableNoteCard
+                            key={note._id}
+                            note={note}
+                            onComplete={handleComplete}
+                            onDelete={handleDelete}
+                            onEdit={handleEdit}
+                            onDragOut={handleDragOut}
+                            onChecklistUpdate={async (noteId, items) => {
+                              try {
+                                await updateNote({ noteId, checklistItems: items });
+                              } catch (error: any) {
+                                toast.error("Failed to update checklist");
+                              }
+                            }}
+                            isCreator={isCreator(note)}
+                            isManager={isManager}
+                            currentUserId={currentUserId}
+                            updateNote={updateNote}
+                            isNew={sessionUnreadIds.has(note._id)}
+                          />
+                        ))}
+                      </div>
+                    </div>
                   ))}
                 </div>
               </div>
@@ -522,70 +597,54 @@ export function StickyNotesWindow({
           </TabsContent>
 
           <TabsContent value="completed" className="mt-0 w-full flex-1 min-h-0 flex flex-col data-[state=active]:flex">
-            {/* Filter Buttons for Completed Tab */}
-            <div className="px-4 pt-3 pb-2 border-b border-border/30 shrink-0">
-              <div className="flex items-center gap-2">
-                <Button
-                  variant={completedFilter === "me" ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => setCompletedFilter("me")}
-                  className="h-8 text-xs"
-                >
-                  Me
-                </Button>
-                {isManager && (
-                  <Button
-                    variant={completedFilter === "assigned" ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => setCompletedFilter("assigned")}
-                    className="h-8 text-xs"
-                  >
-                    Assigned
-                  </Button>
-                )}
-              </div>
-            </div>
-
             {filteredCompletedNotes.length === 0 ? (
               <div className="text-center py-16 w-full px-4">
                 <div className="inline-flex h-16 w-16 rounded-full bg-muted/50 items-center justify-center mb-4">
                   <Check className="h-8 w-8 text-muted-foreground" />
                 </div>
                 <p className="text-lg font-semibold mb-2">
-                  {completedFilter === "me" ? "No completed notes for you" : "No completed assigned notes"}
+                  No completed tasks found
                 </p>
                 <p className="text-sm text-muted-foreground">
-                  {completedFilter === "me"
-                    ? "Completed notes assigned to you will appear here."
-                    : "Completed notes you assigned to others will appear here."}
+                  Adjust filters to see more tasks.
                 </p>
               </div>
             ) : (
               <div className="flex-1 min-h-0 overflow-y-auto px-4 py-4">
-                <div className="flex flex-col gap-4 w-full">
-                  {filteredCompletedNotes.map((note) => (
-                    <DraggableNoteCard
-                      key={note._id}
-                      note={note}
-                      onComplete={handleComplete}
-                      onDelete={handleDelete}
-                      onEdit={handleEdit}
-                      onDragOut={handleDragOut}
-                      onChecklistUpdate={async (noteId, items) => {
-                        try {
-                          await updateNote({
-                            noteId,
-                            checklistItems: items.length > 0 ? items : []
-                          });
-                        } catch (error: any) {
-                          toast.error("Failed to update checklist");
-                        }
-                      }}
-                      isCreator={isCreator(note)}
-                      isManager={isManager}
-                      currentUserId={currentUserId}
-                      updateNote={updateNote}
-                    />
+                <div className="flex flex-col gap-0 w-full">
+                  {groupedCompletedNotes.map(({ label, notes }) => (
+                    <div key={label} className="mb-2">
+                      <div className="flex items-center gap-3 my-3">
+                        <div className="flex-1 h-px bg-border/50" />
+                        <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-widest px-3 py-1 rounded-full bg-muted/60 border border-border/40 shadow-sm backdrop-blur-sm">
+                          {label}
+                        </span>
+                        <div className="flex-1 h-px bg-border/50" />
+                      </div>
+                      <div className="flex flex-col gap-3">
+                        {notes.map((note) => (
+                          <DraggableNoteCard
+                            key={note._id}
+                            note={note}
+                            onComplete={handleComplete}
+                            onDelete={handleDelete}
+                            onEdit={handleEdit}
+                            onDragOut={handleDragOut}
+                            onChecklistUpdate={async (noteId, items) => {
+                              try {
+                                await updateNote({ noteId, checklistItems: items.length > 0 ? items : [] });
+                              } catch (error: any) {
+                                toast.error("Failed to update checklist");
+                              }
+                            }}
+                            isCreator={isCreator(note)}
+                            isManager={isManager}
+                            currentUserId={currentUserId}
+                            updateNote={updateNote}
+                          />
+                        ))}
+                      </div>
+                    </div>
                   ))}
                 </div>
               </div>
@@ -602,7 +661,7 @@ export function StickyNotesWindow({
         >
           <DialogHeader className="shrink-0">
             <DialogTitle>
-              {editingNoteId ? "Edit Sticky Note" : "Create Sticky Note"}
+              {editingNoteId ? "Edit Task" : "Create Task"}
             </DialogTitle>
           </DialogHeader>
           <div className="overflow-y-auto flex-1 min-h-0 pr-2 -mr-2 scrollbar-hide">
@@ -615,6 +674,8 @@ export function StickyNotesWindow({
                 reminderAt: editingNote.reminderAt,
                 assignedTo: editingNote.assignedTo,
                 checklistItems: editingNote.checklistItems,
+                priority: editingNote.priority,
+                dueDate: editingNote.dueDate,
               } : undefined}
               currentUserId={currentUserId}
               onSubmit={editingNoteId ? handleUpdate : handleCreate}
@@ -631,7 +692,7 @@ export function StickyNotesWindow({
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete Sticky Note?</AlertDialogTitle>
+            <AlertDialogTitle>Delete Task?</AlertDialogTitle>
             <AlertDialogDescription>
               {deleteNoteId && (() => {
                 const noteToDelete = allNotesList?.find(n => n._id === deleteNoteId);

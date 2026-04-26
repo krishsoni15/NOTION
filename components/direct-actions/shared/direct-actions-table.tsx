@@ -4,17 +4,26 @@ import React, { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Edit, Loader2, Check, X, Plus, Eye, FileBarChart2, Truck, ShoppingCart, Search, Package } from "lucide-react";
+import { Edit, Loader2, Check, X, Plus, Eye, FileBarChart2, Truck, ShoppingCart, Search, Package, MoreVertical, Ban } from "lucide-react";
 import type { DirectActionItem } from "./types";
 import { getStatusColor, getStatusLabel, formatDate, getEntityLabel, getActionButtonType } from "./utils";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import type { Id } from "@/convex/_generated/dataModel";
 
 interface DirectActionsTableProps {
   items: DirectActionItem[];
   isLoading?: boolean;
+  currentUser?: { role: string };
   onEdit?: (item: DirectActionItem, resetEditingState: () => void) => void;
   onView?: (item: DirectActionItem) => void;
+  onClosePO?: (poId: Id<"purchaseOrders">) => void;
   onUpdateTitle?: (itemId: string, title: string) => void;
   emptyMessage?: string;
 }
@@ -41,13 +50,16 @@ const statusStyle: Record<string, string> = {
   approved: "bg-emerald-500/10 text-emerald-600 border-emerald-500/20",
   ordered: "bg-violet-500/10 text-violet-600  border-violet-500/20",
   rejected: "bg-red-500/10    text-red-600    border-red-500/20",
+  closed: "bg-red-500/10    text-red-600    border-red-500/20",
 };
 
 export function DirectActionsTable({
   items,
   isLoading = false,
+  currentUser,
   onEdit,
   onView,
+  onClosePO,
   onUpdateTitle,
   emptyMessage = "No records found",
 }: DirectActionsTableProps) {
@@ -129,6 +141,12 @@ export function DirectActionsTable({
           const isEditing = editingId === item.id;
           const badge = statusStyle[item.status] ?? "bg-slate-500/10 text-slate-500 border-slate-500/20";
 
+          // Can close PO if: it is a PO, user is manager/purchase officer, and it's not already closed/cancelled/delivered
+          const canClosePO = 
+            item.type === "po" && 
+            (currentUser?.role === "manager" || currentUser?.role === "purchase_officer") &&
+            !["closed", "cancelled", "delivered"].includes(item.status);
+
           return (
             <div
               key={item.id}
@@ -196,29 +214,56 @@ export function DirectActionsTable({
               <p className="text-[12px] text-muted-foreground whitespace-nowrap">{formatDate(item.createdDate)}</p>
 
               {/* Action */}
-              <div className="flex justify-end">
-                {actionType === "edit" ? (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => handleAction(item)}
-                    disabled={isEditing}
-                    className="h-7 text-xs gap-1 px-2.5 text-amber-600 hover:text-amber-700 hover:bg-amber-500/10"
-                  >
-                    <Edit className="h-3.5 w-3.5" />
-                    <span className="hidden sm:inline">Edit</span>
-                  </Button>
+              <div className="flex justify-end gap-1">
+                {canClosePO ? (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="sm" className="h-7 w-7 p-0">
+                        <MoreVertical className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={() => handleAction(item)} className="gap-2">
+                        <Eye className="h-4 w-4" />
+                        View
+                      </DropdownMenuItem>
+                      <DropdownMenuItem 
+                        onClick={() => {
+                          if (confirm("Are you sure you want to close this Purchase Order? This will also close the linked request.")) {
+                            onClosePO?.(item.id as Id<"purchaseOrders">);
+                          }
+                        }} 
+                        className="gap-2 text-red-600 focus:text-red-600"
+                      >
+                        <Ban className="h-4 w-4" />
+                        Close PO
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 ) : (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => handleAction(item)}
-                    disabled={isEditing}
-                    className="h-7 text-xs gap-1 px-2.5 text-blue-500 hover:text-blue-600 hover:bg-blue-500/10"
-                  >
-                    <Eye className="h-3.5 w-3.5" />
-                    <span className="hidden sm:inline">View</span>
-                  </Button>
+                  actionType === "edit" ? (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleAction(item)}
+                      disabled={isEditing}
+                      className="h-7 text-xs gap-1 px-2.5 text-amber-600 hover:text-amber-700 hover:bg-amber-500/10"
+                    >
+                      <Edit className="h-3.5 w-3.5" />
+                      <span className="hidden sm:inline">Edit</span>
+                    </Button>
+                  ) : (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleAction(item)}
+                      disabled={isEditing}
+                      className="h-7 text-xs gap-1 px-2.5 text-blue-500 hover:text-blue-600 hover:bg-blue-500/10"
+                    >
+                      <Eye className="h-3.5 w-3.5" />
+                      <span className="hidden sm:inline">View</span>
+                    </Button>
+                  )
                 )}
               </div>
             </div>

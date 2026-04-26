@@ -22,6 +22,8 @@ import type * as migrations from "../migrations.js";
 import type * as notes from "../notes.js";
 import type * as notifications from "../notifications.js";
 import type * as presence from "../presence.js";
+import type * as projectItems from "../projectItems.js";
+import type * as projects from "../projects.js";
 import type * as purchaseOrders from "../purchaseOrders.js";
 import type * as requests from "../requests.js";
 import type * as setupUser from "../setupUser.js";
@@ -52,6 +54,8 @@ declare const fullApi: ApiFromModules<{
   notes: typeof notes;
   notifications: typeof notifications;
   presence: typeof presence;
+  projectItems: typeof projectItems;
+  projects: typeof projects;
   purchaseOrders: typeof purchaseOrders;
   requests: typeof requests;
   setupUser: typeof setupUser;

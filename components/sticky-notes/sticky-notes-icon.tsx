@@ -6,7 +6,7 @@
 
 "use client";
 
-import { StickyNote } from "lucide-react";
+import { ListTodo } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { usePendingReminders } from "@/hooks/use-pending-reminders";
@@ -35,9 +35,9 @@ export function StickyNotesIcon({ onClick, isActive = false, className }: Sticky
         isActive && "bg-primary/10 text-primary hover:bg-primary/20",
         className
       )}
-      aria-label={`Sticky Notes${totalCount > 0 ? ` (${totalCount} notifications)` : ""}`}
+      aria-label={`Tasks${totalCount > 0 ? ` (${totalCount} notifications)` : ""}`}
     >
-      <StickyNote className={cn("h-5 w-5", isActive && "text-primary")} />
+      <ListTodo className={cn("h-5 w-5", isActive && "text-primary")} />
       {totalCount > 0 && (
         <Badge
           variant="destructive"

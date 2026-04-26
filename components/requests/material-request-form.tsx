@@ -82,6 +82,8 @@ interface MaterialRequestFormProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   draftRequestNumber?: string | null; // If provided, edit this draft
+  isRFQMode?: boolean; // If true, this is an RFQ (Request for Quotation) flow
+  onRFQRequestCreated?: (requestId: Id<"requests">) => void; // Callback when RFQ request is created
 }
 
 interface RequestItem {
@@ -106,6 +108,8 @@ export function MaterialRequestForm({
   open,
   onOpenChange,
   draftRequestNumber,
+  isRFQMode = false,
+  onRFQRequestCreated,
 }: MaterialRequestFormProps) {
   const createMultipleRequests = useMutation(api.requests.createMultipleMaterialRequests);
   const saveAsDraft = useMutation(api.requests.saveMultipleMaterialRequestsAsDraft);
@@ -726,9 +730,11 @@ export function MaterialRequestForm({
 
     // Validate each item
     for (const item of items) {
-      // Site location validation
-      if (!item.siteId || item.siteId === "") {
-        return false;
+      // Site location validation - skip for RFQ mode
+      if (!isRFQMode) {
+        if (!item.siteId || item.siteId === "") {
+          return false;
+        }
       }
 
       // Item name validation
@@ -846,9 +852,11 @@ export function MaterialRequestForm({
       const item = items[i];
       const itemNum = i + 1;
 
-      // Site location validation
-      if (!item.siteId || item.siteId === "") {
-        return `Item ${itemNum}: Please select a site location`;
+      // Site location validation - skip for RFQ mode
+      if (!isRFQMode) {
+        if (!item.siteId || item.siteId === "") {
+          return `Item ${itemNum}: Please select a site location`;
+        }
       }
 
       // Item name validation
@@ -1074,7 +1082,7 @@ export function MaterialRequestForm({
             }
           }
           return {
-            siteId: item.siteId as Id<"sites">,
+            siteId: (item.siteId || "") as any, // Allow empty string for RFQ mode
             itemName: item.itemName.trim(),
             description: item.description.trim() || "",
             quantity: item.quantity,
@@ -1110,19 +1118,28 @@ export function MaterialRequestForm({
           requiredBy: sharedFormData.requiredBy!.getTime(),
           items: itemsWithPhotos,
           orderNote: sharedFormData.orderNote,
+          isRFQ: isRFQMode, // Mark as RFQ if in RFQ mode
         });
 
-        toast.success(
-          `Successfully created request #${result.requestNumber} with ${items.length} item${items.length > 1 ? 's' : ''}`
-        );
+        if (isRFQMode && onRFQRequestCreated && result.requestIds && result.requestIds.length > 0) {
+          // In RFQ mode, immediately trigger the callback with the first request ID
+          toast.success(`Request #${result.requestNumber} created. Opening Cost Comparison...`);
+          onRFQRequestCreated(result.requestIds[0]);
+        } else {
+          toast.success(
+            `Successfully created request #${result.requestNumber} with ${items.length} item${items.length > 1 ? 's' : ''}`
+          );
+        }
       }
 
       onOpenChange(false);
 
-      // Scroll to top after a short delay to see the new request
-      setTimeout(() => {
-        window.scrollTo({ top: 0, behavior: "smooth" });
-      }, 300);
+      // Scroll to top after a short delay to see the new request (only if not RFQ mode)
+      if (!isRFQMode) {
+        setTimeout(() => {
+          window.scrollTo({ top: 0, behavior: "smooth" });
+        }, 300);
+      }
     } catch (err: any) {
       console.error("Error creating request:", err);
       setError(err.message || "Failed to create request");
@@ -1227,11 +1244,13 @@ export function MaterialRequestForm({
                 <Package className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
               </div>
               <DialogTitle className="text-lg sm:text-xl font-bold bg-gradient-to-r from-foreground to-foreground/80 bg-clip-text text-transparent">
-                {draftRequestNumber ? (
-                  draftRequests.some(r => r.status === "rejected" || r.status === "sign_rejected")
-                    ? "Edit & Resubmit Request"
-                    : "Edit Draft Request"
-                ) : "New Material Request"}
+                {isRFQMode ? "RFQ - Request for Quotation" : (
+                  draftRequestNumber ? (
+                    draftRequests.some(r => r.status === "rejected" || r.status === "sign_rejected")
+                      ? "Edit & Resubmit Request"
+                      : "Edit Draft Request"
+                  ) : "New Material Request"
+                )}
               </DialogTitle>
             </div>
           </DialogHeader>
@@ -1697,7 +1716,8 @@ export function MaterialRequestForm({
                           <div className="space-y-2 sm:space-y-2.5">
                             <Label className="text-xs sm:text-sm font-semibold flex items-center gap-1.5">
                               <MapPin className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground" />
-                              Site Location <span className="text-destructive">*</span>
+                              Site Location {!isRFQMode && <span className="text-destructive">*</span>}
+                              {isRFQMode && <span className="text-xs text-muted-foreground font-normal">(optional)</span>}
                             </Label>
                             <Popover
                               open={siteDropdownOpen[item.id] || false}
@@ -2132,17 +2152,17 @@ export function MaterialRequestForm({
                     ? "bg-gradient-to-r from-primary to-primary/90 hover:from-primary/90 hover:to-primary"
                     : "bg-destructive text-destructive-foreground hover:bg-destructive/90 ring-destructive/20"
                     }`}
-                  title="Send request"
+                  title={isRFQMode ? "Create Cost Comparison Sheet" : "Send request"}
                 >
                   {isLoading || isUploading ? (
                     <span className="flex items-center gap-2">
                       <span className="animate-spin">⏳</span>
-                      Sending...
+                      {isRFQMode ? "Creating..." : "Sending..."}
                     </span>
                   ) : (
                     <span className="flex items-center gap-2">
                       <CheckCircle2 className="h-4 w-4" />
-                      Send Request
+                      {isRFQMode ? "Create CCS" : "Send Request"}
                     </span>
                   )}
                 </Button>
@@ -2167,7 +2187,9 @@ export function MaterialRequestForm({
               <div className="p-2.5 rounded-full bg-primary/10">
                 <CheckCircle2 className="h-6 w-6 text-primary" />
               </div>
-              <AlertDialogTitle className="text-lg sm:text-xl font-bold">Confirm & Send Request</AlertDialogTitle>
+              <AlertDialogTitle className="text-lg sm:text-xl font-bold">
+                {isRFQMode ? "Confirm & Create Cost Comparison" : "Confirm & Send Request"}
+              </AlertDialogTitle>
             </div>
             <div className="text-sm text-muted-foreground space-y-4 pt-2">
               <div className="p-4 rounded-lg bg-muted/50 border space-y-3">

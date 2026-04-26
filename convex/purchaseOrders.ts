@@ -1365,3 +1365,59 @@ export const updatePurchaseOrderTitle = mutation({
     return { success: true };
   },
 });
+
+/**
+ * Close Purchase Order
+ * Manually marks a PO and its linked request as closed
+ */
+export const closePurchaseOrder = mutation({
+  args: {
+    poId: v.id("purchaseOrders"),
+    notes: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const currentUser = await getCurrentUser(ctx);
+
+    // Only Purchase Officers and Managers can close POs
+    if (currentUser.role !== "purchase_officer" && currentUser.role !== "manager") {
+      throw new ConvexError("Unauthorized: Only purchase officers and managers can close POs");
+    }
+
+    const po = await ctx.db.get(args.poId);
+    if (!po) {
+      throw new ConvexError("Purchase Order not found");
+    }
+
+    const now = Date.now();
+
+    // 1. Update PO Status
+    await ctx.db.patch(po._id, {
+      status: "closed",
+      updatedAt: now,
+    });
+
+    // 2. Update Linked Request if exists
+    if (po.requestId) {
+      const request = await ctx.db.get(po.requestId);
+      if (request) {
+        await ctx.db.patch(request._id, {
+          status: "closed",
+          updatedAt: now,
+        });
+
+        // Add Log Entry
+        await ctx.db.insert("request_notes", {
+          requestNumber: request.requestNumber,
+          userId: currentUser._id,
+          role: currentUser.role,
+          status: "closed",
+          type: "log",
+          content: args.notes ? `PO Closed: ${args.notes}` : "PO Closed manually",
+          createdAt: now,
+        });
+      }
+    }
+
+    return { success: true };
+  },
+});

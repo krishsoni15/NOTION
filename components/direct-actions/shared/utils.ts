@@ -160,6 +160,7 @@ export function getStatusColor(status: string, type: "cc" | "dc" | "po"): string
         return "bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200";
       case "rejected":
       case "cancelled":
+      case "closed":
         return "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200";
       default:
         return "bg-gray-100 text-gray-800";
@@ -189,6 +190,7 @@ export function getStatusLabel(status: string): string {
     approved: "Approved",
     ordered: "Ordered",
     rejected: "Rejected",
+    closed: "Closed",
   };
   return labels[status] || status;
 }

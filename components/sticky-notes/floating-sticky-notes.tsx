@@ -1,7 +1,7 @@
 /**
- * Floating Sticky Notes Component
+ * Floating Tasks Component
  * 
- * Displays sticky notes as draggable and resizable elements on the screen.
+ * Displays tasks as draggable and resizable elements on the screen.
  * Only shows notes that have been explicitly dragged out (have positionX/positionY set).
  */
 
@@ -130,7 +130,7 @@ export function FloatingStickyNotes({
   const handleEdit = (noteId: Id<"stickyNotes">) => {
     // For now, we'll just show a toast. In a full implementation,
     // you might want to open an edit dialog or inline editor.
-    toast.info("Edit functionality - open the sticky notes window to edit");
+    toast.info("Edit functionality - open the tasks window to edit");
   };
 
   const handleClose = async (noteId: Id<"stickyNotes">) => {
@@ -158,7 +158,7 @@ export function FloatingStickyNotes({
 
   return (
     <>
-      {/* Floating Sticky Notes */}
+      {/* Floating Tasks */}
       {floatingNotes.map((note) => {
         const noteAny = note as any;
         let x = noteAny.positionX ?? 100;
@@ -175,7 +175,7 @@ export function FloatingStickyNotes({
         x = Math.max(20, Math.min(x, maxX));
         y = Math.max(20, Math.min(y, maxY));
 
-        // Generate a subtle rotation based on note ID for realistic sticky note effect
+        // Generate a subtle rotation based on note ID for realistic task effect
         const rotation = (note._id.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0) % 7) - 3; // -3 to +3 degrees
 
         return (
@@ -274,7 +274,7 @@ export function FloatingStickyNotes({
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Delete Sticky Note?</AlertDialogTitle>
+            <AlertDialogTitle>Delete Task?</AlertDialogTitle>
             <AlertDialogDescription>
               {deleteNoteId && (() => {
                 const noteToDelete = allNotes?.find(n => n._id === deleteNoteId);

@@ -769,7 +769,7 @@ export function PurchaseRequestsContent() {
                   className="h-9 sm:h-10 gap-1.5 border-violet-500/40 text-violet-600 hover:bg-violet-500/10 hover:border-violet-500 dark:text-violet-400"
                 >
                   <FileText className="h-4 w-4" />
-                  Direct CC
+                  RFQ
                 </Button>
 
                 <Button
@@ -968,7 +968,7 @@ export function PurchaseRequestsContent() {
         requestId={pdfPreviewRequestId}
       />
 
-      {/* Direct CC Dialog */}
+      {/* RFQ Dialog */}
       <DirectCCSetupDialog
         open={showDirectCCDialog}
         onOpenChange={setShowDirectCCDialog}

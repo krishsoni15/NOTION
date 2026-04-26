@@ -71,6 +71,7 @@ type RequestStatus =
   | "ordered"
   | "out_for_delivery"
   | "delivery_stage"
+  | "closed"
   | "po_rejected";
 
 // Helper to get card border/bg styles based on status

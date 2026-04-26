@@ -22,9 +22,15 @@ interface ChecklistProps {
   items: ChecklistItem[];
   onChange: (items: ChecklistItem[]) => void;
   readonly?: boolean;
+  canAddItems?: boolean;
 }
 
-export function Checklist({ items, onChange, readonly = false }: ChecklistProps) {
+export function Checklist({
+  items,
+  onChange,
+  readonly = false,
+  canAddItems = !readonly,
+}: ChecklistProps) {
   const [newItemText, setNewItemText] = useState("");
 
   const handleToggle = (id: string) => {
@@ -124,7 +130,7 @@ export function Checklist({ items, onChange, readonly = false }: ChecklistProps)
       </div>
 
       {/* Add New */}
-      {!readonly && (
+      {!readonly && canAddItems && (
         <div className="flex items-center gap-1.5 mt-2">
           <Input
             value={newItemText}

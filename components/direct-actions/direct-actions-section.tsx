@@ -63,14 +63,16 @@ export function DirectActionsSection({
   const [selectedDCId, setSelectedDCId] = useState<Id<"deliveries"> | null>(null);
 
   // Fetch data
+  const currentUser = useQuery(api.users.getCurrentUser);
   const costComparisons = useQuery(api.costComparisons.getAllCostComparisons, {});
   const purchaseOrders = useQuery(api.purchaseOrders.getAllPurchaseOrders, {});
   const deliveries = useQuery(api.deliveries.getAllDeliveries, {});
 
-  // Title update mutations
+  // Mutations
   const updateCCTitle = useMutation(api.costComparisons.updateCostComparisonTitle);
   const updatePOTitle = useMutation(api.purchaseOrders.updatePurchaseOrderTitle);
   const updateDCTitle = useMutation(api.deliveries.updateDeliveryTitle);
+  const closePO = useMutation(api.purchaseOrders.closePurchaseOrder);
 
   // Transform and combine data
   const allItems = useMemo(() => {
@@ -92,7 +94,7 @@ export function DirectActionsSection({
     return filterDirectActions(allItems, filters);
   }, [allItems, filters]);
 
-  const isLoading = !costComparisons || !purchaseOrders || !deliveries;
+  const isLoading = !costComparisons || !purchaseOrders || !deliveries || !currentUser;
 
   const handleEditItem = (item: DirectActionItem, resetCallback: () => void) => {
     setResetEditingState(() => resetCallback);
@@ -145,6 +147,15 @@ export function DirectActionsSection({
         // Open PO in the standard view/print format (same as "Approved Requests" sidebar)
         handleViewPO(item);
         break;
+    }
+  };
+
+  const handleClosePO = async (poId: Id<"purchaseOrders">) => {
+    try {
+      await closePO({ poId });
+      toast.success("Purchase Order closed successfully");
+    } catch (error: any) {
+      toast.error(error.message || "Failed to close Purchase Order");
     }
   };
 
@@ -246,8 +257,10 @@ export function DirectActionsSection({
           <DirectActionsTable
             items={filteredItems}
             isLoading={isLoading}
+            currentUser={currentUser as any}
             onEdit={handleEditItem}
             onView={handleViewItem}
+            onClosePO={handleClosePO}
             onUpdateTitle={handleUpdateTitle}
             emptyMessage={
               filters.searchQuery

@@ -83,7 +83,8 @@ export default defineSchema({
       v.literal("delivery_stage"), // Deprecated - migrating to out_for_delivery
       v.literal("delivery_processing"), // Deprecated - migrating to out_for_delivery
       v.literal("out_for_delivery"),
-      v.literal("delivered")
+      v.literal("delivered"),
+      v.literal("closed")
     ),
     approvedBy: v.optional(v.id("users")), // Manager
     approvedAt: v.optional(v.number()),
@@ -100,6 +101,7 @@ export default defineSchema({
       v.literal("split_po_delivery")
     )), // Flag for direct delivery/PO/split combinations
     isSplitApproved: v.optional(v.boolean()),
+    isRFQ: v.optional(v.boolean()), // Flag to indicate this is an RFQ (Request for Quotation)
     lastTalkDate: v.optional(v.number()), // For pending PO last talk date
     lastTalkText: v.optional(v.string()), // Notes for last talk
     committedDate: v.optional(v.number()), // Vendor committed delivery date (manually set)
@@ -147,7 +149,8 @@ export default defineSchema({
       v.literal("sign_rejected"),
       v.literal("ordered"),
       v.literal("delivered"),
-      v.literal("cancelled")
+      v.literal("cancelled"),
+      v.literal("closed")
     ),
     perUnitBasis: v.optional(v.number()),
     perUnitBasisUnit: v.optional(v.string()),
@@ -306,6 +309,23 @@ export default defineSchema({
     positionY: v.optional(v.number()), // Y position on screen
     width: v.optional(v.number()), // Width of the note
     height: v.optional(v.number()), // Height of the note
+
+    // Task Management Extensions
+    priority: v.optional(v.union(v.literal("high"), v.literal("medium"), v.literal("low"))),
+    dueDate: v.optional(v.number()),
+    linkedEntityId: v.optional(v.string()),
+    linkedEntityType: v.optional(v.union(v.literal("cc"), v.literal("dc"), v.literal("po"))),
+    acceptedStatus: v.optional(v.union(v.literal("pending"), v.literal("seen"))),
+    completedAt: v.optional(v.number()),
+
+    // Activity log for tracking note history (created, updated, completed, etc.)
+    activityLogs: v.optional(v.array(v.object({
+      action: v.string(),
+      timestamp: v.number(),
+      userId: v.id("users"),
+      detail: v.optional(v.string()), // Extra info (e.g. comment text)
+    }))),
+
     createdAt: v.number(),
     updatedAt: v.number(),
   })
@@ -313,7 +333,8 @@ export default defineSchema({
     .index("by_created_by", ["createdBy"])
     .index("by_reminder_at", ["reminderAt"])
     .index("by_is_deleted", ["isDeleted"])
-    .index("by_is_completed", ["isCompleted"]),
+    .index("by_is_completed", ["isCompleted"])
+    .index("by_linked_entity", ["linkedEntityType", "linkedEntityId"]),
 
   // ============================================================================
   // Sites Table
@@ -530,5 +551,55 @@ export default defineSchema({
     .index("by_po_id", ["poId"])
     .index("by_created_by", ["createdBy"])
     .index("by_created_at", ["createdAt"]),
+
+  // ============================================================================
+  // Projects Table
+  // ============================================================================
+  projects: defineTable({
+    name: v.string(), // Project name
+    description: v.optional(v.string()), // Project description
+    location: v.optional(v.string()), // Free-text location
+    status: v.optional(v.union(v.literal("active"), v.literal("inactive"))), // Project status
+    timeline: v.optional(v.string()), // Existing string-based timeline
+    estimatedTimeline: v.optional(v.number()), // Deadline timestamp
+    pdfUrl: v.optional(v.string()), // R2 public URL for material requirement PDF
+    pdfKey: v.optional(v.string()), // R2 object key for deletion
+    pdfFileName: v.optional(v.string()), // Original PDF filename
+    createdBy: v.id("users"), // User who created the project
+    createdAt: v.number(), // Auto-set to Date.now()
+    updatedAt: v.number(),
+  })
+    .index("by_created_by", ["createdBy"])
+    .index("by_status", ["status"])
+    .index("by_created_at", ["createdAt"]),
+
+  // ============================================================================
+  // Project Categories Table (Shared across all projects)
+  // ============================================================================
+  projectCategories: defineTable({
+    name: v.string(),
+    createdBy: v.id("users"),
+    createdAt: v.number(),
+  })
+    .index("by_name", ["name"]),
+
+  // ============================================================================
+  // Project Items Table
+  // ============================================================================
+  projectItems: defineTable({
+    projectId: v.id("projects"),
+    name: v.string(),
+    description: v.optional(v.string()),
+    categoryId: v.id("projectCategories"),
+    make: v.optional(v.string()),
+    quantity: v.number(),
+    rate: v.number(),
+    createdBy: v.id("users"),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_project", ["projectId"])
+    .index("by_category", ["categoryId"])
+    .index("by_created_by", ["createdBy"]),
 });
 

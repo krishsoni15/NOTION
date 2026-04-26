@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
 import "../styles/globals.css";
 import { ConvexClientProvider } from "./convex-provider";
 import { AuthProvider } from "./providers/auth-provider";
@@ -8,16 +7,6 @@ import { Providers } from "./providers";
 import { Toaster } from "@/components/ui/sonner";
 import { ErrorBoundary } from "@/components/error-boundary";
 import { PresenceProvider } from "@/components/chat/presence-provider";
-
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
 
 export const metadata: Metadata = {
   title: "Notion App",
@@ -40,7 +29,7 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning className="theme-notion">
       <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+        className="antialiased"
         suppressHydrationWarning
       >
         <ErrorBoundary>

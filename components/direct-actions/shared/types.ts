@@ -48,7 +48,7 @@ export interface PurchaseOrder {
   requestId?: Id<"requests">;
   deliverySiteId?: Id<"sites">;
   vendorId: Id<"vendors">;
-  status: "pending_approval" | "sign_pending" | "approved" | "ordered" | "delivered" | "cancelled";
+  status: "pending_approval" | "sign_pending" | "approved" | "ordered" | "delivered" | "cancelled" | "closed";
   createdBy: Id<"users">;
   createdAt: number;
   updatedAt: number;

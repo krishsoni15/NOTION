@@ -297,6 +297,7 @@ export const update = mutation({
     // Task extensions
     priority: v.optional(v.union(v.literal("high"), v.literal("medium"), v.literal("low"))),
     dueDate: v.optional(v.number()),
+    assignedTo: v.optional(v.id("users")),
     linkedEntityId: v.optional(v.string()),
     linkedEntityType: v.optional(v.union(v.literal("cc"), v.literal("dc"), v.literal("po"))),
   },
@@ -336,6 +337,7 @@ export const update = mutation({
       args.checklistItems !== undefined ||
       args.priority !== undefined ||
       args.dueDate !== undefined ||
+      args.assignedTo !== undefined ||
       args.linkedEntityId !== undefined ||
       args.linkedEntityType !== undefined;
 
@@ -367,12 +369,30 @@ export const update = mutation({
       ...(args.height !== undefined && { height: args.height }),
       ...(args.priority !== undefined && { priority: args.priority }),
       ...(args.dueDate !== undefined && { dueDate: args.dueDate }),
+      ...(args.assignedTo !== undefined && { assignedTo: args.assignedTo }),
       ...(args.linkedEntityId !== undefined && { linkedEntityId: args.linkedEntityId }),
       ...(args.linkedEntityType !== undefined && { linkedEntityType: args.linkedEntityType }),
       updatedAt: Date.now(),
     };
 
     await ctx.db.patch(args.noteId, patchData);
+
+    // Send notification if assigned to someone else
+    if (args.assignedTo !== undefined && args.assignedTo !== note.assignedTo && args.assignedTo !== currentUser._id) {
+      await ctx.db.insert("notifications", {
+        userId: args.assignedTo,
+        title: "Task Reassigned",
+        message: `${currentUser.fullName} reassigned task: "${args.title || note.title}" to you`,
+        type: "assignment",
+        isRead: false,
+        link: "/dashboard?tasks=true",
+        metadata: {
+          entityId: args.noteId,
+          entityType: "task",
+        },
+        createdAt: Date.now(),
+      });
+    }
 
     return { success: true };
   },

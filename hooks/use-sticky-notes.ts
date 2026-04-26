@@ -60,3 +60,17 @@ export function useStickyNotesUnreadCount() {
 export function useMarkStickyNotesAllRead() {
   return useMutation(api.stickyNotes.markAllRead);
 }
+
+export function useBulkCompleteTasks() {
+  return useMutation(api.stickyNotes.bulkComplete);
+}
+
+export function useBulkAssignTasks() {
+  return useMutation(api.stickyNotes.bulkAssign);
+}
+
+export function useLinkedTasks(linkedEntityType: "cc" | "dc" | "po", linkedEntityId: string) {
+  const notes = useQuery(api.stickyNotes.getLinkedTasks, { linkedEntityType, linkedEntityId });
+  return notes ?? [];
+}
+

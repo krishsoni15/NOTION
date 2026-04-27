@@ -52,6 +52,7 @@ import {
   Calendar,
   FileText,
   Eye,
+  ExternalLink,
 } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
@@ -151,6 +152,12 @@ export function ProjectTable({ projects, viewMode = "table" }: ProjectTableProps
                   <Eye className="h-4 w-4 mr-2" />
                   View Details
                 </DropdownMenuItem>
+                {project.pdfUrl && (
+                  <DropdownMenuItem onClick={() => window.open(project.pdfUrl, "_blank", "noopener,noreferrer")}>
+                    <ExternalLink className="h-4 w-4 mr-2" />
+                    View PDF
+                  </DropdownMenuItem>
+                )}
                 <DropdownMenuItem onClick={() => setEditingProject(project)}>
                   <Edit className="h-4 w-4 mr-2" />
                   Edit Project
@@ -270,11 +277,16 @@ export function ProjectTable({ projects, viewMode = "table" }: ProjectTableProps
                       }
                     </TableCell>
                     <TableCell className="align-top py-4">
-                      {project.pdfFileName ? (
-                        <Badge variant="outline" className="text-[10px] h-5 px-2 bg-background/50">
+                      {project.pdfUrl ? (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-7 px-2 text-[10px]"
+                          onClick={() => window.open(project.pdfUrl!, "_blank", "noopener,noreferrer")}
+                        >
                           <FileText className="h-3 w-3 mr-1" />
-                          PDF
-                        </Badge>
+                          View PDF
+                        </Button>
                       ) : (
                         <span className="text-muted-foreground/30">—</span>
                       )}
@@ -297,6 +309,12 @@ export function ProjectTable({ projects, viewMode = "table" }: ProjectTableProps
                             <Eye className="h-4 w-4 mr-2" />
                             View Details
                           </DropdownMenuItem>
+                          {project.pdfUrl && (
+                            <DropdownMenuItem onClick={() => window.open(project.pdfUrl, "_blank", "noopener,noreferrer")}>
+                              <ExternalLink className="h-4 w-4 mr-2" />
+                              View PDF
+                            </DropdownMenuItem>
+                          )}
                           <DropdownMenuItem onClick={() => setEditingProject(project)}>
                             <Edit className="h-4 w-4 mr-2" />
                             Edit Project

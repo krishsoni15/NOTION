@@ -21,34 +21,41 @@ export const getAllProjects = query({
     includeInactive: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
-    const userId = await getAuthUserId(ctx);
-    if (!userId) return [];
+    try {
+      const userId = await getAuthUserId(ctx);
+      if (!userId) return [];
 
-    // Get current user
-    const currentUser = await ctx.db
-      .query("users")
-      .withIndex("by_clerk_user_id", (q) => q.eq("clerkUserId", userId))
-      .first();
+      // Get current user
+      const currentUser = await ctx.db
+        .query("users")
+        .withIndex("by_clerk_user_id", (q) => q.eq("clerkUserId", userId))
+        .first();
 
-    if (!currentUser) return [];
+      if (!currentUser) return [];
 
-    // Only managers and purchase officers can view projects
-    if (currentUser.role !== "manager" && currentUser.role !== "purchase_officer") {
+      // Only managers and purchase officers can view projects
+      if (currentUser.role !== "manager" && currentUser.role !== "purchase_officer") {
+        return [];
+      }
+
+      // Get all projects
+      let projects = await ctx.db
+        .query("projects")
+        .order("desc")
+        .collect();
+
+      // Filter by active status if needed
+      if (!args.includeInactive) {
+        projects = projects.filter((project) => (project.status ?? "active") === "active");
+      }
+
+      return projects;
+    } catch (error) {
+      // Fail-safe for production drift (schema/function/data sync issues):
+      // return an empty list instead of surfacing a fatal client error.
+      console.error("projects:getAllProjects failed", error);
       return [];
     }
-
-    // Get all projects
-    let projects = await ctx.db
-      .query("projects")
-      .order("desc")
-      .collect();
-
-    // Filter by active status if needed
-    if (!args.includeInactive) {
-      projects = projects.filter((project) => (project.status ?? "active") === "active");
-    }
-
-    return projects;
   },
 });
 

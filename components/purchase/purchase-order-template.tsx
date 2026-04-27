@@ -166,28 +166,38 @@ export function PurchaseOrderTemplate({ data }: { data: POData }) {
     });
 
     return (
-        <div className="bg-white text-[#000000] font-sans text-xs" style={{ width: '210mm', padding: '10mm', margin: '0 auto', boxSizing: 'border-box' }}>
+        <div
+            className="bg-white text-[#000000] font-sans text-xs"
+            style={{
+                width: '210mm',
+                minHeight: '297mm',
+                padding: '8mm',
+                margin: '0 auto',
+                boxSizing: 'border-box',
+                overflow: 'visible',
+            }}
+        >
             {/* PO Content */}
             <div className="w-full bg-white">
 
                 {/* Header */}
-                <div className="text-center mb-6">
+                <div className="text-center mb-2">
                     <div className="flex justify-center items-center">
                         <img
                             src="/images/logos/PDF_Data.png"
                             alt="NOTION ELECTRONICS"
-                            style={{ width: '100%', height: '280px', objectFit: 'fill' }}
+                            style={{ width: '100%', height: '200px', objectFit: 'contain' }}
                         />
                     </div>
                 </div>
 
                 {/* Title */}
-                <div className="text-center mb-4">
+                <div className="text-center mb-2">
                     <h3 className="text-lg font-bold uppercase">PURCHASE ORDER</h3>
                 </div>
 
                 {/* Info Section */}
-                <div className="flex justify-between text-[10px] mb-4">
+                <div className="flex justify-between text-[10px] mb-2">
                     {/* To: Vendor */}
                     <div className="w-[48%]">
                         <div className="font-bold mb-1">To :</div>
@@ -275,92 +285,111 @@ export function PurchaseOrderTemplate({ data }: { data: POData }) {
                         </div>
                     </div>
                     <div className="w-[40%]">
-                        <div className="flex justify-between border-b p-1" style={{ borderColor: '#d1d5db' }}>
-                            <span>Total Amount before Tax (₹)</span>
-                            <span className="font-bold">{totalTaxable.toFixed(2)}</span>
-                        </div>
-                        <div className="flex justify-between border-b p-1" style={{ borderColor: '#d1d5db' }}>
-                            <span>Add CGST (₹)</span>
-                            <span>{totalCGST.toFixed(2)}</span>
-                        </div>
-                        <div className="flex justify-between border-b p-1" style={{ borderColor: '#d1d5db' }}>
-                            <span>Add SGST (₹)</span>
-                            <span>{totalSGST.toFixed(2)}</span>
-                        </div>
-                        <div className="flex justify-between border-b border-[#000000] p-1">
-                            <span>Round Off (₹)</span>
-                            <span>{roundOff.toFixed(2)}</span>
-                        </div>
-                        <div className="flex justify-between p-1 font-bold text-sm" style={{ backgroundColor: '#f3f4f6' }}>
-                            <span>Grand Total (₹)</span>
-                            <span>{finalGrandTotal.toFixed(2)}</span>
-                        </div>
+                        <table
+                            className="w-full border-collapse text-[10px]"
+                            style={{ tableLayout: "fixed" }}
+                        >
+                            <tbody>
+                                <tr>
+                                    <td className="border-b border-[#000000] p-1">Total Amount before Tax (₹)</td>
+                                    <td className="border-b border-[#000000] p-1 text-right font-bold">{totalTaxable.toFixed(2)}</td>
+                                </tr>
+                                <tr>
+                                    <td className="border-b border-[#000000] p-1">Add CGST (₹)</td>
+                                    <td className="border-b border-[#000000] p-1 text-right">{totalCGST.toFixed(2)}</td>
+                                </tr>
+                                <tr>
+                                    <td className="border-b border-[#000000] p-1">Add SGST (₹)</td>
+                                    <td className="border-b border-[#000000] p-1 text-right">{totalSGST.toFixed(2)}</td>
+                                </tr>
+                                <tr>
+                                    <td className="border-b border-[#000000] p-1">Round Off (₹)</td>
+                                    <td className="border-b border-[#000000] p-1 text-right">{roundOff.toFixed(2)}</td>
+                                </tr>
+                                <tr style={{ backgroundColor: "#f3f4f6" }}>
+                                    <td className="p-1 font-bold text-sm border-t border-[#000000]">Grand Total (₹)</td>
+                                    <td className="p-1 font-bold text-sm text-right border-t border-[#000000]">{finalGrandTotal.toFixed(2)}</td>
+                                </tr>
+                            </tbody>
+                        </table>
                     </div>
                 </div>
 
-                {/* Notes & Signature */}
-                <div className="flex border border-[#000000] text-[10px]" style={{ minHeight: '80px' }}>
-                    <div className="w-[60%] border-r border-[#000000] p-2">
-                        <div className="font-bold mb-1">Notes :</div>
-                        <div className="uppercase">{data.site?.name}</div>
-                        {data.creator?.role === "purchase_officer" && <div className="mt-2" style={{ color: '#6b7280', fontSize: '8px' }}>Created by: {data.creator.fullName}</div>}
-                    </div>
-                    <div className="w-[40%] flex flex-col p-2 text-center" style={{ position: 'relative' }}>
-                        <div className="font-bold text-[9px]">For, NOTION ELECTRONICS PVT LTD</div>
-                        <div className="flex-1 flex flex-col items-center justify-center" style={{ minHeight: '40px', maxHeight: '50px', overflow: 'hidden' }}>
-                            {/* Signature Image or Text - Only shown for approved POs */}
-                            {data.approver?.signatureUrl ? (
-                                <img
-                                    src={data.approver.signatureUrl}
-                                    crossOrigin="anonymous"
-                                    alt="Signature"
-                                    style={{ maxHeight: '40px', maxWidth: '120px', objectFit: 'contain' }}
-                                />
-                            ) : data.approver ? (
-                                <div className="font-script text-lg">{data.approver.fullName}</div>
-                            ) : null}
-                            {data.approver && (
-                                <div className="text-[8px]" style={{ color: '#4b5563' }}>{data.approver.fullName}</div>
-                            )}
-                        </div>
-                        <div className="font-bold border-t border-[#000000] pt-1">Authorised Signatory</div>
-                    </div>
-                </div>
+                {/* Bottom block */}
+                <div className="mt-2">
+                    <div className="flex gap-2">
+                        {/* Left: Notes + Tax table */}
+                        <div className="w-[60%] flex flex-col gap-2">
+                            {/* Notes */}
+                            <div className="border border-[#000000] text-[10px] p-2" style={{ minHeight: '62px' }}>
+                                <div className="font-bold mb-1">Notes :</div>
+                                <div className="uppercase">{data.site?.name}</div>
+                                {data.creator?.role === "purchase_officer" && (
+                                    <div className="mt-1" style={{ color: '#6b7280', fontSize: '8px' }}>
+                                        Created by: {data.creator.fullName}
+                                    </div>
+                                )}
+                            </div>
 
-                {/* Footer */}
-                <div className="mt-1 text-[8px] font-bold" style={{ color: '#6b7280' }}>
-                    This is a computer-generated purchase order. E. & O. E.
-                </div>
-
-                {/* Tax Breakdown Table (Bottom Left - Extra) */}
-                <div className="mt-4 w-[60%]">
-                    <table className="w-full border-collapse border border-[#000000] text-[8px]">
-                        <thead>
-                            <tr style={{ backgroundColor: '#f3f4f6' }}>
-                                <th className="border border-[#000000] p-1">HSN/SAC Code</th>
-                                <th className="border border-[#000000] p-1">Taxable (₹)</th>
-                                <th className="border border-[#000000] p-1">CGST %</th>
-                                <th className="border border-[#000000] p-1">CGST (₹)</th>
-                                <th className="border border-[#000000] p-1">SGST %</th>
-                                <th className="border border-[#000000] p-1">SGST (₹)</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {Object.entries(taxGroups).map(([key, val]) => {
-                                const [hsn, _] = key.split('-');
-                                return (
-                                    <tr key={key}>
-                                        <td className="border border-[#000000] p-1 text-center">{hsn}</td>
-                                        <td className="border border-[#000000] p-1 text-right">{val.taxable.toFixed(2)}</td>
-                                        <td className="border border-[#000000] p-1 text-center">{val.cgstRate}%</td>
-                                        <td className="border border-[#000000] p-1 text-right">{val.cgst.toFixed(2)}</td>
-                                        <td className="border border-[#000000] p-1 text-center">{val.sgstRate}%</td>
-                                        <td className="border border-[#000000] p-1 text-right">{val.sgst.toFixed(2)}</td>
+                            {/* Tax Breakdown Table */}
+                            <table
+                                className="w-full border-collapse border border-[#000000] text-[8px]"
+                                style={{ tableLayout: "fixed" }}
+                            >
+                                <thead>
+                                    <tr style={{ backgroundColor: '#f3f4f6' }}>
+                                        <th className="border border-[#000000] p-1 text-center align-middle" style={{ width: "18%" }}>HSN/SAC</th>
+                                        <th className="border border-[#000000] p-1 text-center align-middle" style={{ width: "22%" }}>Taxable (₹)</th>
+                                        <th className="border border-[#000000] p-1 text-center align-middle" style={{ width: "9%" }}>CGST%</th>
+                                        <th className="border border-[#000000] p-1 text-center align-middle" style={{ width: "17%" }}>CGST (₹)</th>
+                                        <th className="border border-[#000000] p-1 text-center align-middle" style={{ width: "9%" }}>SGST%</th>
+                                        <th className="border border-[#000000] p-1 text-center align-middle" style={{ width: "25%" }}>SGST (₹)</th>
                                     </tr>
-                                );
-                            })}
-                        </tbody>
-                    </table>
+                                </thead>
+                                <tbody>
+                                    {Object.entries(taxGroups).map(([key, val]) => {
+                                        const [hsn, _] = key.split('-');
+                                        return (
+                                            <tr key={key}>
+                                                <td className="border border-[#000000] p-1 text-center align-middle">{hsn}</td>
+                                                <td className="border border-[#000000] p-1 text-right align-middle">{val.taxable.toFixed(2)}</td>
+                                                <td className="border border-[#000000] p-1 text-center align-middle">{val.cgstRate}%</td>
+                                                <td className="border border-[#000000] p-1 text-right align-middle">{val.cgst.toFixed(2)}</td>
+                                                <td className="border border-[#000000] p-1 text-center align-middle">{val.sgstRate}%</td>
+                                                <td className="border border-[#000000] p-1 text-right align-middle">{val.sgst.toFixed(2)}</td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                        </div>
+
+                        {/* Right: Signature */}
+                        <div className="w-[40%] border border-[#000000] text-[10px] p-2 text-center flex flex-col">
+                            <div className="font-bold text-[9px]">For, NOTION ELECTRONICS PVT LTD</div>
+                            <div className="flex-1 flex flex-col items-center justify-center" style={{ minHeight: '52px', maxHeight: '62px', overflow: 'hidden' }}>
+                                {data.approver?.signatureUrl ? (
+                                    <img
+                                        src={data.approver.signatureUrl}
+                                        crossOrigin="anonymous"
+                                        alt="Signature"
+                                        style={{ maxHeight: '48px', maxWidth: '140px', objectFit: 'contain' }}
+                                    />
+                                ) : data.approver ? (
+                                    <div className="font-script text-lg">{data.approver.fullName}</div>
+                                ) : null}
+                                {data.approver && (
+                                    <div className="text-[8px]" style={{ color: '#4b5563' }}>{data.approver.fullName}</div>
+                                )}
+                            </div>
+                            <div className="font-bold border-t border-[#000000] pt-1">Authorised Signatory</div>
+                        </div>
+                    </div>
+
+                    {/* Footer */}
+                    <div className="mt-1 text-[8px] font-bold" style={{ color: '#6b7280' }}>
+                        This is a computer-generated purchase order. E. & O. E.
+                    </div>
                 </div>
 
             </div>

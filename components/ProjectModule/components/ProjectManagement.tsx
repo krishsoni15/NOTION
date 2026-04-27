@@ -44,8 +44,6 @@ export function ProjectManagement() {
     setPageSize,
     totalItems,
     totalPages,
-    createProject,
-    uploadPdf,
   } = useProjectLogic();
 
   return (

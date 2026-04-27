@@ -4,6 +4,8 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Id } from "@/convex/_generated/dataModel";
+import html2canvas from "html2canvas";
+import { jsPDF } from "jspdf";
 import {
     Dialog,
     DialogContent,
@@ -22,13 +24,6 @@ import { PurchaseOrderTemplate } from "./purchase-order-template";
 import { DeliveryChallanTemplate } from "./delivery-challan-template";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
-
-// Use dynamic import for html2pdf to avoid SSR issues
-const getHtml2Pdf = async () => {
-    // @ts-ignore
-    const html2pdf = (await import("html2pdf.js/dist/html2pdf.min.js")).default;
-    return html2pdf;
-};
 
 /**
  * Sanitize a cloned document to remove modern CSS color functions
@@ -117,6 +112,193 @@ function sanitizeClonedDoc(clonedDoc: Document) {
     });
 }
 
+async function blobToDataUrl(blob: Blob): Promise<string> {
+    return await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result));
+        reader.onerror = () => reject(new Error("Failed to read image blob"));
+        reader.readAsDataURL(blob);
+    });
+}
+
+async function fetchImageAsDataUrl(src: string): Promise<string | null> {
+    const tryFetch = async (url: string) => {
+        const res = await fetch(url);
+        if (!res.ok) throw new Error(`Failed to fetch image: ${res.status}`);
+        const blob = await res.blob();
+        return await blobToDataUrl(blob);
+    };
+
+    try {
+        return await tryFetch(src);
+    } catch {
+        // Fallback through same-origin proxy to bypass CORS restrictions
+        try {
+            const proxyUrl = `/api/download?url=${encodeURIComponent(src)}&filename=image`;
+            return await tryFetch(proxyUrl);
+        } catch {
+            return null;
+        }
+    }
+}
+
+async function inlineImagesForPdf(root: HTMLElement) {
+    const images = Array.from(root.querySelectorAll("img")) as HTMLImageElement[];
+    await Promise.all(images.map(async (img) => {
+        const src = img.getAttribute("src") || "";
+        if (!src || src.startsWith("data:")) return;
+        const dataUrl = await fetchImageAsDataUrl(src);
+        if (!dataUrl) return;
+        img.setAttribute("src", dataUrl);
+    }));
+}
+
+async function nextPaint(frames: number = 2) {
+    for (let i = 0; i < frames; i++) {
+        await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    }
+}
+
+function buildA4ExportNode(source: HTMLElement) {
+    const wrapper = document.createElement("div");
+    wrapper.style.width = "210mm";
+    // Allow auto height; we will split to pages if needed.
+    wrapper.style.height = "auto";
+    wrapper.style.overflow = "visible";
+    wrapper.style.background = "white";
+    wrapper.style.boxSizing = "border-box";
+    wrapper.style.position = "fixed";
+    wrapper.style.left = "0";
+    wrapper.style.top = "0";
+    wrapper.style.pointerEvents = "none";
+    // Make it fully paintable for html2canvas. (Nearly-invisible elements can
+    // still capture as blank/white depending on browser/GPU.)
+    // This may briefly flash during download, but avoids empty PDFs.
+    wrapper.style.opacity = "1";
+    wrapper.style.zIndex = "2147483647";
+    wrapper.style.userSelect = "none";
+    wrapper.style.isolation = "isolate";
+
+    const cloned = source.cloneNode(true) as HTMLElement;
+    // Ensure clone doesn't inherit any transforms that could affect layout
+    cloned.style.transform = "none";
+    cloned.style.width = "210mm";
+    cloned.style.background = "white";
+
+    wrapper.appendChild(cloned);
+    document.body.appendChild(wrapper);
+
+    return {
+        wrapper,
+        cloned,
+        cleanup: () => {
+            try {
+                document.body.removeChild(wrapper);
+            } catch { /* noop */ }
+        }
+    };
+}
+
+async function renderA4PdfFromWrapper(wrapper: HTMLElement) {
+    // Ensure the DOM has painted before capture
+    await nextPaint(2);
+    const canvas = await html2canvas(wrapper, {
+        scale: 2,
+        useCORS: true,
+        allowTaint: false,
+        logging: false,
+        backgroundColor: "#ffffff",
+        scrollX: 0,
+        scrollY: 0,
+        windowWidth: 794,
+        onclone: sanitizeClonedDoc,
+    } as any);
+
+    const pdf = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait", compress: true });
+
+    // Trim trailing whitespace to avoid generating an extra blank page.
+    const trimCanvasBottom = (src: HTMLCanvasElement) => {
+        const ctx = src.getContext("2d");
+        if (!ctx) return src.height;
+        const { width, height } = src;
+        const img = ctx.getImageData(0, 0, width, height).data;
+
+        const isRowWhite = (y: number) => {
+            const start = y * width * 4;
+            for (let x = 0; x < width; x++) {
+                const i = start + x * 4;
+                const r = img[i];
+                const g = img[i + 1];
+                const b = img[i + 2];
+                const a = img[i + 3];
+                // consider transparent as white, and allow small JPEG-like noise
+                if (a > 0 && (r < 250 || g < 250 || b < 250)) return false;
+            }
+            return true;
+        };
+
+        let y = height - 1;
+        while (y > 0 && isRowWhite(y)) y--;
+        // add a small safety margin so borders don't get cut
+        return Math.min(height, y + 10);
+    };
+
+    const trimmedHeight = trimCanvasBottom(canvas);
+
+    // Split the captured canvas into A4 pages if needed.
+    const pageWidthMm = 210;
+    const pageHeightMm = 297;
+    const pageHeightPx = Math.floor(canvas.width * (pageHeightMm / pageWidthMm));
+
+    let rendered = 0;
+    let pageIndex = 0;
+    while (rendered < trimmedHeight) {
+        const sliceHeight = Math.min(pageHeightPx, trimmedHeight - rendered);
+        const pageCanvas = document.createElement("canvas");
+        pageCanvas.width = canvas.width;
+        pageCanvas.height = sliceHeight;
+        const ctx = pageCanvas.getContext("2d");
+        if (!ctx) break;
+
+        // White background
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(0, 0, pageCanvas.width, pageCanvas.height);
+
+        ctx.drawImage(
+            canvas,
+            0,
+            rendered,
+            canvas.width,
+            sliceHeight,
+            0,
+            0,
+            canvas.width,
+            sliceHeight
+        );
+
+        const imgData = pageCanvas.toDataURL("image/jpeg", 1.0);
+        if (pageIndex > 0) pdf.addPage();
+        // Preserve aspect ratio (avoid stretching content to full A4 height).
+        // If the slice is shorter than a full page, it should occupy only that height.
+        const imgHeightMm = (sliceHeight / canvas.width) * pageWidthMm;
+        pdf.addImage(
+            imgData,
+            "JPEG",
+            0,
+            0,
+            pageWidthMm,
+            Math.min(pageHeightMm, imgHeightMm),
+            undefined,
+            "FAST"
+        );
+
+        rendered += sliceHeight;
+        pageIndex++;
+    }
+
+    return pdf;
+}
+
 interface PDFPreviewDialogProps {
     open: boolean;
     onOpenChange: (open: boolean) => void;
@@ -140,6 +322,7 @@ export function PDFPreviewDialog({
     const [isPrinting, setIsPrinting] = useState(false);
     const [isSendingEmail, setIsSendingEmail] = useState(false);
     const pdfContentRef = useRef<HTMLDivElement>(null);
+    const pdfExportRef = useRef<HTMLDivElement>(null);
 
     const poData = useQuery(
         api.purchaseOrders.getPurchaseOrderDetails,
@@ -169,11 +352,6 @@ export function PDFPreviewDialog({
     const [scrollStart, setScrollStart] = useState({ x: 0, y: 0 });
 
     const calculateInitialZoom = () => {
-        if (typeof window === 'undefined') return 1;
-        const width = window.innerWidth;
-        if (width < 640) return 0.45;
-        if (width < 1024) return 0.65;
-        if (width < 1366) return 0.8;
         return 1;
     };
 
@@ -182,48 +360,46 @@ export function PDFPreviewDialog({
         if (open) setZoomLevel(calculateInitialZoom());
     }, [open, poNumber]);
 
-    const handleDownload = async () => {
+    // Make preview images reliable (same as PDF export):
+    // inline/proxy images inside the visible preview so the user sees
+    // exactly what will be exported.
+    useEffect(() => {
+        if (!open) return;
+        if (!isDataLoaded) return;
         if (!pdfContentRef.current) return;
+        // Fire-and-forget: if an image can't be fetched we still show the rest.
+        inlineImagesForPdf(pdfContentRef.current).catch(() => {});
+    }, [open, isDataLoaded, poNumber, type]);
+
+    const handleDownload = async () => {
+        const exportElement = pdfExportRef.current || pdfContentRef.current;
+        if (!exportElement) return;
 
         setIsDownloading(true);
+        let cleanupExport: (() => void) | null = null;
         try {
-            const html2pdf = await getHtml2Pdf();
-            const element = pdfContentRef.current;
+            const { wrapper, cloned, cleanup } = buildA4ExportNode(exportElement);
+            cleanupExport = cleanup;
 
-            // Ensure all images are loaded before generating PDF
-            const images = element.getElementsByTagName('img');
-            const imagePromises = Array.from(images).map(img => {
+            // Inline images (avoids html2canvas CORS issues), then wait for them to settle.
+            await inlineImagesForPdf(cloned);
+            await Promise.all(Array.from(cloned.getElementsByTagName("img")).map(img => {
                 if (img.complete) return Promise.resolve();
                 return new Promise((resolve) => {
                     img.onload = resolve;
-                    img.onerror = resolve; // Continue even if image fails
+                    img.onerror = resolve;
                 });
-            });
+            }));
+            await nextPaint(2);
 
-            await Promise.all(imagePromises);
-
-            const opt = {
-                margin: 0,
-                filename: `${documentId}.pdf`,
-                image: { type: "jpeg", quality: 1.0 },
-                html2canvas: {
-                    scale: 3,
-                    useCORS: true,
-                    logging: false,
-                    letterRendering: true,
-                    windowWidth: 794,
-                    allowTaint: false,
-                    onclone: sanitizeClonedDoc
-                },
-                jsPDF: { unit: "mm", format: "a4", orientation: "portrait", compress: true },
-            };
-
-            await html2pdf().set(opt).from(element).save();
+            const pdf = await renderA4PdfFromWrapper(wrapper);
+            pdf.save(`${documentId}.pdf`);
             toast.success("PDF downloaded successfully");
         } catch (error) {
             console.error("PDF generation error:", error);
             toast.error("Failed to generate PDF");
         } finally {
+            cleanupExport?.();
             setIsDownloading(false);
         }
     };
@@ -335,7 +511,8 @@ Notion Electronica Pvt. Ltd.`;
     };
 
     const handleShareEmail = async () => {
-        if (!poData || !poNumber || !pdfContentRef.current) return;
+        const exportElement = pdfExportRef.current || pdfContentRef.current;
+        if (!poData || !poNumber || !exportElement) return;
 
         const vendorEmail = poData.vendor?.email;
         if (!vendorEmail) {
@@ -348,38 +525,21 @@ Notion Electronica Pvt. Ltd.`;
 
         try {
             // Generate PDF Blob
-            const html2pdf = await getHtml2Pdf();
-            const element = pdfContentRef.current;
+            const { wrapper, cloned, cleanup } = buildA4ExportNode(exportElement);
 
-            // Ensure all images are loaded before generating PDF
-            const images = element.getElementsByTagName('img');
-            const imagePromises = Array.from(images).map(img => {
+            await inlineImagesForPdf(cloned);
+            await Promise.all(Array.from(cloned.getElementsByTagName("img")).map(img => {
                 if (img.complete) return Promise.resolve();
                 return new Promise((resolve) => {
                     img.onload = resolve;
-                    img.onerror = resolve; // Continue even if image fails
+                    img.onerror = resolve;
                 });
-            });
+            }));
+            await nextPaint(2);
 
-            await Promise.all(imagePromises);
-
-            const opt = {
-                margin: 0,
-                filename: `${documentId}.pdf`,
-                image: { type: "jpeg", quality: 1.0 },
-                html2canvas: {
-                    scale: 3,
-                    useCORS: true,
-                    logging: false,
-                    letterRendering: true,
-                    windowWidth: 794,
-                    allowTaint: false,
-                    onclone: sanitizeClonedDoc
-                },
-                jsPDF: { unit: "mm", format: "a4", orientation: "portrait", compress: true },
-            };
-
-            const pdfBlob = await html2pdf().set(opt).from(element).output('blob');
+            const pdf = await renderA4PdfFromWrapper(wrapper);
+            const pdfBlob = pdf.output("blob");
+            cleanup();
 
             // Prepare form data
             const formData = new FormData();
@@ -585,14 +745,15 @@ Notion Electronica Pvt. Ltd.`;
                                 className="mx-auto"
                                 style={{
                                     width: `calc(210mm * ${zoomLevel})`,
-                                    height: `calc(297mm * ${zoomLevel})`,
+                                    // Let height grow; we page-split on export if needed.
+                                    height: "auto",
                                 }}
                             >
                                 <div
                                     className="bg-white shadow-2xl origin-top-left"
                                     style={{
                                         width: "210mm",
-                                        height: "297mm",
+                                        height: "auto",
                                         transform: `scale(${zoomLevel})`,
                                     }}
                                 >
@@ -607,6 +768,30 @@ Notion Electronica Pvt. Ltd.`;
                             </div>
                         </div>
                     )}
+                </div>
+
+                {/* Hidden export surface (unscaled, stable layout for html2canvas/html2pdf) */}
+                <div
+                    aria-hidden
+                    style={{
+                        position: "fixed",
+                        left: "-100000px",
+                        top: 0,
+                        width: "210mm",
+                        background: "white",
+                        pointerEvents: "none",
+                        opacity: 0,
+                    }}
+                >
+                    <div ref={pdfExportRef} style={{ width: "210mm", background: "white" }}>
+                        {isDataLoaded ? (
+                            type === "po" ? (
+                                <PurchaseOrderTemplate data={poData as any} />
+                            ) : (
+                                <DeliveryChallanTemplate data={dcData as any} />
+                            )
+                        ) : null}
+                    </div>
                 </div>
 
                 {/* Drag hint when zoomed */}

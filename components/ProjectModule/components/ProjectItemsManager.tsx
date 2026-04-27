@@ -45,6 +45,7 @@ export function ProjectItemsManager({ projectId }: ProjectItemsManagerProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isCategoryDialogOpen, setIsCategoryDialogOpen] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState("");
+  const hasCategories = (categories?.length ?? 0) > 0;
 
   const handleCreateCategory = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -65,6 +66,14 @@ export function ProjectItemsManager({ projectId }: ProjectItemsManagerProps) {
     e.preventDefault();
     if (!formData.name || !formData.categoryId || formData.quantity === "" || formData.rate === "") {
       toast.error("Please fill in all required fields.");
+      return;
+    }
+    if (Number(formData.quantity) <= 0) {
+      toast.error("Quantity must be greater than 0.");
+      return;
+    }
+    if (Number(formData.rate) < 0) {
+      toast.error("Rate cannot be negative.");
       return;
     }
 
@@ -106,7 +115,7 @@ export function ProjectItemsManager({ projectId }: ProjectItemsManagerProps) {
           Add New Item
         </h3>
         <form onSubmit={handleAddItem} className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="col-span-2 space-y-1.5">
               <Label className="text-xs font-bold text-muted-foreground uppercase">Item Name *</Label>
               <Input
@@ -137,6 +146,11 @@ export function ProjectItemsManager({ projectId }: ProjectItemsManagerProps) {
                   <Plus className="h-4 w-4" />
                 </Button>
               </div>
+              {!hasCategories && (
+                <p className="text-xs text-muted-foreground">
+                  No categories yet. Click <strong>+</strong> to create one first.
+                </p>
+              )}
             </div>
 
             <div className="col-span-2 space-y-1.5">
@@ -192,7 +206,7 @@ export function ProjectItemsManager({ projectId }: ProjectItemsManagerProps) {
               />
             </div>
           </div>
-          <Button type="submit" className="w-full" disabled={isSubmitting}>
+          <Button type="submit" className="w-full" disabled={isSubmitting || !hasCategories}>
             {isSubmitting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Plus className="h-4 w-4 mr-2" />}
             Submit / Save Item
           </Button>

@@ -8,13 +8,157 @@ import { PurchaseOrderTemplate } from "@/components/purchase/purchase-order-temp
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import Link from "next/link";
+import html2canvas from "html2canvas";
+import { jsPDF } from "jspdf";
 
-// Dynamic import for html2pdf
-const getHtml2Pdf = async () => {
-    // @ts-ignore
-    const html2pdf = (await import("html2pdf.js/dist/html2pdf.min.js")).default;
-    return html2pdf;
-};
+async function blobToDataUrl(blob: Blob): Promise<string> {
+    return await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result));
+        reader.onerror = () => reject(new Error("Failed to read image blob"));
+        reader.readAsDataURL(blob);
+    });
+}
+
+async function fetchImageAsDataUrl(src: string): Promise<string | null> {
+    const tryFetch = async (url: string) => {
+        const res = await fetch(url);
+        if (!res.ok) throw new Error(`Failed to fetch image: ${res.status}`);
+        const blob = await res.blob();
+        return await blobToDataUrl(blob);
+    };
+
+    try {
+        return await tryFetch(src);
+    } catch {
+        try {
+            const proxyUrl = `/api/download?url=${encodeURIComponent(src)}&filename=image`;
+            return await tryFetch(proxyUrl);
+        } catch {
+            return null;
+        }
+    }
+}
+
+async function inlineImagesForPdf(root: HTMLElement) {
+    const images = Array.from(root.querySelectorAll("img")) as HTMLImageElement[];
+    await Promise.all(images.map(async (img) => {
+        const src = img.getAttribute("src") || "";
+        if (!src || src.startsWith("data:")) return;
+        const dataUrl = await fetchImageAsDataUrl(src);
+        if (!dataUrl) return;
+        img.setAttribute("src", dataUrl);
+    }));
+}
+
+async function nextPaint(frames: number = 2) {
+    for (let i = 0; i < frames; i++) {
+        await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+    }
+}
+
+function buildA4ExportNode(source: HTMLElement) {
+    const wrapper = document.createElement("div");
+    wrapper.style.width = "210mm";
+    wrapper.style.height = "auto";
+    wrapper.style.overflow = "visible";
+    wrapper.style.background = "white";
+    wrapper.style.boxSizing = "border-box";
+    wrapper.style.position = "fixed";
+    wrapper.style.left = "0";
+    wrapper.style.top = "0";
+    wrapper.style.pointerEvents = "none";
+    wrapper.style.opacity = "1";
+    wrapper.style.zIndex = "2147483647";
+    wrapper.style.userSelect = "none";
+    wrapper.style.isolation = "isolate";
+
+    const cloned = source.cloneNode(true) as HTMLElement;
+    cloned.style.transform = "none";
+    cloned.style.width = "210mm";
+    cloned.style.background = "white";
+
+    wrapper.appendChild(cloned);
+    document.body.appendChild(wrapper);
+
+    return {
+        wrapper,
+        cloned,
+        cleanup: () => {
+            try {
+                document.body.removeChild(wrapper);
+            } catch { /* noop */ }
+        }
+    };
+}
+
+async function renderA4PdfFromWrapper(wrapper: HTMLElement) {
+    await nextPaint(2);
+    const canvas = await html2canvas(wrapper, {
+        scale: 2,
+        useCORS: true,
+        allowTaint: false,
+        logging: false,
+        backgroundColor: "#ffffff",
+        scrollX: 0,
+        scrollY: 0,
+        windowWidth: 794,
+    } as any);
+
+    const pdf = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait", compress: true });
+    const pageWidthMm = 210;
+    const pageHeightMm = 297;
+    const pageHeightPx = Math.floor(canvas.width * (pageHeightMm / pageWidthMm));
+
+    const trimCanvasBottom = (src: HTMLCanvasElement) => {
+        const ctx = src.getContext("2d");
+        if (!ctx) return src.height;
+        const { width, height } = src;
+        const img = ctx.getImageData(0, 0, width, height).data;
+        const isRowWhite = (y: number) => {
+            const start = y * width * 4;
+            for (let x = 0; x < width; x++) {
+                const i = start + x * 4;
+                const r = img[i];
+                const g = img[i + 1];
+                const b = img[i + 2];
+                const a = img[i + 3];
+                if (a > 0 && (r < 250 || g < 250 || b < 250)) return false;
+            }
+            return true;
+        };
+        let y = height - 1;
+        while (y > 0 && isRowWhite(y)) y--;
+        return Math.min(height, y + 10);
+    };
+
+    const trimmedHeight = trimCanvasBottom(canvas);
+
+    let rendered = 0;
+    let pageIndex = 0;
+    while (rendered < trimmedHeight) {
+        const sliceHeight = Math.min(pageHeightPx, trimmedHeight - rendered);
+        const pageCanvas = document.createElement("canvas");
+        pageCanvas.width = canvas.width;
+        pageCanvas.height = sliceHeight;
+        const ctx = pageCanvas.getContext("2d");
+        if (!ctx) break;
+
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(0, 0, pageCanvas.width, pageCanvas.height);
+        ctx.drawImage(canvas, 0, rendered, canvas.width, sliceHeight, 0, 0, canvas.width, sliceHeight);
+
+        const imgData = pageCanvas.toDataURL("image/jpeg", 1.0);
+        if (pageIndex > 0) pdf.addPage();
+        const imgHeightMm = (sliceHeight / canvas.width) * pageWidthMm;
+        pdf.addImage(imgData, "JPEG", 0, 0, pageWidthMm, Math.min(pageHeightMm, imgHeightMm), undefined, "FAST");
+
+        rendered += sliceHeight;
+        pageIndex++;
+    }
+
+    return pdf;
+}
 
 export default function PublicPOViewPage({ params }: { params: Promise<{ poNumber: string }> }) {
     const { poNumber } = use(params);
@@ -26,26 +170,26 @@ export default function PublicPOViewPage({ params }: { params: Promise<{ poNumbe
         if (!pdfRef.current) return;
 
         setIsDownloading(true);
+        let cleanupExport: (() => void) | null = null;
         try {
-            const html2pdf = await getHtml2Pdf();
-            const opt = {
-                margin: 0,
-                filename: `PO_${poNumber}.pdf`,
-                image: { type: "jpeg", quality: 1.0 },
-                html2canvas: {
-                    scale: 3,
-                    useCORS: true,
-                    logging: false,
-                    windowWidth: 794,
-                },
-                jsPDF: { unit: "mm", format: "a4", orientation: "portrait", compress: true },
-            };
-
-            await html2pdf().set(opt).from(pdfRef.current).save();
+            const { wrapper, cloned, cleanup } = buildA4ExportNode(pdfRef.current);
+            cleanupExport = cleanup;
+            await inlineImagesForPdf(cloned);
+            await Promise.all(Array.from(cloned.getElementsByTagName("img")).map(img => {
+                if (img.complete) return Promise.resolve();
+                return new Promise((resolve) => {
+                    img.onload = resolve;
+                    img.onerror = resolve;
+                });
+            }));
+            await nextPaint(2);
+            const pdf = await renderA4PdfFromWrapper(wrapper);
+            pdf.save(`PO_${poNumber}.pdf`);
             toast.success("PDF downloaded!");
         } catch (error) {
             toast.error("Failed to download PDF");
         } finally {
+            cleanupExport?.();
             setIsDownloading(false);
         }
     };

@@ -25,7 +25,6 @@ import {
   FileText,
   ExternalLink,
   Download,
-  X,
 } from "lucide-react";
 import { format } from "date-fns";
 import type { Id } from "@/convex/_generated/dataModel";
@@ -53,13 +52,10 @@ export function ProjectDetailModal({
     project?.createdBy ? { userId: project.createdBy } : "skip"
   );
 
-  if (!project) {
-    return null;
-  }
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-[95vw] md:max-w-7xl w-full h-[95vh] p-0 overflow-hidden bg-card border-border shadow-2xl flex flex-col">
+        <DialogTitle className="sr-only">{project?.name ? `${project.name} details` : "Project details"}</DialogTitle>
         {/* Custom Header with Gradient */}
         <div className="shrink-0 h-16 bg-gradient-to-r from-violet-600 to-indigo-600 relative flex items-center px-6">
           <div className="flex items-center gap-3 text-white">
@@ -67,7 +63,7 @@ export function ProjectDetailModal({
               <FolderKanban className="h-5 w-5" />
             </div>
             <div>
-              <h2 className="font-bold text-lg leading-tight">{project.name}</h2>
+              <h2 className="font-bold text-lg leading-tight">{project?.name || "Project Details"}</h2>
               <p className="text-xs text-white/80 font-medium">Project Workspace</p>
             </div>
           </div>
@@ -77,6 +73,16 @@ export function ProjectDetailModal({
 
         {/* Split Pane Content */}
         <div className="flex-1 overflow-hidden grid grid-cols-1 lg:grid-cols-[1fr_450px] divide-y lg:divide-y-0 lg:divide-x divide-border">
+          {project === undefined ? (
+            <div className="col-span-full flex items-center justify-center p-8 text-muted-foreground">
+              Loading project details...
+            </div>
+          ) : project === null ? (
+            <div className="col-span-full flex items-center justify-center p-8 text-muted-foreground">
+              Project not found or no longer available.
+            </div>
+          ) : (
+            <>
           
           {/* LEFT PANE: Project Details & PDF Viewer */}
           <div className="overflow-y-auto p-6 space-y-6 bg-background">
@@ -168,8 +174,8 @@ export function ProjectDetailModal({
                       <p className="text-xs text-muted-foreground">PDF Document attached to project</p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    <Button variant="outline" size="sm" onClick={() => window.open(project.pdfUrl!, "_blank")} className="gap-1.5 h-8 text-xs">
+                  <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
+                    <Button variant="outline" size="sm" onClick={() => window.open(project.pdfUrl!, "_blank", "noopener,noreferrer")} className="gap-1.5 h-8 text-xs">
                       <ExternalLink className="h-3.5 w-3.5" />
                       Open
                     </Button>
@@ -204,7 +210,8 @@ export function ProjectDetailModal({
           <div className="bg-muted/5 h-full overflow-hidden flex flex-col p-4 lg:p-6">
             <ProjectItemsManager projectId={project._id} />
           </div>
-
+            </>
+          )}
         </div>
       </DialogContent>
     </Dialog>

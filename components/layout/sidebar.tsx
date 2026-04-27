@@ -80,6 +80,12 @@ const navigationItems: NavigationItem[] = [
     roles: [ROLES.MANAGER],
   },
   {
+    label: "Projects",
+    href: "/dashboard/project",
+    icon: FolderKanban,
+    roles: [ROLES.MANAGER],
+  },
+  {
     label: "Inventory",
     href: "/dashboard/inventory",
     icon: Warehouse,
@@ -101,12 +107,6 @@ const navigationItems: NavigationItem[] = [
     label: "Locations",
     href: "/dashboard/locations",
     icon: Building2,
-    roles: [ROLES.MANAGER],
-  },
-  {
-    label: "Projects",
-    href: "/dashboard/project",
-    icon: FolderKanban,
     roles: [ROLES.MANAGER],
   },
   {
@@ -137,6 +137,12 @@ const navigationItems: NavigationItem[] = [
     roles: [ROLES.PURCHASE_OFFICER],
   },
   {
+    label: "Projects",
+    href: "/dashboard/project",
+    icon: FolderKanban,
+    roles: [ROLES.PURCHASE_OFFICER],
+  },
+  {
     label: "Inventory",
     href: "/dashboard/inventory",
     icon: Warehouse,
@@ -158,12 +164,6 @@ const navigationItems: NavigationItem[] = [
     label: "Locations",
     href: "/dashboard/locations",
     icon: Building2,
-    roles: [ROLES.PURCHASE_OFFICER],
-  },
-  {
-    label: "Projects",
-    href: "/dashboard/project",
-    icon: FolderKanban,
     roles: [ROLES.PURCHASE_OFFICER],
   },
   {

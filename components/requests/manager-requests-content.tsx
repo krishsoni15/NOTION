@@ -575,7 +575,10 @@ export function ManagerRequestsContent() {
                         preciseStatuses={true}
                         hideStatusOnCard={true}
                         hideItemCountOnCard={true}
-                        onViewPDF={setPdfRequestNumber}
+                        onViewPDF={(poNumber, requestId) => {
+                            setPdfPreviewPoNumber(poNumber);
+                            setPdfPreviewRequestId(requestId);
+                        }}
                     />
 
                     {/* Pagination Controls - Bottom */}

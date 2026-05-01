@@ -102,6 +102,7 @@ export default defineSchema({
     )), // Flag for direct delivery/PO/split combinations
     isSplitApproved: v.optional(v.boolean()),
     isRFQ: v.optional(v.boolean()), // Flag to indicate this is an RFQ (Request for Quotation)
+    projectId: v.optional(v.id("projects")), // Source project (for items sent from Projects module)
     lastTalkDate: v.optional(v.number()), // For pending PO last talk date
     lastTalkText: v.optional(v.string()), // Notes for last talk
     committedDate: v.optional(v.number()), // Vendor committed delivery date (manually set)

@@ -40,7 +40,7 @@ export interface POData {
 }
 
 // Helper to convert number to words (Indian numbering system)
-function numberToWords(num: number): string {
+export function numberToWords(num: number): string {
     const a = ["", "one ", "two ", "three ", "four ", "five ", "six ", "seven ", "eight ", "nine ", "ten ", "eleven ", "twelve ", "thirteen ", "fourteen ", "fifteen ", "sixteen ", "seventeen ", "eighteen ", "nineteen "];
     const b = ["", "", "twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety"];
 

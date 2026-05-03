@@ -16,8 +16,10 @@ import {
 } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Card, CardContent } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Plus, Trash2, Tag, Layers, Package, IndianRupee, Loader2 } from "lucide-react";
+import { Plus, Trash2, Tag, Layers, Package, IndianRupee, Loader2, Send, ShoppingCart, CheckCircle2 } from "lucide-react";
 import type { Id } from "@/convex/_generated/dataModel";
 import type { ProjectItemFormData } from "../types/project.types";
 
@@ -40,12 +42,61 @@ export function ProjectItemsManager({ projectId }: ProjectItemsManagerProps) {
   const createItem = useMutation(api.projectItems.createItem);
   const deleteItem = useMutation(api.projectItems.deleteItem);
   const createCategory = useMutation(api.projectItems.createCategory);
+  const sendToProcurement = useMutation(api.projectItems.sendItemsToProcurement);
 
   const [formData, setFormData] = useState<ProjectItemFormData>(INITIAL_ITEM_FORM);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isCategoryDialogOpen, setIsCategoryDialogOpen] = useState(false);
   const [newCategoryName, setNewCategoryName] = useState("");
   const hasCategories = (categories?.length ?? 0) > 0;
+
+  // Selection state for "Send to Procurement"
+  const [selectedItemIds, setSelectedItemIds] = useState<Set<Id<"projectItems">>>(new Set());
+  const [isSending, setIsSending] = useState(false);
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+
+  const toggleItemSelection = (itemId: Id<"projectItems">) => {
+    setSelectedItemIds(prev => {
+      const next = new Set(prev);
+      if (next.has(itemId)) {
+        next.delete(itemId);
+      } else {
+        next.add(itemId);
+      }
+      return next;
+    });
+  };
+
+  const selectAll = () => {
+    if (!items) return;
+    if (selectedItemIds.size === items.length) {
+      setSelectedItemIds(new Set());
+    } else {
+      setSelectedItemIds(new Set(items.map(i => i._id)));
+    }
+  };
+
+  const handleSendToProcurement = async () => {
+    if (selectedItemIds.size === 0) {
+      toast.error("Please select at least one item");
+      return;
+    }
+
+    setIsSending(true);
+    try {
+      const result = await sendToProcurement({
+        projectId,
+        itemIds: Array.from(selectedItemIds),
+      });
+      toast.success(`${selectedItemIds.size} item(s) sent to procurement as RFQ #${result.requestNumber}`);
+      setSelectedItemIds(new Set());
+      setShowConfirmDialog(false);
+    } catch (error: any) {
+      toast.error(error.message || "Failed to send items to procurement");
+    } finally {
+      setIsSending(false);
+    }
+  };
 
   const handleCreateCategory = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -100,6 +151,12 @@ export function ProjectItemsManager({ projectId }: ProjectItemsManagerProps) {
   const handleDeleteItem = async (itemId: Id<"projectItems">) => {
     try {
       await deleteItem({ itemId });
+      // Also remove from selection if selected
+      setSelectedItemIds(prev => {
+        const next = new Set(prev);
+        next.delete(itemId);
+        return next;
+      });
       toast.success("Item deleted");
     } catch (error) {
       toast.error("Failed to delete item");
@@ -215,9 +272,23 @@ export function ProjectItemsManager({ projectId }: ProjectItemsManagerProps) {
 
       {/* Summary List */}
       <div className="flex-1 overflow-y-auto p-5 bg-muted/5">
-        <h4 className="text-sm font-bold text-muted-foreground uppercase tracking-wider mb-3">
-          Added Items ({items?.length || 0})
-        </h4>
+        <div className="flex items-center justify-between mb-3">
+          <h4 className="text-sm font-bold text-muted-foreground uppercase tracking-wider">
+            Added Items ({items?.length || 0})
+          </h4>
+          {items && items.length > 0 && (
+            <div className="flex items-center gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={selectAll}
+                className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
+              >
+                {selectedItemIds.size === items.length ? "Deselect All" : "Select All"}
+              </Button>
+            </div>
+          )}
+        </div>
         
         {!items ? (
           <div className="flex justify-center p-8 text-muted-foreground"><Loader2 className="h-6 w-6 animate-spin" /></div>
@@ -227,33 +298,119 @@ export function ProjectItemsManager({ projectId }: ProjectItemsManagerProps) {
           </div>
         ) : (
           <div className="space-y-3">
-            {items.map((item) => (
-              <Card key={item._id} className="shadow-sm border-border/50">
-                <CardContent className="p-3 flex justify-between items-start gap-3">
-                  <div className="min-w-0 flex-1">
-                    <p className="font-semibold text-sm truncate">{item.name}</p>
-                    <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground flex-wrap">
-                      <span className="flex items-center gap-1 bg-primary/10 text-primary px-1.5 py-0.5 rounded font-medium">
-                        <Tag className="h-3 w-3" />
-                        {item.categoryName}
-                      </span>
-                      {item.make && <span>Make: {item.make}</span>}
+            {items.map((item) => {
+              const isSelected = selectedItemIds.has(item._id);
+              return (
+                <Card key={item._id} className={`shadow-sm border-border/50 transition-all ${isSelected ? "ring-2 ring-primary/40 border-primary/30 bg-primary/5" : ""}`}>
+                  <CardContent className="p-3 flex justify-between items-start gap-3">
+                    <div className="flex items-start gap-3 flex-1 min-w-0">
+                      {/* Selection Checkbox */}
+                      <div className="pt-0.5">
+                        <Checkbox
+                          checked={isSelected}
+                          onCheckedChange={() => toggleItemSelection(item._id)}
+                          className="h-4.5 w-4.5"
+                        />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="font-semibold text-sm truncate">{item.name}</p>
+                        <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground flex-wrap">
+                          <span className="flex items-center gap-1 bg-primary/10 text-primary px-1.5 py-0.5 rounded font-medium">
+                            <Tag className="h-3 w-3" />
+                            {item.categoryName}
+                          </span>
+                          {item.make && <span>Make: {item.make}</span>}
+                        </div>
+                        <div className="flex gap-4 mt-2 text-xs font-medium">
+                          <span>Qty: {item.quantity}</span>
+                          <span>Rate: ₹{item.rate.toLocaleString()}</span>
+                          <span className="text-foreground">Total: ₹{(item.quantity * item.rate).toLocaleString()}</span>
+                        </div>
+                      </div>
                     </div>
-                    <div className="flex gap-4 mt-2 text-xs font-medium">
-                      <span>Qty: {item.quantity}</span>
-                      <span>Rate: ₹{item.rate.toLocaleString()}</span>
-                      <span className="text-foreground">Total: ₹{(item.quantity * item.rate).toLocaleString()}</span>
-                    </div>
-                  </div>
-                  <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive shrink-0" onClick={() => handleDeleteItem(item._id)}>
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </CardContent>
-              </Card>
-            ))}
+                    <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive shrink-0" onClick={() => handleDeleteItem(item._id)}>
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </CardContent>
+                </Card>
+              );
+            })}
           </div>
         )}
       </div>
+
+      {/* Send to Procurement Action Bar */}
+      {items && items.length > 0 && (
+        <div className="shrink-0 p-4 border-t border-border bg-card">
+          <Button
+            onClick={() => {
+              if (selectedItemIds.size === 0) {
+                toast.error("Please select at least one item to send");
+                return;
+              }
+              setShowConfirmDialog(true);
+            }}
+            disabled={selectedItemIds.size === 0}
+            className="w-full bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white font-bold shadow-lg"
+          >
+            <ShoppingCart className="h-4 w-4 mr-2" />
+            Send to Procurement ({selectedItemIds.size})
+          </Button>
+        </div>
+      )}
+
+      {/* Confirm Send Dialog */}
+      <Dialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
+        <DialogContent className="sm:max-w-[450px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Send className="h-5 w-5 text-primary" />
+              Send Items to Procurement
+            </DialogTitle>
+            <DialogDescription>
+              This will create an RFQ (Request for Quotation) with {selectedItemIds.size} item(s) and send them directly to the Cost Comparison queue.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4 space-y-3 max-h-[300px] overflow-y-auto">
+            {items?.filter(i => selectedItemIds.has(i._id)).map((item, idx) => (
+              <div key={item._id} className="flex items-center gap-3 p-3 bg-muted/30 rounded-lg border border-border/50">
+                <Badge variant="secondary" className="shrink-0 h-6 w-6 rounded-full p-0 flex items-center justify-center text-[10px] font-bold">
+                  {idx + 1}
+                </Badge>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-semibold truncate">{item.name}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {item.quantity} × ₹{item.rate.toLocaleString()} = ₹{(item.quantity * item.rate).toLocaleString()}
+                  </p>
+                </div>
+                <CheckCircle2 className="h-4 w-4 text-emerald-500 shrink-0" />
+              </div>
+            ))}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowConfirmDialog(false)} disabled={isSending}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSendToProcurement}
+              disabled={isSending}
+              className="bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700 text-white"
+            >
+              {isSending ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Sending...
+                </>
+              ) : (
+                <>
+                  <Send className="h-4 w-4 mr-2" />
+                  Confirm & Send
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Create Category Dialog */}
       <Dialog open={isCategoryDialogOpen} onOpenChange={setIsCategoryDialogOpen}>

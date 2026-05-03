@@ -40,7 +40,7 @@ export interface POData {
 }
 
 // Helper to convert number to words (Indian numbering system)
-function numberToWords(num: number): string {
+export function numberToWords(num: number): string {
     const a = ["", "one ", "two ", "three ", "four ", "five ", "six ", "seven ", "eight ", "nine ", "ten ", "eleven ", "twelve ", "thirteen ", "fourteen ", "fifteen ", "sixteen ", "seventeen ", "eighteen ", "nineteen "];
     const b = ["", "", "twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety"];
 
@@ -167,16 +167,29 @@ export function PurchaseOrderTemplate({ data }: { data: POData }) {
 
     return (
         <div
-            className="bg-white text-[#000000] font-sans text-xs"
+            className="bg-white text-[#000000] font-sans text-xs po-global-padding"
             style={{
                 width: '210mm',
                 minHeight: '297mm',
-                padding: '8mm',
+                padding: '14mm',
                 margin: '0 auto',
                 boxSizing: 'border-box',
                 overflow: 'visible',
             }}
         >
+            <style>{`
+                .po-global-padding th,
+                .po-global-padding td {
+                    padding: 6px 8px !important;
+                    vertical-align: middle !important;
+                }
+                .po-global-padding .p-1 {
+                    padding: 6px 8px !important;
+                }
+                .po-global-padding .p-2 {
+                    padding: 8px 10px !important;
+                }
+            `}</style>
             {/* PO Content */}
             <div className="w-full bg-white">
 

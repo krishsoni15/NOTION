@@ -368,7 +368,7 @@ export function PDFPreviewDialog({
         if (!isDataLoaded) return;
         if (!pdfContentRef.current) return;
         // Fire-and-forget: if an image can't be fetched we still show the rest.
-        inlineImagesForPdf(pdfContentRef.current).catch(() => {});
+        inlineImagesForPdf(pdfContentRef.current).catch(() => { });
     }, [open, isDataLoaded, poNumber, type]);
 
     const handleDownload = async () => {
@@ -627,216 +627,216 @@ Notion Electronica Pvt. Ltd.`;
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent
-                className="max-w-6xl w-full h-[95vh] flex flex-col p-0 overflow-hidden border-0 shadow-2xl bg-slate-900 rounded-xl"
+                className="max-w-[95vw] sm:max-w-[80vw] w-full h-[95vh] flex flex-col p-0 overflow-hidden border-0 shadow-2xl bg-slate-900 rounded-xl"
                 showCloseButton={false}
             >
                 {/* Main PDF side */}
                 <div className="flex-1 flex flex-col overflow-hidden">
-                {/* Header - Compact, No Overflow */}
-                <DialogHeader className="px-2 py-2 border-b border-slate-700/50 bg-slate-800 shrink-0 overflow-hidden">
-                    <div className="flex items-center gap-1.5 w-full overflow-hidden">
-                        {/* Title - Compact */}
-                        <div className="flex items-center gap-1.5 shrink-0">
-                            <div className="p-1.5 bg-blue-600 rounded-md">
-                                <FileText className="h-3.5 w-3.5 text-white" />
+                    {/* Header - Compact, No Overflow */}
+                    <DialogHeader className="px-2 py-2 border-b border-slate-700/50 bg-slate-800 shrink-0 overflow-hidden">
+                        <div className="flex items-center gap-1.5 w-full overflow-hidden">
+                            {/* Title - Compact */}
+                            <div className="flex items-center gap-1.5 shrink-0">
+                                <div className="p-1.5 bg-blue-600 rounded-md">
+                                    <FileText className="h-3.5 w-3.5 text-white" />
+                                </div>
+                                <div className="hidden xs:block">
+                                    <DialogTitle className="text-xs font-bold text-white leading-tight">
+                                        {documentName} Preview
+                                    </DialogTitle>
+                                    <p className="text-[9px] text-slate-400 font-mono">#{documentId}</p>
+                                </div>
                             </div>
-                            <div className="hidden xs:block">
-                                <DialogTitle className="text-xs font-bold text-white leading-tight">
-                                    {documentName} Preview
-                                </DialogTitle>
-                                <p className="text-[9px] text-slate-400 font-mono">#{documentId}</p>
+
+                            {/* Zoom Controls - Compact */}
+                            <div className="flex items-center bg-slate-700/60 rounded-full ml-1 shrink-0">
+                                <button
+                                    className="h-6 w-6 flex items-center justify-center rounded-full text-slate-300 hover:text-white hover:bg-slate-600"
+                                    onClick={handleZoomOut}
+                                >
+                                    <ZoomOut className="h-3 w-3" />
+                                </button>
+                                <button
+                                    className="min-w-[38px] h-6 text-[10px] font-bold text-white font-mono hover:bg-slate-600/50 rounded"
+                                    onClick={handleResetZoom}
+                                >
+                                    {Math.round(zoomLevel * 100)}%
+                                </button>
+                                <button
+                                    className="h-6 w-6 flex items-center justify-center rounded-full text-slate-300 hover:text-white hover:bg-slate-600"
+                                    onClick={handleZoomIn}
+                                >
+                                    <ZoomIn className="h-3 w-3" />
+                                </button>
+                                <button
+                                    className="h-6 w-6 flex items-center justify-center rounded-full text-slate-300 hover:text-white hover:bg-slate-600"
+                                    onClick={handleResetZoom}
+                                >
+                                    <RotateCcw className="h-2.5 w-2.5" />
+                                </button>
+                            </div>
+
+                            {/* Spacer */}
+                            <div className="flex-1" />
+
+                            {/* Actions - Icon buttons */}
+                            <div className="flex items-center gap-0.5 shrink-0">
+                                {/* Print */}
+                                <button
+                                    className="h-7 w-7 flex items-center justify-center rounded-md text-slate-300 hover:text-white hover:bg-slate-700 hidden sm:flex"
+                                    onClick={handlePrint}
+                                    disabled={!isDataLoaded || isPrinting}
+                                    title="Print document only"
+                                >
+                                    {isPrinting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Printer className="h-3.5 w-3.5" />}
+                                </button>
+
+                                {/* Download */}
+                                <button
+                                    className="h-7 px-2.5 flex items-center gap-1.5 rounded-md bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold"
+                                    onClick={handleDownload}
+                                    disabled={!isDataLoaded || isDownloading}
+                                >
+                                    {isDownloading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
+                                    <span className="hidden md:inline">Download</span>
+                                </button>
+
+                                {/* Close */}
+                                <button
+                                    className="h-7 w-7 flex items-center justify-center rounded-md text-slate-400 hover:text-white hover:bg-red-500/30 ml-0.5"
+                                    onClick={() => onOpenChange(false)}
+                                >
+                                    <X className="h-4 w-4" />
+                                </button>
                             </div>
                         </div>
+                    </DialogHeader>
 
-                        {/* Zoom Controls - Compact */}
-                        <div className="flex items-center bg-slate-700/60 rounded-full ml-1 shrink-0">
-                            <button
-                                className="h-6 w-6 flex items-center justify-center rounded-full text-slate-300 hover:text-white hover:bg-slate-600"
-                                onClick={handleZoomOut}
-                            >
-                                <ZoomOut className="h-3 w-3" />
-                            </button>
-                            <button
-                                className="min-w-[38px] h-6 text-[10px] font-bold text-white font-mono hover:bg-slate-600/50 rounded"
-                                onClick={handleResetZoom}
-                            >
-                                {Math.round(zoomLevel * 100)}%
-                            </button>
-                            <button
-                                className="h-6 w-6 flex items-center justify-center rounded-full text-slate-300 hover:text-white hover:bg-slate-600"
-                                onClick={handleZoomIn}
-                            >
-                                <ZoomIn className="h-3 w-3" />
-                            </button>
-                            <button
-                                className="h-6 w-6 flex items-center justify-center rounded-full text-slate-300 hover:text-white hover:bg-slate-600"
-                                onClick={handleResetZoom}
-                            >
-                                <RotateCcw className="h-2.5 w-2.5" />
-                            </button>
-                        </div>
-
-                        {/* Spacer */}
-                        <div className="flex-1" />
-
-                        {/* Actions - Icon buttons */}
-                        <div className="flex items-center gap-0.5 shrink-0">
-                            {/* Print */}
-                            <button
-                                className="h-7 w-7 flex items-center justify-center rounded-md text-slate-300 hover:text-white hover:bg-slate-700 hidden sm:flex"
-                                onClick={handlePrint}
-                                disabled={!isDataLoaded || isPrinting}
-                                title="Print document only"
-                            >
-                                {isPrinting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Printer className="h-3.5 w-3.5" />}
-                            </button>
-
-                            {/* Download */}
-                            <button
-                                className="h-7 px-2.5 flex items-center gap-1.5 rounded-md bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold"
-                                onClick={handleDownload}
-                                disabled={!isDataLoaded || isDownloading}
-                            >
-                                {isDownloading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
-                                <span className="hidden md:inline">Download</span>
-                            </button>
-
-                            {/* Close */}
-                            <button
-                                className="h-7 w-7 flex items-center justify-center rounded-md text-slate-400 hover:text-white hover:bg-red-500/30 ml-0.5"
-                                onClick={() => onOpenChange(false)}
-                            >
-                                <X className="h-4 w-4" />
-                            </button>
-                        </div>
-                    </div>
-                </DialogHeader>
-
-                {/* PDF Content - Draggable */}
-                <div
-                    ref={containerRef}
-                    className={cn(
-                        "flex-1 overflow-auto bg-slate-800/30",
-                        isDragging ? "cursor-grabbing" : "cursor-grab"
-                    )}
-                    onMouseDown={handleMouseDown}
-                    onMouseMove={handleMouseMove}
-                    onMouseUp={handleMouseUp}
-                    onMouseLeave={handleMouseUp}
-                    onTouchStart={handleTouchStart}
-                    onTouchMove={handleTouchMove}
-                    onTouchEnd={handleTouchEnd}
-                    style={{
-                        WebkitOverflowScrolling: 'touch',
-                    }}
-                >
-                    {!isDataLoaded ? (
-                        <div className="flex flex-col items-center justify-center h-full gap-3">
-                            <Loader2 className="h-8 w-8 animate-spin text-blue-400" />
-                            <p className="text-sm text-slate-400">Loading {documentName} details...</p>
-                        </div>
-                    ) : (
-                        <div
-                            className="p-4 sm:p-8 inline-block min-w-full"
-                            style={{ minHeight: '100%' }}
-                        >
-                            {/* PDF Container */}
+                    {/* PDF Content - Draggable */}
+                    <div
+                        ref={containerRef}
+                        className={cn(
+                            "flex-1 overflow-auto bg-slate-800/30",
+                            isDragging ? "cursor-grabbing" : "cursor-grab"
+                        )}
+                        onMouseDown={handleMouseDown}
+                        onMouseMove={handleMouseMove}
+                        onMouseUp={handleMouseUp}
+                        onMouseLeave={handleMouseUp}
+                        onTouchStart={handleTouchStart}
+                        onTouchMove={handleTouchMove}
+                        onTouchEnd={handleTouchEnd}
+                        style={{
+                            WebkitOverflowScrolling: 'touch',
+                        }}
+                    >
+                        {!isDataLoaded ? (
+                            <div className="flex flex-col items-center justify-center h-full gap-3">
+                                <Loader2 className="h-8 w-8 animate-spin text-blue-400" />
+                                <p className="text-sm text-slate-400">Loading {documentName} details...</p>
+                            </div>
+                        ) : (
                             <div
-                                className="mx-auto"
-                                style={{
-                                    width: `calc(210mm * ${zoomLevel})`,
-                                    // Let height grow; we page-split on export if needed.
-                                    height: "auto",
-                                }}
+                                className="p-4 sm:p-8 inline-block min-w-full"
+                                style={{ minHeight: '100%' }}
                             >
+                                {/* PDF Container */}
                                 <div
-                                    className="bg-white shadow-2xl origin-top-left"
+                                    className="mx-auto"
                                     style={{
-                                        width: "210mm",
+                                        width: `calc(210mm * ${zoomLevel})`,
+                                        // Let height grow; we page-split on export if needed.
                                         height: "auto",
-                                        transform: `scale(${zoomLevel})`,
                                     }}
                                 >
-                                    <div ref={pdfContentRef} className="print-surface" style={{ width: "210mm", backgroundColor: 'white' }}>
-                                        {type === "po" ? (
-                                            <PurchaseOrderTemplate data={poData as any} />
-                                        ) : (
-                                            <DeliveryChallanTemplate data={dcData as any} />
-                                        )}
+                                    <div
+                                        className="bg-white shadow-2xl origin-top-left"
+                                        style={{
+                                            width: "210mm",
+                                            height: "auto",
+                                            transform: `scale(${zoomLevel})`,
+                                        }}
+                                    >
+                                        <div ref={pdfContentRef} className="print-surface" style={{ width: "210mm", backgroundColor: 'white' }}>
+                                            {type === "po" ? (
+                                                <PurchaseOrderTemplate data={poData as any} />
+                                            ) : (
+                                                <DeliveryChallanTemplate data={dcData as any} />
+                                            )}
+                                        </div>
                                     </div>
                                 </div>
                             </div>
+                        )}
+                    </div>
+
+                    {/* Hidden export surface (unscaled, stable layout for html2canvas/html2pdf) */}
+                    <div
+                        aria-hidden
+                        style={{
+                            position: "fixed",
+                            left: "-100000px",
+                            top: 0,
+                            width: "210mm",
+                            background: "white",
+                            pointerEvents: "none",
+                            opacity: 0,
+                        }}
+                    >
+                        <div ref={pdfExportRef} style={{ width: "210mm", background: "white" }}>
+                            {isDataLoaded ? (
+                                type === "po" ? (
+                                    <PurchaseOrderTemplate data={poData as any} />
+                                ) : (
+                                    <DeliveryChallanTemplate data={dcData as any} />
+                                )
+                            ) : null}
+                        </div>
+                    </div>
+
+                    {/* Drag hint when zoomed */}
+                    {zoomLevel > 1.1 && (
+                        <div className="absolute bottom-20 left-1/2 -translate-x-1/2 bg-slate-800/90 backdrop-blur-sm text-white text-xs px-3 py-1.5 rounded-full flex items-center gap-2 pointer-events-none animate-pulse">
+                            <Move className="h-3.5 w-3.5" />
+                            <span>Drag to pan</span>
                         </div>
                     )}
-                </div>
 
-                {/* Hidden export surface (unscaled, stable layout for html2canvas/html2pdf) */}
-                <div
-                    aria-hidden
-                    style={{
-                        position: "fixed",
-                        left: "-100000px",
-                        top: 0,
-                        width: "210mm",
-                        background: "white",
-                        pointerEvents: "none",
-                        opacity: 0,
-                    }}
-                >
-                    <div ref={pdfExportRef} style={{ width: "210mm", background: "white" }}>
-                        {isDataLoaded ? (
-                            type === "po" ? (
-                                <PurchaseOrderTemplate data={poData as any} />
-                            ) : (
-                                <DeliveryChallanTemplate data={dcData as any} />
-                            )
-                        ) : null}
-                    </div>
-                </div>
+                    {/* Mobile Footer */}
+                    <div className="sm:hidden p-2 border-t border-slate-700/50 bg-slate-800/90 flex items-center gap-2 shrink-0">
+                        {/* Zoom */}
+                        <div className="flex items-center bg-slate-700/50 rounded-lg shrink-0">
+                            <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-300" onClick={handleZoomOut}>
+                                <ZoomOut className="h-4 w-4" />
+                            </Button>
+                            <span className="text-xs font-mono text-white w-10 text-center">{Math.round(zoomLevel * 100)}%</span>
+                            <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-300" onClick={handleZoomIn}>
+                                <ZoomIn className="h-4 w-4" />
+                            </Button>
+                        </div>
 
-                {/* Drag hint when zoomed */}
-                {zoomLevel > 1.1 && (
-                    <div className="absolute bottom-20 left-1/2 -translate-x-1/2 bg-slate-800/90 backdrop-blur-sm text-white text-xs px-3 py-1.5 rounded-full flex items-center gap-2 pointer-events-none animate-pulse">
-                        <Move className="h-3.5 w-3.5" />
-                        <span>Drag to pan</span>
-                    </div>
-                )}
+                        {/* Send */}
+                        {type === "po" && (
+                            <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                    <Button variant="outline" size="sm" className="h-9 flex-1 border-slate-600 text-slate-200 bg-transparent">
+                                        <Send className="h-4 w-4 mr-1" />
+                                        Send
+                                    </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="center">
+                                    <DropdownMenuItem onClick={handleShareWhatsApp}><MessageCircle className="h-4 w-4 mr-2 text-green-500" />WhatsApp</DropdownMenuItem>
+                                    <DropdownMenuItem onClick={handleShareEmail}><Mail className="h-4 w-4 mr-2 text-blue-500" />Email</DropdownMenuItem>
+                                </DropdownMenuContent>
+                            </DropdownMenu>
+                        )}
 
-                {/* Mobile Footer */}
-                <div className="sm:hidden p-2 border-t border-slate-700/50 bg-slate-800/90 flex items-center gap-2 shrink-0">
-                    {/* Zoom */}
-                    <div className="flex items-center bg-slate-700/50 rounded-lg shrink-0">
-                        <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-300" onClick={handleZoomOut}>
-                            <ZoomOut className="h-4 w-4" />
-                        </Button>
-                        <span className="text-xs font-mono text-white w-10 text-center">{Math.round(zoomLevel * 100)}%</span>
-                        <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-300" onClick={handleZoomIn}>
-                            <ZoomIn className="h-4 w-4" />
+                        {/* Download */}
+                        <Button onClick={handleDownload} disabled={!isDataLoaded || isDownloading} className="h-9 flex-1 bg-blue-600 text-white font-semibold">
+                            {isDownloading ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Download className="h-4 w-4 mr-1" />}
+                            Download
                         </Button>
                     </div>
-
-                    {/* Send */}
-                    {type === "po" && (
-                        <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                                <Button variant="outline" size="sm" className="h-9 flex-1 border-slate-600 text-slate-200 bg-transparent">
-                                    <Send className="h-4 w-4 mr-1" />
-                                    Send
-                                </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="center">
-                                <DropdownMenuItem onClick={handleShareWhatsApp}><MessageCircle className="h-4 w-4 mr-2 text-green-500" />WhatsApp</DropdownMenuItem>
-                                <DropdownMenuItem onClick={handleShareEmail}><Mail className="h-4 w-4 mr-2 text-blue-500" />Email</DropdownMenuItem>
-                            </DropdownMenuContent>
-                        </DropdownMenu>
-                    )}
-
-                    {/* Download */}
-                    <Button onClick={handleDownload} disabled={!isDataLoaded || isDownloading} className="h-9 flex-1 bg-blue-600 text-white font-semibold">
-                        {isDownloading ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Download className="h-4 w-4 mr-1" />}
-                        Download
-                    </Button>
-                </div>
                 </div>
             </DialogContent>
         </Dialog>

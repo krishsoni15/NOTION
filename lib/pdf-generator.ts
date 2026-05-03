@@ -1,4 +1,1 @@
-import
-autoTable
-    from
-    jspdf - autotable
+import autoTable from 'jspdf-autotable';

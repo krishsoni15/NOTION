@@ -627,7 +627,7 @@ Notion Electronica Pvt. Ltd.`;
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent
-                className="max-w-6xl w-full h-[95vh] flex flex-col p-0 overflow-hidden border-0 shadow-2xl bg-slate-900 rounded-xl"
+                className="max-w-[95vw] sm:max-w-[80vw] w-full h-[95vh] flex flex-col p-0 overflow-hidden border-0 shadow-2xl bg-slate-900 rounded-xl"
                 showCloseButton={false}
             >
                 {/* Main PDF side */}

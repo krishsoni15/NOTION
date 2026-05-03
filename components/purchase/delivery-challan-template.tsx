@@ -67,8 +67,20 @@ export function DeliveryChallanTemplate({ data }: { data: DCData }) {
                         page-break-after: always;
                     }
                 }
+                .dc-global-padding th,
+                .dc-global-padding td {
+                    padding: 4px 8px !important;
+                }
+                .dc-global-padding .p-1\\.5 {
+                    padding: 8px 10px !important;
+                }
+                .dc-global-padding .px-1\\.5 {
+                    padding-left: 8px !important;
+                    padding-right: 8px !important;
+                }
             `}</style>
-            <div className="bg-white text-black font-sans text-[10px] leading-tight delivery-challan-print" style={{ width: '210mm', minHeight: '297mm', padding: '0', margin: '0', boxSizing: 'border-box', border: '1px solid #000' }} data-print-content>
+            <div className="bg-white text-black font-sans text-[10px] leading-tight delivery-challan-print dc-global-padding" style={{ width: '210mm', minHeight: '297mm', padding: '14mm', margin: '0 auto', boxSizing: 'border-box' }} data-print-content>
+                <div className="w-full flex flex-col border border-black" style={{ minHeight: 'calc(297mm - 28mm)', boxSizing: 'border-box' }}>
                 {/* Header Title */}
                 <div className="text-center py-1 border-b border-black font-bold text-sm">
                 Delivery Challan
@@ -311,6 +323,7 @@ export function DeliveryChallanTemplate({ data }: { data: DCData }) {
             <div className="text-center p-1 text-[8px] font-bold">
                 <div>SUBJECT TO AHMEDABAD JURISDICTION</div>
                 <div className="mt-1">This is a Computer Generated Document</div>
+            </div>
             </div>
             </div>
         </>

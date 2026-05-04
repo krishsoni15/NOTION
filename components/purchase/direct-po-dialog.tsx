@@ -25,6 +25,7 @@ import {
     TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -116,8 +117,8 @@ export function DirectPODialog({ open, onOpenChange, initialData, mode = "standa
     const createDirectPO = useMutation(api.purchaseOrders.createDirectPO);
     const inventoryItems = useQuery(api.inventory.getAllInventoryItems);
     const vendors = useQuery(api.vendors.getAllVendors);
-
     const sites = useQuery(api.sites.getAllSites, {});
+    const projects = useQuery(api.projects.getAllProjects, {});
 
     const [isLoading, setIsLoading] = useState(false);
     const [showVendorDialog, setShowVendorDialog] = useState(false);
@@ -125,13 +126,16 @@ export function DirectPODialog({ open, onOpenChange, initialData, mode = "standa
     const [vendorSearchQuery, setVendorSearchQuery] = useState("");
     const [itemSearchQuery, setItemSearchQuery] = useState("");
     const [siteSearchQuery, setSiteSearchQuery] = useState("");
+    const [projectSearchQuery, setProjectSearchQuery] = useState("");
 
     const [showItemSuggestions, setShowItemSuggestions] = useState(false);
     const [showVendorSuggestions, setShowVendorSuggestions] = useState(false);
     const [showSiteSuggestions, setShowSiteSuggestions] = useState(false);
+    const [showProjectSuggestions, setShowProjectSuggestions] = useState(false);
     const [showUnitSuggestions, setShowUnitSuggestions] = useState(false);
     const [showPerUnitSuggestions, setShowPerUnitSuggestions] = useState(false);
     const [selectedVendorIndex, setSelectedVendorIndex] = useState(0);
+    const [selectedProjectIndex, setSelectedProjectIndex] = useState(0);
 
     const [infoItemName, setInfoItemName] = useState<string | null>(null);
     const [infoSiteId, setInfoSiteId] = useState<Id<"sites"> | null>(null);
@@ -160,6 +164,7 @@ export function DirectPODialog({ open, onOpenChange, initialData, mode = "standa
         gstNumber: "",
         vendorAddress: "",
         deliverySite: "",
+        projectId: "" as Id<"projects"> | "",
         validTill: "",
         notes: "",
     });
@@ -236,6 +241,17 @@ export function DirectPODialog({ open, onOpenChange, initialData, mode = "standa
             )
             .slice(0, 5);
     }, [sites, siteSearchQuery]);
+
+    const filteredProjects = useMemo(() => {
+        if (!projects) return [];
+        if (!projectSearchQuery.trim()) return projects.slice(0, 5);
+        const query = projectSearchQuery.toLowerCase();
+        return projects
+            .filter((project) =>
+                project.name.toLowerCase().includes(query)
+            )
+            .slice(0, 5);
+    }, [projects, projectSearchQuery]);
 
     useEffect(() => {
         if (commonData.vendorId && vendors) {
@@ -565,6 +581,7 @@ export function DirectPODialog({ open, onOpenChange, initialData, mode = "standa
                 existingRequestNumber: commonData.requestNumber || undefined,
                 deliverySiteId: commonData.deliverySite ? (commonData.deliverySite as Id<"sites">) : undefined,
                 deliverySiteName: siteSearchQuery.trim(),
+                projectId: commonData.projectId as Id<"projects"> | undefined,
                 vendorId: commonData.vendorId as Id<"vendors">,
                 validTill: new Date(commonData.validTill).getTime(),
                 notes: commonData.notes || undefined,
@@ -777,7 +794,79 @@ export function DirectPODialog({ open, onOpenChange, initialData, mode = "standa
                             <h3 className="text-sm font-semibold text-foreground border-b pb-2">General Info</h3>
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="space-y-1.5 relative">
-                                    <Label htmlFor="deliverySite" className="text-sm">Delivery Location</Label>
+                                    <Label htmlFor="projectName" className="text-sm">Project</Label>
+                                    <div className="relative">
+                                        <Input
+                                            id="projectName"
+                                            placeholder="Search project..."
+                                            value={projectSearchQuery}
+                                            onChange={(e) => {
+                                                setProjectSearchQuery(e.target.value);
+                                                setShowProjectSuggestions(true);
+                                                setSelectedProjectIndex(0);
+                                                if (commonData.projectId) setCommonData(p => ({ ...p, projectId: "" }));
+                                            }}
+                                            onKeyDown={(e) => {
+                                                if (!showProjectSuggestions || filteredProjects.length === 0) return;
+                                                if (e.key === "ArrowDown") {
+                                                    e.preventDefault();
+                                                    setSelectedProjectIndex(prev => (prev + 1) % filteredProjects.length);
+                                                } else if (e.key === "ArrowUp") {
+                                                    e.preventDefault();
+                                                    setSelectedProjectIndex(prev => (prev - 1 + filteredProjects.length) % filteredProjects.length);
+                                                } else if (e.key === "Enter") {
+                                                    e.preventDefault();
+                                                    if (filteredProjects[selectedProjectIndex]) {
+                                                        const project = filteredProjects[selectedProjectIndex];
+                                                        setCommonData(p => ({ ...p, projectId: project._id }));
+                                                        setProjectSearchQuery(project.name);
+                                                        setShowProjectSuggestions(false);
+                                                    }
+                                                } else if (e.key === "Escape") {
+                                                    setShowProjectSuggestions(false);
+                                                }
+                                            }}
+                                            onFocus={() => setShowProjectSuggestions(true)}
+                                            onBlur={() => setTimeout(() => setShowProjectSuggestions(false), 200)}
+                                            className="h-9"
+                                        />
+                                        {showProjectSuggestions && filteredProjects.length > 0 && (
+                                            <div className="absolute z-[100] w-full mt-1 bg-popover border rounded-md shadow-lg max-h-60 overflow-y-auto flex flex-col">
+                                                {filteredProjects.map((project, index) => (
+                                                    <div
+                                                        key={project._id}
+                                                        className={cn(
+                                                            "w-full px-3 py-2 flex items-center cursor-pointer hover:bg-accent transition-colors",
+                                                            index === selectedProjectIndex && "bg-accent"
+                                                        )}
+                                                        onClick={() => {
+                                                            setCommonData(p => ({ ...p, projectId: project._id }));
+                                                            setProjectSearchQuery(project.name);
+                                                            setShowProjectSuggestions(false);
+
+                                                            // Pre-fill location search query so user can pick a matching site
+                                                            if (project.location) {
+                                                                setSiteSearchQuery(project.location);
+                                                            }
+                                                        }}
+                                                    >
+                                                        <div className="flex-1 overflow-hidden">
+                                                            <div className="font-medium text-sm truncate">{project.name}</div>
+                                                            {project.location ? (
+                                                                <div className="text-xs text-muted-foreground truncate mt-0.5">{project.location}</div>
+                                                            ) : (
+                                                                <div className="text-xs text-muted-foreground/50 truncate mt-0.5 italic">No location set</div>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+
+                                <div className="space-y-1.5 relative">
+                                    <Label htmlFor="deliverySite" className="text-sm">Location</Label>
                                     <div className="relative">
                                         <Input
                                             id="deliverySite"
@@ -836,46 +925,42 @@ export function DirectPODialog({ open, onOpenChange, initialData, mode = "standa
                                         ) : (
                                             <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
                                         )}
-                                        {showSiteSuggestions && (filteredSites.length > 0 || siteSearchQuery) && (
+                                        {showSiteSuggestions && filteredSites.length > 0 && (
                                             <div className="absolute z-[100] w-full mt-1 bg-popover border rounded-md shadow-lg max-h-48 overflow-y-auto flex flex-col">
-                                                {filteredSites.length > 0 ? (
-                                                    filteredSites.map((site, siteIdx) => (
-                                                        <div
-                                                            key={site._id}
-                                                            className={cn(
-                                                                "w-full px-3 py-2 flex items-center justify-between hover:bg-accent transition-colors cursor-pointer",
-                                                                siteIdx === selectedSiteSuggestionIndex && "bg-accent"
-                                                            )}
-                                                            onClick={() => {
-                                                                setCommonData(p => ({ ...p, deliverySite: site._id }));
-                                                                setSiteSearchQuery(site.name);
-                                                                setShowSiteSuggestions(false);
-                                                            }}
-                                                        >
-                                                            <div className="flex-1 overflow-hidden">
-                                                                <div className="font-medium truncate">{site.name}</div>
-                                                                {site.address && (
-                                                                    <div className="text-xs text-muted-foreground truncate">{site.address}</div>
-                                                                )}
-                                                            </div>
-                                                            <button
-                                                                type="button"
-                                                                className="p-1 hover:bg-background rounded-full ml-2 text-muted-foreground hover:text-foreground"
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    setInfoSiteId(site._id);
-                                                                }}
-                                                                title="View Details"
-                                                            >
-                                                                <Info className="h-4 w-4" />
-                                                            </button>
+                                                {filteredSites.map((site, siteIdx) => (
+                                                    <div
+                                                        key={site._id}
+                                                        className={cn(
+                                                            "w-full px-3 py-2 flex items-center justify-between hover:bg-accent transition-colors cursor-pointer",
+                                                            siteIdx === selectedSiteSuggestionIndex && "bg-accent"
+                                                        )}
+                                                        onClick={() => {
+                                                            setCommonData(p => ({ ...p, deliverySite: site._id }));
+                                                            setSiteSearchQuery(site.name);
+                                                            setShowSiteSuggestions(false);
+                                                        }}
+                                                    >
+                                                        <div className="flex-1 overflow-hidden">
+                                                            <div className="font-medium text-sm truncate">{site.name}</div>
+                                                            {site.address ? (
+                                                                <div className="text-xs text-muted-foreground truncate mt-0.5">{site.address}</div>
+                                                            ) : site.city ? (
+                                                                <div className="text-xs text-muted-foreground truncate mt-0.5">{site.city}</div>
+                                                            ) : null}
                                                         </div>
-                                                    ))
-                                                ) : (
-                                                    <div className="p-3 text-center text-sm text-muted-foreground">
-                                                        No locations found
+                                                        <button
+                                                            type="button"
+                                                            className="p-1 hover:bg-background rounded-full ml-2 text-muted-foreground hover:text-foreground shrink-0"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                setInfoSiteId(site._id);
+                                                            }}
+                                                            title="View Details"
+                                                        >
+                                                            <Info className="h-4 w-4" />
+                                                        </button>
                                                     </div>
-                                                )}
+                                                ))}
                                             </div>
                                         )}
                                     </div>

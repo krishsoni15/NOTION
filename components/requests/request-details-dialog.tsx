@@ -64,6 +64,7 @@ import { BulkDeliveryDialog } from "@/components/purchase/bulk-delivery-dialog";
 import { CreateDCMultiDialog } from "@/components/purchase/create-dc-multi-dialog";
 import { ViewDCDialog } from "@/components/purchase/view-dc-dialog";
 import { ConfirmDeliveryDialog } from "@/components/requests/confirm-delivery-dialog";
+import { ProjectInfoDialog } from "@/components/projects/project-info-dialog";
 import type { Id } from "@/convex/_generated/dataModel";
 
 interface RequestDetailsDialogProps {
@@ -171,6 +172,7 @@ export function RequestDetailsDialog({
   const [selectedUserId, setSelectedUserId] = useState<Id<"users"> | null>(null);
   const [selectedItemName, setSelectedItemName] = useState<string | null>(null);
   const [selectedSiteId, setSelectedSiteId] = useState<Id<"sites"> | null>(null);
+  const [selectedProjectId, setSelectedProjectId] = useState<Id<"projects"> | null>(null);
   const [pdfPreviewPoNumber, setPdfPreviewPoNumber] = useState<string | null>(null);
   const [pdfPreviewRequestId, setPdfPreviewRequestId] = useState<string | null>(null);
   const [pdfPreviewRequestIds, setPdfPreviewRequestIds] = useState<string[] | null>(null);
@@ -2055,30 +2057,28 @@ export function RequestDetailsDialog({
                 {isMobileLayout ? (
                   // Mobile-first simple layout for site engineers
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-                    <div className="space-y-2">
-                      <Label className="text-sm font-semibold text-muted-foreground">Site Location</Label>
+                    <div className="space-y-1.5">
+                      <Label className="text-sm font-semibold text-muted-foreground">Project & Site Location</Label>
                       {request.site ? (
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => handleOpenInMap(request.site!.address!)}
-                            className="text-muted-foreground hover:text-primary transition-colors p-2 rounded-md hover:bg-muted/50 flex-shrink-0"
-                            title="Open in Maps"
-                            disabled={!request.site?.address}
-                          >
-                            <MapPin className="h-5 w-5" />
-                          </button>
-                          <button
-                            onClick={() => setSelectedSiteId(request.site!._id)}
-                            className="font-semibold text-lg text-foreground hover:text-primary hover:bg-muted/50 rounded-md px-3 py-2 -mx-3 -my-2 transition-colors cursor-pointer text-left flex-1 min-w-0"
-                          >
-                            {request.site.name}
-                          </button>
-                        </div>
+                        <button
+                          onClick={() => setSelectedSiteId(request.site!._id)}
+                          className="font-semibold text-lg text-foreground hover:text-primary hover:bg-muted/50 rounded-md transition-colors cursor-pointer text-left block w-full truncate"
+                        >
+                          {request.site.name}
+                        </button>
                       ) : (
                         <p className="font-semibold text-lg">—</p>
                       )}
+                      {request.project && (
+                        <button
+                          onClick={() => setSelectedProjectId(request.project!._id)}
+                          className="flex items-center gap-1 text-muted-foreground hover:text-primary transition-colors"
+                        >
+                          <span className="text-sm">{request.project.name}</span>
+                        </button>
+                      )}
                       {request.site?.address && (
-                        <p className="text-sm text-muted-foreground line-clamp-2 mt-2 ml-9">
+                        <p className="text-xs text-muted-foreground line-clamp-2">
                           {request.site.address}
                         </p>
                       )}
@@ -2117,17 +2117,25 @@ export function RequestDetailsDialog({
                     {/* 1. Site Info */}
                     <div className="flex flex-col gap-1.5 border-r border-border/40 pr-4 last:border-0 md:last:border-0 lg:last:border-0">
                       <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5">
-                        <MapPin className="h-3.5 w-3.5" /> Site Location
+                        <MapPin className="h-3.5 w-3.5" /> Project & Site Location
                       </Label>
-                      <div className="flex flex-col">
+                      <div className="flex flex-col gap-1">
                         {request.site ? (
                           <>
                             <button
                               onClick={() => setSelectedSiteId(request.site!._id)}
-                              className="font-bold text-base text-foreground hover:text-primary transition-colors text-left flex items-center gap-1"
+                              className="font-bold text-lg text-foreground hover:text-primary transition-colors text-left"
                             >
                               {request.site.name}
                             </button>
+                            {request.project && (
+                              <button
+                                onClick={() => setSelectedProjectId(request.project!._id)}
+                                className="text-sm text-muted-foreground hover:text-primary transition-colors text-left w-fit"
+                              >
+                                {request.project.name}
+                              </button>
+                            )}
                             {request.site.address && (
                               <div className="flex items-start gap-1 mt-0.5 group">
                                 <span className="text-sm text-muted-foreground line-clamp-2 leading-snug" title={request.site.address}>
@@ -4177,6 +4185,14 @@ export function RequestDetailsDialog({
           if (!open) setSelectedSiteId(null);
         }}
         locationId={selectedSiteId}
+      />
+
+      <ProjectInfoDialog
+        open={!!selectedProjectId}
+        onOpenChange={(open) => {
+          if (!open) setSelectedProjectId(null);
+        }}
+        projectId={selectedProjectId}
       />
 
       {/* Notes Timeline Dialog */}

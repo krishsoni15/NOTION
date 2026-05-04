@@ -526,6 +526,7 @@ export const getPurchaseRequestsByStatus = query({
           ...request,
           poId,
           poNumber,
+          project: request.projectId ? await ctx.db.get(request.projectId) : null,
           site: site
             ? {
               _id: site._id,
@@ -674,6 +675,7 @@ export const getAllRequests = query({
           ...request,
           poId,
           poNumber,
+          project: request.projectId ? await ctx.db.get(request.projectId) : null,
           site: site
             ? {
               _id: site._id,
@@ -758,8 +760,19 @@ export const getRequestsByRequestNumber = query({
           .withIndex("by_request_id", (q) => q.eq("requestId", request._id))
           .first();
 
+        const project = request.projectId
+          ? await ctx.db.get(request.projectId)
+          : null;
+
         return {
           ...request,
+          project: project
+            ? {
+              _id: project._id,
+              name: project.name,
+              location: (project as any).location,
+            }
+            : null,
           site: site
             ? {
               _id: site._id,
@@ -815,9 +828,19 @@ export const getRequestById = query({
     const approver = request.approvedBy
       ? await ctx.db.get(request.approvedBy)
       : null;
+    const project = request.projectId
+      ? await ctx.db.get(request.projectId)
+      : null;
 
     return {
       ...request,
+      project: project
+        ? {
+          _id: project._id,
+          name: project.name,
+          location: (project as any).location,
+        }
+        : null,
       site: site
         ? {
           _id: site._id,

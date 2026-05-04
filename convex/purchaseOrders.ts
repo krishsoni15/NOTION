@@ -277,6 +277,7 @@ export const getPurchaseOrderDetails = query({
         const firstPO = pos[0];
         const vendor = await ctx.db.get(firstPO.vendorId);
         const site = firstPO.deliverySiteId ? await ctx.db.get(firstPO.deliverySiteId) : null;
+        const project = firstPO.projectId ? await ctx.db.get(firstPO.projectId) : null;
         const creator = await ctx.db.get(firstPO.createdBy);
 
         // Fetch approver if approved (only for actual signed/ordered POs)
@@ -343,6 +344,7 @@ export const getPurchaseOrderDetails = query({
             status: firstPO.status,
             vendor,
             site,
+            project: project ? { name: project.name } : null,
             creator,
             notes: firstPO.notes,
             approver: approver ? {
@@ -379,6 +381,7 @@ export const getPublicPODetails = query({
 
         const vendor = await ctx.db.get(firstPO.vendorId);
         const site = firstPO.deliverySiteId ? await ctx.db.get(firstPO.deliverySiteId) : null;
+        const project = firstPO.projectId ? await ctx.db.get(firstPO.projectId) : null;
 
         // Deduplicate items by description (merge split/partial delivery items)
         const itemsMap = new Map<string, {
@@ -442,6 +445,7 @@ export const getPublicPODetails = query({
                 name: site.name,
                 address: site.address,
             } : null,
+            project: project ? { name: project.name } : null,
             notes: firstPO.notes,
             items: Array.from(itemsMap.values())
         };
@@ -668,6 +672,7 @@ export const createDirectPO = mutation({
         deliverySiteId: v.optional(v.id("sites")),
         deliverySiteName: v.optional(v.string()),
         vendorId: v.id("vendors"),
+        projectId: v.optional(v.id("projects")),
         validTill: v.number(),
         notes: v.optional(v.string()),
         existingRequestNumber: v.optional(v.string()), // Optional: Use existing request number
@@ -704,25 +709,52 @@ export const createDirectPO = mutation({
 
         // Resolve Delivery Site (Auto-create if needed)
         let finalSiteId: Id<"sites">;
-        const siteName = args.deliverySiteName?.trim() || "Not Provided";
+        const rawSiteName = args.deliverySiteName?.trim() || "";
+        // Only use the provided name if it's meaningful (not blank, not placeholder values)
+        const invalidNames = ["na", "n/a", "not provided", "not set", "-", "—"];
+        const siteName = rawSiteName && !invalidNames.includes(rawSiteName.toLowerCase())
+            ? rawSiteName
+            : "Not Provided";
 
         if (!args.deliverySiteId) {
-            const existingSite = await ctx.db
-                .query("sites")
-                .withIndex("by_name", (q) => q.eq("name", siteName))
-                .first();
+            // Only auto-create if we have a real meaningful name
+            if (rawSiteName && !invalidNames.includes(rawSiteName.toLowerCase())) {
+                const existingSite = await ctx.db
+                    .query("sites")
+                    .withIndex("by_name", (q) => q.eq("name", siteName))
+                    .first();
 
-            if (existingSite) {
-                finalSiteId = existingSite._id;
+                if (existingSite) {
+                    finalSiteId = existingSite._id;
+                } else {
+                    finalSiteId = await ctx.db.insert("sites", {
+                        name: siteName,
+                        isActive: true,
+                        type: "site",
+                        createdBy: currentUser._id,
+                        createdAt: Date.now(),
+                        updatedAt: Date.now(),
+                    });
+                }
             } else {
-                finalSiteId = await ctx.db.insert("sites", {
-                    name: siteName,
-                    isActive: true,
-                    type: "site",
-                    createdBy: currentUser._id,
-                    createdAt: Date.now(),
-                    updatedAt: Date.now(),
-                });
+                // No valid site selected — use or create the "Not Provided" placeholder
+                const existingSite = await ctx.db
+                    .query("sites")
+                    .withIndex("by_name", (q) => q.eq("name", "Not Provided"))
+                    .first();
+
+                if (existingSite) {
+                    finalSiteId = existingSite._id;
+                } else {
+                    finalSiteId = await ctx.db.insert("sites", {
+                        name: "Not Provided",
+                        isActive: true,
+                        type: "site",
+                        createdBy: currentUser._id,
+                        createdAt: Date.now(),
+                        updatedAt: Date.now(),
+                    });
+                }
             }
         } else {
             finalSiteId = args.deliverySiteId;
@@ -787,6 +819,7 @@ export const createDirectPO = mutation({
                     siteId: finalSiteId,
                     itemName: item.itemDescription.split('\n')[0], // Use first line as title
                     description: item.itemDescription,
+                    projectId: args.projectId,
                     quantity: item.quantity,
                     unit: item.unit,
                     requiredBy: args.validTill, // Use ValidTill as required date
@@ -826,6 +859,7 @@ export const createDirectPO = mutation({
                     poNumber: poNumber, // Use new unique PO number
                     deliverySiteId: finalSiteId,
                     vendorId: args.vendorId,
+                    projectId: args.projectId,
                     itemDescription: item.itemDescription,
                     quantity: item.quantity,
                     unit: item.unit,
@@ -854,6 +888,7 @@ export const createDirectPO = mutation({
                 poId = await ctx.db.insert("purchaseOrders", {
                     poNumber: poNumber,
                     requestId: requestId!, // We know we have it now
+                    projectId: args.projectId,
                     deliverySiteId: finalSiteId,
                     vendorId: args.vendorId,
                     createdBy: currentUser._id,

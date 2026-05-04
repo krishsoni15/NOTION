@@ -8,8 +8,8 @@
  *         Estimated Timeline (DatePicker), PDF Upload.
  */
 
-import { useState, useEffect, useCallback } from "react";
-import { useMutation } from "convex/react";
+import { useState, useEffect, useCallback, useMemo } from "react";
+import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import {
   Dialog,
@@ -25,7 +25,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { DatePicker } from "@/components/ui/date-picker";
 import { toast } from "sonner";
-import { Upload, X, FileText, Loader2 } from "lucide-react";
+import { Upload, X, FileText, Loader2, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Project, ProjectFormData } from "../types/project.types";
 
@@ -54,14 +54,26 @@ export function ProjectFormDialog({
 }: ProjectFormDialogProps) {
   const createProject = useMutation(api.projects.createProject);
   const updateProject = useMutation(api.projects.updateProject);
+  const sites = useQuery(api.sites.getAllSites, {});
 
   const [isLoading, setIsLoading] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState("");
   const [formData, setFormData] = useState<ProjectFormData>(INITIAL_FORM);
   const [dragActive, setDragActive] = useState(false);
+  const [showLocationSuggestions, setShowLocationSuggestions] = useState(false);
+  const [selectedLocationSuggestionIndex, setSelectedLocationSuggestionIndex] = useState(0);
 
   const isEditing = !!projectData;
+
+  const filteredSites = useMemo(() => {
+    if (!sites) return [];
+    if (!formData.location.trim()) return sites.slice(0, 5);
+    const query = formData.location.toLowerCase();
+    return sites
+      .filter((site) => site.name.toLowerCase().includes(query))
+      .slice(0, 5);
+  }, [sites, formData.location]);
 
   // ── Load initial data when editing ────────────────────────────────────
   useEffect(() => {
@@ -266,18 +278,74 @@ export function ProjectFormDialog({
           </div>
 
           {/* Location (free text) */}
-          <div className="space-y-1.5">
+          <div className="space-y-1.5 relative">
             <Label htmlFor="location" className="text-sm">
               Location <span className="text-muted-foreground text-xs">(optional)</span>
             </Label>
-            <Input
-              id="location"
-              placeholder="Enter project location"
-              value={formData.location}
-              onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-              disabled={isLoading}
-              className="h-9"
-            />
+            <div className="relative">
+              <Input
+                id="location"
+                placeholder="Search or enter project location"
+                value={formData.location}
+                onChange={(e) => {
+                  setFormData({ ...formData, location: e.target.value });
+                  setShowLocationSuggestions(true);
+                  setSelectedLocationSuggestionIndex(0);
+                }}
+                onFocus={() => { setShowLocationSuggestions(true); setSelectedLocationSuggestionIndex(0); }}
+                onClick={() => setShowLocationSuggestions(true)}
+                onBlur={() => setTimeout(() => setShowLocationSuggestions(false), 200)}
+                onKeyDown={(e) => {
+                  if (!showLocationSuggestions) return;
+                  if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    setSelectedLocationSuggestionIndex(prev => prev < filteredSites.length - 1 ? prev + 1 : prev);
+                  } else if (e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    setSelectedLocationSuggestionIndex(prev => prev > 0 ? prev - 1 : 0);
+                  } else if (e.key === 'Enter' && filteredSites.length > 0) {
+                    e.preventDefault();
+                    if (selectedLocationSuggestionIndex < filteredSites.length) {
+                      setFormData({ ...formData, location: filteredSites[selectedLocationSuggestionIndex].name });
+                      setShowLocationSuggestions(false);
+                    }
+                  } else if (e.key === 'Escape') {
+                    setShowLocationSuggestions(false);
+                  }
+                }}
+                disabled={isLoading}
+                className="h-9 pr-9"
+              />
+              <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+              {showLocationSuggestions && (filteredSites.length > 0 || formData.location) && (
+                <div className="absolute z-[100] w-full mt-1 bg-popover border rounded-md shadow-lg max-h-48 overflow-y-auto flex flex-col">
+                  {filteredSites.length > 0 ? (
+                    filteredSites.map((site, siteIdx) => (
+                      <div
+                        key={site._id}
+                        className={cn(
+                          "w-full px-3 py-2 flex items-center justify-between hover:bg-accent transition-colors cursor-pointer",
+                          siteIdx === selectedLocationSuggestionIndex && "bg-accent"
+                        )}
+                        onClick={() => {
+                          setFormData({ ...formData, location: site.name });
+                          setShowLocationSuggestions(false);
+                        }}
+                      >
+                        <div className="flex-1 overflow-hidden">
+                          <div className="font-medium truncate text-sm">{site.name}</div>
+                          {site.city && <div className="text-xs text-muted-foreground truncate">{site.city}</div>}
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="p-3 text-center text-sm text-muted-foreground">
+                      Press enter to use "{formData.location}"
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Status (pill selector) */}

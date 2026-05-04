@@ -38,6 +38,7 @@ import { ROLES } from "@/lib/auth/roles";
 import { UserInfoDialog } from "./user-info-dialog";
 import { ItemInfoDialog } from "./item-info-dialog";
 import { LocationInfoDialog } from "@/components/locations/location-info-dialog";
+import { ProjectInfoDialog } from "@/components/projects/project-info-dialog";
 import { NotesTimelineDialog } from "./notes-timeline-dialog";
 import { GRNAuditDialog } from "./grn-audit-dialog";
 import { PDFPreviewDialog } from "@/components/purchase/pdf-preview-dialog";
@@ -186,6 +187,10 @@ interface Request {
   createdAt: number;
   updatedAt: number;
   directAction?: "po" | "delivery" | "all" | "split_po" | "split_delivery" | "split_po_delivery"; // Flag for direct action
+  project?: {
+    _id: Id<"projects">;
+    name: string;
+  } | null;
   site?: {
     _id: Id<"sites">;
     name: string;
@@ -265,6 +270,7 @@ export function RequestsTable({
   const [selectedUserId, setSelectedUserId] = useState<Id<"users"> | null>(null);
   const [selectedItemName, setSelectedItemName] = useState<string | null>(null);
   const [selectedSiteId, setSelectedSiteId] = useState<Id<"sites"> | null>(null);
+  const [selectedProjectId, setSelectedProjectId] = useState<Id<"projects"> | null>(null);
 
   const [selectedRequestNumberForNotes, setSelectedRequestNumberForNotes] = useState<string | null>(null);
   const [selectedRequestNumberForGRN, setSelectedRequestNumberForGRN] = useState<string | null>(null);
@@ -843,16 +849,28 @@ export function RequestsTable({
                 </div>
 
                 <div className="flex items-center gap-4 sm:gap-6 shrink-0 justify-between sm:justify-end border-t sm:border-t-0 border-border/10 pt-3 sm:pt-0">
-                  {/* Site Location */}
-                  {item.site && (
+                  {/* Site / Project Location */}
+                  {(item.site || item.project) && (
                     <div className="flex flex-col items-start sm:items-center gap-1">
-                      <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest opacity-70">Site</span>
-                      <div
-                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-400/10 border border-transparent hover:border-primary/20 hover:text-primary transition-all cursor-pointer group/site"
-                        onClick={(e) => { e.stopPropagation(); setSelectedSiteId(item.siteId); }}
-                      >
-                        <MapPin className="h-3.5 w-3.5 shrink-0" />
-                        <span className="text-xs font-black uppercase truncate max-w-[120px] tracking-wide">{item.site.name}</span>
+                      <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest opacity-70">Project / Location</span>
+                      <div className="flex flex-col gap-1 items-end sm:items-center">
+                        {item.project && (
+                          <div
+                            className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-primary/5 text-primary border border-primary/10 cursor-pointer hover:bg-primary/10 transition-colors"
+                            onClick={(e) => { e.stopPropagation(); setSelectedProjectId(item.project!._id); }}
+                          >
+                            <span className="text-[10px] font-black uppercase tracking-wide">{item.project.name}</span>
+                          </div>
+                        )}
+                        {item.site && (
+                          <div
+                            className="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-slate-400/10 border border-transparent hover:border-primary/20 hover:text-primary transition-all cursor-pointer group/site"
+                            onClick={(e) => { e.stopPropagation(); setSelectedSiteId(item.siteId); }}
+                          >
+                            <MapPin className="h-3 w-3 shrink-0 text-muted-foreground group-hover/site:text-primary" />
+                            <span className="text-[10px] font-semibold truncate max-w-[120px]">{item.site.name}</span>
+                          </div>
+                        )}
                       </div>
                     </div>
                   )}
@@ -1228,7 +1246,7 @@ export function RequestsTable({
                 <TableRow className="bg-muted/30 hover:bg-muted/30 border-b border-border">
                   <TableHead className="w-[50px]"></TableHead>
                   <TableHead className="w-[120px] font-bold text-xs uppercase tracking-tight text-muted-foreground/80">Request ID</TableHead>
-                  <TableHead className="min-w-[180px] font-bold text-xs uppercase tracking-tight text-muted-foreground/80">Location</TableHead>
+                  <TableHead className="min-w-[180px] font-bold text-xs uppercase tracking-tight text-muted-foreground/80">Project / Location</TableHead>
                   <TableHead className="w-[150px] font-bold text-xs uppercase tracking-tight text-muted-foreground/80">Dates</TableHead>
                   <TableHead className="min-w-[350px] font-bold text-xs uppercase tracking-tight text-muted-foreground/80">Item Details</TableHead>
                   <TableHead className="text-right min-w-[320px] font-bold text-xs uppercase tracking-tight text-muted-foreground/80">Actions</TableHead>
@@ -1386,12 +1404,23 @@ export function RequestsTable({
 
                         {/* Location */}
                         <TableCell className="py-4">
-                          <div
-                            className="flex items-center gap-2 max-w-[200px] cursor-pointer hover:text-primary transition-colors group"
-                            onClick={(e) => { e.stopPropagation(); setSelectedSiteId(firstItem.siteId); }}
-                          >
-                            <MapPin className="h-4 w-4 text-primary shrink-0 transition-transform" />
-                            <span className="truncate text-sm font-semibold group-hover:underline" title={firstItem.site?.name}>{firstItem.site?.name || "—"}</span>
+                          <div className="flex flex-col gap-1 max-w-[200px]">
+                            {firstItem.project && (
+                              <span
+                                className="text-xs font-bold text-primary truncate cursor-pointer hover:underline"
+                                title={firstItem.project.name}
+                                onClick={(e) => { e.stopPropagation(); setSelectedProjectId(firstItem.project!._id); }}
+                              >
+                                {firstItem.project.name}
+                              </span>
+                            )}
+                            <div
+                              className="flex items-center gap-1.5 cursor-pointer hover:text-primary transition-colors group"
+                              onClick={(e) => { e.stopPropagation(); setSelectedSiteId(firstItem.siteId); }}
+                            >
+                              <MapPin className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                              <span className="truncate text-xs text-muted-foreground group-hover:underline group-hover:text-primary" title={firstItem.site?.name}>{firstItem.site?.name || "—"}</span>
+                            </div>
                           </div>
                         </TableCell>
 
@@ -1972,6 +2001,14 @@ export function RequestsTable({
           if (!open) setSelectedSiteId(null);
         }}
         locationId={selectedSiteId}
+      />
+
+      <ProjectInfoDialog
+        open={!!selectedProjectId}
+        onOpenChange={(open) => {
+          if (!open) setSelectedProjectId(null);
+        }}
+        projectId={selectedProjectId}
       />
 
       {/* Notes Timeline Dialog */}

@@ -129,6 +129,7 @@ export default defineSchema({
   purchaseOrders: defineTable({
     poNumber: v.string(), // Auto-generated unique identifier
     requestId: v.optional(v.id("requests")), // Linked request (optional for Direct PO)
+    projectId: v.optional(v.id("projects")), // Linked project (optional)
     deliverySiteId: v.optional(v.id("sites")), // Delivery site (for Direct PO)
     vendorId: v.id("vendors"),
     createdBy: v.id("users"), // Purchase Officer

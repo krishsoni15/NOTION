@@ -344,6 +344,7 @@ export const getPurchaseOrderDetails = query({
             vendor,
             site,
             creator,
+            notes: firstPO.notes,
             approver: approver ? {
                 fullName: approver.fullName,
                 signatureUrl: approver.signatureUrl || undefined,
@@ -441,6 +442,7 @@ export const getPublicPODetails = query({
                 name: site.name,
                 address: site.address,
             } : null,
+            notes: firstPO.notes,
             items: Array.from(itemsMap.values())
         };
     },

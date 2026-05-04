@@ -248,7 +248,7 @@ export const sendItemsToProcurement = mutation({
         createdBy: currentUser._id,
         siteId: effectiveSiteId!,
         itemName: item.name,
-        description: item.description || `From Project: ${project.name}${item.make ? ` | Make: ${item.make}` : ""}`,
+        description: item.description ? `${item.description}\nFrom Project: ${project.name}${item.make ? ` | Make: ${item.make}` : ""}` : `From Project: ${project.name}${item.make ? ` | Make: ${item.make}` : ""}`,
         specsBrand: item.make || undefined,
         quantity: item.quantity,
         unit: "nos", // Default unit for project items

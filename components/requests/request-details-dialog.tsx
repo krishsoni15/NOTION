@@ -2057,8 +2057,16 @@ export function RequestDetailsDialog({
                 {isMobileLayout ? (
                   // Mobile-first simple layout for site engineers
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
-                    <div className="space-y-1.5">
+                    <div className="space-y-1">
                       <Label className="text-sm font-semibold text-muted-foreground">Project & Site Location</Label>
+                      {request.project && (
+                        <button
+                          onClick={() => setSelectedProjectId(request.project!._id)}
+                          className="flex items-center gap-1 px-2 py-0.5 rounded bg-primary/5 text-primary border border-primary/10 w-fit hover:bg-primary/10 transition-colors"
+                        >
+                          <span className="text-xs font-semibold">{request.project.name}</span>
+                        </button>
+                      )}
                       {request.site ? (
                         <button
                           onClick={() => setSelectedSiteId(request.site!._id)}
@@ -2069,17 +2077,9 @@ export function RequestDetailsDialog({
                       ) : (
                         <p className="font-semibold text-lg">—</p>
                       )}
-                      {request.project && (
-                        <button
-                          onClick={() => setSelectedProjectId(request.project!._id)}
-                          className="flex items-center gap-1 text-muted-foreground hover:text-primary transition-colors"
-                        >
-                          <span className="text-sm">{request.project.name}</span>
-                        </button>
-                      )}
                       {request.site?.address && (
-                        <p className="text-xs text-muted-foreground line-clamp-2">
-                          {request.site.address}
+                        <p className="text-xs text-muted-foreground line-clamp-2 flex items-center gap-1">
+                          <MapPin className="h-3 w-3 shrink-0" />{request.site.address}
                         </p>
                       )}
                     </div>
@@ -2120,6 +2120,14 @@ export function RequestDetailsDialog({
                         <MapPin className="h-3.5 w-3.5" /> Project & Site Location
                       </Label>
                       <div className="flex flex-col gap-1">
+                        {request.project && (
+                          <button
+                            onClick={() => setSelectedProjectId(request.project!._id)}
+                            className="text-xs font-semibold text-primary bg-primary/5 border border-primary/10 px-2 py-0.5 rounded w-fit hover:bg-primary/10 transition-colors"
+                          >
+                            {request.project.name}
+                          </button>
+                        )}
                         {request.site ? (
                           <>
                             <button
@@ -2128,22 +2136,15 @@ export function RequestDetailsDialog({
                             >
                               {request.site.name}
                             </button>
-                            {request.project && (
-                              <button
-                                onClick={() => setSelectedProjectId(request.project!._id)}
-                                className="text-sm text-muted-foreground hover:text-primary transition-colors text-left w-fit"
-                              >
-                                {request.project.name}
-                              </button>
-                            )}
                             {request.site.address && (
                               <div className="flex items-start gap-1 mt-0.5 group">
-                                <span className="text-sm text-muted-foreground line-clamp-2 leading-snug" title={request.site.address}>
+                                <MapPin className="h-3 w-3 text-muted-foreground shrink-0 mt-0.5" />
+                                <span className="text-xs text-muted-foreground line-clamp-2 leading-snug" title={request.site.address}>
                                   {request.site.address}
                                 </span>
                                 <button
                                   onClick={() => handleOpenInMap(request.site!.address!)}
-                                  className="text-primary hover:text-primary/80 flex-shrink-0 mt-0.5"
+                                  className="text-primary hover:text-primary/80 flex-shrink-0 mt-0.5 ml-1"
                                   title="Open in Maps"
                                 >
                                   <MapPin className="h-3.5 w-3.5" />

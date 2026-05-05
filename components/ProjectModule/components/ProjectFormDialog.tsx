@@ -334,7 +334,7 @@ export function ProjectFormDialog({
                       >
                         <div className="flex-1 overflow-hidden">
                           <div className="font-medium truncate text-sm">{site.name}</div>
-                          {site.city && <div className="text-xs text-muted-foreground truncate">{site.city}</div>}
+                          {(site as any).city && <div className="text-xs text-muted-foreground truncate">{(site as any).city}</div>}
                         </div>
                       </div>
                     ))

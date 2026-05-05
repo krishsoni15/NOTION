@@ -35,7 +35,6 @@ export function LocationManagement() {
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
-  const [typeFilter, setTypeFilter] = useState<string>("all");
   const [sortBy, setSortBy] = useState<SortOption>("newest");
   const { viewMode, toggleViewMode } = useViewMode("location-view-mode");
   const [refreshKey, setRefreshKey] = useState(0);
@@ -70,7 +69,7 @@ export function LocationManagement() {
   // Reset page when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery, statusFilter, typeFilter, sortBy]);
+  }, [searchQuery, statusFilter, sortBy]);
 
   // Filter and sort locations
   const filteredAndSortedLocations = useMemo(() => {
@@ -78,49 +77,30 @@ export function LocationManagement() {
 
     let filtered = [...locations];
 
-    // Search filter - smart search with normalized query
     const normalizedQuery = normalizeSearchQuery(searchQuery);
     if (normalizedQuery) {
       filtered = filtered.filter((site) =>
-        matchesAnySearchQuery(
-          [site.name, site.code, site.address, site.description],
-          normalizedQuery
-        )
+        matchesAnySearchQuery([site.name, site.code, site.address, site.description], normalizedQuery)
       );
     }
 
-    // Status filter
     if (statusFilter !== "all") {
       const isActive = statusFilter === "active";
       filtered = filtered.filter((site) => site.isActive === isActive);
     }
 
-    // Type filter
-    if (typeFilter !== "all") {
-      filtered = filtered.filter((site) => {
-        const siteType = site.type || "site"; // Default to 'site' for legacy records
-        return siteType === typeFilter;
-      });
-    }
-
-    // Sort
     filtered.sort((a, b) => {
       switch (sortBy) {
-        case "newest":
-          return b.createdAt - a.createdAt;
-        case "oldest":
-          return a.createdAt - b.createdAt;
-        case "name_asc":
-          return a.name.localeCompare(b.name);
-        case "name_desc":
-          return b.name.localeCompare(a.name);
-        default:
-          return 0;
+        case "newest": return b.createdAt - a.createdAt;
+        case "oldest": return a.createdAt - b.createdAt;
+        case "name_asc": return a.name.localeCompare(b.name);
+        case "name_desc": return b.name.localeCompare(a.name);
+        default: return 0;
       }
     });
 
     return filtered;
-  }, [locations, searchQuery, statusFilter, typeFilter, sortBy]);
+  }, [locations, searchQuery, statusFilter, sortBy]);
 
   return (
     <div className="space-y-4">
@@ -159,18 +139,6 @@ export function LocationManagement() {
         {/* Row 2: Filters and Actions */}
         <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-2 border-t border-border/50">
           <div className="flex items-center gap-2 w-full sm:w-auto overflow-x-auto pb-1 sm:pb-0">
-            <Select value={typeFilter} onValueChange={setTypeFilter}>
-              <SelectTrigger className="w-[120px] h-10 text-sm bg-muted/30 border-muted-foreground/20 font-medium">
-                <SelectValue placeholder="Type" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Types</SelectItem>
-                <SelectItem value="site">Site</SelectItem>
-                <SelectItem value="inventory">Inventory</SelectItem>
-                <SelectItem value="other">Others</SelectItem>
-              </SelectContent>
-            </Select>
-
             <Select value={statusFilter} onValueChange={setStatusFilter}>
               <SelectTrigger className="w-[120px] h-10 text-sm bg-muted/30 border-muted-foreground/20 font-medium">
                 <SelectValue placeholder="Status" />

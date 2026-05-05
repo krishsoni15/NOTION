@@ -24,6 +24,7 @@ export default defineSchema({
       v.literal("purchase_officer")
     ),
     assignedSites: v.optional(v.array(v.id("sites"))), // Sites assigned to site engineers
+    assignedProjects: v.optional(v.array(v.id("projects"))), // Projects assigned to site engineers
     isActive: v.boolean(),
     profileImage: v.optional(v.string()), // Profile image URL
     profileImageKey: v.optional(v.string()), // Profile image storage key

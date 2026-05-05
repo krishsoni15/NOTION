@@ -74,7 +74,7 @@ export function UserTable({ users, viewMode = "table" }: UserTableProps) {
   const disableUser = useMutation(api.users.disableUser);
   const enableUser = useMutation(api.users.enableUser);
   const deleteUser = useMutation(api.users.deleteUser);
-  const allSites = useQuery(api.sites.getAllSites, {});
+  const allProjects = useQuery(api.projects.getAllProjects, {});
 
   const [loadingUserId, setLoadingUserId] = useState<string | null>(null);
   const [editingUser, setEditingUser] = useState<Doc<"users"> | null>(null);
@@ -307,57 +307,42 @@ export function UserTable({ users, viewMode = "table" }: UserTableProps) {
             </div>
           )}
 
-          {/* Assigned Sites Summary */}
-          {user.role === ROLES.SITE_ENGINEER && user.assignedSites && user.assignedSites.length > 0 && (
+          {/* Assigned Projects Summary */}
+          {user.role === ROLES.SITE_ENGINEER && (user as any).assignedProjects && (user as any).assignedProjects.length > 0 && (
             <div className="space-y-1 pt-1">
               <div className="flex items-center gap-2 text-muted-foreground">
                 <Building2 className="h-3 w-3" />
-                <span className="text-[10px] uppercase font-bold tracking-wider opacity-70">Assigned Sites</span>
+                <span className="text-[10px] uppercase font-bold tracking-wider opacity-70">Projects</span>
               </div>
               <div className="pl-5 flex flex-wrap gap-1.5">
-                {user.assignedSites.slice(0, 3).map(siteId => {
-                  const site = allSites?.find(s => s._id === siteId);
-                  return site ? (
-                    <Badge
-                      key={siteId}
-                      variant="secondary"
-                      className="text-[10px] h-5 px-1.5 cursor-pointer hover:bg-primary/20 transition-colors border-transparent hover:border-primary/20"
-                      onClick={() => setSelectedSiteId(site._id)}
-                      title="View Site Details"
-                    >
-                      {site.name}
+                {(user as any).assignedProjects.slice(0, 3).map((projectId: string) => {
+                  const project = allProjects?.find(p => p._id === projectId);
+                  return project ? (
+                    <Badge key={projectId} variant="secondary" className="text-[10px] h-5 px-1.5">
+                      {project.name}
                     </Badge>
                   ) : null;
                 })}
-                {user.assignedSites.length > 3 && (
+                {(user as any).assignedProjects.length > 3 && (
                   <Popover>
                     <PopoverTrigger asChild>
-                      <Badge
-                        variant="outline"
-                        className="text-[10px] h-5 px-1.5 cursor-pointer hover:bg-muted/80 transition-colors"
-                      >
-                        +{user.assignedSites.length - 3} more
+                      <Badge variant="outline" className="text-[10px] h-5 px-1.5 cursor-pointer hover:bg-muted/80">
+                        +{(user as any).assignedProjects.length - 3} more
                       </Badge>
                     </PopoverTrigger>
                     <PopoverContent className="w-56 p-2" align="start">
                       <div className="space-y-2">
                         <div className="text-xs font-semibold text-muted-foreground px-2 pb-1 border-b">
-                          Remaining Assigned Sites
+                          All Projects ({(user as any).assignedProjects.length})
                         </div>
                         <div className="flex flex-col gap-1 max-h-[200px] overflow-y-auto">
-                          {user.assignedSites.slice(3).map(siteId => {
-                            const site = allSites?.find(s => s._id === siteId);
-                            return site ? (
-                              <Button
-                                key={siteId}
-                                variant="ghost"
-                                size="sm"
-                                className="justify-start h-8 px-2 text-xs w-full font-normal truncate"
-                                onClick={() => setSelectedSiteId(site._id)}
-                              >
-                                <Building2 className="h-3 w-3 mr-2 text-muted-foreground" />
-                                <span className="truncate">{site.name}</span>
-                              </Button>
+                          {(user as any).assignedProjects.slice(3).map((projectId: string) => {
+                            const project = allProjects?.find(p => p._id === projectId);
+                            return project ? (
+                              <div key={projectId} className="px-2 py-1.5 text-xs rounded hover:bg-muted/50">
+                                <div className="font-medium">{project.name}</div>
+                                {project.location && <div className="text-muted-foreground text-[11px]">{project.location}</div>}
+                              </div>
                             ) : null;
                           })}
                         </div>
@@ -394,7 +379,7 @@ export function UserTable({ users, viewMode = "table" }: UserTableProps) {
                   <TableHead className="w-[120px] font-semibold text-xs uppercase tracking-wider text-muted-foreground/80">Role</TableHead>
                   <TableHead className="w-[120px] font-semibold text-xs uppercase tracking-wider text-muted-foreground/80">Phone</TableHead>
                   <TableHead className="min-w-[200px] font-semibold text-xs uppercase tracking-wider text-muted-foreground/80">Address</TableHead>
-                  <TableHead className="w-[150px] font-semibold text-xs uppercase tracking-wider text-muted-foreground/80">Sites</TableHead>
+                  <TableHead className="w-[150px] font-semibold text-xs uppercase tracking-wider text-muted-foreground/80">Projects</TableHead>
                   <TableHead className="w-[100px] font-semibold text-xs uppercase tracking-wider text-muted-foreground/80">Status</TableHead>
                   <TableHead className="w-[100px] font-semibold text-xs uppercase tracking-wider text-muted-foreground/80">Created</TableHead>
                   <TableHead className="w-[60px] text-right font-semibold text-xs uppercase tracking-wider text-muted-foreground/80">Actions</TableHead>
@@ -463,45 +448,40 @@ export function UserTable({ users, viewMode = "table" }: UserTableProps) {
                         )}
                       </TableCell>
                       <TableCell className="align-top py-4">
-                        {user.role === ROLES.SITE_ENGINEER && user.assignedSites && user.assignedSites.length > 0 ? (
+                        {user.role === ROLES.SITE_ENGINEER && (user as any).assignedProjects && (user as any).assignedProjects.length > 0 ? (
                           <div className="flex flex-wrap gap-1.5 items-center">
-                            {user.assignedSites.slice(0, 2).map((siteId) => {
-                              const site = allSites?.find((s) => s._id === siteId);
-                              return site ? (
+                            {(user as any).assignedProjects.slice(0, 2).map((projectId: string) => {
+                              const project = allProjects?.find((p) => p._id === projectId);
+                              return project ? (
                                 <Badge
-                                  key={siteId}
+                                  key={projectId}
                                   variant="secondary"
-                                  className="text-[10px] cursor-pointer hover:bg-primary/20 transition-colors h-5 px-1.5 border-transparent hover:border-primary/20"
-                                  onClick={() => setSelectedSiteId(site._id)}
+                                  className="text-[10px] h-5 px-1.5 border-transparent"
                                 >
-                                  {site.name}
+                                  {project.name}
                                 </Badge>
                               ) : null;
                             })}
-                            {user.assignedSites.length > 2 && (
+                            {(user as any).assignedProjects.length > 2 && (
                               <Popover>
                                 <PopoverTrigger asChild>
-                                  <Badge variant="outline" className="text-[10px] h-5 px-1.5 text-muted-foreground cursor-pointer hover:bg-muted/80">+{user.assignedSites.length - 2}</Badge>
+                                  <Badge variant="outline" className="text-[10px] h-5 px-1.5 text-muted-foreground cursor-pointer hover:bg-muted/80">
+                                    +{(user as any).assignedProjects.length - 2}
+                                  </Badge>
                                 </PopoverTrigger>
                                 <PopoverContent className="w-56 p-2" align="start">
                                   <div className="space-y-2">
                                     <div className="text-xs font-semibold text-muted-foreground px-2 pb-1 border-b">
-                                      All Assigned Sites ({user.assignedSites.length})
+                                      All Projects ({(user as any).assignedProjects.length})
                                     </div>
                                     <div className="flex flex-col gap-1 max-h-[200px] overflow-y-auto">
-                                      {user.assignedSites.slice(2).map(siteId => {
-                                        const site = allSites?.find(s => s._id === siteId);
-                                        return site ? (
-                                          <Button
-                                            key={siteId}
-                                            variant="ghost"
-                                            size="sm"
-                                            className="justify-start h-8 px-2 text-xs w-full font-normal truncate"
-                                            onClick={() => setSelectedSiteId(site._id)}
-                                          >
-                                            <Building2 className="h-3 w-3 mr-2 text-muted-foreground" />
-                                            <span className="truncate">{site.name}</span>
-                                          </Button>
+                                      {(user as any).assignedProjects.slice(2).map((projectId: string) => {
+                                        const project = allProjects?.find(p => p._id === projectId);
+                                        return project ? (
+                                          <div key={projectId} className="px-2 py-1.5 text-xs rounded hover:bg-muted/50">
+                                            <div className="font-medium">{project.name}</div>
+                                            {project.location && <div className="text-muted-foreground text-[11px]">{project.location}</div>}
+                                          </div>
                                         ) : null;
                                       })}
                                     </div>
@@ -511,7 +491,7 @@ export function UserTable({ users, viewMode = "table" }: UserTableProps) {
                             )}
                           </div>
                         ) : user.role === ROLES.SITE_ENGINEER ? (
-                          <span className="text-xs text-muted-foreground/50 italic">No sites assigned</span>
+                          <span className="text-xs text-muted-foreground/50 italic">No projects</span>
                         ) : (
                           <span className="text-muted-foreground/30">—</span>
                         )}

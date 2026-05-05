@@ -341,12 +341,6 @@ export function PurchaseOrderTemplate({ data }: { data: POData }) {
                             <div className="border border-[#000000] text-[10px] p-2" style={{ minHeight: '62px' }}>
                                 <div className="font-bold mb-1">Notes :</div>
                                 {data.notes && <div className="uppercase whitespace-pre-wrap mb-1">{data.notes}</div>}
-                                {data.project?.name && (
-                                    <div className="uppercase font-semibold">Project: {data.project.name}</div>
-                                )}
-                                {data.site?.name && !['NA', 'NOT PROVIDED'].includes(data.site.name.toUpperCase()) && (
-                                    <div className="uppercase">{data.site.name}</div>
-                                )}
                                 {data.creator?.role === "purchase_officer" && (
                                     <div className="mt-1" style={{ color: '#6b7280', fontSize: '8px' }}>
                                         Created by: {data.creator.fullName}

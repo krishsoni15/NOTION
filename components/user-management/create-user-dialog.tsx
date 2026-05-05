@@ -37,6 +37,7 @@ import { ROLES, ROLE_LABELS, Role } from "@/lib/auth/roles";
 import { Eye, EyeOff, Loader2, Camera, X } from "lucide-react";
 import { MediaInput } from "@/components/shared/media-input";
 import { SiteSelector } from "./site-selector";
+import { ProjectSelector } from "./project-selector";
 import { AddressAutocomplete } from "@/components/vendors/address-autocomplete";
 import { toast } from "sonner";
 import type { Id } from "@/convex/_generated/dataModel";
@@ -74,6 +75,7 @@ export function CreateUserDialog({ open, onOpenChange }: CreateUserDialogProps) 
     role: "" as Role | "",
     password: "",
     assignedSites: [] as Id<"sites">[],
+    assignedProjects: [] as Id<"projects">[],
   });
 
   const handleOpenChange = (newOpen: boolean) => {
@@ -87,9 +89,9 @@ export function CreateUserDialog({ open, onOpenChange }: CreateUserDialogProps) 
         role: "",
         password: "",
         assignedSites: [],
+        assignedProjects: [],
       });
       setShowPassword(false);
-      setError("");
       setError("");
       // Reset image
       setSelectedImage(null);
@@ -151,9 +153,9 @@ export function CreateUserDialog({ open, onOpenChange }: CreateUserDialogProps) 
     setIsLoading(true);
 
     try {
-      // Validate site engineer has at least one site assigned
-      if (formData.role === ROLES.SITE_ENGINEER && formData.assignedSites.length === 0) {
-        setError("Please assign at least one site to the site engineer");
+      // Validate site engineer has at least one project assigned
+      if (formData.role === ROLES.SITE_ENGINEER && formData.assignedProjects.length === 0) {
+        setError("Please assign at least one project to the site engineer");
         setIsLoading(false);
         return;
       }
@@ -206,8 +208,8 @@ export function CreateUserDialog({ open, onOpenChange }: CreateUserDialogProps) 
       const { clerkUserId, passwordHash } = await clerkResponse.json();
 
       // Step 2: Create user in Convex with assigned sites
-      const assignedSites = formData.role === ROLES.SITE_ENGINEER && formData.assignedSites.length > 0
-        ? formData.assignedSites
+      const assignedProjects = formData.role === ROLES.SITE_ENGINEER && formData.assignedProjects.length > 0
+        ? formData.assignedProjects
         : undefined;
 
       let userId: any;
@@ -220,7 +222,8 @@ export function CreateUserDialog({ open, onOpenChange }: CreateUserDialogProps) 
           phoneNumber: formData.phoneNumber,
           address: formData.address,
           role: formData.role as Role,
-          assignedSites: assignedSites,
+          assignedSites: undefined,
+          assignedProjects: assignedProjects,
           signatureStorageId: signatureStorageId,
         });
       } catch (convexError) {
@@ -263,8 +266,8 @@ export function CreateUserDialog({ open, onOpenChange }: CreateUserDialogProps) 
       }
 
       // Show success message with site count
-      const successMessage = formData.role === ROLES.SITE_ENGINEER && assignedSites
-        ? `User created successfully with ${assignedSites.length} site(s) assigned!`
+      const successMessage = formData.role === ROLES.SITE_ENGINEER && assignedProjects
+        ? `User created with ${assignedProjects.length} project(s) assigned!`
         : "User created successfully!";
       toast.success(successMessage);
 
@@ -434,7 +437,7 @@ export function CreateUserDialog({ open, onOpenChange }: CreateUserDialogProps) 
             <Select
               value={formData.role}
               onValueChange={(value) =>
-                setFormData({ ...formData, role: value as Role, assignedSites: [] })
+                setFormData({ ...formData, role: value as Role, assignedSites: [], assignedProjects: [] })
               }
               disabled={isLoading}
             >
@@ -470,13 +473,13 @@ export function CreateUserDialog({ open, onOpenChange }: CreateUserDialogProps) 
             </div>
           )}
 
-          {/* Site Selection - Only for Site Engineers */}
+          {/* Project Assignment - Only for Site Engineers */}
           {formData.role === ROLES.SITE_ENGINEER && (
             <div className="space-y-1.5">
-              <SiteSelector
-                selectedSites={formData.assignedSites}
-                onSelectionChange={(sites) =>
-                  setFormData({ ...formData, assignedSites: sites })
+              <ProjectSelector
+                selectedProjects={formData.assignedProjects}
+                onSelectionChange={(projects) =>
+                  setFormData({ ...formData, assignedProjects: projects })
                 }
                 disabled={isLoading}
               />

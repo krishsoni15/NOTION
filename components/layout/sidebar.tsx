@@ -80,7 +80,7 @@ const navigationItems: NavigationItem[] = [
     roles: [ROLES.MANAGER],
   },
   {
-    label: "Projects",
+    label: "Projects (Site)",
     href: "/dashboard/project",
     icon: FolderKanban,
     roles: [ROLES.MANAGER],
@@ -137,7 +137,7 @@ const navigationItems: NavigationItem[] = [
     roles: [ROLES.PURCHASE_OFFICER],
   },
   {
-    label: "Projects",
+    label: "Projects (Site)",
     href: "/dashboard/project",
     icon: FolderKanban,
     roles: [ROLES.PURCHASE_OFFICER],

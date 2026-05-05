@@ -1,18 +1,11 @@
 "use client";
 
-/**
- * Site Form Dialog
- * 
- * Dialog for creating and editing sites (Manager only).
- */
-
 import { useState, useEffect } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -21,12 +14,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
+import { AlertCircle } from "lucide-react";
 import type { Id } from "@/convex/_generated/dataModel";
 import { toast } from "sonner";
-// ... imports
 import { AddressAutocomplete } from "@/components/vendors/address-autocomplete";
-
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 
 interface LocationFormDialogProps {
   open: boolean;
@@ -55,76 +46,48 @@ export function LocationFormDialog({
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const [formData, setFormData] = useState<{
-    name: string;
-    code: string;
-    address: string;
-    description: string;
-    type: "site" | "inventory" | "other";
-    isActive: boolean;
-  }>({
+  const [formData, setFormData] = useState({
     name: "",
     code: "",
     address: "",
     description: "",
-    type: "site",
     isActive: true,
   });
 
-  // Check for duplicate location name
+  // Duplicate name check
   useEffect(() => {
     if (formData.name.trim()) {
       const nameLower = formData.name.trim().toLowerCase();
-      const existingLocation = allLocations?.find(
-        (loc) =>
-          loc.name.toLowerCase() === nameLower &&
-          loc.isActive &&
-          loc._id !== locationId
+      const exists = allLocations?.find(
+        (loc) => loc.name.toLowerCase() === nameLower && loc.isActive && loc._id !== locationId
       );
-      if (existingLocation) {
-        setError(`Location "${formData.name}" already exists`);
-      } else {
-        setError("");
-      }
+      setError(exists ? `"${formData.name}" already exists` : "");
     } else {
       setError("");
     }
   }, [formData.name, allLocations, locationId]);
 
-  // Load initial data when editing
+  // Load initial data
   useEffect(() => {
-    if (initialData) {
-      setFormData({
-        name: initialData.name,
-        code: initialData.code || "",
-        address: initialData.address || "",
-        description: initialData.description || "",
-        type: (initialData.type as "site" | "inventory" | "other") || "site",
-        isActive: initialData.isActive !== undefined ? initialData.isActive : true,
-      });
-    } else {
-      setFormData({
-        name: "",
-        code: "",
-        address: "",
-        description: "",
-        type: "site",
-        isActive: true,
-      });
+    if (open) {
+      if (initialData) {
+        setFormData({
+          name: initialData.name,
+          code: initialData.code || "",
+          address: initialData.address || "",
+          description: initialData.description || "",
+          isActive: initialData.isActive !== undefined ? initialData.isActive : true,
+        });
+      } else {
+        setFormData({ name: "", code: "", address: "", description: "", isActive: true });
+      }
+      setError("");
     }
-    setError("");
   }, [locationId, open]);
 
   const handleOpenChange = (newOpen: boolean) => {
     if (!newOpen) {
-      setFormData({
-        name: "",
-        code: "",
-        address: "",
-        description: "",
-        type: "site",
-        isActive: true,
-      });
+      setFormData({ name: "", code: "", address: "", description: "", isActive: true });
       setError("");
     }
     onOpenChange(newOpen);
@@ -134,61 +97,43 @@ export function LocationFormDialog({
     e.preventDefault();
     setError("");
 
-    if (!formData.name.trim()) {
-      setError("Location name is required");
-      return;
-    }
+    if (!formData.name.trim()) { setError("Location name is required"); return; }
+    if (!formData.address.trim()) { setError("Address is required"); return; }
 
-    if (!formData.address.trim()) {
-      setError("Address is required");
-      return;
-    }
-
-    // Check for duplicate before submitting
     const nameLower = formData.name.trim().toLowerCase();
-    const existingLocation = allLocations?.find(
-      (loc) =>
-        loc.name.toLowerCase() === nameLower &&
-        loc.isActive &&
-        loc._id !== locationId
+    const exists = allLocations?.find(
+      (loc) => loc.name.toLowerCase() === nameLower && loc.isActive && loc._id !== locationId
     );
-    if (existingLocation) {
-      setError(`Location "${formData.name}" already exists`);
-      return;
-    }
+    if (exists) { setError(`"${formData.name}" already exists`); return; }
 
     setIsLoading(true);
-
     try {
       if (locationId) {
-        // Update existing location
         await updateLocation({
           siteId: locationId,
           name: formData.name.trim(),
-          code: formData.type === "site" ? (formData.code.trim() || undefined) : undefined,
+          code: formData.code.trim() || undefined,
           address: formData.address.trim() || undefined,
           description: formData.description.trim() || undefined,
-          type: formData.type,
+          type: "site",
           isActive: formData.isActive,
         });
-        toast.success("Location updated successfully");
+        toast.success("Location updated");
       } else {
-        // Create new location
         await createLocation({
           name: formData.name.trim(),
-          code: formData.type === "site" ? (formData.code.trim() || undefined) : undefined,
+          code: formData.code.trim() || undefined,
           address: formData.address.trim() || undefined,
           description: formData.description.trim() || undefined,
-          type: formData.type,
+          type: "site",
         });
-        toast.success("Location created successfully");
+        toast.success("Location created");
       }
-
       handleOpenChange(false);
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : "Failed to save location";
-      setError(errorMessage);
-      toast.error(errorMessage);
+      const msg = err instanceof Error ? err.message : "Failed to save location";
+      setError(msg);
+      toast.error(msg);
     } finally {
       setIsLoading(false);
     }
@@ -196,95 +141,70 @@ export function LocationFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="sm:max-w-[550px] max-h-[90vh] overflow-y-auto">
+      <DialogContent className="sm:max-w-[480px]">
         <DialogHeader>
-          <DialogTitle>{locationId ? "Edit Location" : "Add New Location"}</DialogTitle>
-
+          <DialogTitle>{locationId ? "Edit Location" : "Add Location"}</DialogTitle>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-4 py-2">
-          {/* Location Type Selection */}
-          <div className="space-y-2">
-            <Label>Location Type *</Label>
-            <RadioGroup
-              defaultValue="site"
-              value={formData.type}
-              onValueChange={(value) => setFormData({ ...formData, type: value as "site" | "inventory" | "other" })}
-              className="flex gap-4"
-              disabled={isLoading}
-            >
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="site" id="type-site" />
-                <Label htmlFor="type-site" className="cursor-pointer font-normal">Site</Label>
-              </div>
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="inventory" id="type-inventory" />
-                <Label htmlFor="type-inventory" className="cursor-pointer font-normal">Inventory</Label>
-              </div>
-              <div className="flex items-center space-x-2">
-                <RadioGroupItem value="other" id="type-other" />
-                <Label htmlFor="type-other" className="cursor-pointer font-normal">Other</Label>
-              </div>
-            </RadioGroup>
-          </div>
-
+        <form onSubmit={handleSubmit} className="space-y-4 pt-1">
+          {/* Location Name */}
           <div className="space-y-1.5">
-            <Label htmlFor="name" className="text-sm">
-              {formData.type === "inventory" ? "Store Name *" : formData.type === "other" ? "Location Name *" : "Site Name *"}
+            <Label htmlFor="name" className="text-sm font-medium">
+              Location Name <span className="text-destructive">*</span>
             </Label>
             <Input
               id="name"
-              placeholder={formData.type === "inventory" ? "Enter store name" : formData.type === "other" ? "Enter location name" : "Enter site name"}
+              placeholder="e.g. Ahmedabad Site, Main Warehouse"
               value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
               disabled={isLoading}
               className="h-9"
-              required
+              autoFocus
             />
             {error && (
-              <p className="text-xs text-destructive">{error}</p>
+              <p className="text-xs text-destructive flex items-center gap-1">
+                <AlertCircle className="h-3 w-3 shrink-0" /> {error}
+              </p>
             )}
           </div>
 
-          {/* Show Code only for Site type */}
-          {formData.type === "site" && (
-            <div className="space-y-1.5">
-              <Label htmlFor="code" className="text-sm">
-                Site Code <span className="text-muted-foreground text-xs">(optional)</span>
-              </Label>
-              <Input
-                id="code"
-                placeholder="Enter site code"
-                value={formData.code}
-                onChange={(e) => setFormData({ ...formData, code: e.target.value })}
-                disabled={isLoading}
-                className="h-9"
-              />
-            </div>
-          )}
-
+          {/* Address */}
           <div className="space-y-1.5">
-            <div className="space-y-1.5">
-              <AddressAutocomplete
-                value={formData.address}
-                onChange={(address) => setFormData({ ...formData, address })}
-                disabled={isLoading}
-                label="Address"
-                placeholder="Search address..."
-                id="address"
-                required={true}
-                showMapLink={true}
-              />
-            </div>
+            <AddressAutocomplete
+              value={formData.address}
+              onChange={(address) => setFormData({ ...formData, address })}
+              disabled={isLoading}
+              label="Address"
+              placeholder="Search or enter address..."
+              id="address"
+              required={true}
+              showMapLink={true}
+            />
           </div>
 
+          {/* Code (optional) */}
           <div className="space-y-1.5">
-            <Label htmlFor="description" className="text-sm">
-              Description <span className="text-muted-foreground text-xs">(optional)</span>
+            <Label htmlFor="code" className="text-sm font-medium">
+              Location Code <span className="text-xs text-muted-foreground font-normal">(optional)</span>
+            </Label>
+            <Input
+              id="code"
+              placeholder="e.g. AHM-01"
+              value={formData.code}
+              onChange={(e) => setFormData({ ...formData, code: e.target.value })}
+              disabled={isLoading}
+              className="h-9"
+            />
+          </div>
+
+          {/* Description (optional) */}
+          <div className="space-y-1.5">
+            <Label htmlFor="description" className="text-sm font-medium">
+              Description <span className="text-xs text-muted-foreground font-normal">(optional)</span>
             </Label>
             <Input
               id="description"
-              placeholder="Enter location description"
+              placeholder="Brief notes about this location"
               value={formData.description}
               onChange={(e) => setFormData({ ...formData, description: e.target.value })}
               disabled={isLoading}
@@ -292,33 +212,25 @@ export function LocationFormDialog({
             />
           </div>
 
+          {/* Active status (edit only) */}
           {locationId && (
-            <div className="flex items-center space-x-2 py-2">
+            <div className="flex items-center gap-2 pt-1">
               <Checkbox
                 id="isActive"
                 checked={formData.isActive}
-                onCheckedChange={(checked) => setFormData({ ...formData, isActive: checked as boolean })}
+                onCheckedChange={(checked) => setFormData({ ...formData, isActive: !!checked })}
                 disabled={isLoading}
               />
-              <Label htmlFor="isActive" className="text-sm cursor-pointer">Active Status</Label>
+              <Label htmlFor="isActive" className="text-sm cursor-pointer">Active</Label>
             </div>
           )}
 
-          {error && !error.includes("already exists") && (
-            <div className="text-sm text-destructive">{error}</div>
-          )}
-
-          <DialogFooter className="gap-2 sm:gap-0">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => handleOpenChange(false)}
-              disabled={isLoading}
-            >
+          <DialogFooter className="pt-2">
+            <Button type="button" variant="outline" onClick={() => handleOpenChange(false)} disabled={isLoading}>
               Cancel
             </Button>
             <Button type="submit" disabled={isLoading || !!error}>
-              {isLoading ? "Saving..." : locationId ? "Update Location" : "Create Location"}
+              {isLoading ? "Saving..." : locationId ? "Update" : "Create Location"}
             </Button>
           </DialogFooter>
         </form>
@@ -326,4 +238,3 @@ export function LocationFormDialog({
     </Dialog>
   );
 }
-

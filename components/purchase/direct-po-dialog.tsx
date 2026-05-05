@@ -37,7 +37,7 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { AlertCircle, Plus, Search, X, Info, ChevronDown, ChevronUp, Copy, Camera, Upload, ImageIcon } from "lucide-react";
+import { AlertCircle, Plus, Search, X, Info, ChevronDown, ChevronUp, Copy, Camera, Upload, ImageIcon, MapPin } from "lucide-react";
 import { CameraDialog } from "@/components/inventory/camera-dialog";
 import type { Id } from "@/convex/_generated/dataModel";
 import { AddressAutocomplete } from "@/components/vendors/address-autocomplete";
@@ -132,6 +132,8 @@ export function DirectPODialog({ open, onOpenChange, initialData, mode = "standa
     const [showVendorSuggestions, setShowVendorSuggestions] = useState(false);
     const [showSiteSuggestions, setShowSiteSuggestions] = useState(false);
     const [showProjectSuggestions, setShowProjectSuggestions] = useState(false);
+    const [projectDropdownOpenIndex, setProjectDropdownOpenIndex] = useState<number | null>(null);
+    const [projectDropdownSearch, setProjectDropdownSearch] = useState("");
     const [showUnitSuggestions, setShowUnitSuggestions] = useState(false);
     const [showPerUnitSuggestions, setShowPerUnitSuggestions] = useState(false);
     const [selectedVendorIndex, setSelectedVendorIndex] = useState(0);
@@ -189,6 +191,7 @@ export function DirectPODialog({ open, onOpenChange, initialData, mode = "standa
             // Photo fields
             photoFile: null as File | null,
             photoPreview: null as string | null,
+            projectId: "" as string,
             inventoryImageUrl: null as string | null, // from inventory item
         }
     ]);
@@ -357,6 +360,7 @@ export function DirectPODialog({ open, onOpenChange, initialData, mode = "standa
                         cgst: item.cgst?.toString() || "0",                       // Auto-fill CGST
                         photoFile: null,
                         photoPreview: null,
+                        projectId: (item as any).projectId || "",
                         inventoryImageUrl: item.imageUrl || (matchingInvItem as any)?.images?.[0]?.imageUrl || null,
                     };
                 }));
@@ -378,6 +382,7 @@ export function DirectPODialog({ open, onOpenChange, initialData, mode = "standa
             gstNumber: "",
             vendorAddress: "",
             deliverySite: "",
+            projectId: "",
             validTill: "",
             notes: "",
         });
@@ -399,6 +404,7 @@ export function DirectPODialog({ open, onOpenChange, initialData, mode = "standa
             cgst: "0",
             photoFile: null,
             photoPreview: null,
+            projectId: "",
             inventoryImageUrl: null,
         }]);
         setVendorSearchQuery("");
@@ -407,6 +413,8 @@ export function DirectPODialog({ open, onOpenChange, initialData, mode = "standa
         setInfoItemName(null);
         setInfoSiteId(null);
         setActiveItemIndex(null);
+        setProjectDropdownOpenIndex(null);
+        setProjectDropdownSearch("");
     };
 
     const handleOpenChange = (newOpen: boolean) => {
@@ -437,6 +445,7 @@ export function DirectPODialog({ open, onOpenChange, initialData, mode = "standa
                 cgst: "0",
                 photoFile: null,
                 photoPreview: null,
+                projectId: "",
                 inventoryImageUrl: null,
             }
         ]);
@@ -581,7 +590,7 @@ export function DirectPODialog({ open, onOpenChange, initialData, mode = "standa
                 existingRequestNumber: commonData.requestNumber || undefined,
                 deliverySiteId: commonData.deliverySite ? (commonData.deliverySite as Id<"sites">) : undefined,
                 deliverySiteName: siteSearchQuery.trim(),
-                projectId: commonData.projectId as Id<"projects"> | undefined,
+                projectId: (commonData.projectId || items[0]?.projectId) as Id<"projects"> | undefined,
                 vendorId: commonData.vendorId as Id<"vendors">,
                 validTill: new Date(commonData.validTill).getTime(),
                 notes: commonData.notes || undefined,
@@ -793,178 +802,127 @@ export function DirectPODialog({ open, onOpenChange, initialData, mode = "standa
                         <div className="space-y-4">
                             <h3 className="text-sm font-semibold text-foreground border-b pb-2">General Info</h3>
                             <div className="grid grid-cols-2 gap-4">
+                                {/* Project (shared) */}
                                 <div className="space-y-1.5 relative">
-                                    <Label htmlFor="projectName" className="text-sm">Project</Label>
-                                    <div className="relative">
-                                        <Input
-                                            id="projectName"
-                                            placeholder="Search project..."
-                                            value={projectSearchQuery}
-                                            onChange={(e) => {
-                                                setProjectSearchQuery(e.target.value);
-                                                setShowProjectSuggestions(true);
-                                                setSelectedProjectIndex(0);
-                                                if (commonData.projectId) setCommonData(p => ({ ...p, projectId: "" }));
-                                            }}
-                                            onKeyDown={(e) => {
-                                                if (!showProjectSuggestions || filteredProjects.length === 0) return;
-                                                if (e.key === "ArrowDown") {
-                                                    e.preventDefault();
-                                                    setSelectedProjectIndex(prev => (prev + 1) % filteredProjects.length);
-                                                } else if (e.key === "ArrowUp") {
-                                                    e.preventDefault();
-                                                    setSelectedProjectIndex(prev => (prev - 1 + filteredProjects.length) % filteredProjects.length);
-                                                } else if (e.key === "Enter") {
-                                                    e.preventDefault();
-                                                    if (filteredProjects[selectedProjectIndex]) {
-                                                        const project = filteredProjects[selectedProjectIndex];
-                                                        setCommonData(p => ({ ...p, projectId: project._id }));
-                                                        setProjectSearchQuery(project.name);
-                                                        setShowProjectSuggestions(false);
-                                                    }
-                                                } else if (e.key === "Escape") {
-                                                    setShowProjectSuggestions(false);
-                                                }
-                                            }}
-                                            onFocus={() => setShowProjectSuggestions(true)}
-                                            onBlur={() => setTimeout(() => setShowProjectSuggestions(false), 200)}
-                                            className="h-9"
-                                        />
-                                        {showProjectSuggestions && filteredProjects.length > 0 && (
-                                            <div className="absolute z-[100] w-full mt-1 bg-popover border rounded-md shadow-lg max-h-60 overflow-y-auto flex flex-col">
-                                                {filteredProjects.map((project, index) => (
-                                                    <div
-                                                        key={project._id}
-                                                        className={cn(
-                                                            "w-full px-3 py-2 flex items-center cursor-pointer hover:bg-accent transition-colors",
-                                                            index === selectedProjectIndex && "bg-accent"
+                                    <Label className="text-sm">Project <span className="text-muted-foreground text-xs">(optional)</span></Label>
+                                    {(() => {
+                                        const projectList = projects || [];
+                                        const selectedProject = projectList.find(p => p._id === commonData.projectId);
+                                        const filtered = projectSearchQuery.trim()
+                                            ? projectList.filter(p => p.name.toLowerCase().includes(projectSearchQuery.toLowerCase()))
+                                            : projectList;
+                                        return (
+                                            <div className="relative">
+                                                {/* Trigger */}
+                                                <button
+                                                    type="button"
+                                                    onMouseDown={(e) => {
+                                                        e.preventDefault();
+                                                        setShowProjectSuggestions(prev => !prev);
+                                                        setProjectSearchQuery("");
+                                                    }}
+                                                    className={`w-full h-auto min-h-[36px] flex items-center justify-between gap-2 px-3 py-2 rounded-md border-2 text-sm text-left transition-all bg-background ${selectedProject ? "border-primary/40 hover:border-primary/60" : "border-input hover:border-primary/30"}`}
+                                                >
+                                                    <div className="flex-1 min-w-0">
+                                                        {selectedProject ? (
+                                                            <div className="flex flex-col min-w-0">
+                                                                <span className="font-medium text-sm text-foreground truncate leading-tight">{selectedProject.name}</span>
+                                                                {selectedProject.location && (
+                                                                    <span className="text-[11px] text-muted-foreground truncate leading-tight flex items-center gap-1">
+                                                                        <MapPin className="h-2.5 w-2.5 shrink-0" />{selectedProject.location}
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                        ) : (
+                                                            <span className="text-muted-foreground">Select project...</span>
                                                         )}
-                                                        onClick={() => {
-                                                            setCommonData(p => ({ ...p, projectId: project._id }));
-                                                            setProjectSearchQuery(project.name);
-                                                            setShowProjectSuggestions(false);
+                                                    </div>
+                                                    <div className="flex items-center gap-1 shrink-0">
+                                                        {commonData.projectId && (
+                                                            <span
+                                                                role="button"
+                                                                onMouseDown={(e) => {
+                                                                    e.preventDefault();
+                                                                    e.stopPropagation();
+                                                                    setCommonData(p => ({ ...p, projectId: "" }));
+                                                                    setProjectSearchQuery("");
+                                                                    setShowProjectSuggestions(false);
+                                                                }}
+                                                                className="p-0.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground"
+                                                            >
+                                                                <X className="h-3.5 w-3.5" />
+                                                            </span>
+                                                        )}
+                                                        <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${showProjectSuggestions ? "rotate-180" : ""}`} />
+                                                    </div>
+                                                </button>
 
-                                                            // Pre-fill location search query so user can pick a matching site
-                                                            if (project.location) {
-                                                                setSiteSearchQuery(project.location);
-                                                            }
-                                                        }}
+                                                {/* Dropdown */}
+                                                {showProjectSuggestions && (
+                                                    <div
+                                                        className="absolute z-[100] w-full mt-1 bg-popover border rounded-lg shadow-lg"
+                                                        onMouseDown={(e) => e.preventDefault()}
                                                     >
-                                                        <div className="flex-1 overflow-hidden">
-                                                            <div className="font-medium text-sm truncate">{project.name}</div>
-                                                            {project.location ? (
-                                                                <div className="text-xs text-muted-foreground truncate mt-0.5">{project.location}</div>
-                                                            ) : (
-                                                                <div className="text-xs text-muted-foreground/50 truncate mt-0.5 italic">No location set</div>
+                                                        <div className="p-2 border-b">
+                                                            <div className="relative">
+                                                                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                                                                <Input
+                                                                    autoFocus
+                                                                    placeholder="Search projects..."
+                                                                    value={projectSearchQuery}
+                                                                    onChange={(e) => setProjectSearchQuery(e.target.value)}
+                                                                    onKeyDown={(e) => { if (e.key === "Escape") setShowProjectSuggestions(false); }}
+                                                                    className="pl-8 h-8 text-sm"
+                                                                />
+                                                            </div>
+                                                        </div>
+                                                        <div className="max-h-48 overflow-y-auto">
+                                                            {filtered.slice(0, 8).map((project) => {
+                                                                const isSelected = commonData.projectId === project._id;
+                                                                return (
+                                                                    <div
+                                                                        key={project._id}
+                                                                        className={`px-3 py-2.5 cursor-pointer hover:bg-accent transition-colors border-b border-border/20 last:border-0 ${isSelected ? "bg-primary/10" : ""}`}
+                                                                        onMouseDown={(e) => {
+                                                                            e.preventDefault();
+                                                                            setCommonData(p => ({ ...p, projectId: project._id }));
+                                                                            setProjectSearchQuery("");
+                                                                            setShowProjectSuggestions(false);
+                                                                            if (project.location && sites) {
+                                                                                const loc = project.location.toLowerCase();
+                                                                                const matched = sites.find(s =>
+                                                                                    s.name.toLowerCase() === loc ||
+                                                                                    s.name.toLowerCase().includes(loc) ||
+                                                                                    loc.includes(s.name.toLowerCase())
+                                                                                );
+                                                                                if (matched) {
+                                                                                    setCommonData(p => ({ ...p, deliverySite: matched._id, projectId: project._id }));
+                                                                                    setSiteSearchQuery(matched.name);
+                                                                                }
+                                                                            }
+                                                                        }}
+                                                                    >
+                                                                        <div className={`font-semibold text-sm ${isSelected ? "text-primary" : ""}`}>{project.name}</div>
+                                                                        {project.location && (
+                                                                            <div className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
+                                                                                <MapPin className="h-3 w-3 shrink-0" />{project.location}
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
+                                                                );
+                                                            })}
+                                                            {filtered.length === 0 && (
+                                                                <div className="px-3 py-3 text-sm text-muted-foreground text-center">No projects found</div>
                                                             )}
                                                         </div>
                                                     </div>
-                                                ))}
+                                                )}
                                             </div>
-                                        )}
-                                    </div>
+                                        );
+                                    })()}
                                 </div>
 
-                                <div className="space-y-1.5 relative">
-                                    <Label htmlFor="deliverySite" className="text-sm">Location</Label>
-                                    <div className="relative">
-                                        <Input
-                                            id="deliverySite"
-                                            placeholder="Search location..."
-                                            value={siteSearchQuery}
-                                            onChange={(e) => {
-                                                setSiteSearchQuery(e.target.value);
-                                                setShowSiteSuggestions(true);
-                                                setSelectedSiteSuggestionIndex(0);
-                                            }}
-                                            onFocus={() => { setShowSiteSuggestions(true); setSelectedSiteSuggestionIndex(0); }}
-                                            onClick={() => setShowSiteSuggestions(true)}
-                                            onBlur={() => setTimeout(() => setShowSiteSuggestions(false), 200)}
-                                            onKeyDown={(e) => {
-                                                if (!showSiteSuggestions) return;
-
-                                                if (e.key === 'ArrowDown') {
-                                                    e.preventDefault();
-                                                    setSelectedSiteSuggestionIndex(prev =>
-                                                        prev < filteredSites.length ? prev + 1 : prev
-                                                    );
-                                                } else if (e.key === 'ArrowUp') {
-                                                    e.preventDefault();
-                                                    setSelectedSiteSuggestionIndex(prev => prev > 0 ? prev - 1 : 0);
-                                                } else if (e.key === 'Enter' && filteredSites.length > 0) {
-                                                    e.preventDefault();
-                                                    if (selectedSiteSuggestionIndex < filteredSites.length) {
-                                                        const selectedSite = filteredSites[selectedSiteSuggestionIndex];
-                                                        setCommonData(p => ({ ...p, deliverySite: selectedSite._id }));
-                                                        setSiteSearchQuery(selectedSite.name);
-                                                        setShowSiteSuggestions(false);
-                                                    } else {
-                                                        // "Add New Location" option selected
-                                                        setShowLocationDialog(true);
-                                                        setShowSiteSuggestions(false);
-                                                    }
-                                                } else if (e.key === 'Escape') {
-                                                    setShowSiteSuggestions(false);
-                                                }
-                                            }}
-                                            className="h-9 pr-9"
-                                        />
-                                        {commonData.deliverySite ? (
-                                            <Button
-                                                type="button"
-                                                variant="ghost"
-                                                size="sm"
-                                                onClick={() => {
-                                                    setCommonData(p => ({ ...p, deliverySite: "" }));
-                                                    setSiteSearchQuery("");
-                                                }}
-                                                className="absolute right-0 top-0 h-9 w-9 p-0 hover:bg-transparent"
-                                            >
-                                                <X className="h-3 w-3 text-muted-foreground" />
-                                            </Button>
-                                        ) : (
-                                            <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
-                                        )}
-                                        {showSiteSuggestions && filteredSites.length > 0 && (
-                                            <div className="absolute z-[100] w-full mt-1 bg-popover border rounded-md shadow-lg max-h-48 overflow-y-auto flex flex-col">
-                                                {filteredSites.map((site, siteIdx) => (
-                                                    <div
-                                                        key={site._id}
-                                                        className={cn(
-                                                            "w-full px-3 py-2 flex items-center justify-between hover:bg-accent transition-colors cursor-pointer",
-                                                            siteIdx === selectedSiteSuggestionIndex && "bg-accent"
-                                                        )}
-                                                        onClick={() => {
-                                                            setCommonData(p => ({ ...p, deliverySite: site._id }));
-                                                            setSiteSearchQuery(site.name);
-                                                            setShowSiteSuggestions(false);
-                                                        }}
-                                                    >
-                                                        <div className="flex-1 overflow-hidden">
-                                                            <div className="font-medium text-sm truncate">{site.name}</div>
-                                                            {site.address ? (
-                                                                <div className="text-xs text-muted-foreground truncate mt-0.5">{site.address}</div>
-                                                            ) : site.city ? (
-                                                                <div className="text-xs text-muted-foreground truncate mt-0.5">{site.city}</div>
-                                                            ) : null}
-                                                        </div>
-                                                        <button
-                                                            type="button"
-                                                            className="p-1 hover:bg-background rounded-full ml-2 text-muted-foreground hover:text-foreground shrink-0"
-                                                            onClick={(e) => {
-                                                                e.stopPropagation();
-                                                                setInfoSiteId(site._id);
-                                                            }}
-                                                            title="View Details"
-                                                        >
-                                                            <Info className="h-4 w-4" />
-                                                        </button>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
+                                {/* PO Expiry Date */}
                                 <div className="space-y-1.5">
                                     <Label htmlFor="validTill" className="text-sm">PO Expiry Date *</Label>
                                     <Input id="validTill" type="date" value={commonData.validTill} onChange={(e) => setCommonData(p => ({ ...p, validTill: e.target.value }))} required className="h-9" min={new Date().toISOString().split("T")[0]} />
@@ -1196,7 +1154,7 @@ export function DirectPODialog({ open, onOpenChange, initialData, mode = "standa
                                         </div>
                                     </div>
 
-                                    {/* Row 1.5: Description */}
+                                    {/* Row 1.6: Description */}
                                     <div className="space-y-1.5">
                                         <Label className="text-sm">Description <span className="text-muted-foreground text-xs">(optional)</span></Label>
                                         <Textarea

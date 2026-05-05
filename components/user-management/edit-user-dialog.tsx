@@ -40,6 +40,7 @@ import { MediaInput } from "@/components/shared/media-input";
 import { Doc } from "@/convex/_generated/dataModel";
 import { toast } from "sonner";
 import { SiteSelector } from "./site-selector";
+import { ProjectSelector } from "./project-selector";
 import { AddressAutocomplete } from "@/components/vendors/address-autocomplete";
 import type { Id } from "@/convex/_generated/dataModel";
 
@@ -80,9 +81,10 @@ export function EditUserDialog({ open, onOpenChange, user }: EditUserDialogProps
     address: "",
     role: "" as Role | "",
     assignedSites: [] as Id<"sites">[],
-    password: "", // Optional - only if manager wants to change it
-    currentPassword: "", // For self password change
-    confirmPassword: "", // For password confirmation
+    assignedProjects: [] as Id<"projects">[],
+    password: "",
+    currentPassword: "",
+    confirmPassword: "",
   });
 
   // Initialize form when user changes or dialog opens
@@ -94,7 +96,8 @@ export function EditUserDialog({ open, onOpenChange, user }: EditUserDialogProps
         address: user.address || "",
         role: user.role,
         assignedSites: user.assignedSites || [],
-        password: "", // Always empty for security
+        assignedProjects: (user as any).assignedProjects || [],
+        password: "",
         currentPassword: "",
         confirmPassword: "",
       });
@@ -286,6 +289,7 @@ export function EditUserDialog({ open, onOpenChange, user }: EditUserDialogProps
         address: formData.address,
         role: formData.role as Role,
         assignedSites: formData.assignedSites,
+        assignedProjects: formData.assignedProjects,
         profileImage,
         profileImageKey,
         signatureStorageId,
@@ -311,6 +315,7 @@ export function EditUserDialog({ open, onOpenChange, user }: EditUserDialogProps
         address: "",
         role: "",
         assignedSites: [],
+        assignedProjects: [],
         password: "",
         currentPassword: "",
         confirmPassword: "",
@@ -596,7 +601,7 @@ export function EditUserDialog({ open, onOpenChange, user }: EditUserDialogProps
             <Select
               value={formData.role}
               onValueChange={(value) =>
-                setFormData({ ...formData, role: value as Role, assignedSites: [] })
+                setFormData({ ...formData, role: value as Role, assignedSites: [], assignedProjects: [] })
               }
               disabled={isLoading || isEditingSelf}
             >
@@ -637,13 +642,13 @@ export function EditUserDialog({ open, onOpenChange, user }: EditUserDialogProps
             </div>
           )}
 
-          {/* Site Selection - Only for Site Engineers */}
+          {/* Project Assignment - Only for Site Engineers */}
           {formData.role === ROLES.SITE_ENGINEER && (
             <div className="space-y-1.5">
-              <SiteSelector
-                selectedSites={formData.assignedSites}
-                onSelectionChange={(sites) =>
-                  setFormData({ ...formData, assignedSites: sites })
+              <ProjectSelector
+                selectedProjects={formData.assignedProjects}
+                onSelectionChange={(projects) =>
+                  setFormData({ ...formData, assignedProjects: projects })
                 }
                 disabled={isLoading}
               />

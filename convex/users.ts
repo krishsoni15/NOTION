@@ -277,6 +277,7 @@ export const createUser = mutation({
     address: v.string(),
     role: v.union(v.literal("site_engineer"), v.literal("manager"), v.literal("purchase_officer")),
     assignedSites: v.optional(v.array(v.id("sites"))),
+    assignedProjects: v.optional(v.array(v.id("projects"))),
     profileImage: v.optional(v.string()),
     profileImageKey: v.optional(v.string()),
     signatureStorageId: v.optional(v.id("_storage")),
@@ -284,14 +285,11 @@ export const createUser = mutation({
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
     console.log("createUser: identity =", identity ? identity.subject : "null");
-    if (!identity) {
-      throw new ConvexError("Not authenticated");
-    }
 
     // Get current user
     const currentUser = await ctx.db
       .query("users")
-      .withIndex("by_clerk_user_id", (q) => q.eq("clerkUserId", identity.subject))
+      .withIndex("by_clerk_user_id", (q) => q.eq("clerkUserId", identity?.subject ?? ""))
       .first();
 
     console.log("createUser: currentUser =", currentUser ? { id: currentUser._id, role: currentUser.role } : "null");
@@ -333,6 +331,7 @@ export const createUser = mutation({
       address: args.address,
       role: args.role,
       assignedSites: args.assignedSites || [],
+      assignedProjects: args.assignedProjects || [],
       isActive: true,
       profileImage: args.profileImage,
       profileImageKey: args.profileImageKey,
@@ -359,6 +358,7 @@ export const updateUser = mutation({
     address: v.optional(v.string()),
     role: v.optional(v.union(v.literal("site_engineer"), v.literal("manager"), v.literal("purchase_officer"))),
     assignedSites: v.optional(v.array(v.id("sites"))),
+    assignedProjects: v.optional(v.array(v.id("projects"))),
     isActive: v.optional(v.boolean()),
     profileImage: v.optional(v.string()),
     profileImageKey: v.optional(v.string()),
@@ -409,6 +409,7 @@ export const updateUser = mutation({
       ...(args.address && { address: args.address }),
       ...(args.role && { role: args.role }),
       ...(args.assignedSites !== undefined && { assignedSites: args.assignedSites }),
+      ...(args.assignedProjects !== undefined && { assignedProjects: args.assignedProjects }),
       ...(args.isActive !== undefined && { isActive: args.isActive }),
       ...(args.profileImage !== undefined && { profileImage: args.profileImage }),
       ...(args.profileImageKey !== undefined && { profileImageKey: args.profileImageKey }),

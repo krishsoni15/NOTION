@@ -70,6 +70,39 @@ export const getUserAssignedSites = query({
 });
 
 /**
+ * Get projects assigned to current user (site engineer)
+ * Returns all projects if user is purchase_officer/manager (for RFQ)
+ */
+export const getUserAssignedProjects = query({
+  args: {},
+  handler: async (ctx) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) return [];
+
+    const currentUser = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_user_id", (q: any) => q.eq("clerkUserId", userId))
+      .first();
+
+    if (!currentUser) return [];
+
+    // Purchase officers and managers see all projects
+    if (currentUser.role === "purchase_officer" || currentUser.role === "manager") {
+      return await ctx.db.query("projects").collect();
+    }
+
+    // Site engineers see only their assigned projects
+    const assignedProjectIds: Id<"projects">[] = (currentUser as any).assignedProjects || [];
+    if (assignedProjectIds.length === 0) return [];
+
+    const projects = await Promise.all(
+      assignedProjectIds.map((id) => ctx.db.get(id))
+    );
+    return projects.filter(Boolean);
+  },
+});
+
+/**
  * Get inventory items for autocomplete suggestions
  * Returns all active inventory items with their names and units
  */
@@ -1005,6 +1038,7 @@ export const createMultipleMaterialRequests = mutation({
     ),
     orderNote: v.optional(v.string()),
     isRFQ: v.optional(v.boolean()), // Flag to indicate this is an RFQ
+    projectId: v.optional(v.id("projects")), // Optional project association
   },
   handler: async (ctx, args) => {
     const currentUser = await getCurrentUser(ctx);
@@ -1103,6 +1137,7 @@ export const createMultipleMaterialRequests = mutation({
         status: args.isRFQ ? "ready_for_cc" : "pending", // RFQ goes directly to ready_for_cc
         notes: item.notes,
         isRFQ: args.isRFQ || undefined, // Mark as RFQ if applicable
+        projectId: args.projectId, // Associate with project if provided
         createdAt: now,
         updatedAt: now,
       });

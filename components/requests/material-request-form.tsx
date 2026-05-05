@@ -88,7 +88,8 @@ interface MaterialRequestFormProps {
 
 interface RequestItem {
   id: string;
-  siteId: string; // Per-item site location
+  siteId: string; // Per-item site location (resolved from project)
+  projectId: string; // Per-item selected project
   itemName: string;
   itemSearchQuery: string;
   description: string;
@@ -122,6 +123,9 @@ export function MaterialRequestForm({
     ? allUserRequests.filter((r) => r.requestNumber === draftRequestNumber && (r.status === "draft" || r.status === "rejected" || r.status === "sign_rejected"))
     : [];
   const assignedSites = useQuery(api.requests.getUserAssignedSites);
+  const assignedProjects = useQuery(api.requests.getUserAssignedProjects);
+  const allProjects = useQuery(api.projects.getAllProjects, {});
+  const allSites = useQuery(api.sites.getAllSites, {});
   const inventoryItems = useQuery(
     api.requests.getInventoryItemsForAutocomplete,
     {}
@@ -142,6 +146,11 @@ export function MaterialRequestForm({
   const [dateError, setDateError] = useState<string | null>(null);
   const [openSiteInfoPopover, setOpenSiteInfoPopover] = useState<string | null>(null);
 
+  // Project selector state
+  const [selectedProjectId, setSelectedProjectId] = useState<Id<"projects"> | "">("");
+  const [projectSearchQuery, setProjectSearchQuery] = useState("");
+  const [showProjectSuggestions, setShowProjectSuggestions] = useState(false);
+
   // Quantity suggestion keyboard navigation state (per item)
   const [selectedQuantityIndex, setSelectedQuantityIndex] = useState<{ [itemId: string]: number }>({});
   // Item suggestion keyboard navigation state (per item)
@@ -161,6 +170,7 @@ export function MaterialRequestForm({
     {
       id: "1",
       siteId: "",
+      projectId: "",
       itemName: "",
       itemSearchQuery: "",
       description: "",
@@ -216,6 +226,7 @@ export function MaterialRequestForm({
             return {
               id: `${index + 1}`,
               siteId: req.siteId,
+              projectId: (req as any).projectId || "",
               itemName: req.itemName,
               itemSearchQuery: req.itemName,
               description: req.description,
@@ -242,6 +253,7 @@ export function MaterialRequestForm({
         setItems(sortedRequestItems.length > 0 ? sortedRequestItems : [{
           id: "1",
           siteId: "",
+          projectId: "",
           itemName: "",
           itemSearchQuery: "",
           description: "",
@@ -271,6 +283,7 @@ export function MaterialRequestForm({
         {
           id: "1",
           siteId: "",
+          projectId: "",
           itemName: "",
           itemSearchQuery: "",
           description: "",
@@ -290,6 +303,9 @@ export function MaterialRequestForm({
       setShowConfirmDialog(false);
       setSiteDropdownOpen({});
       setSiteSearchQuery({});
+      setSelectedProjectId("");
+      setProjectSearchQuery("");
+      setShowProjectSuggestions(false);
     }
   }, [open]);
 
@@ -484,6 +500,7 @@ export function MaterialRequestForm({
       const newItem = {
         id: newId,
         siteId: lastItemSiteId,
+        projectId: prev[prev.length - 1]?.projectId || "",
         itemName: "",
         itemSearchQuery: "",
         description: "",
@@ -1119,6 +1136,7 @@ export function MaterialRequestForm({
           items: itemsWithPhotos,
           orderNote: sharedFormData.orderNote,
           isRFQ: isRFQMode, // Mark as RFQ if in RFQ mode
+          projectId: selectedProjectId ? selectedProjectId as Id<"projects"> : undefined,
         });
 
         if (isRFQMode && onRFQRequestCreated && result.requestIds && result.requestIds.length > 0) {
@@ -1282,7 +1300,7 @@ export function MaterialRequestForm({
                   <h3 className="text-sm sm:text-base font-bold text-foreground">Request Details</h3>
                 </div>
 
-                {/* Required By - Single field since site moved to items */}
+                {/* Required By - full width now */}
                 <div className="space-y-2 sm:space-y-2.5">
                   <Label className="text-xs sm:text-sm font-semibold flex items-center gap-1.5">
                     <Calendar className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground" />
@@ -1712,170 +1730,136 @@ export function MaterialRequestForm({
                             </div>
                           </div>
 
-                          {/* Per-Item Site Location */}
+                          {/* Per-Item Project */}
                           <div className="space-y-2 sm:space-y-2.5">
                             <Label className="text-xs sm:text-sm font-semibold flex items-center gap-1.5">
-                              <MapPin className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground" />
-                              Site Location {!isRFQMode && <span className="text-destructive">*</span>}
+                              <Building2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground" />
+                              Project
+                              {!isRFQMode && <span className="text-destructive">*</span>}
                               {isRFQMode && <span className="text-xs text-muted-foreground font-normal">(optional)</span>}
                             </Label>
-                            <Popover
-                              open={siteDropdownOpen[item.id] || false}
-                              onOpenChange={(open) => {
-                                setSiteDropdownOpen(prev => ({ ...prev, [item.id]: open }));
-                                if (!open) {
-                                  setOpenSiteInfoPopover(null);
-                                }
-                              }}
-                              modal={false}
-                            >
-                              <PopoverTrigger asChild>
-                                <Button
-                                  type="button"
-                                  variant="outline"
-                                  disabled={isLoading}
-                                  className="w-full h-10 sm:h-11 text-sm border-2 hover:border-primary/30 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all duration-200 justify-between font-normal bg-background px-3"
+                            {(() => {
+                              const projectList = assignedProjects || [];
+                              const selectedProject = projectList.find((p: any) => p._id === item.projectId);
+                              const filteredList = (siteSearchQuery[item.id] || "").trim()
+                                ? projectList.filter((p: any) => p.name.toLowerCase().includes((siteSearchQuery[item.id] || "").toLowerCase()))
+                                : projectList;
+                              return (
+                                <Popover
+                                  open={siteDropdownOpen[item.id] || false}
+                                  onOpenChange={(open) => setSiteDropdownOpen(prev => ({ ...prev, [item.id]: open }))}
+                                  modal={false}
                                 >
-                                  <div className="flex items-center gap-2 flex-1 min-w-0">
-                                    {item.siteId ? (
-                                      <>
-                                        <Building2 className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                                        <span className="truncate text-left">
-                                          {assignedSites?.find((s) => s?._id === item.siteId)?.name || "Selected site"}
-                                        </span>
-                                      </>
-                                    ) : (
-                                      <span className="text-muted-foreground">Select site</span>
-                                    )}
-                                  </div>
-                                  <div className="flex items-center gap-1 shrink-0">
-                                    {item.siteId && (
-                                      <div
-                                        role="button"
-                                        tabIndex={0}
-                                        onClick={(e) => {
-                                          e.preventDefault();
-                                          e.stopPropagation();
-                                          updateItem(item.id, { siteId: "" });
-                                          setSiteSearchQuery(prev => ({ ...prev, [item.id]: "" }));
-                                        }}
-                                        onKeyDown={(e) => {
-                                          if (e.key === "Enter" || e.key === " ") {
-                                            e.preventDefault();
-                                            e.stopPropagation();
-                                            updateItem(item.id, { siteId: "" });
-                                            setSiteSearchQuery(prev => ({ ...prev, [item.id]: "" }));
-                                          }
-                                        }}
-                                        className="p-1 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors cursor-pointer focus:outline-none focus:ring-2 focus:ring-primary/20"
-                                        aria-label="Clear selection"
-                                      >
-                                        <X className="h-3.5 w-3.5" />
+                                  <PopoverTrigger asChild>
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      disabled={isLoading}
+                                      className={`w-full min-h-[40px] sm:min-h-[44px] h-auto text-sm border-2 transition-all duration-200 justify-between font-normal bg-background px-3 py-2 ${selectedProject ? "border-primary/40 hover:border-primary/60" : "hover:border-primary/30 focus:border-primary focus:ring-2 focus:ring-primary/20"}`}
+                                    >
+                                      <div className="flex items-center gap-2 flex-1 min-w-0">
+                                        {selectedProject ? (
+                                          <div className="flex items-center gap-2 min-w-0 flex-1">
+                                            <Building2 className="h-3.5 w-3.5 text-primary shrink-0" />
+                                            <div className="flex flex-col min-w-0">
+                                              <span className="font-medium text-sm text-foreground truncate leading-tight">{(selectedProject as any).name}</span>
+                                              {(selectedProject as any).location && (
+                                                <span className="text-[11px] text-muted-foreground truncate leading-tight">{(selectedProject as any).location}</span>
+                                              )}
+                                            </div>
+                                          </div>
+                                        ) : (
+                                          <span className="text-muted-foreground">Select project</span>
+                                        )}
                                       </div>
-                                    )}
-                                    <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${siteDropdownOpen[item.id] ? "rotate-180" : ""}`} />
-                                  </div>
-                                </Button>
-                              </PopoverTrigger>
-                              <PopoverContent
-                                className="w-[var(--radix-popover-trigger-width)] p-0 z-[100]"
-                                align="start"
-                                sideOffset={4}
-                                onOpenAutoFocus={(e) => e.preventDefault()}
-                              >
-                                <div className="p-3 border-b bg-muted/30">
-                                  <div className="relative">
-                                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                                    <Input
-                                      type="text"
-                                      placeholder="Search sites..."
-                                      value={siteSearchQuery[item.id] || ""}
-                                      onChange={(e) => setSiteSearchQuery(prev => ({ ...prev, [item.id]: e.target.value }))}
-                                      onFocus={(e) => e.stopPropagation()}
-                                      className="pl-9 h-9 text-sm"
-                                      autoFocus
-                                    />
-                                  </div>
-                                </div>
-                                <div className="max-h-[300px] overflow-y-auto">
-                                  {!assignedSites ? (
-                                    <div className="p-4 text-center text-sm text-muted-foreground">
-                                      Loading sites...
+                                      <div className="flex items-center gap-1 shrink-0">
+                                        {item.projectId && (
+                                          <div
+                                            role="button"
+                                            tabIndex={0}
+                                            onClick={(e) => { e.preventDefault(); e.stopPropagation(); updateItem(item.id, { siteId: "", projectId: "" }); setSiteSearchQuery(prev => ({ ...prev, [item.id]: "" })); }}
+                                            onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.stopPropagation(); updateItem(item.id, { siteId: "", projectId: "" }); } }}
+                                            className="p-1 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+                                            aria-label="Clear selection"
+                                          >
+                                            <X className="h-3.5 w-3.5" />
+                                          </div>
+                                        )}
+                                        <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${siteDropdownOpen[item.id] ? "rotate-180" : ""}`} />
+                                      </div>
+                                    </Button>
+                                  </PopoverTrigger>
+                                  <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0 z-[100]" align="start" sideOffset={4} onOpenAutoFocus={(e) => e.preventDefault()}>
+                                    <div className="p-3 border-b bg-muted/30">
+                                      <div className="relative">
+                                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                                        <Input
+                                          type="text"
+                                          placeholder="Search projects..."
+                                          value={siteSearchQuery[item.id] || ""}
+                                          onChange={(e) => setSiteSearchQuery(prev => ({ ...prev, [item.id]: e.target.value }))}
+                                          onFocus={(e) => e.stopPropagation()}
+                                          className="pl-9 h-9 text-sm"
+                                          autoFocus
+                                        />
+                                      </div>
                                     </div>
-                                  ) : (() => {
-                                    const filteredSites = assignedSites
-                                      .filter((site): site is NonNullable<typeof site> => site !== null)
-                                      .filter((site) => {
-                                        const normalizedQuery = normalizeSearchQuery(siteSearchQuery[item.id] || "");
-                                        if (!normalizedQuery) return true;
-                                        return matchesAnySearchQuery(
-                                          [site.name, site.code, site.address, site.description].filter(Boolean) as string[],
-                                          normalizedQuery
-                                        );
-                                      });
-
-                                    return filteredSites.length === 0 ? (
-                                      <div className="p-4 text-center text-sm text-muted-foreground">
-                                        {siteSearchQuery[item.id] ? "No sites found" : "No sites assigned"}
-                                      </div>
-                                    ) : (
-                                      <div className="p-1">
-                                        {filteredSites.map((site) => {
-                                          const isSelected = item.siteId === site._id;
-                                          return (
-                                            <div key={site._id} className="relative group">
+                                    <div className="max-h-[280px] overflow-y-auto">
+                                      {filteredList.length === 0 ? (
+                                        <div className="p-4 text-center text-sm text-muted-foreground">
+                                          {siteSearchQuery[item.id] ? "No projects found" : (isRFQMode ? "No projects available" : "No projects assigned")}
+                                        </div>
+                                      ) : (
+                                        <div className="p-1">
+                                          {filteredList.map((project: any) => {
+                                            const isSelected = item.projectId === project._id;
+                                            return (
                                               <button
+                                                key={project._id}
                                                 type="button"
                                                 onClick={(e) => {
                                                   e.preventDefault();
                                                   e.stopPropagation();
-                                                  updateItem(item.id, { siteId: site._id });
-                                                  setSiteSearchQuery(prev => ({ ...prev, [item.id]: "" }));
+                                                  // Resolve siteId from project location
+                                                  let resolvedSiteId = "";
+                                                  if (project.location && allSites) {
+                                                    const loc = project.location.toLowerCase();
+                                                    const matched = allSites.find((s: any) => s.name.toLowerCase() === loc || s.name.toLowerCase().includes(loc) || loc.includes(s.name.toLowerCase()));
+                                                    if (matched) resolvedSiteId = matched._id;
+                                                  }
+                                                  updateItem(item.id, { projectId: project._id, siteId: resolvedSiteId });
                                                   setSiteDropdownOpen(prev => ({ ...prev, [item.id]: false }));
+                                                  setSiteSearchQuery(prev => ({ ...prev, [item.id]: "" }));
                                                 }}
-                                                className={`w-full flex items-center gap-2 px-3 py-2.5 rounded-md text-sm text-left transition-all ${isSelected
-                                                  ? "bg-primary/10 hover:bg-primary/15 border border-primary/20"
-                                                  : "hover:bg-accent pr-12"
-                                                  }`}
+                                                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-left transition-all ${isSelected ? "bg-primary/10 border border-primary/20" : "hover:bg-accent"}`}
                                               >
-                                                <div
-                                                  className={`h-4 w-4 rounded border flex items-center justify-center shrink-0 transition-all ${isSelected
-                                                    ? "bg-primary border-primary"
-                                                    : "border-input group-hover:border-primary/50"
-                                                    }`}
-                                                >
-                                                  {isSelected && (
-                                                    <Check className="h-3 w-3 text-primary-foreground" />
-                                                  )}
+                                                <div className={`h-4 w-4 rounded-full border-2 flex items-center justify-center shrink-0 transition-all ${isSelected ? "bg-primary border-primary" : "border-muted-foreground/40"}`}>
+                                                  {isSelected && <div className="h-2 w-2 rounded-full bg-white" />}
                                                 </div>
                                                 <div className="flex-1 min-w-0">
-                                                  <div className="font-medium truncate flex items-center gap-1.5">
-                                                    <Building2 className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                                                    {site.name}
+                                                  <div className={`font-semibold truncate ${isSelected ? "text-primary" : "text-foreground"}`}>
+                                                    {project.name}
                                                   </div>
-                                                  {site.code && (
-                                                    <div className="text-xs text-muted-foreground mt-0.5">
-                                                      Code: {site.code}
-                                                    </div>
-                                                  )}
-                                                  {site.address && (
-                                                    <div className="flex items-center gap-1 mt-0.5">
-                                                      <div className="text-xs text-muted-foreground truncate flex-1">
-                                                        {site.address}
-                                                      </div>
+                                                  {project.location && (
+                                                    <div className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
+                                                      <MapPin className="h-3 w-3 shrink-0" />
+                                                      {project.location}
                                                     </div>
                                                   )}
                                                 </div>
+                                                {isSelected && (
+                                                  <Check className="h-4 w-4 text-primary shrink-0" />
+                                                )}
                                               </button>
-                                            </div>
-                                          );
-                                        })}
-                                      </div>
-                                    );
-                                  })()}
-                                </div>
-                              </PopoverContent>
-                            </Popover>
+                                            );
+                                          })}
+                                        </div>
+                                      )}
+                                    </div>
+                                  </PopoverContent>
+                                </Popover>
+                              );
+                            })()}
                           </div>
                         </div>
 

@@ -27,61 +27,58 @@ export function ImageGallery({
   title = "Image Gallery"
 }: ImageGalleryProps) {
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
-  const [zoom, setZoom] = useState(1);
+  // zoom: 0 = "fit" mode (image fills viewer), >0 = explicit scale multiplier on top of fit
+  const [zoom, setZoom] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const [offset, setOffset] = useState({ x: 0, y: 0 });
 
-  // Reset zoom/offset when image changes
-  useEffect(() => {
-    setZoom(1);
-    setOffset({ x: 0, y: 0 });
-  }, [currentIndex]);
+  const resetView = () => { setZoom(0); setOffset({ x: 0, y: 0 }); };
 
-  // Reset index when gallery opens
+  // Reset when image changes
+  useEffect(() => { resetView(); }, [currentIndex]);
+
+  // Reset when gallery opens
   useEffect(() => {
-    if (open) {
-      setCurrentIndex(initialIndex);
-      setZoom(1);
-      setOffset({ x: 0, y: 0 });
-    }
+    if (open) { setCurrentIndex(initialIndex); resetView(); }
   }, [open, initialIndex]);
 
   const currentImage = images[currentIndex];
 
-  const goToPrevious = () => {
-    setCurrentIndex((prev) => (prev === 0 ? images.length - 1 : prev - 1));
-  };
+  const goToPrevious = () => setCurrentIndex((prev) => (prev === 0 ? images.length - 1 : prev - 1));
+  const goToNext = () => setCurrentIndex((prev) => (prev === images.length - 1 ? 0 : prev + 1));
 
-  const goToNext = () => {
-    setCurrentIndex((prev) => (prev === images.length - 1 ? 0 : prev + 1));
+  // zoom=0 means "fit". Steps: fit → 1.5× → 2× → 3× → fit
+  const zoomSteps = [0, 1.5, 2, 3];
+  const handleZoomIn = () => {
+    const idx = zoomSteps.indexOf(zoom);
+    setZoom(zoomSteps[Math.min(idx + 1, zoomSteps.length - 1)]);
+    if (zoom === 0) setOffset({ x: 0, y: 0 });
   };
-
-  const handleZoomIn = () => setZoom(prev => Math.min(prev + 0.5, 4));
-  const handleZoomOut = () => setZoom(prev => Math.max(prev - 0.5, 0.5));
-  const handleReset = () => { setZoom(1); setOffset({ x: 0, y: 0 }); };
+  const handleZoomOut = () => {
+    const idx = zoomSteps.indexOf(zoom);
+    if (idx <= 1) { resetView(); return; }
+    setZoom(zoomSteps[idx - 1]);
+  };
 
   const handleWheel = useCallback((e: React.WheelEvent) => {
     e.preventDefault();
-    const delta = e.deltaY > 0 ? -0.2 : 0.2;
-    setZoom(prev => Math.min(Math.max(prev + delta, 0.5), 4));
-  }, []);
+    if (e.deltaY < 0) handleZoomIn();
+    else handleZoomOut();
+  }, [zoom]);
 
   const handleMouseDown = (e: React.MouseEvent) => {
-    if (zoom <= 1) return;
+    if (zoom === 0) return;
     setIsDragging(true);
     setDragStart({ x: e.clientX - offset.x, y: e.clientY - offset.y });
   };
-
   const handleMouseMove = (e: React.MouseEvent) => {
     if (!isDragging) return;
     setOffset({ x: e.clientX - dragStart.x, y: e.clientY - dragStart.y });
   };
-
   const handleMouseUp = () => setIsDragging(false);
 
   const downloadImage = () => {
-    // Open in new tab — works for all CORS origins, user can save from there
     const a = document.createElement('a');
     a.href = currentImage.imageUrl;
     a.download = `image-${currentIndex + 1}.jpg`;
@@ -93,6 +90,11 @@ export function ImageGallery({
   };
 
   if (!currentImage) return null;
+
+  // In fit mode: image fills the container using CSS (width/height 100%, object-fit contain)
+  // In zoom mode: image is natural size × zoom multiplier, centered, draggable
+  const isFitMode = zoom === 0;
+  const zoomLabel = isFitMode ? "Fit" : `${Math.round(zoom * 100)}%`;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -114,11 +116,11 @@ export function ImageGallery({
             <Button variant="ghost" size="icon" onClick={handleZoomOut} className="text-white hover:bg-white/20 h-8 w-8" title="Zoom Out">
               <ZoomOut className="h-4 w-4" />
             </Button>
-            <span className="text-white text-xs w-10 text-center">{Math.round(zoom * 100)}%</span>
+            <span className="text-white text-xs w-10 text-center font-medium">{zoomLabel}</span>
             <Button variant="ghost" size="icon" onClick={handleZoomIn} className="text-white hover:bg-white/20 h-8 w-8" title="Zoom In">
               <ZoomIn className="h-4 w-4" />
             </Button>
-            <Button variant="ghost" size="icon" onClick={handleReset} className="text-white hover:bg-white/20 h-8 w-8" title="Reset">
+            <Button variant="ghost" size="icon" onClick={resetView} className="text-white hover:bg-white/20 h-8 w-8" title="Reset to Fit">
               <RotateCcw className="h-3.5 w-3.5" />
             </Button>
             <div className="w-px h-5 bg-white/20 mx-1" />
@@ -133,13 +135,16 @@ export function ImageGallery({
 
         {/* Main Image Area */}
         <div
-          className="relative flex items-center justify-center w-full h-full overflow-hidden"
+          className="relative flex items-center justify-center w-full h-full"
+          style={{
+            overflow: isFitMode ? 'hidden' : 'auto',
+            cursor: !isFitMode ? (isDragging ? 'grabbing' : 'grab') : 'zoom-in',
+          }}
           onWheel={handleWheel}
           onMouseDown={handleMouseDown}
           onMouseMove={handleMouseMove}
           onMouseUp={handleMouseUp}
           onMouseLeave={handleMouseUp}
-          style={{ cursor: zoom > 1 ? (isDragging ? 'grabbing' : 'grab') : 'default' }}
         >
           {/* Prev/Next */}
           {images.length > 1 && (
@@ -163,21 +168,36 @@ export function ImageGallery({
             </>
           )}
 
-          {/* Image */}
-          <img
-            src={currentImage.imageUrl}
-            alt={currentImage.alt || `Image ${currentIndex + 1}`}
-            draggable={false}
-            style={{
-              transform: `scale(${zoom}) translate(${offset.x / zoom}px, ${offset.y / zoom}px)`,
-              transition: isDragging ? 'none' : 'transform 0.15s ease',
-              maxWidth: '90vw',
-              maxHeight: '85vh',
-              objectFit: 'contain',
-              userSelect: 'none',
-            }}
-            onDoubleClick={() => zoom === 1 ? handleZoomIn() : handleReset()}
-          />
+          {isFitMode ? (
+            /* FIT MODE — image fills the viewer, proper aspect ratio */
+            <img
+              src={currentImage.imageUrl}
+              alt={currentImage.alt || `Image ${currentIndex + 1}`}
+              draggable={false}
+              onClick={handleZoomIn}
+              style={{
+                width: '100%',
+                height: images.length > 1 ? 'calc(100vh - 120px)' : 'calc(100vh - 80px)',
+                objectFit: 'contain',
+                userSelect: 'none',
+                marginTop: '56px', // below header
+              }}
+            />
+          ) : (
+            /* ZOOM MODE — natural size × zoom, draggable */
+            <img
+              src={currentImage.imageUrl}
+              alt={currentImage.alt || `Image ${currentIndex + 1}`}
+              draggable={false}
+              style={{
+                transform: `scale(${zoom}) translate(${offset.x / zoom}px, ${offset.y / zoom}px)`,
+                transition: isDragging ? 'none' : 'transform 0.15s ease',
+                maxWidth: 'none',
+                userSelect: 'none',
+              }}
+              onDoubleClick={resetView}
+            />
+          )}
         </div>
 
         {/* Thumbnail Strip */}
@@ -207,10 +227,10 @@ export function ImageGallery({
           </div>
         )}
 
-        {/* Zoom hint */}
-        {zoom === 1 && (
-          <div className="absolute bottom-20 left-1/2 -translate-x-1/2 z-40 text-white/40 text-xs pointer-events-none">
-            Scroll or double-click to zoom
+        {/* Hint */}
+        {isFitMode && (
+          <div className="absolute bottom-20 left-1/2 -translate-x-1/2 z-40 text-white/40 text-xs pointer-events-none select-none">
+            Click or scroll to zoom · Double-click to reset
           </div>
         )}
       </DialogContent>

@@ -528,12 +528,14 @@ export function DirectPODialog({ open, onOpenChange, initialData, mode = "standa
         e.preventDefault();
         setIsLoading(true);
 
+        let toastId: string | number | undefined;
+
         try {
             if (!commonData.vendorId) throw new Error("Vendor is required");
             if (!commonData.validTill) throw new Error("PO expiry date is required");
 
             // Handle image uploads and format all items
-            const toastId = toast.loading("Processing items and images...");
+            toastId = toast.loading("Processing items and images...");
 
             const formattedItems = await Promise.all(items.map(async (item, idx) => {
                 if (!item.itemDescription.trim()) throw new Error(`Item ${idx + 1}: Description is required`);
@@ -590,7 +592,7 @@ export function DirectPODialog({ open, onOpenChange, initialData, mode = "standa
                 existingRequestNumber: commonData.requestNumber || undefined,
                 deliverySiteId: commonData.deliverySite ? (commonData.deliverySite as Id<"sites">) : undefined,
                 deliverySiteName: siteSearchQuery.trim(),
-                projectId: (commonData.projectId || items[0]?.projectId) as Id<"projects"> | undefined,
+                projectId: (commonData.projectId || items[0]?.projectId || undefined) as Id<"projects"> | undefined,
                 vendorId: commonData.vendorId as Id<"vendors">,
                 validTill: new Date(commonData.validTill).getTime(),
                 notes: commonData.notes || undefined,
@@ -607,7 +609,7 @@ export function DirectPODialog({ open, onOpenChange, initialData, mode = "standa
             handleOpenChange(false);
         } catch (err) {
             const errorMessage = err instanceof Error ? err.message : "Failed to create Direct PO";
-            toast.error(errorMessage);
+            toast.error(errorMessage, { id: toastId });
         } finally {
             setIsLoading(false);
         }

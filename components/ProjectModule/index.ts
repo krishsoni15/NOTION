@@ -4,9 +4,9 @@
 
 // Components
 export { ProjectManagement } from "./components/ProjectManagement";
-export { ProjectTable } from "./components/ProjectTable";
+export { ProjectDetailPanel } from "./components/ProjectDetailPanel";
 export { ProjectFormDialog } from "./components/ProjectFormDialog";
-export { ProjectDetailModal } from "./components/ProjectDetailModal";
+export { ProjectItemsManager } from "./components/ProjectItemsManager";
 
 // Hooks
 export { useProjectLogic } from "./hooks/useProjectLogic";

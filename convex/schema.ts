@@ -432,6 +432,7 @@ export default defineSchema({
     vehicleNumber: v.optional(v.string()), // Vehicle Number
     transportName: v.optional(v.string()), // Transport Name (for Vendor type)
     transportId: v.optional(v.string()), // Transport ID (for Vendor type)
+    vendorId: v.optional(v.id("vendors")), // Vendor for direct delivery DC
 
     receiverName: v.string(), // Receiver at site
 

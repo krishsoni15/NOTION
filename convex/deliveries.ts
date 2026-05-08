@@ -32,6 +32,7 @@ export const createDelivery = mutation({
         vehicleNumber: v.optional(v.string()),
         transportName: v.optional(v.string()), // For vendor
         transportId: v.optional(v.string()), // For vendor
+        vendorId: v.optional(v.id("vendors")), // Vendor for direct delivery DC
 
         receiverName: v.string(),
         purchaserName: v.string(),
@@ -238,13 +239,20 @@ export const getDeliveryWithItems = query({
 
         // Get the PO details if available
         let po = null;
-        let vendor = null;
+        let vendor: any = null;
 
         if (delivery.poId) {
             po = await ctx.db.get(delivery.poId);
             // Get vendor details from PO
-            if (po) {
+            if (po && po.vendorId) {
                 vendor = await ctx.db.get(po.vendorId);
+            }
+        } else if ((delivery as any).vendorId) {
+            // Direct DC - fetch vendor directly from stored vendorId
+            try {
+                vendor = await ctx.db.get((delivery as any).vendorId);
+            } catch {
+                // Vendor may have been deleted, ignore
             }
         }
 
@@ -309,6 +317,7 @@ export const getDeliveryWithItems = query({
                 vendorId: po.vendorId,
             } : null,
             vendor: vendor ? {
+                _id: vendor._id,
                 companyName: vendor.companyName,
                 contactName: vendor.contactName,
                 phone: vendor.phone,

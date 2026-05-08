@@ -36,11 +36,29 @@ export interface DCData {
     creator?: {
         fullName: string;
     } | null;
+    notes?: string;
+    buyersOrderNo?: string;
+}
+
+// Helper: Extract state name from GST state code
+const GST_STATE_CODES: Record<string, string> = {
+    "01": "Jammu & Kashmir", "02": "Himachal Pradesh", "03": "Punjab", "04": "Chandigarh",
+    "05": "Uttarakhand", "06": "Haryana", "07": "Delhi", "08": "Rajasthan",
+    "09": "Uttar Pradesh", "10": "Bihar", "11": "Sikkim", "12": "Arunachal Pradesh",
+    "13": "Nagaland", "14": "Manipur", "15": "Mizoram", "16": "Tripura",
+    "17": "Meghalaya", "18": "Assam", "19": "West Bengal", "20": "Jharkhand",
+    "21": "Odisha", "22": "Chhattisgarh", "23": "Madhya Pradesh", "24": "Gujarat",
+    "27": "Maharashtra", "29": "Karnataka", "32": "Kerala", "33": "Tamil Nadu",
+    "36": "Telangana",
+};
+function getStateFromGST(gst?: string): { stateName: string; stateCode: string } {
+    if (!gst || gst.length < 2) return { stateName: "Gujarat", stateCode: "24" };
+    const code = gst.substring(0, 2);
+    return { stateName: GST_STATE_CODES[code] || "Unknown", stateCode: code };
 }
 
 export function DeliveryChallanTemplate({ data }: { data: DCData }) {
     const dcDate = format(new Date(data.createdAt), "dd-MMM-yy");
-    const poDate = data.po ? format(new Date(data.createdAt), "dd-MMM-yy") : "-"; // Approximation if not stored
 
     // Tally often uses a very rigid table structure with specific headers
     // Let's implement the layout from the screenshot
@@ -69,7 +87,8 @@ export function DeliveryChallanTemplate({ data }: { data: DCData }) {
                 }
                 .dc-global-padding th,
                 .dc-global-padding td {
-                    padding: 4px 8px !important;
+                    padding: 6px 10px !important;
+                    vertical-align: middle !important;
                 }
                 .dc-global-padding .p-1\\.5 {
                     padding: 8px 10px !important;
@@ -125,11 +144,11 @@ export function DeliveryChallanTemplate({ data }: { data: DCData }) {
                     <div className="flex border-b border-black flex-1">
                         <div className="w-1/2 border-r border-black p-1.5 flex flex-col">
                             <span className="text-[8px] text-gray-600">Buyer's Order No.</span>
-                            <span className="font-bold">{data.po?.poNumber || '-'}</span>
+                            <span className="font-bold">{data.buyersOrderNo || data.po?.poNumber || '-'}</span>
                         </div>
                         <div className="w-1/2 p-1.5 flex flex-col">
                             <span className="text-[8px] text-gray-600">Dated</span>
-                            <span className="font-bold">{poDate}</span>
+                            <span className="font-bold">{dcDate}</span>
                         </div>
                     </div>
                     <div className="flex border-b border-black flex-1">
@@ -159,33 +178,33 @@ export function DeliveryChallanTemplate({ data }: { data: DCData }) {
                         </div>
                         <div className="w-1/2 p-1.5 flex flex-col">
                             <span className="text-[8px] text-gray-600">Terms of Delivery</span>
-                            <span className="font-bold uppercase">BY ROAD</span>
+                            <span className="font-bold uppercase">{data.deliveryType === 'public' ? 'BY PORTER' : data.deliveryType === 'private' ? 'BY PRIVATE VEHICLE' : 'BY TRANSPORT'}</span>
                         </div>
                     </div>
                 </div>
             </div>
 
-            {/* Consignee & Buyer Section */}
-            <div className="flex border-b border-black min-h-[120px]">
+            {/* Consignee & Buyer Section - Stacked Vertically */}
+            <div className="flex flex-col">
                 {/* Consignee (Ship to) */}
-                <div className="w-[55%] border-r border-black p-1.5">
+                <div className="border-b border-black p-1.5 min-h-[60px]">
                     <span className="text-[8px] text-gray-600 italic">Consignee (Ship to)</span>
-                    <div className="font-bold uppercase mt-1">{data.receiverName || 'Site Contact'}</div>
+                    <div className="font-bold uppercase mt-1">{data.vendor?.companyName || data.receiverName || 'Consignee Name'}</div>
                     <div className="whitespace-pre-line">
-                        {data.vendor?.address || 'Site Address'}{"\n"}
+                        {data.vendor?.address || 'Address'}{"\n"}
                         GSTIN/UIN  : {data.vendor?.gstNumber || '-'}{"\n"}
-                        State Name  : Gujarat, Code : 24
+                        State Name  : {(() => { const s = getStateFromGST(data.vendor?.gstNumber); return `${s.stateName}, Code : ${s.stateCode}`; })()}
                     </div>
                 </div>
 
                 {/* Buyer (Bill to) */}
-                <div className="w-[45%] p-1.5">
+                <div className="border-b border-black p-1.5 min-h-[60px]">
                     <span className="text-[8px] text-gray-600 italic">Buyer (Bill to)</span>
                     <div className="font-bold uppercase mt-1">{data.vendor?.companyName || 'Buyer Name'}</div>
                     <div className="whitespace-pre-line">
                         {data.vendor?.address || 'Buyer Address'}{"\n"}
                         GSTIN/UIN  : {data.vendor?.gstNumber || '-'}{"\n"}
-                        State Name  : Gujarat, Code : 24
+                        State Name  : {(() => { const s = getStateFromGST(data.vendor?.gstNumber); return `${s.stateName}, Code : ${s.stateCode}`; })()}
                     </div>
                 </div>
             </div>
@@ -208,7 +227,7 @@ export function DeliveryChallanTemplate({ data }: { data: DCData }) {
                     <tbody>
                         {data.items && data.items.length > 0 ? (
                             data.items.map((item, index) => (
-                                <tr key={item._id || index} className="h-10 align-top">
+                                <tr key={item._id || index} className="h-10">
                                     <td className="border-r border-black text-center pt-1">{index + 1}</td>
                                     <td className="border-r border-black px-1.5 pt-1">
                                         <div className="font-bold uppercase">{item.itemName || ''}</div>
@@ -231,7 +250,7 @@ export function DeliveryChallanTemplate({ data }: { data: DCData }) {
                         ) : null}
                         {/* Empty rows to fill space */}
                         {Array.from({ length: Math.max(0, 10 - (data.items?.length || 0)) }).map((_, i) => (
-                            <tr key={`empty-${i}`} className="h-10 align-top">
+                            <tr key={`empty-${i}`} className="h-10">
                                 <td className="border-r border-black"></td>
                                 <td className="border-r border-black"></td>
                                 <td className="border-r border-black"></td>
@@ -305,6 +324,14 @@ export function DeliveryChallanTemplate({ data }: { data: DCData }) {
                         </div>
                     </div>
                 </div>
+
+                {/* Notes Section */}
+                {data.notes && (
+                    <div className="p-1.5 border-t border-black">
+                        <span className="text-[8px] text-gray-600 font-semibold">Notes:</span>
+                        <div className="mt-0.5 whitespace-pre-wrap">{data.notes}</div>
+                    </div>
+                )}
 
                 {/* Signature Section */}
                 <div className="flex border-t border-black h-20">

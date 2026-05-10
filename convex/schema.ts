@@ -198,12 +198,23 @@ export default defineSchema({
     .index("by_created_at", ["createdAt"]),
 
   // ============================================================================
+  // Inventory Categories Table
+  // ============================================================================
+  inventoryCategories: defineTable({
+    name: v.string(),
+    createdBy: v.id("users"),
+    createdAt: v.number(),
+  })
+    .index("by_name", ["name"]),
+
+  // ============================================================================
   // Inventory Table
   // ============================================================================
   inventory: defineTable({
     itemName: v.string(), // Item Name
     description: v.optional(v.string()), // Item Description
-    specification: v.optional(v.string()), // Specification / Model No
+    specification: v.optional(v.string()), // Legacy field - kept for backward compatibility
+    categoryId: v.optional(v.id("inventoryCategories")), // Category
     hsnSacCode: v.optional(v.string()), // HSN/SAC Code
     unit: v.optional(v.string()), // Unit (e.g., bags, kg, mm, gm, nos, ton) - optional
     centralStock: v.optional(v.number()), // Central Stock quantity - optional
@@ -223,7 +234,8 @@ export default defineSchema({
     .index("by_item_name", ["itemName"])
     .index("by_vendor_id", ["vendorId"])
     .index("by_is_active", ["isActive"])
-    .index("by_created_at", ["createdAt"]),
+    .index("by_created_at", ["createdAt"])
+    .index("by_category", ["categoryId"]),
 
   // ============================================================================
   // Chat Conversations Table
@@ -594,10 +606,18 @@ export default defineSchema({
     projectId: v.id("projects"),
     name: v.string(),
     description: v.optional(v.string()),
-    categoryId: v.id("projectCategories"),
-    make: v.optional(v.string()),
+    categoryId: v.optional(v.union(v.id("inventoryCategories"), v.id("projectCategories"))),
+    make: v.optional(v.string()), // Legacy field - kept for backward compatibility
+    unit: v.optional(v.string()), // e.g. kg, nos, bags, m
+    hsnSacCode: v.optional(v.string()), // HSN/SAC Code
     quantity: v.number(),
     rate: v.number(),
+    photos: v.optional(v.array(v.object({
+      imageUrl: v.string(),
+      imageKey: v.string(),
+      uploadedBy: v.id("users"),
+      uploadedAt: v.number(),
+    }))),
     createdBy: v.id("users"),
     createdAt: v.number(),
     updatedAt: v.number(),

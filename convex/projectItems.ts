@@ -18,7 +18,7 @@ export const getCategories = query({
     if (!userId) return [];
 
     return await ctx.db
-      .query("projectCategories")
+      .query("inventoryCategories")
       .order("asc")
       .collect();
   },
@@ -37,9 +37,8 @@ export const createCategory = mutation({
 
     if (!currentUser) throw new ConvexError("User not found");
 
-    // Check for duplicate category name (case-insensitive check handled in app logic or here)
     const existing = await ctx.db
-      .query("projectCategories")
+      .query("inventoryCategories")
       .withIndex("by_name", (q) => q.eq("name", args.name.trim()))
       .first();
 
@@ -47,7 +46,7 @@ export const createCategory = mutation({
       return existing._id;
     }
 
-    const categoryId = await ctx.db.insert("projectCategories", {
+    const categoryId = await ctx.db.insert("inventoryCategories", {
       name: args.name.trim(),
       createdBy: currentUser._id,
       createdAt: Date.now(),
@@ -76,10 +75,10 @@ export const getItemsByProjectId = query({
     // Fetch category names for the items
     const itemsWithCategory = await Promise.all(
       items.map(async (item) => {
-        const category = await ctx.db.get(item.categoryId);
+        const category = item.categoryId ? await ctx.db.get(item.categoryId) : null;
         return {
           ...item,
-          categoryName: category?.name || "Unknown",
+          categoryName: (category as any)?.name || "—",
         };
       })
     );
@@ -93,10 +92,15 @@ export const createItem = mutation({
     projectId: v.id("projects"),
     name: v.string(),
     description: v.optional(v.string()),
-    categoryId: v.id("projectCategories"),
-    make: v.optional(v.string()),
+    categoryId: v.optional(v.union(v.id("inventoryCategories"), v.id("projectCategories"))),
+    unit: v.optional(v.string()),
+    hsnSacCode: v.optional(v.string()),
     quantity: v.number(),
     rate: v.number(),
+    photos: v.optional(v.array(v.object({
+      imageUrl: v.string(),
+      imageKey: v.string(),
+    }))),
   },
   handler: async (ctx, args) => {
     const userId = await getAuthUserId(ctx);
@@ -110,14 +114,23 @@ export const createItem = mutation({
     if (!currentUser) throw new ConvexError("User not found");
 
     const now = Date.now();
+    const photos = args.photos?.map((p) => ({
+      imageUrl: p.imageUrl,
+      imageKey: p.imageKey,
+      uploadedBy: currentUser._id,
+      uploadedAt: now,
+    }));
+
     const itemId = await ctx.db.insert("projectItems", {
       projectId: args.projectId,
       name: args.name,
       description: args.description,
       categoryId: args.categoryId,
-      make: args.make,
+      unit: args.unit,
+      hsnSacCode: args.hsnSacCode,
       quantity: args.quantity,
       rate: args.rate,
+      photos,
       createdBy: currentUser._id,
       createdAt: now,
       updatedAt: now,
@@ -127,13 +140,48 @@ export const createItem = mutation({
   },
 });
 
+export const addPhotoToProjectItem = mutation({
+  args: {
+    itemId: v.id("projectItems"),
+    imageUrl: v.string(),
+    imageKey: v.string(),
+  },
+  handler: async (ctx, args) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) throw new ConvexError("Not authenticated");
+
+    const currentUser = await ctx.db
+      .query("users")
+      .withIndex("by_clerk_user_id", (q) => q.eq("clerkUserId", userId))
+      .first();
+    if (!currentUser) throw new ConvexError("User not found");
+
+    const item = await ctx.db.get(args.itemId);
+    if (!item) throw new ConvexError("Item not found");
+
+    const existing = item.photos || [];
+    await ctx.db.patch(args.itemId, {
+      photos: [...existing, {
+        imageUrl: args.imageUrl,
+        imageKey: args.imageKey,
+        uploadedBy: currentUser._id,
+        uploadedAt: Date.now(),
+      }],
+      updatedAt: Date.now(),
+    });
+    return args.itemId;
+  },
+});
+
 export const updateItem = mutation({
   args: {
     itemId: v.id("projectItems"),
     name: v.optional(v.string()),
     description: v.optional(v.string()),
-    categoryId: v.optional(v.id("projectCategories")),
+    categoryId: v.optional(v.union(v.id("inventoryCategories"), v.id("projectCategories"))),
     make: v.optional(v.string()),
+    unit: v.optional(v.string()),
+    hsnSacCode: v.optional(v.string()),
     quantity: v.optional(v.number()),
     rate: v.optional(v.number()),
   },
@@ -151,6 +199,8 @@ export const updateItem = mutation({
     if (updateFields.description !== undefined) patch.description = updateFields.description;
     if (updateFields.categoryId !== undefined) patch.categoryId = updateFields.categoryId;
     if (updateFields.make !== undefined) patch.make = updateFields.make;
+    if (updateFields.unit !== undefined) patch.unit = updateFields.unit;
+    if (updateFields.hsnSacCode !== undefined) patch.hsnSacCode = updateFields.hsnSacCode;
     if (updateFields.quantity !== undefined) patch.quantity = updateFields.quantity;
     if (updateFields.rate !== undefined) patch.rate = updateFields.rate;
 
@@ -248,10 +298,10 @@ export const sendItemsToProcurement = mutation({
         createdBy: currentUser._id,
         siteId: effectiveSiteId!,
         itemName: item.name,
-        description: item.description ? `${item.description}\nFrom Project: ${project.name}${item.make ? ` | Make: ${item.make}` : ""}` : `From Project: ${project.name}${item.make ? ` | Make: ${item.make}` : ""}`,
-        specsBrand: item.make || undefined,
+        description: item.description ? `${item.description}\nFrom Project: ${project.name}` : `From Project: ${project.name}`,
+        specsBrand: undefined,
         quantity: item.quantity,
-        unit: "nos", // Default unit for project items
+        unit: item.unit || "nos", // Use item's unit or default to nos
         requiredBy: project.estimatedTimeline || (now + 30 * 24 * 60 * 60 * 1000), // Use project deadline or +30 days
         isUrgent: false,
         itemOrder: i + 1,

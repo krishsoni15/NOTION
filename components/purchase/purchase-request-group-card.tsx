@@ -835,6 +835,10 @@ export function PurchaseRequestGroupCard({
   const ccPendingItems = items.filter(item => item.status === "cc_pending");
   const hasCCPending = ccPendingItems.length > 0;
 
+  // Calculate ready_for_cc items for purchase officer bulk CC creation
+  const ccReadyItems = items.filter(item => item.status === "ready_for_cc");
+  const hasCCReady = ccReadyItems.length > 1; // Only show bulk button when >1 item
+
   return (
     <div
       className={cn(
@@ -1366,7 +1370,11 @@ export function PurchaseRequestGroupCard({
 
                           {/* Review CC Button - For CC Pending Status - Managers Only */}
                           {item.status === "cc_pending" && isManager && (
-                            <Button size="sm" onClick={() => onOpenCC?.(item._id)} className="h-7 text-xs font-semibold bg-purple-600 hover:bg-purple-700 text-white flex-1 sm:flex-none shadow-sm">
+                            <Button size="sm" onClick={() => {
+                              const ccSiblings = items.filter(i => ["cc_pending", "cc_approved", "cc_rejected", "ready_for_po"].includes(i.status as string));
+                              const allCCIds = ccSiblings.map(i => i._id);
+                              onOpenCC?.(item._id, allCCIds.length > 1 ? allCCIds : undefined);
+                            }} className="h-7 text-xs font-semibold bg-purple-600 hover:bg-purple-700 text-white flex-1 sm:flex-none shadow-sm">
                               <CheckCircle className="h-3.5 w-3.5 mr-1.5" /> Review CC
                             </Button>
                           )}
@@ -1381,7 +1389,13 @@ export function PurchaseRequestGroupCard({
                           {/* View CC Button - Available anytime after CC is created */}
                           {["cc_pending", "cc_approved", "cc_rejected", "ready_for_po"].includes(item.status) &&
                             (onOpenCC || onCheck) && (
-                              <Button size="sm" variant="outline" onClick={(e) => { e.stopPropagation(); (onOpenCC || onCheck)?.(item._id); }} className="h-7 text-xs font-semibold shadow-sm flex-1 sm:flex-none border-purple-200 text-purple-700 hover:bg-purple-50 dark:border-purple-800 dark:text-purple-400 dark:hover:bg-purple-900/30">
+                              <Button size="sm" variant="outline" onClick={(e) => {
+                                e.stopPropagation();
+                                // Pass all sibling items that have a CC so merged view opens correctly
+                                const ccSiblings = items.filter(i => ["cc_pending", "cc_approved", "cc_rejected", "ready_for_po"].includes(i.status as string));
+                                const allCCIds = ccSiblings.map(i => i._id);
+                                onOpenCC?.(item._id, allCCIds.length > 1 ? allCCIds : undefined) ?? onCheck?.(item._id);
+                              }} className="h-7 text-xs font-semibold shadow-sm flex-1 sm:flex-none border-purple-200 text-purple-700 hover:bg-purple-50 dark:border-purple-800 dark:text-purple-400 dark:hover:bg-purple-900/30">
                                 <Layers className="h-3.5 w-3.5 mr-1.5" /> View CC
                               </Button>
                             )}
@@ -1515,6 +1529,21 @@ export function PurchaseRequestGroupCard({
           {/* Purchase Officer Bulk Actions */}
           {/* Purchase Officer Bulk Actions */}
 
+
+          {/* Purchase Officer: Create CC for all ready_for_cc items at once */}
+          {!isManager && hasCCReady && (
+            <Button
+              size="sm"
+              onClick={(e) => {
+                e.stopPropagation();
+                onOpenCC?.(ccReadyItems[0]._id, ccReadyItems.map(i => i._id));
+              }}
+              className="h-7 text-xs bg-violet-600 hover:bg-violet-700 text-white shadow-sm ring-1 ring-violet-500/20 px-3"
+            >
+              <FileText className="h-3.5 w-3.5 mr-1.5" />
+              Create CC ({ccReadyItems.length} items)
+            </Button>
+          )}
 
           {/* Manager CC Review Button (Footer) */}
           {isManager && hasCCPending && (

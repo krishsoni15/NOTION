@@ -37,7 +37,7 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
-import { AlertCircle, Plus, Search, X, Info, ChevronDown, ChevronUp, Copy, Camera, Upload, ImageIcon, MapPin } from "lucide-react";
+import { AlertCircle, Plus, Search, X, Info, ChevronDown, ChevronUp, Copy, Camera, Upload, ImageIcon, MapPin, Building2, FileText, Package } from "lucide-react";
 import { CameraDialog } from "@/components/inventory/camera-dialog";
 import type { Id } from "@/convex/_generated/dataModel";
 import { AddressAutocomplete } from "@/components/vendors/address-autocomplete";
@@ -145,16 +145,14 @@ export function DirectPODialog({ open, onOpenChange, initialData, mode = "standa
 
     const [activeItemIndex, setActiveItemIndex] = useState<number | null>(null);
     const [selectedItemSuggestionIndex, setSelectedItemSuggestionIndex] = useState<number>(0);
+    // Inventory picker state (for "Select from Inventory" button)
+    const [inventoryPickerIndex, setInventoryPickerIndex] = useState<number | null>(null);
+    const [inventoryPickerSearch, setInventoryPickerSearch] = useState("");
+    // Photo-only inventory picker state
+    const [photoPickerIndex, setPhotoPickerIndex] = useState<number | null>(null);
+    const [photoPickerSearch, setPhotoPickerSearch] = useState("");
     const [selectedSiteSuggestionIndex, setSelectedSiteSuggestionIndex] = useState<number>(0);
     const [roundOff, setRoundOff] = useState(false);
-
-    // Set poType based on mode prop
-    const [poType, setPoType] = useState<"standard" | "direct">(mode);
-
-    // Sync poType when mode prop changes
-    useEffect(() => {
-        setPoType(mode);
-    }, [mode]);
 
     const [commonData, setCommonData] = useState({
         requestNumber: "",
@@ -597,11 +595,11 @@ export function DirectPODialog({ open, onOpenChange, initialData, mode = "standa
                 validTill: new Date(commonData.validTill).getTime(),
                 notes: commonData.notes || undefined,
                 items: formattedItems,
-                isDirect: poType === "direct",
+                isDirect: mode === "direct",
                 isUrgent: false,
             });
 
-            toast.success(`${poType === "direct" ? "Direct PO" : "Purchase Order"} generated successfully!`, {
+            toast.success(`${mode === "direct" ? "Direct PO" : "Purchase Order"} generated successfully!`, {
                 id: toastId,
                 description: "The PO is now pending approval.",
             });
@@ -621,31 +619,46 @@ export function DirectPODialog({ open, onOpenChange, initialData, mode = "standa
         <>
             <Dialog open={open} onOpenChange={handleOpenChange}>
                 <DialogContent
-                    className="sm:max-w-[800px] max-h-[90vh] overflow-y-auto"
+                    className="max-w-[95vw] sm:max-w-4xl max-h-[95vh] overflow-y-auto p-0 sm:p-0"
                     onOpenAutoFocus={(e) => e.preventDefault()}
                 >
-                    <DialogHeader>
-                        <DialogTitle className="flex items-center gap-2">
-                            {poType === "direct" ? (
-                                <>
-                                    <AlertCircle className="h-5 w-5 text-orange-500" />
-                                    Create Direct PO
-                                </>
-                            ) : (
-                                <>
-                                    <div className="h-5 w-5 rounded-full bg-blue-100 flex items-center justify-center">
-                                        <div className="h-2.5 w-2.5 rounded-full bg-blue-600" />
-                                    </div>
-                                    Create Purchase Order
-                                </>
-                            )}
-                        </DialogTitle>
+                    {/* RFQ-Style Gradient Header */}
+                    <DialogHeader className={cn(
+                        "px-4 sm:px-6 pt-4 sm:pt-6 pb-3 sm:pb-4 border-b bg-gradient-to-r",
+                        mode === "direct"
+                            ? "from-orange-500/10 to-orange-500/5"
+                            : "from-primary/5 to-primary/10"
+                    )}>
+                        <div className="flex items-center gap-2 sm:gap-3">
+                            <div className={cn(
+                                "p-2 rounded-lg",
+                                mode === "direct" ? "bg-orange-100 dark:bg-orange-900/30" : "bg-primary/10"
+                            )}>
+                                {mode === "direct"
+                                    ? <AlertCircle className="h-4 w-4 sm:h-5 sm:w-5 text-orange-500" />
+                                    : <Plus className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
+                                }
+                            </div>
+                            <div>
+                                <DialogTitle className="text-lg sm:text-xl font-bold bg-gradient-to-r from-foreground to-foreground/80 bg-clip-text text-transparent">
+                                    {mode === "direct" ? "Direct PO" : "Create Purchase Order"}
+                                </DialogTitle>
+                                <DialogDescription className="text-xs text-muted-foreground mt-0.5">
+                                    {mode === "direct" ? "Emergency procurement — bypasses approval workflow" : "Standard purchase order for vendor"}
+                                </DialogDescription>
+                            </div>
+                        </div>
                     </DialogHeader>
 
-                    <form onSubmit={handleSubmit} className="space-y-6 py-2">
-                        {/* 1. Vendor Details Section */}
-                        <div className="space-y-4">
-                            <h3 className="text-sm font-semibold text-foreground border-b pb-2">Vendor Details</h3>
+                    <div className="px-4 sm:px-6 py-4 sm:py-6">
+                    <form onSubmit={handleSubmit} className="space-y-5 sm:space-y-6">
+
+                        {/* 1. Vendor Details Section — RFQ card style */}
+                        <div className="space-y-4 p-4 sm:p-5 bg-gradient-to-br from-muted/50 to-muted/30 rounded-xl border shadow-sm hover:shadow-md transition-shadow duration-200">
+                            <div className="flex items-center gap-2 pb-2 border-b border-border/50">
+                                <Building2 className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
+                                <h3 className="text-sm sm:text-base font-bold text-foreground">Vendor Details</h3>
+                            </div>
 
                             {/* Row 1: Vendor Name */}
                             <div className="space-y-1.5 relative">
@@ -800,9 +813,12 @@ export function DirectPODialog({ open, onOpenChange, initialData, mode = "standa
                             )}
                         </div>
 
-                        {/* 2. General Info Section */}
-                        <div className="space-y-4">
-                            <h3 className="text-sm font-semibold text-foreground border-b pb-2">General Info</h3>
+                        {/* 2. General Info Section — RFQ card style */}
+                        <div className="space-y-4 p-4 sm:p-5 bg-gradient-to-br from-muted/50 to-muted/30 rounded-xl border shadow-sm hover:shadow-md transition-shadow duration-200">
+                            <div className="flex items-center gap-2 pb-2 border-b border-border/50">
+                                <FileText className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
+                                <h3 className="text-sm sm:text-base font-bold text-foreground">General Info</h3>
+                            </div>
                             <div className="grid grid-cols-2 gap-4">
                                 {/* Project (shared) */}
                                 <div className="space-y-1.5 relative">
@@ -933,24 +949,28 @@ export function DirectPODialog({ open, onOpenChange, initialData, mode = "standa
                         </div>
 
 
-                        {/* 3. Items Section */}
+                        {/* 3. Items Section — RFQ style items bar */}
                         <div className="space-y-4">
-                            <div className="flex flex-col gap-2 border-b pb-2">
-                                <div className="flex items-center justify-between">
-                                    <h3 className="text-sm font-semibold text-foreground">Order Items</h3>
+                            <div className="flex items-center justify-between gap-2 sm:gap-3 p-3 sm:p-4 bg-gradient-to-r from-primary/5 to-primary/10 rounded-xl border border-primary/20">
+                                <div className="flex items-center gap-2 sm:gap-3">
+                                    <div className="p-1.5 sm:p-2 rounded-lg bg-primary/10">
+                                        <Package className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <h3 className="text-sm sm:text-base font-bold text-foreground">Items</h3>
+                                        <div className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-full bg-primary text-primary-foreground text-xs sm:text-sm font-bold shadow-sm">
+                                            <span>{items.length}</span>
+                                            <span className="hidden sm:inline">{items.length === 1 ? "item" : "items"}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-2">
                                     {items.length > 1 && (
                                         <div className="flex items-center gap-1">
-                                            <span className="text-xs text-muted-foreground mr-2">{items.length} items</span>
                                             <TooltipProvider>
                                                 <Tooltip>
                                                     <TooltipTrigger asChild>
-                                                        <Button
-                                                            type="button"
-                                                            variant="outline"
-                                                            size="icon"
-                                                            className="h-7 w-7"
-                                                            onClick={() => scrollToItem(0)}
-                                                        >
+                                                        <Button type="button" variant="outline" size="icon" className="h-7 w-7" onClick={() => scrollToItem(0)}>
                                                             <ChevronUp className="h-4 w-4" />
                                                         </Button>
                                                     </TooltipTrigger>
@@ -960,13 +980,7 @@ export function DirectPODialog({ open, onOpenChange, initialData, mode = "standa
                                             <TooltipProvider>
                                                 <Tooltip>
                                                     <TooltipTrigger asChild>
-                                                        <Button
-                                                            type="button"
-                                                            variant="outline"
-                                                            size="icon"
-                                                            className="h-7 w-7"
-                                                            onClick={() => scrollToItem(items.length - 1)}
-                                                        >
+                                                        <Button type="button" variant="outline" size="icon" className="h-7 w-7" onClick={() => scrollToItem(items.length - 1)}>
                                                             <ChevronDown className="h-4 w-4" />
                                                         </Button>
                                                     </TooltipTrigger>
@@ -975,6 +989,17 @@ export function DirectPODialog({ open, onOpenChange, initialData, mode = "standa
                                             </TooltipProvider>
                                         </div>
                                     )}
+                                    <Button
+                                        type="button"
+                                        variant="default"
+                                        size="sm"
+                                        onClick={handleAddItem}
+                                        className="gap-1.5 sm:gap-2 text-xs sm:text-sm h-8 sm:h-9 font-semibold shadow-sm hover:shadow-lg hover:scale-105 active:scale-95 bg-gradient-to-r from-primary to-primary/90 hover:from-primary/90 hover:to-primary transition-all duration-200"
+                                    >
+                                        <Plus className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                                        <span className="hidden sm:inline">Add Item</span>
+                                        <span className="sm:hidden">Add</span>
+                                    </Button>
                                 </div>
                             </div>
 
@@ -982,29 +1007,111 @@ export function DirectPODialog({ open, onOpenChange, initialData, mode = "standa
                                 <div
                                     key={item.id}
                                     ref={(el) => { itemRefs.current[index] = el; }}
-                                    className="relative p-4 border rounded-lg bg-card shadow-sm space-y-4"
+                                    className="space-y-4 sm:space-y-5 p-4 sm:p-5 border-2 rounded-xl bg-card shadow-md hover:shadow-xl hover:border-primary/30 transition-all duration-200 focus-within:ring-2 focus-within:ring-primary/20 focus-within:border-primary/50"
                                 >
                                     {/* Item Header */}
-                                    <div className="flex items-center justify-between pb-3 border-b">
-                                        <div className="flex items-center gap-2">
-                                            <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
-                                                <span className="text-sm font-bold text-primary">{index + 1}</span>
+                                    <div className="flex items-center justify-between pb-3 border-b-2 border-border/60">
+                                        <div className="flex items-center gap-2 sm:gap-3">
+                                            <div className="flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-lg bg-gradient-to-br from-primary to-primary/80 text-primary-foreground font-bold text-sm sm:text-base shadow-sm">
+                                                {index + 1}
                                             </div>
-                                            <h4 className="font-semibold text-base">Item {index + 1}</h4>
+                                            <h4 className="text-sm sm:text-base font-bold text-foreground">Item {index + 1}</h4>
                                         </div>
-                                        {items.length > 1 && (
-                                            <Button
-                                                type="button"
-                                                variant="ghost"
-                                                size="sm"
-                                                className="h-8 px-3 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-                                                onClick={() => handleRemoveItem(index)}
-                                                title="Remove Item"
-                                            >
-                                                <X className="h-4 w-4 mr-1" />
-                                                <span className="text-xs">Remove</span>
-                                            </Button>
-                                        )}
+                                        <div className="flex items-center gap-2">
+                                            {/* Select from Inventory button */}
+                                            <div className="relative">
+                                                <Button
+                                                    type="button"
+                                                    variant="outline"
+                                                    size="sm"
+                                                    className="h-8 px-3 text-xs font-semibold border-emerald-300 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-700 dark:text-emerald-400 dark:hover:bg-emerald-950"
+                                                    onClick={() => {
+                                                        setInventoryPickerIndex(inventoryPickerIndex === index ? null : index);
+                                                        setInventoryPickerSearch("");
+                                                    }}
+                                                >
+                                                    <Package className="h-3.5 w-3.5 mr-1.5" />
+                                                    Select from Inventory
+                                                </Button>
+                                                {/* Inventory picker dropdown */}
+                                                {inventoryPickerIndex === index && (
+                                                    <div className="absolute right-0 top-full mt-1 z-[200] w-72 bg-popover border rounded-lg shadow-xl">
+                                                        <div className="p-2 border-b">
+                                                            <input
+                                                                autoFocus
+                                                                type="text"
+                                                                placeholder="Search inventory..."
+                                                                value={inventoryPickerSearch}
+                                                                onChange={(e) => setInventoryPickerSearch(e.target.value)}
+                                                                className="w-full h-8 px-3 text-sm rounded-md border bg-background focus:outline-none focus:ring-1 focus:ring-primary"
+                                                            />
+                                                        </div>
+                                                        <div className="max-h-56 overflow-y-auto">
+                                                            {(inventoryItems || [])
+                                                                .filter(inv => !inventoryPickerSearch.trim() || inv.itemName.toLowerCase().includes(inventoryPickerSearch.toLowerCase()))
+                                                                .slice(0, 20)
+                                                                .map(inv => (
+                                                                    <button
+                                                                        key={inv._id}
+                                                                        type="button"
+                                                                        className="w-full flex items-center gap-3 px-3 py-2 text-left hover:bg-accent transition-colors"
+                                                                        onClick={() => {
+                                                                            handleItemChange(index, 'itemDescription', inv.itemName);
+                                                                            handleItemChange(index, 'itemSearchQuery', inv.itemName);
+                                                                            handleItemChange(index, 'description', (inv as any).description || "");
+                                                                            handleItemChange(index, 'unit', inv.unit || "pcs");
+                                                                            handleItemChange(index, 'perUnitBasisUnit', inv.unit || "pcs");
+                                                                            handleItemChange(index, 'hsnCode', (inv as any).hsnSacCode || "");
+                                                                            handleItemChange(index, 'inventoryImageUrl', (inv as any).images?.[0]?.imageUrl || null);
+                                                                            setInventoryPickerIndex(null);
+                                                                            setInventoryPickerSearch("");
+                                                                        }}
+                                                                    >
+                                                                        {(inv as any).images?.[0]?.imageUrl ? (
+                                                                            <img src={(inv as any).images[0].imageUrl} alt={inv.itemName} className="w-8 h-8 object-cover rounded border flex-shrink-0" />
+                                                                        ) : (
+                                                                            <div className="w-8 h-8 rounded border bg-muted flex items-center justify-center flex-shrink-0">
+                                                                                <Package className="h-3.5 w-3.5 text-muted-foreground" />
+                                                                            </div>
+                                                                        )}
+                                                                        <div className="min-w-0 flex-1">
+                                                                            <div className="text-sm font-medium truncate">{inv.itemName}</div>
+                                                                            <div className="text-xs text-muted-foreground flex items-center gap-2">
+                                                                                {inv.unit && <span>{inv.unit}</span>}
+                                                                                {(inv as any).centralStock !== undefined && (
+                                                                                    <span className="text-emerald-600">Stock: {(inv as any).centralStock}</span>
+                                                                                )}
+                                                                            </div>
+                                                                        </div>
+                                                                    </button>
+                                                                ))
+                                                            }
+                                                            {(inventoryItems || []).filter(inv => !inventoryPickerSearch.trim() || inv.itemName.toLowerCase().includes(inventoryPickerSearch.toLowerCase())).length === 0 && (
+                                                                <div className="p-4 text-center text-sm text-muted-foreground">No items found</div>
+                                                            )}
+                                                        </div>
+                                                        <div className="p-2 border-t">
+                                                            <Button type="button" variant="ghost" size="sm" className="w-full text-xs" onClick={() => setInventoryPickerIndex(null)}>
+                                                                Cancel
+                                                            </Button>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+                                            {items.length > 1 && (
+                                                <Button
+                                                    type="button"
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    className="h-8 px-3 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
+                                                    onClick={() => handleRemoveItem(index)}
+                                                    title="Remove Item"
+                                                >
+                                                    <X className="h-4 w-4 mr-1" />
+                                                    <span className="text-xs">Remove</span>
+                                                </Button>
+                                            )}
+                                        </div>
                                     </div>
 
                                     {/* Row 1: Item Name */}
@@ -1167,129 +1274,6 @@ export function DirectPODialog({ open, onOpenChange, initialData, mode = "standa
                                         />
                                     </div>
 
-                                    {/* Row 1.6: Item Photo */}
-                                    <div className="space-y-1.5">
-                                        <Label className="text-sm flex items-center gap-1.5">
-                                            <ImageIcon className="h-3.5 w-3.5" />
-                                            Item Photo
-                                            <span className="text-muted-foreground text-xs">(optional)</span>
-                                        </Label>
-
-                                        {/* Show current photo (user-captured OR inventory image) */}
-                                        {(item.photoPreview || item.inventoryImageUrl) ? (
-                                            <div className="flex gap-3 items-start">
-                                                <div className="relative group">
-                                                    <img
-                                                        src={item.photoPreview || item.inventoryImageUrl!}
-                                                        alt="Item photo"
-                                                        className="w-20 h-20 object-cover rounded-lg border-2 border-border shadow-sm"
-                                                    />
-                                                    {item.photoPreview && (
-                                                        <div className="absolute top-0.5 left-0.5 bg-blue-500 text-white text-[9px] px-1 rounded font-medium">
-                                                            New
-                                                        </div>
-                                                    )}
-                                                    {!item.photoPreview && item.inventoryImageUrl && (
-                                                        <div className="absolute top-0.5 left-0.5 bg-green-500 text-white text-[9px] px-1 rounded font-medium shadow-sm">
-                                                            Inv
-                                                        </div>
-                                                    )}
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => handleItemPhotoRemove(index)}
-                                                        className="absolute -top-1 -right-1 bg-destructive text-destructive-foreground rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity ring-2 ring-background"
-                                                        title="Remove photo"
-                                                    >
-                                                        <X className="h-3 w-3" />
-                                                    </button>
-                                                </div>
-                                                <div className="flex flex-col gap-1.5 pt-1">
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => setCameraOpenForItem(index)}
-                                                        className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-blue-600 transition-colors font-medium"
-                                                    >
-                                                        <Camera className="h-3.5 w-3.5" />
-                                                        Capture
-                                                    </button>
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => itemPhotoInputRefs.current[index]?.click()}
-                                                        className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-blue-600 transition-colors font-medium"
-                                                    >
-                                                        <Upload className="h-3.5 w-3.5" />
-                                                        Upload
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        ) : (
-                                            <div className="flex flex-wrap gap-2">
-                                                <input
-                                                    type="file"
-                                                    accept="image/*"
-                                                    ref={(el: HTMLInputElement | null) => {
-                                                        itemPhotoInputRefs.current[index] = el;
-                                                    }}
-                                                    onChange={(e) => {
-                                                        const file = e.target.files?.[0];
-                                                        if (file) handleItemPhotoSelect(index, file);
-                                                    }}
-                                                    className="hidden"
-                                                />
-                                                <Button
-                                                    type="button"
-                                                    variant="outline"
-                                                    size="sm"
-                                                    className="h-9 px-3 gap-1.5 border-dashed border-2 hover:border-blue-500 hover:text-blue-600 hover:bg-blue-50/50"
-                                                    onClick={() => setCameraOpenForItem(index)}
-                                                >
-                                                    <Camera className="h-4 w-4" />
-                                                    Camera
-                                                </Button>
-                                                <Button
-                                                    type="button"
-                                                    variant="outline"
-                                                    size="sm"
-                                                    className="h-9 px-3 gap-1.5 border-dashed border-2 hover:border-blue-500 hover:text-blue-600 hover:bg-blue-50/50"
-                                                    onClick={() => itemPhotoInputRefs.current[index]?.click()}
-                                                >
-                                                    <Upload className="h-4 w-4" />
-                                                    Upload
-                                                </Button>
-                                                <Button
-                                                    type="button"
-                                                    variant="outline"
-                                                    size="sm"
-                                                    className="h-9 px-3 gap-1.5 border-dashed border-2 hover:border-orange-500 hover:text-orange-600 hover:bg-orange-50/50"
-                                                    onClick={() => {
-                                                        const itemName = item.itemDescription.trim();
-                                                        if (!itemName) {
-                                                            toast.error("Enter item name first");
-                                                            return;
-                                                        }
-                                                        const match = (inventoryItems || []).find(
-                                                            (i: any) => i.itemName.toLowerCase() === itemName.toLowerCase() ||
-                                                                itemName.toLowerCase().includes(i.itemName.toLowerCase())
-                                                        );
-
-                                                        const invImageUrl = (match as any)?.images?.[0]?.imageUrl;
-                                                        if (invImageUrl) {
-                                                            handleItemChange(index, 'inventoryImageUrl', invImageUrl);
-                                                            toast.success("Matched inventory image found!");
-                                                        } else {
-                                                            toast.info("No matching inventory photo found", {
-                                                                description: "Try camera or manual upload."
-                                                            });
-                                                        }
-                                                    }}
-                                                >
-                                                    <Search className="h-4 w-4" />
-                                                    Inv. Photo
-                                                </Button>
-                                            </div>
-                                        )}
-                                    </div>
-
                                     {/* Row 2: Qty, Unit, Price, HSN */}
                                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                                         <div className="space-y-1.5 relative">
@@ -1394,6 +1378,158 @@ export function DirectPODialog({ open, onOpenChange, initialData, mode = "standa
                                         </div>
                                     </div>
 
+                                    {/* Row 4: Item Photo */}
+                                    <div className="space-y-1.5">
+                                        <Label className="text-sm flex items-center gap-1.5">
+                                            <ImageIcon className="h-3.5 w-3.5" />
+                                            Photos
+                                            <span className="text-muted-foreground text-xs">(Multiple allowed)</span>
+                                        </Label>
+
+                                        <input
+                                            type="file"
+                                            accept="image/*"
+                                            ref={(el: HTMLInputElement | null) => {
+                                                itemPhotoInputRefs.current[index] = el;
+                                            }}
+                                            onChange={(e) => {
+                                                const file = e.target.files?.[0];
+                                                if (file) handleItemPhotoSelect(index, file);
+                                            }}
+                                            className="hidden"
+                                        />
+
+                                        {/* Dashed drop zone — RFQ style */}
+                                        <div
+                                            className="flex items-center justify-between gap-3 border-2 border-dashed border-border/60 rounded-lg px-4 py-3 bg-muted/10 hover:border-primary/40 hover:bg-muted/20 transition-colors"
+                                            onDragOver={(e) => e.preventDefault()}
+                                            onDrop={(e) => {
+                                                e.preventDefault();
+                                                const file = e.dataTransfer.files?.[0];
+                                                if (file && file.type.startsWith("image/")) handleItemPhotoSelect(index, file);
+                                            }}
+                                        >
+                                            <div className="flex items-center gap-2 text-muted-foreground min-w-0">
+                                                <Upload className="h-4 w-4 shrink-0 opacity-50" />
+                                                <span className="text-xs truncate">
+                                                    {(item.photoPreview || item.inventoryImageUrl)
+                                                        ? "Photo added — drop to replace"
+                                                        : "Drag and drop image here"}
+                                                </span>
+                                            </div>
+                                            <div className="flex items-center gap-2 shrink-0">
+                                                <Button
+                                                    type="button"
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    className="h-7 px-2.5 gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground"
+                                                    onClick={() => itemPhotoInputRefs.current[index]?.click()}
+                                                >
+                                                    <Upload className="h-3.5 w-3.5" />
+                                                    Upload
+                                                </Button>
+                                                <Button
+                                                    type="button"
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    className="h-7 px-2.5 gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground"
+                                                    onClick={() => setCameraOpenForItem(index)}
+                                                >
+                                                    <Camera className="h-3.5 w-3.5" />
+                                                    Camera
+                                                </Button>
+                                                {/* From Inventory - photo only */}
+                                                <div className="relative">
+                                                    <Button
+                                                        type="button"
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        className="h-7 px-2.5 gap-1.5 text-xs font-medium text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:text-emerald-400 dark:hover:bg-emerald-950"
+                                                        onClick={() => {
+                                                            setPhotoPickerIndex(photoPickerIndex === index ? null : index);
+                                                            setPhotoPickerSearch("");
+                                                        }}
+                                                    >
+                                                        <Package className="h-3.5 w-3.5" />
+                                                        Inventory
+                                                    </Button>
+                                                    {/* Photo-only inventory picker */}
+                                                    {photoPickerIndex === index && (
+                                                        <div className="absolute right-0 bottom-full mb-1 z-[200] w-64 bg-popover border rounded-lg shadow-xl">
+                                                            <div className="p-2 border-b">
+                                                                <input
+                                                                    autoFocus
+                                                                    type="text"
+                                                                    placeholder="Search item..."
+                                                                    value={photoPickerSearch}
+                                                                    onChange={(e) => setPhotoPickerSearch(e.target.value)}
+                                                                    className="w-full h-7 px-2 text-xs rounded border bg-background focus:outline-none focus:ring-1 focus:ring-primary"
+                                                                />
+                                                            </div>
+                                                            <div className="max-h-48 overflow-y-auto">
+                                                                {(inventoryItems || [])
+                                                                    .filter(inv =>
+                                                                        (inv as any).images?.length > 0 &&
+                                                                        (!photoPickerSearch.trim() || inv.itemName.toLowerCase().includes(photoPickerSearch.toLowerCase()))
+                                                                    )
+                                                                    .slice(0, 15)
+                                                                    .map(inv => (
+                                                                        <button
+                                                                            key={inv._id}
+                                                                            type="button"
+                                                                            className="w-full flex items-center gap-2 px-2 py-1.5 text-left hover:bg-accent transition-colors"
+                                                                            onClick={() => {
+                                                                                handleItemChange(index, 'inventoryImageUrl', (inv as any).images[0].imageUrl);
+                                                                                setPhotoPickerIndex(null);
+                                                                                setPhotoPickerSearch("");
+                                                                            }}
+                                                                        >
+                                                                            <img src={(inv as any).images[0].imageUrl} alt={inv.itemName} className="w-8 h-8 object-cover rounded border flex-shrink-0" />
+                                                                            <span className="text-xs truncate">{inv.itemName}</span>
+                                                                        </button>
+                                                                    ))
+                                                                }
+                                                                {(inventoryItems || []).filter(inv => (inv as any).images?.length > 0 && (!photoPickerSearch.trim() || inv.itemName.toLowerCase().includes(photoPickerSearch.toLowerCase()))).length === 0 && (
+                                                                    <div className="p-3 text-center text-xs text-muted-foreground">No items with photos</div>
+                                                                )}
+                                                            </div>
+                                                            <div className="p-1.5 border-t">
+                                                                <Button type="button" variant="ghost" size="sm" className="w-full text-xs h-6" onClick={() => setPhotoPickerIndex(null)}>Cancel</Button>
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Preview thumbnail */}
+                                        {(item.photoPreview || item.inventoryImageUrl) && (
+                                            <div className="flex items-center gap-3 mt-1.5">
+                                                <div className="relative group shrink-0">
+                                                    <img
+                                                        src={item.photoPreview || item.inventoryImageUrl!}
+                                                        alt="Item photo"
+                                                        className="w-14 h-14 object-cover rounded-lg border border-border shadow-sm"
+                                                    />
+                                                    {item.photoPreview && (
+                                                        <div className="absolute top-0.5 left-0.5 bg-blue-500 text-white text-[9px] px-1 rounded font-medium">New</div>
+                                                    )}
+                                                    {!item.photoPreview && item.inventoryImageUrl && (
+                                                        <div className="absolute top-0.5 left-0.5 bg-emerald-500 text-white text-[9px] px-1 rounded font-medium">Inv</div>
+                                                    )}
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleItemPhotoRemove(index)}
+                                                        className="absolute -top-1 -right-1 bg-destructive text-destructive-foreground rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity ring-2 ring-background"
+                                                    >
+                                                        <X className="h-3 w-3" />
+                                                    </button>
+                                                </div>
+                                                <span className="text-xs text-muted-foreground">1 photo added</span>
+                                            </div>
+                                        )}
+                                    </div>
+
                                     {/* Item Total */}
                                     <div className="text-right text-xs text-muted-foreground pt-1">
                                         Item Total: <span className="font-bold text-primary">₹{calculateItemTotal(item).toFixed(2)}</span>
@@ -1401,10 +1537,15 @@ export function DirectPODialog({ open, onOpenChange, initialData, mode = "standa
                                 </div>
                             ))}
 
-                            <Button type="button" variant="outline" className="w-full border-dashed" onClick={handleAddItem}>
-                                <Plus className="h-4 w-4 mr-2" />
+                            {/* Add Item button - RFQ style */}
+                            <button
+                                type="button"
+                                onClick={handleAddItem}
+                                className="w-full py-3 rounded-xl border-2 border-dashed border-primary/30 hover:border-primary/60 hover:bg-primary/5 text-sm font-semibold text-muted-foreground hover:text-primary transition-all flex items-center justify-center gap-2 group"
+                            >
+                                <Plus className="h-4 w-4 group-hover:rotate-90 transition-transform duration-200" />
                                 Add Another Item
-                            </Button>
+                            </button>
 
                             {/* Camera dialog for item photos */}
                             {cameraOpenForItem !== null && (
@@ -1418,37 +1559,44 @@ export function DirectPODialog({ open, onOpenChange, initialData, mode = "standa
 
 
 
-                            <div className="flex justify-end pt-2">
-                                <div className="bg-muted/50 p-3 rounded-lg flex flex-col items-end gap-2">
-                                    <div className="flex gap-4 items-center">
-                                        <span className="text-sm font-semibold">Grand Total:</span>
-                                        <span className="text-xl font-bold text-primary">₹{calculateGrandTotal().toFixed(2)}</span>
-                                    </div>
-                                    <div className="flex items-center space-x-2">
-                                        <Checkbox
-                                            id="roundOff"
-                                            checked={roundOff}
-                                            onCheckedChange={(checked) => setRoundOff(checked as boolean)}
-                                        />
-                                        <Label htmlFor="roundOff" className="text-xs font-medium cursor-pointer">
-                                            Round Off Total
-                                        </Label>
-                                    </div>
+                            {/* Grand Total Block — RFQ style */}
+                            <div className="rounded-xl border border-primary/20 bg-gradient-to-br from-primary/5 to-primary/10 p-4 flex items-center justify-between">
+                                <div className="flex items-center space-x-2">
+                                    <Checkbox
+                                        id="roundOff"
+                                        checked={roundOff}
+                                        onCheckedChange={(checked) => setRoundOff(checked as boolean)}
+                                    />
+                                    <Label htmlFor="roundOff" className="text-sm font-semibold cursor-pointer text-muted-foreground">
+                                        Round Off Total
+                                    </Label>
+                                </div>
+                                <div className="text-right">
+                                    <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/70">Grand Total</p>
+                                    <p className="text-2xl font-bold text-primary">₹{calculateGrandTotal().toFixed(2)}</p>
                                 </div>
                             </div>
 
                             {/* Internal Notes */}
                             <div className="space-y-1.5 pt-2">
-                                <Label htmlFor="notes" className="text-sm">Internal Notes</Label>
-                                <Textarea id="notes" placeholder="Internal notes..." value={commonData.notes} onChange={(e) => setCommonData(p => ({ ...p, notes: e.target.value }))} className="resize-none" rows={2} />
+                                <Label htmlFor="notes" className="text-sm font-semibold flex items-center gap-1.5">
+                                    <FileText className="h-3.5 w-3.5 text-muted-foreground" />
+                                    Internal Notes <span className="text-muted-foreground text-xs font-normal">(optional)</span>
+                                </Label>
+                                <Textarea id="notes" placeholder="Add any internal notes or special instructions..." value={commonData.notes} onChange={(e) => setCommonData(p => ({ ...p, notes: e.target.value }))} className="resize-none min-h-[70px]" rows={2} />
                             </div>
                         </div>
 
-                        <DialogFooter className="gap-2 sm:gap-0">
-                            <Button type="button" variant="outline" onClick={() => handleOpenChange(false)} disabled={isLoading}>Cancel</Button>
-                            <Button type="submit" disabled={isLoading}>{isLoading ? "Generate..." : "Generate Direct PO"}</Button>
+                        <DialogFooter className="gap-2 sm:gap-2 border-t pt-4 mt-2">
+                            <Button type="button" variant="outline" onClick={() => handleOpenChange(false)} disabled={isLoading} className="rounded-full px-6">
+                                Cancel
+                            </Button>
+                            <Button type="submit" disabled={isLoading} className="rounded-full px-8 font-bold shadow-sm hover:shadow-lg hover:scale-105 active:scale-95 transition-all duration-200 bg-gradient-to-r from-primary to-primary/90">
+                                {isLoading ? "Generating..." : "Generate PO"}
+                            </Button>
                         </DialogFooter>
                     </form>
+                    </div>
                 </DialogContent>
             </Dialog >
 

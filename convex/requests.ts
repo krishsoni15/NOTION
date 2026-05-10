@@ -142,6 +142,9 @@ export const getInventoryItemsForAutocomplete = query({
       unit: item.unit || "",
       centralStock: item.centralStock || 0,
       imageUrl: (item as any).images?.[0]?.imageUrl || null,
+      description: item.description || "",
+      hsnSacCode: item.hsnSacCode || "",
+      images: (item as any).images?.map((img: any) => ({ imageUrl: img.imageUrl, imageKey: img.imageKey })) || [],
     }));
   },
 });

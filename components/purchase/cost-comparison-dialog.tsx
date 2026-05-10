@@ -54,6 +54,7 @@ interface CostComparisonDialogProps {
   requestId?: Id<"requests"> | null; // Main request ID (used when opening single item)
   requestIds?: Id<"requests">[]; // Multiple request IDs for batch CC viewing
   isDirectCreation?: boolean; // Flag for direct CC creation without request
+  autoOpenQuoteForm?: boolean; // Auto-open the Add Vendor Quote form on mount
 }
 
 interface VendorQuote {
@@ -115,6 +116,7 @@ export function CostComparisonDialog({
   onOpenChange,
   requestId,
   requestIds,
+  autoOpenQuoteForm = false,
 }: CostComparisonDialogProps) {
   // Multi-item CC navigation state
   const [currentCCIndex, setCurrentCCIndex] = useState(0);
@@ -199,6 +201,8 @@ export function CostComparisonDialog({
 
   // Manager review state
   const [selectedFinalVendor, setSelectedFinalVendor] = useState<Id<"vendors"> | "">("");
+  // Per-item vendor selection for merged CC manager review
+  const [selectedVendorPerItem, setSelectedVendorPerItem] = useState<Record<string, Id<"vendors">>>({});
   const [managerNotes, setManagerNotes] = useState("");
   const [isReviewing, setIsReviewing] = useState(false);
   const [counterOfferPercent, setCounterOfferPercent] = useState<number>(0);
@@ -213,6 +217,24 @@ export function CostComparisonDialog({
     api.requests.getRequestById,
     activeRequestId ? { requestId: activeRequestId } : "skip"
   );
+
+  // Fetch all requests for multi-item merged preview
+  const req0 = useQuery(api.requests.getRequestById, ccRequestIds[0] ? { requestId: ccRequestIds[0] } : "skip");
+  const req1 = useQuery(api.requests.getRequestById, ccRequestIds[1] ? { requestId: ccRequestIds[1] } : "skip");
+  const req2 = useQuery(api.requests.getRequestById, ccRequestIds[2] ? { requestId: ccRequestIds[2] } : "skip");
+  const req3 = useQuery(api.requests.getRequestById, ccRequestIds[3] ? { requestId: ccRequestIds[3] } : "skip");
+  const req4 = useQuery(api.requests.getRequestById, ccRequestIds[4] ? { requestId: ccRequestIds[4] } : "skip");
+  const req5 = useQuery(api.requests.getRequestById, ccRequestIds[5] ? { requestId: ccRequestIds[5] } : "skip");
+  const allCCRequests = [req0, req1, req2, req3, req4, req5].slice(0, ccRequestIds.length).filter(Boolean) as any[];
+
+  // Fetch CCs for all items (for merged preview)
+  const cc0 = useQuery(api.costComparisons.getCostComparisonByRequestId, ccRequestIds[0] ? { requestId: ccRequestIds[0] } : "skip");
+  const cc1 = useQuery(api.costComparisons.getCostComparisonByRequestId, ccRequestIds[1] ? { requestId: ccRequestIds[1] } : "skip");
+  const cc2 = useQuery(api.costComparisons.getCostComparisonByRequestId, ccRequestIds[2] ? { requestId: ccRequestIds[2] } : "skip");
+  const cc3 = useQuery(api.costComparisons.getCostComparisonByRequestId, ccRequestIds[3] ? { requestId: ccRequestIds[3] } : "skip");
+  const cc4 = useQuery(api.costComparisons.getCostComparisonByRequestId, ccRequestIds[4] ? { requestId: ccRequestIds[4] } : "skip");
+  const cc5 = useQuery(api.costComparisons.getCostComparisonByRequestId, ccRequestIds[5] ? { requestId: ccRequestIds[5] } : "skip");
+  const allItemCCs = [cc0, cc1, cc2, cc3, cc4, cc5].slice(0, ccRequestIds.length);
   const vendors = useQuery(api.vendors.getAllVendors);
   const inventoryItems = useQuery(api.inventory.getAllInventoryItems);
 
@@ -243,6 +265,9 @@ export function CostComparisonDialog({
   const updateRequestDetails = useMutation(api.requests.updateRequestDetails);
   const updatePurchaseRequestStatus = useMutation(api.requests.updatePurchaseRequestStatus);
   const deductInventoryStock = useMutation(api.inventory.deductInventoryStockByName);
+
+  // Track whether this is the initial open of the dialog (vs tab switch)
+  const [isInitialLoad, setIsInitialLoad] = useState(true);
 
   // Load existing cost comparison
   useEffect(() => {
@@ -291,11 +316,14 @@ export function CostComparisonDialog({
         setManagerNotes("");
       }
 
-      // Auto show preview if CC already has quotes
-      if (existingCC.vendorQuotes.length > 0) {
-        setCCViewMode("preview");
-      } else {
-        setCCViewMode("form");
+      // Auto show preview if CC already has quotes — only on initial open, not on tab switch
+      if (isInitialLoad) {
+        if (existingCC.vendorQuotes.length > 0) {
+          setCCViewMode("preview");
+        } else {
+          setCCViewMode("form");
+        }
+        setIsInitialLoad(false);
       }
     } else if (open && !existingCC) {
       // Reset when opening new
@@ -303,7 +331,10 @@ export function CostComparisonDialog({
       setIsDirectDelivery(false);
       // Default to inventory stock if sufficient
       setUseInventoryStock(false);
-      setCCViewMode("form"); // always start in form mode for new CC
+      if (isInitialLoad) {
+        setCCViewMode("form"); // always start in form mode for new CC
+        setIsInitialLoad(false);
+      }
       setCounterOfferPercent(0); // default
       if (isManager) {
         setManagerNotes("");
@@ -439,7 +470,7 @@ export function CostComparisonDialog({
     setQuantityToBuy(amount);
 
     // Save immediately with new quantity
-    handleSave(true, newQuotes, amount);
+    handleSave(false, newQuotes, amount);
 
     // Reset form
     setSelectedVendorId("");
@@ -540,7 +571,10 @@ export function CostComparisonDialog({
 
   // Save cost comparison (silent mode for auto-save, accepts quotes parameter for immediate save)
   const handleSave = async (silent: boolean = false, quotesToSave?: VendorQuote[], purchaseQuantityOverride?: number) => {
-    if (!activeRequestId) return;
+    if (!activeRequestId) {
+      if (!silent) toast.error("No request selected");
+      return;
+    }
     const quotes = quotesToSave || vendorQuotes;
     const qtyToBuy = purchaseQuantityOverride !== undefined ? purchaseQuantityOverride : quantityToBuy;
 
@@ -561,9 +595,6 @@ export function CostComparisonDialog({
     }
   };
 
-  // Auto-save state - moved isInitialLoad state here
-  const [isInitialLoad, setIsInitialLoad] = useState(true);
-
   // Reset initial load flag when dialog closes
   useEffect(() => {
     if (!open) {
@@ -571,27 +602,56 @@ export function CostComparisonDialog({
     }
   }, [open]);
 
-  // Submit for approval
+  // Submit for approval — handles both single and multi-item CC
   const handleSubmit = async () => {
     if (!activeRequestId) return;
-    if (vendorQuotes.length === 0) {
-      toast.error("Please add at least one vendor quote");
-      return;
+
+    // For multi-item CC: check all items have at least one quote
+    if (hasMultipleCCs) {
+      const itemsWithNoQuotes = allItemCCs.filter((cc, idx) => {
+        // If CC exists, check it has quotes; if no CC yet, check current vendorQuotes
+        if (idx === currentCCIndex) return vendorQuotes.length === 0;
+        return !cc || (cc.vendorQuotes?.length ?? 0) === 0;
+      });
+      if (itemsWithNoQuotes.length > 0) {
+        toast.error(`Add at least one vendor quote for each item before submitting`);
+        return;
+      }
+    } else {
+      if (vendorQuotes.length === 0) {
+        toast.error("Please add at least one vendor quote");
+        return;
+      }
     }
 
     setIsSubmitting(true);
     try {
-      if (existingCC?.status === "cc_rejected") {
-        await resubmitCC({
-          requestId: activeRequestId,
-          vendorQuotes,
-          isDirectDelivery,
-        });
-        toast.success("Cost comparison resubmitted");
+      if (hasMultipleCCs) {
+        // Save current item's quotes first
+        await handleSave(true);
+        // Submit ALL items' CCs
+        for (let i = 0; i < ccRequestIds.length; i++) {
+          const rid = ccRequestIds[i];
+          if (!rid) continue;
+          const cc = allItemCCs[i];
+          if (!cc) continue;
+          if (cc.status === "cc_rejected") {
+            await resubmitCC({ requestId: rid, vendorQuotes: cc.vendorQuotes, isDirectDelivery: false });
+          } else if (cc.status === "draft") {
+            await submitCC({ requestId: rid });
+          }
+          // Already pending/approved — skip
+        }
+        toast.success(`${ccRequestIds.length} items submitted for approval`);
       } else {
-        await handleSave();
-        await submitCC({ requestId: activeRequestId });
-        toast.success("Cost comparison submitted");
+        if (existingCC?.status === "cc_rejected") {
+          await resubmitCC({ requestId: activeRequestId, vendorQuotes, isDirectDelivery });
+          toast.success("Cost comparison resubmitted");
+        } else {
+          await handleSave();
+          await submitCC({ requestId: activeRequestId });
+          toast.success("Cost comparison submitted");
+        }
       }
       onOpenChange(false);
     } catch (error: any) {
@@ -801,6 +861,8 @@ export function CostComparisonDialog({
   };
 
   const canEdit = userRole === ROLES.PURCHASE_OFFICER && (existingCC?.status === "draft" || existingCC?.status === "cc_rejected" || !existingCC);
+  // While role is loading (null), treat as potentially editable for UI rendering
+  const canEditUI = canEdit || (userRole === null && (existingCC?.status === "draft" || existingCC?.status === "cc_rejected" || !existingCC));
   const isSubmitted = existingCC?.status === "cc_pending";
   const isManagerReview = isManager && isSubmitted;
 
@@ -935,10 +997,11 @@ export function CostComparisonDialog({
     }
   }, [existingCC, open, isManager]);
 
-  // Reset CC index when dialog opens
+  // Reset CC index and per-item vendor selections when dialog opens
   useEffect(() => {
     if (open) {
       setCurrentCCIndex(0);
+      setSelectedVendorPerItem({});
     }
   }, [open]);
   // ── Shared style objects for CC preview table (forced light mode) ──────────
@@ -982,10 +1045,47 @@ export function CostComparisonDialog({
             <div className="flex items-start justify-between">
               <div>
                 <DialogTitle className="text-xl font-bold tracking-tight">Cost Comparison</DialogTitle>
-                <DialogDescription className="text-sm mt-1 flex items-center gap-2">
-                  <span className="font-medium text-foreground">{request?.requestNumber}</span>
+                <DialogDescription className="text-sm mt-1 flex items-center gap-2 flex-wrap">
+                  {/* Request number */}
+                  <span className="font-mono font-bold text-foreground">#{req0?.requestNumber ?? request?.requestNumber}</span>
+                  {/* CC ID badge - single badge for merged CC, per-item badge for single */}
+                  {hasMultipleCCs ? (
+                    // Merged CC: show one badge covering all items
+                    allItemCCs.some(cc => cc) && (
+                      <span className="px-1.5 py-0.5 rounded bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300 text-[11px] font-mono font-bold">
+                        {req0?.requestNumber ?? request?.requestNumber}-CC-1
+                      </span>
+                    )
+                  ) : (
+                    // Single item CC: show per-item badge
+                    ccRequestIds.map((rid, idx) => {
+                      const cc = allItemCCs[idx];
+                      const ccSeq = cc ? `CC-${String(idx + 1).padStart(1, "0")}` : null;
+                      return ccSeq ? (
+                        <span key={rid} className="px-1.5 py-0.5 rounded bg-violet-100 dark:bg-violet-900/30 text-violet-700 dark:text-violet-300 text-[11px] font-mono font-bold">
+                          {request?.requestNumber}-{ccSeq}
+                        </span>
+                      ) : null;
+                    })
+                  )}
                   <span className="text-muted-foreground">•</span>
-                  <span>{request?.itemName}</span>
+                  {/* Site name */}
+                  {(request as any)?.site?.name && (
+                    <span className="text-muted-foreground text-xs">{(request as any).site.name}</span>
+                  )}
+                  {/* Project name */}
+                  {(request as any)?.project?.name && (
+                    <>
+                      <span className="text-muted-foreground">·</span>
+                      <span className="text-muted-foreground text-xs">{(request as any).project.name}</span>
+                    </>
+                  )}
+                  {/* Item count for merged CC, item name for single */}
+                  {hasMultipleCCs ? (
+                    <span className="text-muted-foreground text-xs">{allCCRequests.length} items</span>
+                  ) : (
+                    <span>{request?.itemName}</span>
+                  )}
                 </DialogDescription>
               </div>
               <div className="flex items-center gap-2">
@@ -997,7 +1097,7 @@ export function CostComparisonDialog({
                   {request?.status?.replace("_", " ") || "Pending"}
                 </Badge>
                 {/* Toggle View Mode Button */}
-                {vendorQuotes.length > 0 && (
+                {(vendorQuotes.length > 0 || (hasMultipleCCs && allItemCCs.some(cc => (cc?.vendorQuotes?.length ?? 0) > 0))) && (
                   <Button
                     variant="outline"
                     size="sm"
@@ -1042,8 +1142,430 @@ export function CostComparisonDialog({
 
           <div className={`flex-1 overflow-y-auto ${ccViewMode === "preview" && vendorQuotes.length > 0 ? "overflow-x-auto" : "overflow-x-hidden space-y-3 pr-1"}`}>
 
+            {/* ── MERGED MULTI-ITEM CC PREVIEW ─────────────────────── */}
+            {ccViewMode === "preview" && hasMultipleCCs && allCCRequests.length > 1 && (() => {
+              // Collect all unique vendor IDs across all items' CCs
+              const allVendorIds: Id<"vendors">[] = [];
+              const seenVendors = new Set<string>();
+              allItemCCs.forEach((cc) => {
+                (cc?.vendorQuotes ?? []).forEach((q: any) => {
+                  if (!seenVendors.has(q.vendorId)) {
+                    seenVendors.add(q.vendorId);
+                    allVendorIds.push(q.vendorId);
+                  }
+                });
+              });
+
+              if (allVendorIds.length === 0) return null;
+
+              const totalColumnsCount = 5 + allVendorIds.length * 3;
+
+              // Per-item, per-vendor quote lookup
+              const getQuote = (ccIdx: number, vendorId: Id<"vendors">) =>
+                (allItemCCs[ccIdx]?.vendorQuotes ?? []).find((q: any) => q.vendorId === vendorId);
+
+              // Lowest vendor per item
+              const getLowestVendorId = (ccIdx: number, req: any) => {
+                const quotes = allItemCCs[ccIdx]?.vendorQuotes ?? [];
+                if (!quotes.length) return null;
+                return [...quotes].sort((a: any, b: any) =>
+                  calculateQuoteTotal(a, req.quantity) - calculateQuoteTotal(b, req.quantity)
+                )[0]?.vendorId;
+              };
+
+              const counterOfferMultiplier = 1 - (counterOfferPercent / 100);
+
+              // Use first available quote for header info (contact, reference, date)
+              const getHeaderQuote = (vendorId: Id<"vendors">) => {
+                for (const cc of allItemCCs) {
+                  const q = (cc?.vendorQuotes ?? []).find((q: any) => q.vendorId === vendorId);
+                  if (q) return q;
+                }
+                return null;
+              };
+
+              return (
+                <div style={{ fontFamily: "Arial, sans-serif", color: "#000", background: "#fff", width: "100%", paddingBottom: "12px" }}>
+                  {/* Toolbar */}
+                  <div style={{ display: "flex", alignItems: "center", gap: "6px", padding: "6px 4px 8px", borderBottom: "1px solid #e5e7eb", marginBottom: "6px", flexWrap: "wrap" }}>
+                    {/* Zoom controls */}
+                    <span style={{ fontSize: "10px", fontWeight: 600, color: "#999", textTransform: "uppercase", letterSpacing: "0.5px", marginRight: "2px" }}>Zoom</span>
+                    <button onClick={() => setCcZoom(z => Math.max(0.5, parseFloat((z - 0.1).toFixed(1))))} style={{ display: "flex", alignItems: "center", justifyContent: "center", width: "28px", height: "28px", borderRadius: "6px", border: "1.5px solid #ddd", background: "#f5f5f5", cursor: "pointer", color: "#444", fontSize: "16px", fontWeight: "bold" }}>−</button>
+                    <span style={{ fontSize: "11px", fontWeight: 700, color: "#555", minWidth: "38px", textAlign: "center", background: "#f0f0f0", borderRadius: "4px", padding: "2px 4px" }}>{Math.round(ccZoom * 100)}%</span>
+                    <button onClick={() => setCcZoom(z => Math.min(1.5, parseFloat((z + 0.1).toFixed(1))))} style={{ display: "flex", alignItems: "center", justifyContent: "center", width: "28px", height: "28px", borderRadius: "6px", border: "1.5px solid #ddd", background: "#f5f5f5", cursor: "pointer", color: "#444", fontSize: "16px", fontWeight: "bold" }}>+</button>
+                    <button onClick={() => setCcZoom(1.0)} style={{ fontSize: "10px", padding: "4px 8px", borderRadius: "5px", border: "1.5px solid #ddd", background: "#f5f5f5", cursor: "pointer", color: "#666", marginLeft: "2px" }}>Reset</button>
+                    {/* Divider */}
+                    <div style={{ width: "1px", height: "20px", background: "#e5e7eb", margin: "0 4px" }} />
+                    {/* Excel download */}
+                    <button
+                      onClick={() => {
+                        try {
+                          const table = document.getElementById('cc-export-table');
+                          if (!table) return;
+                          const clone = table.cloneNode(true) as HTMLElement;
+                          clone.querySelectorAll('.no-export').forEach(el => el.remove());
+                          const wb = XLSX.utils.table_to_book(clone, { sheet: "Sheet1" });
+                          XLSX.writeFile(wb, `Cost_Comparison_${allCCRequests[0]?.requestNumber || 'Export'}.xlsx`);
+                          toast.success("Excel downloaded!");
+                        } catch (err) { console.error(err); toast.error("Failed to download Excel"); }
+                      }}
+                      style={{ display: "flex", alignItems: "center", gap: "5px", padding: "5px 10px", borderRadius: "6px", border: "1.5px solid #217346", background: "#fff", color: "#217346", fontWeight: 600, fontSize: "11px", cursor: "pointer" }}
+                    >
+                      <Download style={{ width: "12px", height: "12px" }} /> Excel
+                    </button>
+                    {/* PDF download */}
+                    <button
+                      onClick={async () => {
+                        const table = document.getElementById('cc-export-table');
+                        if (!table) return;
+                        try {
+                          const canvas = await html2canvas(table, { scale: 2 } as any);
+                          const imgData = canvas.toDataURL("image/png");
+                          const pdf = new jsPDF({ orientation: "landscape", unit: "pt", format: [canvas.width * 0.75, canvas.height * 0.75] });
+                          pdf.addImage(imgData, "PNG", 0, 0, canvas.width * 0.75, canvas.height * 0.75);
+                          pdf.save(`Cost_Comparison_${allCCRequests[0]?.requestNumber || 'Export'}.pdf`);
+                          toast.success("PDF downloaded!");
+                        } catch (err) { console.error(err); toast.error("Failed to download PDF"); }
+                      }}
+                      style={{ display: "flex", alignItems: "center", gap: "5px", padding: "5px 10px", borderRadius: "6px", border: "1.5px solid #d9534f", background: "#fff", color: "#d9534f", fontWeight: 600, fontSize: "11px", cursor: "pointer" }}
+                    >
+                      <Printer style={{ width: "12px", height: "12px" }} /> PDF
+                    </button>
+                    {/* Submit button for purchase officer */}
+                    {canEdit && !isManager && !isSubmitted && (
+                      <>
+                        <div style={{ width: "1px", height: "20px", background: "#e5e7eb", margin: "0 4px" }} />
+                        <button
+                          onClick={() => setShowSubmitConfirm(true)}
+                          disabled={isSaving || isSubmitting || allItemCCs.every(cc => (cc?.vendorQuotes?.length ?? 0) === 0)}
+                          style={{
+                            display: "flex", alignItems: "center", gap: "5px", padding: "5px 12px",
+                            borderRadius: "6px", border: "none",
+                            background: allItemCCs.every(cc => (cc?.vendorQuotes?.length ?? 0) === 0) ? "#c8c8c8" : "linear-gradient(135deg, #1565c0 0%, #1976d2 100%)",
+                            color: "#fff", fontWeight: 700, fontSize: "11px",
+                            cursor: allItemCCs.every(cc => (cc?.vendorQuotes?.length ?? 0) === 0) ? "not-allowed" : "pointer",
+                            boxShadow: "0 1px 4px rgba(21,101,192,0.25)",
+                          }}
+                        >
+                          <Send style={{ width: "12px", height: "12px" }} />
+                          Submit All ({ccRequestIds.length} items)
+                        </button>
+                      </>
+                    )}
+                    {isSubmitted && !isManager && (
+                      <span style={{ fontSize: "10px", color: "#7c3aed", fontWeight: 600, marginLeft: "4px" }}>● Submitted for approval</span>
+                    )}
+                  </div>
+
+                  <div style={{ position: "relative", width: "100%" }}>
+                    <button onClick={() => ccScrollRef.current?.scrollBy({ left: -250, behavior: "smooth" })} style={{ position: "absolute", left: 0, top: "50%", transform: "translateY(-50%)", zIndex: 10, display: "flex", alignItems: "center", justifyContent: "center", width: "26px", height: "48px", borderRadius: "0 8px 8px 0", border: "1.5px solid #ddd", borderLeft: "none", background: "rgba(255,255,255,0.95)", cursor: "pointer", color: "#555", boxShadow: "2px 0 8px rgba(0,0,0,0.10)" }}>
+                      <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M7.5 10L3.5 6l4-4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                    </button>
+                    <div ref={ccScrollRef} style={{ overflowX: "auto", width: "100%" }}>
+                      <div style={{ minWidth: `${800 + allVendorIds.length * 180}px`, transform: `scale(${ccZoom})`, transformOrigin: "top left", width: `${100 / ccZoom}%` }}>
+                        <table id="cc-export-table" style={{ width: "100%", borderCollapse: "collapse", tableLayout: "fixed" }}>
+                          <colgroup>
+                            <col style={{ width: "40px" }} />
+                            <col style={{ width: "200px" }} />
+                            <col style={{ width: "160px" }} />
+                            <col style={{ width: "55px" }} />
+                            <col style={{ width: "55px" }} />
+                            {allVendorIds.map((_, i) => (
+                              <React.Fragment key={i}>
+                                <col style={{ width: "70px" }} />
+                                <col style={{ width: "50px" }} />
+                                <col style={{ width: "75px" }} />
+                              </React.Fragment>
+                            ))}
+                          </colgroup>
+                          <tbody>
+                            {/* Company header */}
+                            <tr>
+                              <th colSpan={totalColumnsCount} style={{ ...excelThStyle, background: "#cbe4f9", color: "#1a4670", fontSize: "15px", padding: "8px", border: "1px solid #7a7a7a" }}>
+                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "0 10px" }}>
+                                  <span style={{ visibility: "hidden" }}>NOTION</span>
+                                  <span style={{ textAlign: "center", letterSpacing: "1px" }}>NOTION ELECTRONICS PVT. LTD. ( AN ISO 9001: 2015 COMPANY )</span>
+                                  <img src="/images/logos/Notion_Logo-removebg-preview.png" alt="Notion Logo" style={{ height: "22px", objectFit: "contain" }} />
+                                </div>
+                              </th>
+                            </tr>
+                            {/* Project / Form title */}
+                            <tr>
+                              <th colSpan={3} style={{ ...excelThStyle, background: "#e8acd1", color: "#61224d", textAlign: "left", fontSize: "11px", paddingLeft: "10px", border: "1px solid #7a7a7a" }}>
+                                {(allCCRequests[0] as any)?.project?.name
+                                  ? `PROJECT: ${(allCCRequests[0] as any).project.name}`
+                                  : (allCCRequests[0] as any)?.site?.name
+                                    ? `SITE: ${(allCCRequests[0] as any).site.name}`
+                                    : `REQ: ${allCCRequests[0]?.requestNumber}`}
+                                {" ("}
+                                {`${allCCRequests[0]?.requestNumber}-CC-1`}
+                                {allItemCCs.filter(Boolean).length > 1 ? ` · ${allItemCCs.filter(Boolean).length} items` : ""}
+                                {")"}
+                              </th>
+                              <th colSpan={totalColumnsCount - 3} style={{ ...excelThStyle, background: "#e8acd1", color: "#61224d", fontSize: "13px", border: "1px solid #7a7a7a" }}>
+                                VENDOR COMPARISON FORM
+                              </th>
+                            </tr>
+                            {/* Vendor name header */}
+                            <tr>
+                              <th rowSpan={4} style={{ ...excelThStyle, background: "#dee5ed" }}>SR NO.</th>
+                              <th rowSpan={4} style={{ ...excelThStyle, background: "#dee5ed" }}>ITEM DESCRIPTION</th>
+                              <th rowSpan={4} style={{ ...excelThStyle, background: "#dee5ed" }}>SPECIFICATION / MODEL NO</th>
+                              <th rowSpan={4} style={{ ...excelThStyle, background: "#dee5ed" }}>Unit</th>
+                              <th rowSpan={4} style={{ ...excelThStyle, background: "#dee5ed" }}>Qty</th>
+                              {allVendorIds.map((vid, i) => {
+                                // Count how many items have this vendor selected (during review)
+                                const selectedCount = ccRequestIds.filter(rid => rid && selectedVendorPerItem[rid] === vid).length;
+                                const isAnySelected = selectedCount > 0;
+                                // Count how many items have this vendor approved (after approval)
+                                const approvedCount = allItemCCs.filter(cc => cc?.selectedVendorId === vid).length;
+                                const isApproved = approvedCount > 0;
+                                const headerBg = isApproved ? "#86efac" : isAnySelected ? "#c7f0d8" : "#dee5ed";
+                                const headerBorder = isApproved ? "2px solid #166534" : isAnySelected ? "2px solid #22c55e" : "1px solid #7a7a7a";
+                                const headerColor = (isApproved || isAnySelected) ? "#14532d" : "#000";
+                                return (
+                                  <th key={i} colSpan={3}
+                                    style={{ ...excelThStyle, background: headerBg, textTransform: "uppercase", cursor: "default", border: headerBorder, color: headerColor }}>
+                                    {getVendorName(vid)}
+                                    {isApproved && (
+                                      <div style={{ fontSize: "8px", fontWeight: "bold", opacity: 0.9 }}>✓ APPROVED · {approvedCount} item{approvedCount > 1 ? "s" : ""}</div>
+                                    )}
+                                    {!isApproved && isManagerReview && isAnySelected && (
+                                      <div style={{ fontSize: "8px", opacity: 0.8 }}>✓ {selectedCount} of {ccRequestIds.length} item{selectedCount > 1 ? "s" : ""}</div>
+                                    )}
+                                    {!isApproved && isManagerReview && !isAnySelected && (
+                                      <div style={{ fontSize: "8px", opacity: 0.5 }}>click SELECT per row</div>
+                                    )}
+                                  </th>
+                                );
+                              })}
+                            </tr>
+                            {/* Contact */}
+                            <tr>
+                              {allVendorIds.map((vid, i) => {
+                                const q = getHeaderQuote(vid);
+                                return <th key={i} colSpan={3} style={{ ...excelThStyle, background: "#dee5ed", fontSize: "9px", fontWeight: "normal" }}>{q?.contact || ""}</th>;
+                              })}
+                            </tr>
+                            {/* Reference */}
+                            <tr>
+                              {allVendorIds.map((vid, i) => {
+                                const q = getHeaderQuote(vid);
+                                return <th key={i} colSpan={3} style={{ ...excelThStyle, background: "#dee5ed", fontSize: "9px", fontWeight: "normal" }}>{q?.reference || ""}</th>;
+                              })}
+                            </tr>
+                            {/* Sub-headers: RATE / DISC / TOTAL per vendor */}
+                            <tr>
+                              {allVendorIds.map((_, i) => (
+                                <React.Fragment key={i}>
+                                  <th style={{ ...excelThStyle, background: "#dee5ed" }}>RATE</th>
+                                  <th style={{ ...excelThStyle, background: "#dee5ed" }}>DISC.</th>
+                                  <th style={{ ...excelThStyle, background: "#dee5ed" }}>TOTAL</th>
+                                </React.Fragment>
+                              ))}
+                            </tr>
+
+                            {/* ── Item rows ── */}
+                            {allCCRequests.map((req, rowIdx) => {
+                              if (!req) return null;
+                              const lowestVid = getLowestVendorId(rowIdx, req);
+                              const rid = ccRequestIds[rowIdx];
+                              const approvedVid = allItemCCs[rowIdx]?.selectedVendorId;
+                              return (
+                                <tr key={req._id}>
+                                  <td style={{ ...excelTdStyle }}>{rowIdx + 1}</td>
+                                  <td style={{ ...excelTdStyle, textAlign: "left" }}>
+                                    {req.itemName?.toUpperCase()}
+                                    {approvedVid && (
+                                      <div style={{ fontSize: "8px", color: "#166534", fontWeight: "bold", marginTop: "2px" }}>
+                                        ✓ {getVendorName(approvedVid)}
+                                      </div>
+                                    )}
+                                  </td>
+                                  <td style={{ ...excelTdStyle, textAlign: "left", fontSize: "9px" }}>{req.specsBrand || ""}</td>
+                                  <td style={{ ...excelTdStyle }}>{req.unit || ""}</td>
+                                  <td style={{ ...excelTdStyle }}>{req.quantity}</td>
+                                  {allVendorIds.map((vid, vIdx) => {
+                                    const q = getQuote(rowIdx, vid);
+                                    const isLowest = vid === lowestVid;
+                                    const isItemSelected = rid ? selectedVendorPerItem[rid] === vid : false;
+                                    const isItemApproved = approvedVid === vid;
+                                    if (!q) {
+                                      return (
+                                        <React.Fragment key={vIdx}>
+                                          <td style={{ ...excelTdStyle, background: "#f9f9f9", color: "#bbb" }}>—</td>
+                                          <td style={{ ...excelTdStyle, background: "#f9f9f9", color: "#bbb" }}>—</td>
+                                          <td style={{ ...excelTdStyle, background: "#f9f9f9", color: "#bbb" }}>—</td>
+                                        </React.Fragment>
+                                      );
+                                    }
+                                    const baseRate = calculatePriceAfterDiscount(q.unitPrice * (q.perUnitBasis || 1), q.discountPercent);
+                                    const baseTotal = baseRate * req.quantity;
+                                    const cellBg = isItemApproved ? "#bbf7d0" : isItemSelected ? "#d1fae5" : isLowest ? "#ebfbee" : "transparent";
+                                    const selectedBorder = isItemSelected ? "2px solid #16a34a" : undefined;
+                                    return (
+                                      <React.Fragment key={vIdx}>
+                                        <td style={{ ...excelTdStyle, background: cellBg }}>{parseFloat((q.unitPrice * (q.perUnitBasis || 1)).toFixed(3))}</td>
+                                        <td style={{ ...excelTdStyle, background: cellBg }}>{q.discountPercent ? q.discountPercent + "%" : ""}</td>
+                                        <td style={{ ...excelTdStyle, background: cellBg, fontWeight: "bold", padding: "2px 4px" }}>
+                                          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "2px" }}>
+                                            <span>{parseFloat(baseTotal.toFixed(3))}</span>
+                                            {isItemApproved && (
+                                              <div style={{ fontSize: "7px", fontWeight: "bold", color: "#166534", background: "#bbf7d0", borderRadius: "3px", padding: "1px 4px", border: "1px solid #16a34a", whiteSpace: "nowrap" }}>
+                                                ✓ APPROVED
+                                              </div>
+                                            )}
+                                            {!isItemApproved && isManagerReview && rid && (
+                                              <div
+                                                className="no-export"
+                                                data-html2canvas-ignore="true"
+                                                onClick={() => setSelectedVendorPerItem(prev => ({
+                                                  ...prev,
+                                                  [rid]: isItemSelected ? "" as any : vid
+                                                }))}
+                                                style={{ fontSize: "7px", fontWeight: "bold", cursor: "pointer", color: isItemSelected ? "#166534" : "#6b7280", textAlign: "center", background: isItemSelected ? "#bbf7d0" : "#e5e7eb", borderRadius: "3px", padding: "1px 4px", whiteSpace: "nowrap", userSelect: "none", border: isItemSelected ? "1px solid #16a34a" : "1px solid #d1d5db" }}
+                                              >
+                                                {isItemSelected ? "✓ SELECTED" : "SELECT"}
+                                              </div>
+                                            )}
+                                          </div>
+                                        </td>
+                                      </React.Fragment>
+                                    );
+                                  })}
+                                </tr>
+                              );
+                            })}
+
+                            {/* Freight row */}
+                            <tr>
+                              <th colSpan={5} style={{ ...excelThStyle, background: "#dee5ed", textAlign: "right", paddingRight: "8px" }}>Freight</th>
+                              {allVendorIds.map((vid, i) => {
+                                const q = getHeaderQuote(vid);
+                                return <td key={i} colSpan={3} style={{ ...excelTdStyle, textAlign: "center", fontSize: "9px" }}>{q?.freight || ""}</td>;
+                              })}
+                            </tr>
+
+                            {/* TOTAL row */}
+                            <tr>
+                              <th colSpan={5} style={{ ...excelThStyle, background: "#9bc2e6", textAlign: "right", paddingRight: "8px", fontWeight: "bold", border: "1px solid #7a7a7a" }}>TOTAL</th>
+                              {allVendorIds.map((vid, i) => {
+                                const total = allCCRequests.reduce((sum, req, rowIdx) => {
+                                  if (!req) return sum;
+                                  const q = getQuote(rowIdx, vid);
+                                  if (!q) return sum;
+                                  return sum + calculatePriceAfterDiscount(q.unitPrice * (q.perUnitBasis || 1), q.discountPercent) * req.quantity;
+                                }, 0);
+                                return (
+                                  <React.Fragment key={i}>
+                                    <td style={{ ...excelTdStyle, background: "#9bc2e6" }}></td>
+                                    <td style={{ ...excelTdStyle, background: "#9bc2e6" }}></td>
+                                    <td style={{ ...excelTdStyle, background: "#9bc2e6", fontWeight: "bold" }}>{parseFloat(total.toFixed(3))}</td>
+                                  </React.Fragment>
+                                );
+                              })}
+                            </tr>
+
+                            {/* GST row */}
+                            <tr>
+                              <th colSpan={5} style={{ ...excelThStyle, background: "#9bc2e6", textAlign: "right", paddingRight: "8px", fontWeight: "bold", border: "1px solid #7a7a7a" }}>GST</th>
+                              {allVendorIds.map((vid, i) => {
+                                const gstTotal = allCCRequests.reduce((sum, req, rowIdx) => {
+                                  if (!req) return sum;
+                                  const q = getQuote(rowIdx, vid);
+                                  if (!q) return sum;
+                                  const base = calculatePriceAfterDiscount(q.unitPrice * (q.perUnitBasis || 1), q.discountPercent);
+                                  return sum + calculateGstAmount(base, q.gstPercent) * req.quantity;
+                                }, 0);
+                                const firstQ = getHeaderQuote(vid);
+                                return (
+                                  <React.Fragment key={i}>
+                                    <td style={{ ...excelTdStyle, background: "#9bc2e6", fontSize: "9px" }}>{firstQ?.gstPercent ? `${firstQ.gstPercent}%` : ""}</td>
+                                    <td style={{ ...excelTdStyle, background: "#9bc2e6" }}></td>
+                                    <td style={{ ...excelTdStyle, background: "#9bc2e6", fontWeight: "bold" }}>{parseFloat(gstTotal.toFixed(3))}</td>
+                                  </React.Fragment>
+                                );
+                              })}
+                            </tr>
+
+                            {/* TOTAL AMOUNT */}
+                            <tr>
+                              <th colSpan={5} style={{ ...excelThStyle, background: "#9bc2e6", textAlign: "right", paddingRight: "8px", fontWeight: "bold", border: "1px solid #7a7a7a" }}>TOTAL AMOUNT</th>
+                              {allVendorIds.map((vid, i) => {
+                                const grandTotal = allCCRequests.reduce((sum, req, rowIdx) => {
+                                  if (!req) return sum;
+                                  const q = getQuote(rowIdx, vid);
+                                  if (!q) return sum;
+                                  return sum + calculateQuoteTotal(q, req.quantity);
+                                }, 0);
+                                return (
+                                  <React.Fragment key={i}>
+                                    <td style={{ ...excelTdStyle, background: "#9bc2e6" }}></td>
+                                    <td style={{ ...excelTdStyle, background: "#9bc2e6" }}></td>
+                                    <td style={{ ...excelTdStyle, background: "#9bc2e6", fontWeight: "bold" }}>{parseFloat(grandTotal.toFixed(3))}</td>
+                                  </React.Fragment>
+                                );
+                              })}
+                            </tr>
+
+                            {/* Delivery Period */}
+                            <tr>
+                              <th colSpan={5} style={{ ...excelThStyle, background: "#e8acd1", textAlign: "right", paddingRight: "8px", color: "#61224d", fontWeight: "bold", border: "1px solid #7a7a7a" }}>DELIVERY PERIOD</th>
+                              {allVendorIds.map((vid, i) => {
+                                const q = getHeaderQuote(vid);
+                                return <td key={i} colSpan={3} style={{ ...excelTdStyle, background: "#e8acd1", fontSize: "9px", textAlign: "center" }}>{q?.deliveryPeriod || ""}</td>;
+                              })}
+                            </tr>
+
+                            {/* Payment Terms */}
+                            <tr>
+                              <th colSpan={5} style={{ ...excelThStyle, background: "#9bc2e6", textAlign: "right", paddingRight: "8px", color: "#61224d", fontWeight: "bold", border: "1px solid #7a7a7a" }}>PAYMENT TERMS</th>
+                              {allVendorIds.map((vid, i) => {
+                                const q = getHeaderQuote(vid);
+                                return <td key={i} colSpan={3} style={{ ...excelTdStyle, background: "#9bc2e6", fontSize: "9px", textAlign: "center" }}>{q?.paymentTerms || ""}</td>;
+                              })}
+                            </tr>
+
+                            {/* Past Performance */}
+                            <tr>
+                              <th colSpan={5} style={{ ...excelThStyle, background: "#e8acd1", textAlign: "right", paddingRight: "8px", color: "#61224d", fontWeight: "bold", border: "1px solid #7a7a7a" }}>PAST PERFORMANCE</th>
+                              {allVendorIds.map((vid, i) => {
+                                const q = getHeaderQuote(vid);
+                                return <td key={i} colSpan={3} style={{ ...excelTdStyle, background: "#e8acd1", fontSize: "9px", textAlign: "center" }}>{q?.pastPerformance || ""}</td>;
+                              })}
+                            </tr>
+
+                            {/* Signature */}
+                            <tr>
+                              <td colSpan={Math.ceil(totalColumnsCount / 3)} style={{ ...excelTdStyle, borderTop: "2px solid #000", height: "80px", verticalAlign: "top", padding: "10px", textAlign: "center" }}>
+                                <div style={{ fontWeight: "bold", marginBottom: "36px" }}>PREPARED BY</div>
+                                <div style={{ fontWeight: "bold" }}>PURCHASE</div>
+                              </td>
+                              <td colSpan={Math.ceil(totalColumnsCount / 3)} style={{ ...excelTdStyle, borderTop: "2px solid #000", height: "80px", verticalAlign: "top", padding: "10px", textAlign: "center" }}>
+                                <div style={{ fontWeight: "bold", marginBottom: "36px" }}>VERIFIED BY</div>
+                                <div style={{ fontWeight: "bold" }}>PURCHASE</div>
+                              </td>
+                              <td colSpan={totalColumnsCount - 2 * Math.ceil(totalColumnsCount / 3)} style={{ ...excelTdStyle, borderTop: "2px solid #000", height: "80px", verticalAlign: "top", padding: "10px", textAlign: "center" }}>
+                                <div style={{ fontWeight: "bold", marginBottom: "36px" }}>APPROVED BY</div>
+                                <div style={{ fontWeight: "bold", color: existingCC?.status === "cc_approved" ? "#16a34a" : "#f59e0b" }}>
+                                  {existingCC?.status === "cc_approved" ? "APPROVED" : "PENDING"}
+                                </div>
+                              </td>
+                            </tr>
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                    <button onClick={() => ccScrollRef.current?.scrollBy({ left: 250, behavior: "smooth" })} style={{ position: "absolute", right: 0, top: "50%", transform: "translateY(-50%)", zIndex: 10, display: "flex", alignItems: "center", justifyContent: "center", width: "26px", height: "48px", borderRadius: "8px 0 0 8px", border: "1.5px solid #ddd", borderRight: "none", background: "rgba(255,255,255,0.95)", cursor: "pointer", color: "#555", boxShadow: "-2px 0 8px rgba(0,0,0,0.10)" }}>
+                      <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M4.5 2l4 4-4 4" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" /></svg>
+                    </button>
+                  </div>
+                </div>
+              );
+            })()}
+
             {/* ── CC FORMATTED PREVIEW ─── Excel Match ─────────────── */}
-            {ccViewMode === "preview" && vendorQuotes.length > 0 && request && (() => {
+            {ccViewMode === "preview" && vendorQuotes.length > 0 && request && !hasMultipleCCs && (() => {
               // Calculate values
               const sortedQuotes = [...vendorQuotes].sort((a, b) =>
                 calculateQuoteTotal(a, request.quantity) - calculateQuoteTotal(b, request.quantity)
@@ -1153,7 +1675,12 @@ export function CostComparisonDialog({
                             {/* Row 2: Form Title */}
                             <tr>
                               <th colSpan={3} style={{ ...excelThStyle, background: "#e8acd1", color: "#61224d", textAlign: "left", fontSize: "12px", paddingLeft: "12px", border: "1px solid #7a7a7a" }}>
-                                PROJECT NAME : {request.requestNumber}
+                                {(request as any)?.project?.name
+                                  ? `PROJECT: ${(request as any).project.name}`
+                                  : (request as any)?.site?.name
+                                    ? `SITE: ${(request as any).site.name}`
+                                    : `REQ: ${request.requestNumber}`}
+                                {existingCC ? ` (${request.requestNumber}-CC-1)` : ""}
                               </th>
                               <th colSpan={totalColumnsCount - 3} style={{ ...excelThStyle, background: "#e8acd1", color: "#61224d", fontSize: "14px", border: "1px solid #7a7a7a" }}>
                                 VENDOR COMPARISON FORM
@@ -1519,24 +2046,83 @@ export function CostComparisonDialog({
                     )}
                     {/* Manager Review Actions IN PREVIEW (Compact) */}
                     {isManagerReview && (
-                      <div className="flex flex-col md:flex-row items-center gap-3 bg-card p-3 rounded-lg border border-border mt-2 shadow-sm">
-                        {vendorQuotes.length > 0 && (
-                          <div className="flex flex-col items-start justify-center gap-1 w-full md:w-[180px] shrink-0 border-r border-border pr-2">
+                      <div className="flex flex-col gap-3 bg-card p-3 rounded-lg border border-border mt-2 shadow-sm">
+                        {/* Per-item vendor selection summary for merged CC */}
+                        {hasMultipleCCs ? (
+                          <div className="space-y-2">
                             <Label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
-                              Final Vendor <span className="text-destructive">*</span>
+                              Selected Vendors <span className="text-destructive">*</span>
                             </Label>
-                            <div className={`text-sm font-semibold truncate w-full ${selectedFinalVendor ? "text-primary" : "text-muted-foreground italic"}`}>
-                              {selectedFinalVendor ? getVendorName(selectedFinalVendor as Id<"vendors">) : "None selected"}
-                            </div>
+                            {allCCRequests.map((req, idx) => {
+                              const rid = ccRequestIds[idx];
+                              const selected = rid ? selectedVendorPerItem[rid] : undefined;
+                              return (
+                                <div key={idx} className="flex items-center gap-2 text-xs">
+                                  <span className="font-bold text-muted-foreground w-12 shrink-0">Item {idx + 1}</span>
+                                  <span className="truncate flex-1 text-muted-foreground">{req?.itemName}</span>
+                                  <span className={`font-semibold shrink-0 ${selected ? "text-primary" : "text-muted-foreground italic"}`}>
+                                    {selected ? getVendorName(selected) : "— click SELECT in table —"}
+                                  </span>
+                                </div>
+                              );
+                            })}
                           </div>
+                        ) : (
+                          vendorQuotes.length > 0 && (
+                            <div className="flex flex-col items-start justify-center gap-1 w-full md:w-[180px] shrink-0 border-r border-border pr-2">
+                              <Label className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+                                Final Vendor <span className="text-destructive">*</span>
+                              </Label>
+                              <div className={`text-sm font-semibold truncate w-full ${selectedFinalVendor ? "text-primary" : "text-muted-foreground italic"}`}>
+                                {selectedFinalVendor ? getVendorName(selectedFinalVendor as Id<"vendors">) : "None selected"}
+                              </div>
+                            </div>
+                          )
                         )}
                         <Textarea
                           placeholder="Manager notes (Required for rejection)..."
                           value={managerNotes}
                           onChange={(e) => setManagerNotes(e.target.value)}
-                          className="flex-1 w-full h-9 min-h-[36px] resize-none text-xs bg-background text-foreground placeholder:text-muted-foreground border-input py-2 px-3 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                          className="w-full h-9 min-h-[36px] resize-none text-xs bg-background text-foreground placeholder:text-muted-foreground border-input py-2 px-3 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                         />
-                        <div className="flex gap-2 w-full md:w-auto shrink-0">
+                        <div className="flex gap-2 w-full">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              try {
+                                const table = document.getElementById('cc-export-table');
+                                if (!table) return;
+                                const clone = table.cloneNode(true) as HTMLElement;
+                                clone.querySelectorAll('.no-export').forEach(el => el.remove());
+                                const wb = XLSX.utils.table_to_book(clone, { sheet: "Sheet1" });
+                                XLSX.writeFile(wb, `Cost_Comparison_${allCCRequests[0]?.requestNumber || 'Export'}.xlsx`);
+                                toast.success("Excel downloaded!");
+                              } catch (err) { toast.error("Failed to download Excel"); }
+                            }}
+                            className="border-green-600 text-green-700 hover:bg-green-50 h-9 px-3 text-xs font-semibold"
+                          >
+                            <Download className="h-3.5 w-3.5 mr-1" /> Excel
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={async () => {
+                              const table = document.getElementById('cc-export-table');
+                              if (!table) return;
+                              try {
+                                const canvas = await html2canvas(table, { scale: 2 } as any);
+                                const imgData = canvas.toDataURL("image/png");
+                                const pdf = new jsPDF({ orientation: "landscape", unit: "pt", format: [canvas.width * 0.75, canvas.height * 0.75] });
+                                pdf.addImage(imgData, "PNG", 0, 0, canvas.width * 0.75, canvas.height * 0.75);
+                                pdf.save(`Cost_Comparison_${allCCRequests[0]?.requestNumber || 'Export'}.pdf`);
+                                toast.success("PDF downloaded!");
+                              } catch (err) { toast.error("Failed to download PDF"); }
+                            }}
+                            className="border-red-500 text-red-600 hover:bg-red-50 h-9 px-3 text-xs font-semibold"
+                          >
+                            <Printer className="h-3.5 w-3.5 mr-1" /> PDF
+                          </Button>
                           <Button
                             variant="outline"
                             onClick={async () => {
@@ -1546,35 +2132,64 @@ export function CostComparisonDialog({
                               }
                               setIsReviewing(true);
                               try {
-                                await reviewCC({ requestId: activeRequestId!, action: "reject", notes: managerNotes.trim() });
-                                toast.success("Cost comparison rejected");
+                                if (hasMultipleCCs) {
+                                  for (const rid of ccRequestIds) {
+                                    if (!rid) continue;
+                                    await reviewCC({ requestId: rid, action: "reject", notes: managerNotes.trim() });
+                                  }
+                                  toast.success("All items rejected");
+                                } else {
+                                  await reviewCC({ requestId: activeRequestId!, action: "reject", notes: managerNotes.trim() });
+                                  toast.success("Cost comparison rejected");
+                                }
                                 onOpenChange(false);
                               } catch (error: any) { toast.error(error.message || "Failed to reject"); }
                               finally { setIsReviewing(false); }
                             }}
                             disabled={isReviewing}
-                            className="text-destructive hover:bg-destructive/10 hover:text-destructive border-destructive/20 h-9 px-3 text-xs"
+                            className="flex-1 text-destructive hover:bg-destructive/10 hover:text-destructive border-destructive/20 h-9 px-3 text-xs"
                           >
                             <X className="h-3.5 w-3.5 mr-1" /> Reject
                           </Button>
                           <Button
                             onClick={async () => {
-                              if (!selectedFinalVendor) {
-                                toast.error("Please select a final vendor");
-                                return;
+                              if (hasMultipleCCs) {
+                                const missing = ccRequestIds.filter(rid => rid && !selectedVendorPerItem[rid]);
+                                if (missing.length > 0) {
+                                  toast.error("Please select a vendor for each item (click SELECT in the table)");
+                                  return;
+                                }
+                                setIsReviewing(true);
+                                try {
+                                  for (const rid of ccRequestIds) {
+                                    if (!rid) continue;
+                                    await reviewCC({ requestId: rid, action: "approve", selectedVendorId: selectedVendorPerItem[rid], notes: managerNotes.trim() || undefined });
+                                  }
+                                  toast.success("All items approved");
+                                  onOpenChange(false);
+                                } catch (error: any) { toast.error(error.message || "Failed to approve"); }
+                                finally { setIsReviewing(false); }
+                              } else {
+                                if (!selectedFinalVendor) {
+                                  toast.error("Please select a final vendor");
+                                  return;
+                                }
+                                setIsReviewing(true);
+                                try {
+                                  await reviewCC({ requestId: activeRequestId!, action: "approve", selectedVendorId: selectedFinalVendor as Id<"vendors">, notes: managerNotes.trim() || undefined });
+                                  toast.success("Cost comparison approved");
+                                  onOpenChange(false);
+                                } catch (error: any) { toast.error(error.message || "Failed to approve"); }
+                                finally { setIsReviewing(false); }
                               }
-                              setIsReviewing(true);
-                              try {
-                                await reviewCC({ requestId: activeRequestId!, action: "approve", selectedVendorId: selectedFinalVendor as Id<"vendors">, notes: managerNotes.trim() || undefined });
-                                toast.success("Cost comparison approved");
-                                onOpenChange(false);
-                              } catch (error: any) { toast.error(error.message || "Failed to approve"); }
-                              finally { setIsReviewing(false); }
                             }}
-                            disabled={isReviewing || !selectedFinalVendor}
-                            className="bg-primary hover:bg-primary/90 text-primary-foreground h-9 px-3 text-xs"
+                            disabled={isReviewing || (hasMultipleCCs
+                              ? ccRequestIds.some(rid => rid && !selectedVendorPerItem[rid])
+                              : !selectedFinalVendor)}
+                            className="flex-[2] bg-primary hover:bg-primary/90 text-primary-foreground h-9 px-3 text-xs"
                           >
-                            <CheckCircle className="h-3.5 w-3.5 mr-1" /> Approve
+                            <CheckCircle className="h-3.5 w-3.5 mr-1" />
+                            {hasMultipleCCs ? `Approve All (${ccRequestIds.length} items)` : "Approve"}
                           </Button>
                         </div>
                       </div>
@@ -1818,7 +2433,7 @@ export function CostComparisonDialog({
             )}
 
             {/* Vendor Quotes - Show always to allow comparison even if stock exists */}
-            {ccViewMode !== "preview" && (canEdit || isManagerReview) && (
+            {ccViewMode !== "preview" && (canEditUI || isManagerReview) && (
               <div className="space-y-4 pt-2 border-t mt-4">
                 <div className="flex items-center justify-between">
                   <h3 className="text-sm font-semibold flex items-center gap-2">
@@ -1893,7 +2508,7 @@ export function CostComparisonDialog({
                 )}
 
                 {/* Empty State / Add First Vendor Button */}
-                {vendorQuotes.length === 0 && canEdit && !isManagerReview && (
+                {vendorQuotes.length === 0 && canEditUI && !isManagerReview && (
                   <button
                     onClick={() => {
                       setQuoteAmount((quantityToBuy || request?.quantity || 0).toString());
@@ -1937,11 +2552,24 @@ export function CostComparisonDialog({
                         return (
                           <div
                             key={quote.vendorId}
-                            className={`relative group bg-card border rounded-lg p-4 transition-all duration-200 ${isManagerReview && selectedFinalVendor === quote.vendorId
+                            className={`relative group bg-card border rounded-lg p-4 transition-all duration-200 ${isManagerReview && (
+                              hasMultipleCCs
+                                ? activeRequestId && selectedVendorPerItem[activeRequestId] === quote.vendorId
+                                : selectedFinalVendor === quote.vendorId
+                            )
                               ? "border-primary ring-1 ring-primary shadow-md bg-primary/5"
                               : "hover:border-primary/50 hover:shadow-sm"
                               } ${isBestPrice && !isManagerReview ? "border-green-200 dark:border-green-800 bg-green-50/30 dark:bg-green-950/10" : ""}`}
-                            onClick={isManagerReview ? () => setSelectedFinalVendor(prev => prev === quote.vendorId ? "" : quote.vendorId) : undefined}
+                            onClick={isManagerReview ? () => {
+                              if (hasMultipleCCs && activeRequestId) {
+                                setSelectedVendorPerItem(prev => ({
+                                  ...prev,
+                                  [activeRequestId]: prev[activeRequestId] === quote.vendorId ? "" as any : quote.vendorId
+                                }));
+                              } else {
+                                setSelectedFinalVendor(prev => prev === quote.vendorId ? "" : quote.vendorId);
+                              }
+                            } : undefined}
                           >
                             {/* Best Price Badge */}
                             {isBestPrice && (
@@ -1955,11 +2583,16 @@ export function CostComparisonDialog({
                               <div className="flex-1 min-w-0">
                                 {/* Header */}
                                 <div className="flex items-center gap-2 mb-2">
-                                  {isManagerReview && (
-                                    <div className={`w-4 h-4 rounded-full border flex items-center justify-center ${selectedFinalVendor === quote.vendorId ? "border-primary bg-primary text-primary-foreground" : "border-muted-foreground"}`}>
-                                      {selectedFinalVendor === quote.vendorId && <Check className="w-2.5 h-2.5" />}
-                                    </div>
-                                  )}
+                                  {isManagerReview && (() => {
+                                    const isCardSelected = hasMultipleCCs
+                                      ? (activeRequestId ? selectedVendorPerItem[activeRequestId] === quote.vendorId : false)
+                                      : selectedFinalVendor === quote.vendorId;
+                                    return (
+                                      <div className={`w-4 h-4 rounded-full border flex items-center justify-center ${isCardSelected ? "border-primary bg-primary text-primary-foreground" : "border-muted-foreground"}`}>
+                                        {isCardSelected && <Check className="w-2.5 h-2.5" />}
+                                      </div>
+                                    );
+                                  })()}
                                   <h4 className="font-semibold text-lg truncate text-foreground">{getVendorName(quote.vendorId)}</h4>
                                 </div>
 
@@ -2093,25 +2726,58 @@ export function CostComparisonDialog({
             {ccViewMode !== "preview" && isManagerReview && (
               <div className="mt-4 pt-4 border-t border-border/60">
                 <div className="space-y-4">
-                  {/* Vendor Selection for Form Mode */}
-                  {vendorQuotes.length > 0 && (
-                    <div className="space-y-2">
+                  {/* For merged CC: per-item vendor selectors */}
+                  {hasMultipleCCs ? (
+                    <div className="space-y-3">
                       <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                        Select Final Vendor <span className="text-red-500">*</span>
+                        Select Final Vendor Per Item <span className="text-red-500">*</span>
                       </Label>
-                      <select
-                        className="w-full md:max-w-md h-10 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                        value={selectedFinalVendor}
-                        onChange={(e) => setSelectedFinalVendor(e.target.value as Id<"vendors">)}
-                      >
-                        <option value="">-- Choose winning vendor --</option>
-                        {vendorQuotes.map((q) => (
-                          <option key={q.vendorId} value={q.vendorId}>
-                            {getVendorName(q.vendorId)} (₹{calculateQuoteTotal(q, request?.quantity || 0).toFixed(2)})
-                          </option>
-                        ))}
-                      </select>
+                      {allCCRequests.map((req, idx) => {
+                        const cc = allItemCCs[idx];
+                        const quotes = cc?.vendorQuotes ?? [];
+                        const rid = ccRequestIds[idx];
+                        if (!rid || quotes.length === 0) return null;
+                        return (
+                          <div key={rid} className="flex items-center gap-3 p-2 rounded-lg border bg-muted/20">
+                            <span className="text-xs font-bold text-muted-foreground w-14 shrink-0">Item {idx + 1}</span>
+                            <span className="text-xs font-medium truncate flex-1">{req?.itemName}</span>
+                            <select
+                              className="h-9 rounded-md border border-input bg-background px-2 py-1 text-xs shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring flex-1 min-w-0"
+                              value={selectedVendorPerItem[rid] ?? ""}
+                              onChange={(e) => setSelectedVendorPerItem(prev => ({ ...prev, [rid]: e.target.value as Id<"vendors"> }))}
+                            >
+                              <option value="">-- Choose vendor --</option>
+                              {quotes.map((q: any) => (
+                                <option key={q.vendorId} value={q.vendorId}>
+                                  {getVendorName(q.vendorId)} (₹{calculateQuoteTotal(q, req?.quantity || 0).toFixed(2)})
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        );
+                      })}
                     </div>
+                  ) : (
+                    /* Single item: original vendor selector */
+                    vendorQuotes.length > 0 && (
+                      <div className="space-y-2">
+                        <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                          Select Final Vendor <span className="text-red-500">*</span>
+                        </Label>
+                        <select
+                          className="w-full md:max-w-md h-10 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                          value={selectedFinalVendor}
+                          onChange={(e) => setSelectedFinalVendor(e.target.value as Id<"vendors">)}
+                        >
+                          <option value="">-- Choose winning vendor --</option>
+                          {vendorQuotes.map((q) => (
+                            <option key={q.vendorId} value={q.vendorId}>
+                              {getVendorName(q.vendorId)} (₹{calculateQuoteTotal(q, request?.quantity || 0).toFixed(2)})
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    )
                   )}
 
                   <div className="space-y-2">
@@ -2132,6 +2798,44 @@ export function CostComparisonDialog({
                   </div>
 
                   <div className="flex gap-3 pt-2">
+                    {/* Excel + PDF download buttons */}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        try {
+                          const table = document.getElementById('cc-export-table');
+                          if (!table) { toast.error("Open CC Format view first to export"); return; }
+                          const clone = table.cloneNode(true) as HTMLElement;
+                          clone.querySelectorAll('.no-export').forEach(el => el.remove());
+                          const wb = XLSX.utils.table_to_book(clone, { sheet: "Sheet1" });
+                          XLSX.writeFile(wb, `Cost_Comparison_${allCCRequests[0]?.requestNumber || 'Export'}.xlsx`);
+                          toast.success("Excel downloaded!");
+                        } catch (err) { toast.error("Switch to CC Format view first, then download"); }
+                      }}
+                      className="border-green-600 text-green-700 hover:bg-green-50 font-semibold"
+                    >
+                      <Download className="h-3.5 w-3.5 mr-1.5" /> Excel
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={async () => {
+                        const table = document.getElementById('cc-export-table');
+                        if (!table) { toast.error("Switch to CC Format view first to export PDF"); return; }
+                        try {
+                          const canvas = await html2canvas(table, { scale: 2 } as any);
+                          const imgData = canvas.toDataURL("image/png");
+                          const pdf = new jsPDF({ orientation: "landscape", unit: "pt", format: [canvas.width * 0.75, canvas.height * 0.75] });
+                          pdf.addImage(imgData, "PNG", 0, 0, canvas.width * 0.75, canvas.height * 0.75);
+                          pdf.save(`Cost_Comparison_${allCCRequests[0]?.requestNumber || 'Export'}.pdf`);
+                          toast.success("PDF downloaded!");
+                        } catch (err) { toast.error("Switch to CC Format view first, then download"); }
+                      }}
+                      className="border-red-500 text-red-600 hover:bg-red-50 font-semibold"
+                    >
+                      <Printer className="h-3.5 w-3.5 mr-1.5" /> PDF
+                    </Button>
                     <Button
                       variant="ghost"
                       onClick={async () => {
@@ -2139,15 +2843,18 @@ export function CostComparisonDialog({
                           toast.error("Please provide a reason for rejection");
                           return;
                         }
-
                         setIsReviewing(true);
                         try {
-                          await reviewCC({
-                            requestId: activeRequestId!,
-                            action: "reject",
-                            notes: managerNotes.trim(),
-                          });
-                          toast.success("Cost comparison rejected");
+                          if (hasMultipleCCs) {
+                            for (const rid of ccRequestIds) {
+                              if (!rid) continue;
+                              await reviewCC({ requestId: rid, action: "reject", notes: managerNotes.trim() });
+                            }
+                            toast.success("All items rejected");
+                          } else {
+                            await reviewCC({ requestId: activeRequestId!, action: "reject", notes: managerNotes.trim() });
+                            toast.success("Cost comparison rejected");
+                          }
                           onOpenChange(false);
                         } catch (error: any) {
                           toast.error(error.message || "Failed to reject");
@@ -2164,32 +2871,50 @@ export function CostComparisonDialog({
                     </Button>
                     <Button
                       onClick={async () => {
-                        if (!selectedFinalVendor) {
-                          toast.error("Please select a final vendor");
-                          return;
-                        }
-                        setIsReviewing(true);
-                        try {
-                          await reviewCC({
-                            requestId: activeRequestId!,
-                            action: "approve",
-                            selectedVendorId: selectedFinalVendor as Id<"vendors">,
-                            notes: managerNotes.trim() || undefined,
-                          });
-                          toast.success("Cost comparison approved");
-                          onOpenChange(false);
-                        } catch (error: any) {
-                          toast.error(error.message || "Failed to approve");
-                        } finally {
-                          setIsReviewing(false);
+                        if (hasMultipleCCs) {
+                          const missing = ccRequestIds.filter(rid => rid && !selectedVendorPerItem[rid]);
+                          if (missing.length > 0) {
+                            toast.error("Please select a vendor for each item");
+                            return;
+                          }
+                          setIsReviewing(true);
+                          try {
+                            for (const rid of ccRequestIds) {
+                              if (!rid) continue;
+                              await reviewCC({ requestId: rid, action: "approve", selectedVendorId: selectedVendorPerItem[rid], notes: managerNotes.trim() || undefined });
+                            }
+                            toast.success("All items approved");
+                            onOpenChange(false);
+                          } catch (error: any) {
+                            toast.error(error.message || "Failed to approve");
+                          } finally {
+                            setIsReviewing(false);
+                          }
+                        } else {
+                          if (!selectedFinalVendor) {
+                            toast.error("Please select a final vendor");
+                            return;
+                          }
+                          setIsReviewing(true);
+                          try {
+                            await reviewCC({ requestId: activeRequestId!, action: "approve", selectedVendorId: selectedFinalVendor as Id<"vendors">, notes: managerNotes.trim() || undefined });
+                            toast.success("Cost comparison approved");
+                            onOpenChange(false);
+                          } catch (error: any) {
+                            toast.error(error.message || "Failed to approve");
+                          } finally {
+                            setIsReviewing(false);
+                          }
                         }
                       }}
-                      disabled={isReviewing || !selectedFinalVendor}
+                      disabled={isReviewing || (hasMultipleCCs
+                        ? ccRequestIds.some(rid => rid && !selectedVendorPerItem[rid])
+                        : !selectedFinalVendor)}
                       size="sm"
                       className="flex-[2] bg-primary hover:bg-primary/90 text-primary-foreground shadow-sm hover:shadow transition-all font-medium"
                     >
                       <CheckCircle className="h-4 w-4 mr-1.5" />
-                      Approve & Select Vendor
+                      {hasMultipleCCs ? `Approve All (${ccRequestIds.length} items)` : "Approve & Select Vendor"}
                     </Button>
                   </div>
                 </div>
@@ -2229,12 +2954,16 @@ export function CostComparisonDialog({
                     </Button>
                     <Button
                       onClick={() => setShowSubmitConfirm(true)}
-                      disabled={isSaving || isSubmitting || vendorQuotes.length < 2}
+                      disabled={isSaving || isSubmitting || (hasMultipleCCs
+                        ? allItemCCs.every(cc => (cc?.vendorQuotes?.length ?? 0) === 0)
+                        : vendorQuotes.length < 2)}
                       size="sm"
                       className="flex-1"
                     >
                       <Send className="h-3.5 w-3.5 mr-1.5" />
-                      {existingCC?.status === "cc_rejected" ? "Resubmit" : "Submit for Approval"}
+                      {hasMultipleCCs
+                        ? `Submit All (${ccRequestIds.length} items)`
+                        : existingCC?.status === "cc_rejected" ? "Resubmit" : "Submit for Approval"}
                     </Button>
                   </div>
                 </div>
@@ -2249,11 +2978,168 @@ export function CostComparisonDialog({
               )
             }
 
+            {/* Submit button visible in preview mode too */}
+            {ccViewMode === "preview" && canEdit && !isSubmitted && !isManager && (
+              <div className="pt-3 border-t mt-2 flex gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => onOpenChange(false)}
+                  size="sm"
+                  className="flex-1"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={() => setShowSubmitConfirm(true)}
+                  disabled={isSaving || isSubmitting || (hasMultipleCCs
+                    ? allItemCCs.every(cc => (cc?.vendorQuotes?.length ?? 0) === 0)
+                    : vendorQuotes.length < 2)}
+                  size="sm"
+                  className="flex-[2]"
+                >
+                  <Send className="h-3.5 w-3.5 mr-1.5" />
+                  {hasMultipleCCs
+                    ? `Submit All (${ccRequestIds.length} items)`
+                    : existingCC?.status === "cc_rejected" ? "Resubmit" : "Submit for Approval"}
+                </Button>
+              </div>
+            )}
+
+            {/* Manager approve/reject bottom bar - always visible in preview mode for managers */}
+            {ccViewMode === "preview" && isManager && allItemCCs.some(cc => cc?.status === "cc_pending") && (
+              <div className="pt-3 border-t mt-2 space-y-2">
+                {/* Per-item selection summary */}
+                {hasMultipleCCs && (
+                  <div className="flex flex-wrap gap-2 text-xs">
+                    {allCCRequests.map((req, idx) => {
+                      const rid = ccRequestIds[idx];
+                      const selected = rid ? selectedVendorPerItem[rid] : undefined;
+                      return (
+                        <div key={idx} className={`flex items-center gap-1.5 px-2 py-1 rounded-md border text-xs ${selected ? "border-primary/40 bg-primary/5 text-primary" : "border-border bg-muted/30 text-muted-foreground"}`}>
+                          <span className="font-bold">Item {idx + 1}:</span>
+                          <span className="truncate max-w-[80px]">{req?.itemName}</span>
+                          <span className="font-semibold">{selected ? `→ ${getVendorName(selected)}` : "not selected"}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+                <Textarea
+                  placeholder="Manager notes (Required for rejection)..."
+                  value={managerNotes}
+                  onChange={(e) => setManagerNotes(e.target.value)}
+                  className="w-full min-h-[60px] resize-none text-xs"
+                />
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      try {
+                        const table = document.getElementById('cc-export-table');
+                        if (!table) { toast.error("Scroll up to see the CC table first"); return; }
+                        const clone = table.cloneNode(true) as HTMLElement;
+                        clone.querySelectorAll('.no-export').forEach(el => el.remove());
+                        const wb = XLSX.utils.table_to_book(clone, { sheet: "Sheet1" });
+                        XLSX.writeFile(wb, `Cost_Comparison_${allCCRequests[0]?.requestNumber || request?.requestNumber || 'Export'}.xlsx`);
+                        toast.success("Excel downloaded!");
+                      } catch (err) { toast.error("Failed to download Excel"); }
+                    }}
+                    className="border-green-600 text-green-700 hover:bg-green-50 font-semibold"
+                  >
+                    <Download className="h-3.5 w-3.5 mr-1" /> Excel
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={async () => {
+                      const table = document.getElementById('cc-export-table');
+                      if (!table) { toast.error("Scroll up to see the CC table first"); return; }
+                      try {
+                        const canvas = await html2canvas(table, { scale: 2 } as any);
+                        const imgData = canvas.toDataURL("image/png");
+                        const pdf = new jsPDF({ orientation: "landscape", unit: "pt", format: [canvas.width * 0.75, canvas.height * 0.75] });
+                        pdf.addImage(imgData, "PNG", 0, 0, canvas.width * 0.75, canvas.height * 0.75);
+                        pdf.save(`Cost_Comparison_${allCCRequests[0]?.requestNumber || request?.requestNumber || 'Export'}.pdf`);
+                        toast.success("PDF downloaded!");
+                      } catch (err) { toast.error("Failed to download PDF"); }
+                    }}
+                    className="border-red-500 text-red-600 hover:bg-red-50 font-semibold"
+                  >
+                    <Printer className="h-3.5 w-3.5 mr-1" /> PDF
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={async () => {
+                      if (!managerNotes.trim()) { toast.error("Please provide a reason for rejection"); return; }
+                      setIsReviewing(true);
+                      try {
+                        const rids = hasMultipleCCs ? ccRequestIds : [activeRequestId!];
+                        for (const rid of rids) {
+                          if (!rid) continue;
+                          await reviewCC({ requestId: rid, action: "reject", notes: managerNotes.trim() });
+                        }
+                        toast.success(hasMultipleCCs ? "All items rejected" : "Rejected");
+                        onOpenChange(false);
+                      } catch (e: any) { toast.error(e.message || "Failed"); }
+                      finally { setIsReviewing(false); }
+                    }}
+                    disabled={isReviewing}
+                    className="flex-1 text-destructive hover:bg-destructive/10 border border-transparent hover:border-destructive/20 font-medium"
+                  >
+                    <X className="h-3.5 w-3.5 mr-1" /> Reject
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={async () => {
+                      if (hasMultipleCCs) {
+                        const missing = ccRequestIds.filter(rid => rid && !selectedVendorPerItem[rid]);
+                        if (missing.length > 0) { toast.error("Select a vendor for each item first"); return; }
+                        setIsReviewing(true);
+                        try {
+                          for (const rid of ccRequestIds) {
+                            if (!rid) continue;
+                            await reviewCC({ requestId: rid, action: "approve", selectedVendorId: selectedVendorPerItem[rid], notes: managerNotes.trim() || undefined });
+                          }
+                          toast.success("All items approved");
+                          onOpenChange(false);
+                        } catch (e: any) { toast.error(e.message || "Failed"); }
+                        finally { setIsReviewing(false); }
+                      } else {
+                        if (!selectedFinalVendor) { toast.error("Please select a vendor first"); return; }
+                        setIsReviewing(true);
+                        try {
+                          await reviewCC({ requestId: activeRequestId!, action: "approve", selectedVendorId: selectedFinalVendor as Id<"vendors">, notes: managerNotes.trim() || undefined });
+                          toast.success("Approved");
+                          onOpenChange(false);
+                        } catch (e: any) { toast.error(e.message || "Failed"); }
+                        finally { setIsReviewing(false); }
+                      }
+                    }}
+                    disabled={isReviewing || (hasMultipleCCs
+                      ? ccRequestIds.some(rid => rid && !selectedVendorPerItem[rid])
+                      : !selectedFinalVendor)}
+                    className="flex-[2] bg-primary hover:bg-primary/90 text-primary-foreground font-medium"
+                  >
+                    <CheckCircle className="h-3.5 w-3.5 mr-1" />
+                    {hasMultipleCCs ? `Approve All (${ccRequestIds.length} items)` : "Approve"}
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {ccViewMode === "preview" && isSubmitted && !isManagerReview && (
+              <p className="text-xs text-muted-foreground text-center py-3 border-t mt-2">
+                Submitted for manager approval
+              </p>
+            )}
+
           </div></DialogContent>
       </Dialog>
 
       {/* Simplified Vendor Selection Dialog */}
-      <Dialog open={vendorDialogOpen && canEdit} onOpenChange={(open) => {
+      <Dialog open={vendorDialogOpen} onOpenChange={(open) => {
         if (canEdit) {
           setVendorDialogOpen(open);
           // Reset form when closing
@@ -2363,7 +3249,35 @@ export function CostComparisonDialog({
                     )}
                   </div>
                   {showVendorDropdown && (
-                    <div className="absolute top-full left-0 right-0 z-50 mt-1 bg-background border border-border rounded-md shadow-lg max-h-40 overflow-y-auto">
+                    <div className="absolute top-full left-0 right-0 z-50 mt-1 bg-background border border-border rounded-md shadow-lg max-h-48 overflow-y-auto">
+                      {/* Suggested vendors from inventory item — shown when no search term */}
+                      {!vendorSearchTerm.trim() && suggestedVendors.length > 0 && (
+                        <>
+                          <div className="px-3 py-1 text-[10px] font-bold text-muted-foreground uppercase tracking-wider bg-muted/50 border-b border-border">
+                            Linked to this item
+                          </div>
+                          {suggestedVendors.map((vendor, index) => (
+                            <div
+                              key={vendor._id}
+                              onClick={() => {
+                                setSelectedVendorId(vendor._id);
+                                setVendorSearchTerm(vendor.companyName);
+                                if (!quoteContact && vendor.phone) setQuoteContact(vendor.phone);
+                                setShowVendorDropdown(false);
+                              }}
+                              className="w-full px-3 py-2 text-left text-sm hover:bg-violet-50 dark:hover:bg-violet-950/30 transition-colors flex items-center justify-between cursor-pointer"
+                            >
+                              <span className="font-medium text-violet-700 dark:text-violet-300">{vendor.companyName}</span>
+                              <span className="text-[10px] text-violet-500 bg-violet-100 dark:bg-violet-900/30 px-1.5 py-0.5 rounded">linked</span>
+                            </div>
+                          ))}
+                          {otherVendors.length > 0 && (
+                            <div className="px-3 py-1 text-[10px] font-bold text-muted-foreground uppercase tracking-wider bg-muted/50 border-y border-border">
+                              All vendors
+                            </div>
+                          )}
+                        </>
+                      )}
                       {filteredVendors.length > 0 ? (
                         filteredVendors.map((vendor, index) => (
                           <div

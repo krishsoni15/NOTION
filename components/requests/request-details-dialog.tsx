@@ -177,6 +177,7 @@ export function RequestDetailsDialog({
   const [pdfPreviewRequestId, setPdfPreviewRequestId] = useState<string | null>(null);
   const [pdfPreviewRequestIds, setPdfPreviewRequestIds] = useState<string[] | null>(null);
   const [selectedItemsForAction, setSelectedItemsForAction] = useState<Set<Id<"requests">>>(new Set());
+  const [selectedCCItems, setSelectedCCItems] = useState<Set<Id<"requests">>>(new Set());
   const [itemActions, setItemActions] = useState<Record<Id<"requests">, "approve" | "reject" | "direct_po" | null>>({});
   const [itemIntents, setItemIntents] = useState<Record<Id<"requests">, string[]>>({});
   const [showBatchProcessDialog, setShowBatchProcessDialog] = useState(false);
@@ -428,6 +429,11 @@ export function RequestDetailsDialog({
   const signPendingItems = allRequests?.filter((item) => item.status === "sign_pending") || [];
   const hasMultiplePendingItems = pendingItems.length > 1;
 
+  // Merged CC items — used to show single Review CC button across all cc_pending items
+  const allCCStatusItems = allRequests?.filter(i => ["cc_pending", "cc_approved", "cc_rejected", "ready_for_po"].includes(i.status as string)) || [];
+  const firstCCItemIdGlobal = allCCStatusItems[0]?._id;
+  const allCCIdsGlobal = allCCStatusItems.map(i => i._id);
+
   // Manager permissions based on pending items
   const canApprove = isManager && (pendingItems.length > 0 || signPendingItems.length > 0 || selectedItemsForAction.size > 0);
   const canReject = isManager && (pendingItems.length > 0 || signPendingItems.length > 0 || selectedItemsForAction.size > 0);
@@ -644,6 +650,18 @@ export function RequestDetailsDialog({
     if (newSelected.has(itemId)) {
       newSelected.delete(itemId);
     } else {
+      // Check for vendor mismatch for ready_for_po items
+      const itemToSelect = allRequests?.find(r => r._id === itemId);
+      if (itemToSelect?.status === "ready_for_po") {
+        const selectedPOItems = Array.from(newSelected).map(id => allRequests?.find(r => r._id === id)).filter(r => r?.status === "ready_for_po");
+        if (selectedPOItems.length > 0) {
+          const firstVendor = (selectedPOItems[0] as any)?.selectedVendorId;
+          if ((itemToSelect as any).selectedVendorId !== firstVendor) {
+            toast.error("Cannot select items with different vendors for PO creation.");
+            return;
+          }
+        }
+      }
       newSelected.add(itemId);
     }
     setSelectedItemsForAction(newSelected);
@@ -1128,7 +1146,7 @@ export function RequestDetailsDialog({
       ready_for_cc: { label: "Ready for CC", color: "bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900/40 dark:text-blue-400 dark:border-blue-800", dot: "bg-blue-500", icon: Loader2, border: "border-blue-500" },
       cc_pending: { label: "CC Pending", color: "bg-purple-50 text-purple-700 border-purple-200 dark:bg-purple-900/40 dark:text-purple-400 dark:border-purple-800", dot: "bg-purple-500", icon: Loader2, border: "border-purple-500" },
       cc_rejected: { label: "CC Rejected", color: "bg-red-50 text-red-700 border-red-200 dark:bg-red-900/40 dark:text-red-400 dark:border-red-800", dot: "bg-red-500", icon: XCircle, border: "border-red-500" },
-      ready_for_po: { label: "Ready for PO", color: "bg-teal-50 text-teal-700 border-teal-200 dark:bg-teal-900/40 dark:text-teal-400 dark:border-teal-800", dot: "bg-teal-500", icon: Loader2, border: "border-teal-500" },
+      ready_for_po: { label: "Ready for PO", color: "bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-900/40 dark:text-emerald-400 dark:border-emerald-800", dot: "bg-emerald-500", icon: ShoppingCart, border: "border-emerald-500" },
       sign_pending: { label: "Sign Pending", color: "bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900/40 dark:text-amber-400 dark:border-amber-800", dot: "bg-amber-500", icon: Clock, border: "border-amber-400" },
       sign_rejected: { label: "Sign Rejected", color: "bg-red-50 text-red-700 border-red-200 dark:bg-red-900/40 dark:text-red-400 dark:border-red-800", dot: "bg-red-500", icon: XCircle, border: "border-red-500" },
       pending_po: { label: "Pending PO", color: "bg-orange-50 text-orange-700 border-orange-200 dark:bg-orange-900/40 dark:text-orange-400 dark:border-orange-800", dot: "bg-orange-500", icon: ShoppingCart, border: "border-orange-500" },
@@ -1182,7 +1200,7 @@ export function RequestDetailsDialog({
       ready_for_delivery: "border-emerald-500 dark:border-emerald-400",
       out_for_delivery: "border-orange-500 dark:border-orange-400",
       delivered: "border-sky-500 dark:border-sky-400",
-      ready_for_po: "border-teal-500 dark:border-teal-400"
+      ready_for_po: "border-emerald-500 dark:border-emerald-400"
     };
     return mapping[status] || "border-slate-400 dark:border-slate-500";
   };
@@ -1218,8 +1236,8 @@ export function RequestDetailsDialog({
       cc_pending: "bg-purple-50/80 dark:bg-purple-950/20 hover:bg-purple-100/50 dark:hover:bg-purple-950/40",
       cc_approved: "bg-purple-50/80 dark:bg-purple-950/20 hover:bg-purple-100/50 dark:hover:bg-purple-950/40",
 
-      // Teal
-      ready_for_po: "bg-teal-50/80 dark:bg-teal-950/20 hover:bg-teal-100/50 dark:hover:bg-teal-950/40",
+      // Emerald (Ready for PO)
+      ready_for_po: "bg-emerald-50/80 dark:bg-emerald-950/20 hover:bg-emerald-100/50 dark:hover:bg-emerald-950/40",
 
       // Orange
       pending_po: "bg-orange-50/80 dark:bg-orange-950/20 hover:bg-orange-100/50 dark:hover:bg-orange-950/40",
@@ -1233,7 +1251,7 @@ export function RequestDetailsDialog({
     return mapping[status] || "bg-card hover:bg-accent/50 dark:bg-slate-900/40";
   };
 
-  const RenderActionSegments = ({ item, isCard = false }: { item: any; isCard?: boolean }) => {
+  const RenderActionSegments = ({ item, isCard = false, mergedCCIds, showMergedCCButton = true }: { item: any; isCard?: boolean; mergedCCIds?: string[]; showMergedCCButton?: boolean }) => {
     const status = Array.isArray(inventoryStatus)
       ? inventoryStatus.find((s: any) => s.requestedName === item.itemName)
       : (inventoryStatus as any)?.[item.itemName];
@@ -1318,7 +1336,12 @@ export function RequestDetailsDialog({
             </Button>
           )}
           {(onOpenCC || onCheck) && (
-            <Button size="sm" variant="outline" onClick={(e) => { e.stopPropagation(); (onOpenCC || onCheck)?.(item._id); }} className={cn("h-9 border-purple-200 text-purple-700 hover:bg-purple-50 dark:border-purple-800 dark:text-purple-400 dark:hover:bg-purple-900/30", isCard ? "w-full" : "")}>
+            <Button size="sm" variant="outline" onClick={(e) => {
+              e.stopPropagation();
+              const ccSiblings = (allRequests || []).filter(i => ["cc_pending", "cc_approved", "cc_rejected", "ready_for_po"].includes(i.status as string));
+              const allCCIds = ccSiblings.map(i => i._id);
+              onOpenCC?.(item._id, allCCIds.length > 1 ? allCCIds : undefined) ?? onCheck?.(item._id);
+            }} className={cn("h-9 border-purple-200 text-purple-700 hover:bg-purple-50 dark:border-purple-800 dark:text-purple-400 dark:hover:bg-purple-900/30", isCard ? "w-full" : "")}>
               <Layers className="h-4 w-4 mr-1.5" /> View CC
             </Button>
           )}
@@ -1349,6 +1372,10 @@ export function RequestDetailsDialog({
 
     // For cc_pending items
     if (item.status === "cc_pending") {
+      // Non-first item in a merged CC — show nothing (handled by first item's button)
+      if (!showMergedCCButton && mergedCCIds && mergedCCIds.length > 1) {
+        return null;
+      }
       return (
         <div className={cn("flex gap-2", isCard ? "w-full flex-col" : "items-center")}>
           {isManager && (
@@ -1356,17 +1383,28 @@ export function RequestDetailsDialog({
               size="sm"
               onClick={(e) => {
                 e.stopPropagation();
-                if (onOpenCC) onOpenCC(item._id);
+                if (onOpenCC) {
+                  const ccSiblings = mergedCCIds && mergedCCIds.length > 1
+                    ? mergedCCIds
+                    : (allRequests || []).filter(i => ["cc_pending", "cc_approved", "cc_rejected", "ready_for_po"].includes(i.status as string)).map(i => i._id);
+                  onOpenCC(item._id, ccSiblings.length > 1 ? ccSiblings as any : undefined);
+                }
               }}
               className={cn(
                 "bg-purple-600 hover:bg-purple-700 text-white font-semibold shadow-sm w-full"
               )}
             >
-              <CheckCircle className="h-4 w-4 mr-2" /> Review CC
+              <CheckCircle className="h-4 w-4 mr-2" />
+              {mergedCCIds && mergedCCIds.length > 1 ? `Review CC (${mergedCCIds.length} items)` : "Review CC"}
             </Button>
           )}
-          {(onOpenCC || onCheck) && (
-            <Button size="sm" variant="outline" onClick={(e) => { e.stopPropagation(); (onOpenCC || onCheck)?.(item._id); }} className={cn("h-9 border-purple-200 text-purple-700 hover:bg-purple-50 dark:border-purple-800 dark:text-purple-400 dark:hover:bg-purple-900/30", isCard ? "w-full" : "")}>
+          {(onOpenCC || onCheck) && !isManager && (
+            <Button size="sm" variant="outline" onClick={(e) => {
+              e.stopPropagation();
+              const ccSiblings = mergedCCIds && mergedCCIds.length > 1 ? mergedCCIds
+                : (allRequests || []).filter(i => ["cc_pending", "cc_approved", "cc_rejected", "ready_for_po"].includes(i.status as string)).map(i => i._id);
+              onOpenCC?.(item._id, ccSiblings.length > 1 ? ccSiblings as any : undefined) ?? onCheck?.(item._id);
+            }} className={cn("h-9 border-purple-200 text-purple-700 hover:bg-purple-50 dark:border-purple-800 dark:text-purple-400 dark:hover:bg-purple-900/30", isCard ? "w-full" : "")}>
               <Layers className="h-4 w-4 mr-1.5" /> View CC
             </Button>
           )}
@@ -1393,7 +1431,12 @@ export function RequestDetailsDialog({
             </Button>
           )}
           {(onOpenCC || onCheck) && (
-            <Button size="sm" variant="outline" onClick={(e) => { e.stopPropagation(); (onOpenCC || onCheck)?.(item._id); }} className={cn("h-9 border-purple-200 text-purple-700 hover:bg-purple-50 dark:border-purple-800 dark:text-purple-400 dark:hover:bg-purple-900/30", isCard ? "w-full" : "")}>
+            <Button size="sm" variant="outline" onClick={(e) => {
+              e.stopPropagation();
+              const ccSiblings = (allRequests || []).filter(i => ["cc_pending", "cc_approved", "cc_rejected", "ready_for_po"].includes(i.status as string));
+              const allCCIds = ccSiblings.map(i => i._id);
+              onOpenCC?.(item._id, allCCIds.length > 1 ? allCCIds : undefined) ?? onCheck?.(item._id);
+            }} className={cn("h-9 border-purple-200 text-purple-700 hover:bg-purple-50 dark:border-purple-800 dark:text-purple-400 dark:hover:bg-purple-900/30", isCard ? "w-full" : "")}>
               <Layers className="h-4 w-4 mr-1.5" /> View CC
             </Button>
           )}
@@ -1922,9 +1965,16 @@ export function RequestDetailsDialog({
                       variant="outline"
                       size="sm"
                       onClick={() => {
+                        // Only select items with matching vendors
+                        const firstVendor = eligibleForPO[0]?.selectedVendorId;
+                        const sameVendorItems = eligibleForPO.filter(i => (i as any).selectedVendorId === firstVendor);
+                        const hasMixedVendors = sameVendorItems.length < eligibleForPO.length;
                         const newSet = new Set(selectedItemsForAction);
-                        eligibleForPO.forEach(i => newSet.add(i._id));
+                        sameVendorItems.forEach(i => newSet.add(i._id));
                         setSelectedItemsForAction(newSet);
+                        if (hasMixedVendors) {
+                          toast.error("Some items have different vendors and were excluded from selection.");
+                        }
                       }}
                       className="h-7 text-xs border-emerald-200 text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800"
                     >
@@ -1997,41 +2047,25 @@ export function RequestDetailsDialog({
             </div>
             {/* Right Side Actions */}
             <div className="flex items-center gap-2">
-              {/* Create PO for Selected - Purchase Officer only */}
-              {isPurchaseOfficer && selectedItemsForAction.size > 0 && (() => {
-                const selectedReadyForPO = allRequests?.filter(item =>
-                  selectedItemsForAction.has(item._id) &&
-                  ["direct_po", "ready_for_po", "sign_rejected"].includes(item.status)
-                ) || [];
+              {/* Create CC for Selected - Purchase Officer only */}
+              {isPurchaseOfficer && selectedCCItems.size > 0 && (
+                <Button
+                  variant="default"
+                  size="sm"
+                  className="h-9 bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-700 hover:to-purple-700 shadow-md animate-in zoom-in-95 duration-200"
+                  onClick={() => {
+                    const ids = Array.from(selectedCCItems);
+                    if (onOpenCC) onOpenCC(ids[0], ids);
+                    setSelectedCCItems(new Set());
+                  }}
+                >
+                  <FileText className="h-4 w-4 mr-1.5" />
+                  Create CC ({selectedCCItems.size})
+                </Button>
+              )}
 
-                if (selectedReadyForPO.length === 0) return null;
 
-                return (
-                  <Button
-                    variant="default"
-                    size="sm"
-                    className="h-9 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 shadow-md animate-in zoom-in-95 duration-200"
-                    onClick={() => {
-                      // Group check could happen here or in the dialog
-                      const firstVendor = selectedReadyForPO[0].selectedVendorId;
-                      const mixedVendors = selectedReadyForPO.some(i => i.selectedVendorId !== firstVendor);
 
-                      if (mixedVendors) {
-                        toast.warning("Selected items have different vendors. Using vendor from first item.");
-                      }
-
-                      // Call the bulk PO creation handler passed from props or defined locally
-                      // Assuming onCreatePO handles array of IDs
-                      if (onCreatePO) {
-                        onCreatePO(selectedReadyForPO.map(i => i._id));
-                      }
-                    }}
-                  >
-                    <ShoppingCart className="h-4 w-4 mr-1.5" />
-                    Create PO ({selectedReadyForPO.length})
-                  </Button>
-                );
-              })()}
 
 
               {/* Create DC for Selected Items */}
@@ -2600,6 +2634,10 @@ export function RequestDetailsDialog({
 
                               const visibleItems = sortedItems;
                               const remainingCount = sortedItems.length - 1;
+                              // For merged CC: use global CC items computed at component level
+                              const ccPendingItems = allCCStatusItems;
+                              const firstCCItemId = firstCCItemIdGlobal;
+                              const allCCIds = allCCIdsGlobal;
 
                               return (
                                 <>
@@ -2621,19 +2659,121 @@ export function RequestDetailsDialog({
                                     );
                                     if (isInSignPendingGroup || isInPendingPOGroup) return null; // Rendered in group row on top
 
+                                    // Determine if this item is part of a merged CC group
+                                    const isMergedCCItem = ccPendingItems.length > 1 && ["cc_pending", "cc_approved", "cc_rejected", "ready_for_po"].includes(item.status as string);
+                                    const isFirstMergedCC = isMergedCCItem && item._id === firstCCItemId;
+                                    const isLastMergedCC = isMergedCCItem && item._id === ccPendingItems[ccPendingItems.length - 1]?._id;
+
                                     return (
                                       <Fragment key={item._id}>
+                                        {isFirstMergedCC && (() => {
+                                          const allReadyForPO = ccPendingItems.every(i => i.status === "ready_for_po");
+                                          const hasPending = ccPendingItems.some(i => i.status === "cc_pending");
+                                          const hasApproved = ccPendingItems.some(i => ["cc_approved", "ready_for_po"].includes(i.status as string));
+
+                                          if (allReadyForPO) {
+                                            // All items are ready for PO — show emerald "Ready for PO" bar
+                                            return (
+                                              <TableRow className="h-9 hover:bg-transparent">
+                                                <TableCell colSpan={6} className="py-0 px-3 pb-0">
+                                                  <div className="flex items-center gap-2 px-3 py-1.5 rounded-t-lg bg-emerald-500/10 border border-b-0 border-emerald-400/30">
+                                                    <div className="flex items-center gap-1.5">
+                                                      <div className="w-2 h-2 rounded-full bg-emerald-500" />
+                                                      <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">
+                                                        Ready for PO · {ccPendingItems.length} items
+                                                      </span>
+                                                    </div>
+                                                    <div className="flex-1 h-px bg-emerald-400/20" />
+                                                    <div className="flex items-center gap-1.5">
+                                                      {/* View CC button — always available for ready_for_po items */}
+                                                      {onOpenCC && (
+                                                        <Button
+                                                          size="sm"
+                                                          variant="outline"
+                                                          className="h-6 px-3 text-[10px] font-bold border-emerald-300 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-700 dark:text-emerald-400 dark:hover:bg-emerald-950/30"
+                                                          onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            onOpenCC(firstCCItemId as any, allCCIds.length > 1 ? allCCIds as any : undefined);
+                                                          }}
+                                                        >
+                                                          <Layers className="h-3 w-3 mr-1" />
+                                                          View CC ({ccPendingItems.length} items)
+                                                        </Button>
+                                                      )}
+                                                    </div>
+                                                  </div>
+                                                </TableCell>
+                                              </TableRow>
+                                            );
+                                          }
+
+                                          // Default: purple CC bar
+                                          return (
+                                            <TableRow className="h-9 hover:bg-transparent">
+                                              <TableCell colSpan={6} className="py-0 px-3 pb-0">
+                                                <div className="flex items-center gap-2 px-3 py-1.5 rounded-t-lg bg-purple-500/10 border border-b-0 border-purple-400/30">
+                                                  <div className="flex items-center gap-1.5">
+                                                    <div className="w-2 h-2 rounded-full bg-purple-500 animate-pulse" />
+                                                    <span className="text-[10px] font-bold text-purple-600 dark:text-purple-400 uppercase tracking-wider">
+                                                      Merged CC · {ccPendingItems.length} items
+                                                    </span>
+                                                  </div>
+                                                  <div className="flex-1 h-px bg-purple-400/20" />
+                                                  {/* Single CC button in the header */}
+                                                  {(() => {
+                                                    if (!hasPending && !hasApproved) return null;
+                                                    return (
+                                                      <Button
+                                                        size="sm"
+                                                        variant={hasPending ? "default" : "outline"}
+                                                        className={hasPending
+                                                          ? "h-6 px-3 text-[10px] font-bold bg-purple-600 hover:bg-purple-700 text-white shadow-sm"
+                                                          : "h-6 px-3 text-[10px] font-bold border-purple-300 text-purple-700 hover:bg-purple-50 dark:border-purple-700 dark:text-purple-400"
+                                                        }
+                                                        onClick={(e) => {
+                                                          e.stopPropagation();
+                                                          if (onOpenCC) {
+                                                            onOpenCC(firstCCItemId as any, allCCIds.length > 1 ? allCCIds as any : undefined);
+                                                          }
+                                                        }}
+                                                      >
+                                                        {hasPending
+                                                          ? <><CheckCircle className="h-3 w-3 mr-1" /> Review CC ({ccPendingItems.length} items)</>
+                                                          : <><Layers className="h-3 w-3 mr-1" /> View CC ({ccPendingItems.length} items)</>
+                                                        }
+                                                      </Button>
+                                                    );
+                                                  })()}
+                                                </div>
+                                              </TableCell>
+                                            </TableRow>
+                                          );
+                                        })()}
                                         <TableRow
                                           className={cn(
                                             "cursor-pointer transition-all relative h-[80px]",
-                                            getStatusBgTint(item.status),
-                                            "hover:brightness-[0.98] dark:hover:brightness-110",
-                                            getStatusBorderClass(item.status),
-                                            // Left Border Only - Color Inherited
-                                            "[&>td:first-child]:border-l-[6px] [&>td:first-child]:border-l-[color:inherit]",
-                                            // Top/Bottom/Right - Neutral/Transparent
-                                            "[&>td]:border-y [&>td]:border-r-0 [&>td]:border-border/30",
-                                            "[&>td:last-child]:border-r",
+                                            isMergedCCItem && ccPendingItems.every(i => i.status === "ready_for_po")
+                                              ? "bg-emerald-500/5 dark:bg-emerald-900/10 hover:bg-emerald-500/10"
+                                              : isMergedCCItem
+                                              ? "bg-purple-500/5 dark:bg-purple-900/10 hover:bg-purple-500/10"
+                                              : getStatusBgTint(item.status),
+                                            !isMergedCCItem && "hover:brightness-[0.98] dark:hover:brightness-110",
+                                            isMergedCCItem && ccPendingItems.every(i => i.status === "ready_for_po")
+                                              ? "[&>td:first-child]:border-l-[4px] [&>td:first-child]:border-l-emerald-500"
+                                              : isMergedCCItem
+                                              ? "[&>td:first-child]:border-l-[4px] [&>td:first-child]:border-l-purple-500"
+                                              : getStatusBorderClass(item.status),
+                                            !isMergedCCItem && "[&>td:first-child]:border-l-[6px] [&>td:first-child]:border-l-[color:inherit]",
+                                            // Top/Bottom/Right borders
+                                            isMergedCCItem && ccPendingItems.every(i => i.status === "ready_for_po")
+                                              ? "[&>td]:border-x-0 [&>td]:border-border/20 [&>td:first-child]:border-l-[4px] [&>td:first-child]:border-l-emerald-500"
+                                              : isMergedCCItem
+                                              ? "[&>td]:border-x-0 [&>td]:border-border/20 [&>td:first-child]:border-l-[4px] [&>td:first-child]:border-l-purple-500"
+                                              : "[&>td]:border-y [&>td]:border-r-0 [&>td]:border-border/30",
+                                            !isMergedCCItem && "[&>td:last-child]:border-r",
+                                            isMergedCCItem && isLastMergedCC && ccPendingItems.every(i => i.status === "ready_for_po") && "[&>td]:border-b [&>td]:border-emerald-400/30",
+                                            isMergedCCItem && isLastMergedCC && !ccPendingItems.every(i => i.status === "ready_for_po") && "[&>td]:border-b [&>td]:border-purple-400/30",
+                                            isMergedCCItem && !isLastMergedCC && "[&>td]:border-b-0",
                                             "rounded-lg border-separate",
                                             "hover:shadow-md shadow-sm",
                                             isSelected && "ring-4 ring-primary/20 bg-primary/5"
@@ -2643,25 +2783,31 @@ export function RequestDetailsDialog({
                                           {/* Selection Checkbox */}
                                           <TableCell className="p-2 text-center w-[45px] relative rounded-l-lg overflow-hidden">
                                             <div className="flex items-center justify-center h-full w-full">
-                                              {((isManager && item.status === "pending") || (isPurchaseOfficer && ["pending_po", "direct_po", "ready_for_po", "ready_for_delivery", "sign_rejected"].includes(item.status))) && (
+                                              {((isManager && item.status === "pending") || (isPurchaseOfficer && ["pending_po", "direct_po", "ready_for_po", "ready_for_delivery", "sign_rejected", "ready_for_cc"].includes(item.status))) && (
                                                 <Checkbox
-                                                  checked={item.status === "ready_for_delivery" ? selectedDCItems.has(item._id) : selectedItemsForAction.has(item._id)}
+                                                  checked={
+                                                    item.status === "ready_for_delivery" ? selectedDCItems.has(item._id) :
+                                                    item.status === "ready_for_cc" ? selectedCCItems.has(item._id) :
+                                                    selectedItemsForAction.has(item._id)
+                                                  }
                                                   onCheckedChange={() => {
                                                     if (item.status === "ready_for_delivery") {
                                                       const newSet = new Set(selectedDCItems);
-                                                      if (newSet.has(item._id)) {
-                                                        newSet.delete(item._id);
-                                                      } else {
-                                                        newSet.add(item._id);
-                                                      }
+                                                      if (newSet.has(item._id)) { newSet.delete(item._id); } else { newSet.add(item._id); }
                                                       setSelectedDCItems(newSet);
+                                                    } else if (item.status === "ready_for_cc") {
+                                                      const newSet = new Set(selectedCCItems);
+                                                      if (newSet.has(item._id)) { newSet.delete(item._id); } else { newSet.add(item._id); }
+                                                      setSelectedCCItems(newSet);
                                                     } else {
                                                       toggleItemSelection(item._id);
                                                     }
                                                   }}
                                                   className={cn(
                                                     "h-4 w-4 relative z-10",
-                                                    item.status === "ready_for_delivery" && "border-green-500 data-[state=checked]:bg-green-600 data-[state=checked]:border-green-600"
+                                                    item.status === "ready_for_delivery" && "border-green-500 data-[state=checked]:bg-green-600 data-[state=checked]:border-green-600",
+                                                    item.status === "ready_for_cc" && "border-violet-500 data-[state=checked]:bg-violet-600 data-[state=checked]:border-violet-600",
+                                                    item.status === "ready_for_po" && "border-emerald-500 data-[state=checked]:bg-emerald-600 data-[state=checked]:border-emerald-600"
                                                   )}
                                                 />
                                               )}
@@ -2786,7 +2932,24 @@ export function RequestDetailsDialog({
                                                   )
                                                 ) : (
                                                   <div className="flex items-center gap-3">
-                                                    <RenderActionSegments item={item} />
+                                                    {/* For merged CC where all items are ready_for_po: show Create PO button per item */}
+                                                    {isMergedCCItem && ccPendingItems.every(i => i.status === "ready_for_po") ? (
+                                                      onCreatePO ? (
+                                                        <Button
+                                                          size="sm"
+                                                          className="h-9 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold shadow-sm"
+                                                          onClick={(e) => { e.stopPropagation(); onCreatePO([item._id]); }}
+                                                        >
+                                                          <ShoppingCart className="h-4 w-4 mr-1.5" /> Create PO
+                                                        </Button>
+                                                      ) : null
+                                                    ) : isMergedCCItem ? null : (
+                                                      <RenderActionSegments
+                                                        item={item}
+                                                        mergedCCIds={allCCIds as any}
+                                                        showMergedCCButton={true}
+                                                      />
+                                                    )}
                                                   </div>
                                                 )}
                                               </div>
@@ -2795,6 +2958,19 @@ export function RequestDetailsDialog({
                                             <TableCell className="hidden"></TableCell>
                                           )}
                                         </TableRow>
+                                        {/* Merged CC group footer — shown after last CC item */}
+                                        {isLastMergedCC && (
+                                          <TableRow className="h-2 hover:bg-transparent">
+                                            <TableCell colSpan={6} className="py-0 px-3 pt-0">
+                                              <div className={cn(
+                                                "h-1 rounded-b-lg border border-t-0",
+                                                ccPendingItems.every(i => i.status === "ready_for_po")
+                                                  ? "bg-emerald-500/10 border-emerald-400/30"
+                                                  : "bg-purple-500/10 border-purple-400/30"
+                                              )} />
+                                            </TableCell>
+                                          </TableRow>
+                                        )}
                                         {
                                           showItemRejectionInput === item._id && (
                                             <TableRow className="bg-muted/10 hover:bg-muted/10">
@@ -3098,7 +3274,12 @@ export function RequestDetailsDialog({
                                       <Checkbox
                                         checked={isSelected}
                                         onCheckedChange={() => toggleItemSelection(item._id)}
-                                        className="h-5 w-5 bg-background shadow-sm border-2 data-[state=checked]:border-primary"
+                                        className={cn(
+                                          "h-5 w-5 bg-background shadow-sm border-2",
+                                          item.status === "ready_for_po"
+                                            ? "border-emerald-500 data-[state=checked]:bg-emerald-600 data-[state=checked]:border-emerald-600"
+                                            : "data-[state=checked]:border-primary"
+                                        )}
                                       />
                                     </div>
                                   )}
@@ -3228,14 +3409,18 @@ export function RequestDetailsDialog({
                                                   <span className="text-xs font-medium text-blue-600 dark:text-blue-400">
                                                     Vendors Quoted: {item.vendorQuotes.length} vendors
                                                   </span>
-                                                  {/* We don't have vendor names readily available in the request object without a join, 
-                                                    so we will show the count. If names are critical, we'd need to fetch them. 
-                                                    For now, sticking to the count as per immediate data availability or adding a placeholder if requested style matches. */}
                                                 </div>
                                               </div>
                                             )}
 
-                                            <RenderActionSegments item={item} isCard />
+                                            <RenderActionSegments
+                                              item={item}
+                                              isCard
+                                              mergedCCIds={allCCIdsGlobal as any}
+                                              showMergedCCButton={
+                                                allCCStatusItems.length <= 1 || item._id === firstCCItemIdGlobal
+                                              }
+                                            />
                                           </div>
                                         ) : (
                                           <RenderActionSegments item={item} isCard />

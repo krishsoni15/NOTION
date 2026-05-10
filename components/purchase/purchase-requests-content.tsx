@@ -81,6 +81,7 @@ export function PurchaseRequestsContent() {
 
   const [selectedRequestId, setSelectedRequestId] = useState<Id<"requests"> | null>(null);
   const [ccRequestId, setCCRequestId] = useState<Id<"requests"> | null>(null);
+  const [ccRequestIds, setCCRequestIds] = useState<Id<"requests">[]>([]);
   const [checkRequestId, setCheckRequestId] = useState<Id<"requests"> | null>(null);
   const [filterStatus, setFilterStatus] = useState<string[]>([]);
   const { viewMode, toggleViewMode } = useViewMode();
@@ -210,6 +211,11 @@ export function PurchaseRequestsContent() {
   const directToPO = useMutation(api.requests.directToPO);
   const updatePurchaseStatus = useMutation(api.requests.updatePurchaseRequestStatus);
   const [showConfirmDelivery, setShowConfirmDelivery] = useState<Id<"requests"> | null>(null);
+  // Mixed vendor alert state
+  const [mixedVendorAlert, setMixedVendorAlert] = useState<{
+    groups: { vendorName: string; vendorId: string; items: string[] }[];
+    requestIds: Id<"requests">[][];
+  } | null>(null);
 
   const handleDirectPO = async (requestId: Id<"requests">) => {
     try {
@@ -469,7 +475,30 @@ export function PurchaseRequestsContent() {
     }
 
     if (mixedVendors) {
-      toast.warning("Selected items have different assigned vendors. Using vendor from first item.");
+      // Group items by vendor and show alert
+      const vendorGroups = new Map<string, typeof requests>();
+      requests.forEach(req => {
+        const vid = (req.selectedVendorId as string) || "unknown";
+        if (!vendorGroups.has(vid)) vendorGroups.set(vid, []);
+        vendorGroups.get(vid)!.push(req);
+      });
+
+      if (vendorGroups.size > 1) {
+        const groups = Array.from(vendorGroups.entries()).map(([vid, reqs]) => {
+          const vendor = vendors?.find(v => v._id === vid);
+          return {
+            vendorName: vendor?.companyName || "Unknown Vendor",
+            vendorId: vid,
+            items: reqs.map(r => r.itemName),
+          };
+        });
+        setMixedVendorAlert({
+          groups,
+          requestIds: Array.from(vendorGroups.values()).map(reqs => reqs.map(r => r._id)),
+        });
+        toast.dismiss(toastId);
+        return;
+      }
     }
 
     // Map items
@@ -763,10 +792,9 @@ export function PurchaseRequestsContent() {
               {/* Direct Action Buttons - Pushed to the right side */}
               <div className="flex items-center gap-2 flex-wrap ml-auto">
                 <Button
-                  variant="outline"
                   size="sm"
                   onClick={() => setShowDirectCCDialog(true)}
-                  className="h-9 sm:h-10 gap-1.5 border-violet-500/40 text-violet-600 hover:bg-violet-500/10 hover:border-violet-500 dark:text-violet-400"
+                  className="h-9 sm:h-10 gap-1.5 bg-violet-600 hover:bg-violet-700 text-white shadow-sm hover:shadow-md transition-all duration-200 font-semibold"
                 >
                   <FileText className="h-4 w-4" />
                   RFQ
@@ -775,17 +803,16 @@ export function PurchaseRequestsContent() {
                 <Button
                   onClick={handleOpenDirectPO}
                   size="sm"
-                  className="h-9 sm:h-10 gap-1.5 bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white shadow-sm hover:shadow-md transition-all duration-200"
+                  className="h-9 sm:h-10 gap-1.5 bg-orange-500 hover:bg-orange-600 text-white shadow-sm hover:shadow-md transition-all duration-200 font-semibold"
                 >
                   <Zap className="h-4 w-4" />
                   Direct PO
                 </Button>
 
                 <Button
-                  variant="outline"
                   size="sm"
                   onClick={() => setShowDirectDCDialog(true)}
-                  className="h-9 sm:h-10 gap-1.5 border-emerald-500/40 text-emerald-600 hover:bg-emerald-500/10 hover:border-emerald-500 dark:text-emerald-400"
+                  className="h-9 sm:h-10 gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm hover:shadow-md transition-all duration-200 font-semibold"
                 >
                   <Truck className="h-4 w-4" />
                   Direct DC
@@ -833,11 +860,15 @@ export function PurchaseRequestsContent() {
               requests={paginatedRequests as any}
               viewMode="table"
               onViewDetails={setSelectedRequestId}
-              onOpenCC={(requestId, requestIds) => setCCRequestId(requestId)}
+              onOpenCC={(requestId, allIds) => {
+                setCCRequestId(requestId);
+                setCCRequestIds(allIds ?? [requestId]);
+              }}
               onDirectPO={handleDirectPO}
               onDirectDelivery={handleDirectDelivery}
               onCheck={handleCheck}
               onCreatePO={handleCreatePO}
+              onCreateBulkPO={handleCreateBulkPO}
               onMoveToCC={handleMoveToCC}
               onConfirmDelivery={setShowConfirmDelivery}
               onViewPDF={(poNumber, requestId) => { setPdfPreviewPoNumber(poNumber); setPdfPreviewRequestId(requestId); }}
@@ -870,7 +901,10 @@ export function PurchaseRequestsContent() {
                     hasMultipleItems={hasMultipleItems}
                     urgentCount={urgentCount}
                     onViewDetails={setSelectedRequestId}
-                    onOpenCC={setCCRequestId}
+                    onOpenCC={(requestId, allIds) => {
+                      setCCRequestId(requestId);
+                      setCCRequestIds(allIds ?? [requestId]);
+                    }}
                     onSiteClick={setSelectedSiteId}
                     onItemClick={setSelectedItemName}
                     canEditVendor={true}
@@ -910,14 +944,18 @@ export function PurchaseRequestsContent() {
         requestId={selectedRequestId}
         onCheck={handleCheck}
         onCreatePO={handleCreateBulkPO}
-        onOpenCC={setCCRequestId}
+        onOpenCC={(requestId, allIds) => {
+          setCCRequestId(requestId);
+          setCCRequestIds(allIds ?? [requestId]);
+        }}
       />
 
       {ccRequestId && (
         <CostComparisonDialog
           open={!!ccRequestId}
-          onOpenChange={(open) => { if (!open) setCCRequestId(null); }}
+          onOpenChange={(open) => { if (!open) { setCCRequestId(null); setCCRequestIds([]); } }}
           requestId={ccRequestId}
+          requestIds={ccRequestIds.length > 1 ? ccRequestIds : undefined}
         />
       )}
 

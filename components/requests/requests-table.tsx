@@ -10,6 +10,7 @@ import { useState, Fragment, useMemo } from "react";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { format } from "date-fns";
+import { toast } from "sonner";
 import {
   Table,
   TableBody,
@@ -212,6 +213,7 @@ interface Request {
   notesCount?: number;
   poNumber?: string;
   deliveryId?: Id<"deliveries">;
+  selectedVendorId?: Id<"vendors"> | string | null;
 }
 
 interface RequestsTableProps {
@@ -236,6 +238,7 @@ interface RequestsTableProps {
   minimalDashboardView?: boolean; // Hide detailed info (Required By, Location, Items) for dashboard
   onCheck?: (requestId: Id<"requests">) => void; // Check request history
   onCreatePO?: (requestId: Id<"requests">) => void; // Create PO
+  onCreateBulkPO?: (requestIds: Id<"requests">[]) => void; // Create PO for multiple items
   onMoveToCC?: (requestId: Id<"requests">) => void; // Move to CC
   onViewPDF?: (poNumber: string, requestId: Id<"requests">) => void; // View PDF with optional request filter
 }
@@ -262,6 +265,7 @@ export function RequestsTable({
   minimalDashboardView = false,
   onCheck,
   onCreatePO,
+  onCreateBulkPO,
   onMoveToCC,
   onViewPDF,
 }: RequestsTableProps) {
@@ -281,6 +285,41 @@ export function RequestsTable({
   const [showReadyForPOConfirm, setShowReadyForPOConfirm] = useState<Id<"requests"> | null>(null);
   const [showReadyForDeliveryConfirm, setShowReadyForDeliveryConfirm] = useState<Id<"requests"> | null>(null);
   const [editQuantityItem, setEditQuantityItem] = useState<{ id: Id<"requests">; quantity: number; name: string; unit: string } | null>(null);
+
+  // CC multi-select state
+  const [selectedCCItems, setSelectedCCItems] = useState<Set<Id<"requests">>>(new Set());
+  const toggleCCItem = (id: Id<"requests">) => {
+    setSelectedCCItems(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  // PO multi-select state (for selecting which items to create PO for in merged groups)
+  const [selectedPOItems, setSelectedPOItems] = useState<string[]>([]);
+  const togglePOItem = (id: Id<"requests">) => {
+    const idStr = id as string;
+    setSelectedPOItems(prev => {
+      if (prev.includes(idStr)) {
+        return prev.filter(x => x !== idStr);
+      } else {
+        const itemToSelect = requests?.find(r => r._id === id);
+        if (itemToSelect) {
+          const selectedItems = prev.map(pId => requests?.find(r => r._id === pId)).filter(Boolean);
+          if (selectedItems.length > 0) {
+            const firstVendor = selectedItems[0]?.selectedVendorId;
+            if (itemToSelect.selectedVendorId !== firstVendor) {
+              toast.error("Cannot select items with different vendors for PO creation.");
+              return prev;
+            }
+          }
+        }
+        return [...prev, idStr];
+      }
+    });
+  };
+  const isPOItemSelected = (id: Id<"requests">) => selectedPOItems.includes(id as string);
 
   const [showCreateDCDialog, setShowCreateDCDialog] = useState(false);
   const [dcDialogItems, setDcDialogItems] = useState<{ requestId: Id<"requests">; itemName: string; quantity: number; unit: string; poNumber?: string }[]>([]);
@@ -816,6 +855,17 @@ export function RequestsTable({
 
             return (
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 w-full group/item">
+                {/* CC Checkbox for ready_for_cc items */}
+                {item.status === "ready_for_cc" && userRole !== "manager" && (
+                  <div className="shrink-0 self-start sm:self-center" onClick={(e) => e.stopPropagation()}>
+                    <input
+                      type="checkbox"
+                      checked={selectedCCItems.has(item._id)}
+                      onChange={() => toggleCCItem(item._id)}
+                      className="h-4 w-4 rounded border-violet-400 accent-violet-600 cursor-pointer"
+                    />
+                  </div>
+                )}
                 <div className="flex items-center gap-4 flex-1 min-w-0">
                   {/* Item Image - Only if exists */}
                   {hasPhotos && (
@@ -1170,26 +1220,67 @@ export function RequestsTable({
                     </Button>
                   )}
 
-                  {/* CC Review Button - Batch Action */}
-                  {onOpenCC && items.some(i => i.status === "cc_pending") && (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        // Open CC for this specific item, but pass context of all pending
-                        const pendingItems = items.filter(i => i.status === "cc_pending");
-                        if (pendingItems.length > 0) {
-                          onOpenCC(pendingItems[0]._id, pendingItems.map(i => i._id));
+                  {/* CC Batch Button - single entry point for merged CC groups */}
+                  {onOpenCC && (() => {
+                    const ccItems = items.filter(i => ["cc_pending", "cc_approved", "cc_rejected", "ready_for_po"].includes(i.status as string));
+                    if (ccItems.length <= 1) return null; // Single item: handled per-item
+                    const hasPending = ccItems.some(i => i.status === "cc_pending");
+                    return (
+                      <Button
+                        variant={hasPending ? "default" : "outline"}
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onOpenCC(ccItems[0]._id, ccItems.map(i => i._id));
+                        }}
+                        className={hasPending
+                          ? "h-8 px-2.5 text-[10px] font-bold bg-purple-600 hover:bg-purple-700 text-white ml-1 shadow-sm"
+                          : "h-8 px-2.5 text-[10px] font-bold border-purple-200 text-purple-700 hover:bg-purple-50 dark:border-purple-800 dark:text-purple-400 dark:hover:bg-purple-950 ml-1 shadow-sm"
                         }
-                      }}
-                      className="h-8 px-2.5 text-[10px] font-bold border-purple-200 text-purple-700 hover:bg-purple-50 dark:border-purple-800 dark:text-purple-400 dark:hover:bg-purple-950 ml-1 shadow-sm"
-                      title="Review Cost Comparison"
-                    >
-                      <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
-                      Review CC {items.filter(i => i.status === "cc_pending").length > 1 ? `(${items.filter(i => i.status === "cc_pending").length})` : ''}
-                    </Button>
-                  )}
+                        title={hasPending ? "Review Cost Comparison" : "View Cost Comparison"}
+                      >
+                        {hasPending ? <CheckCircle2 className="h-3.5 w-3.5 mr-1" /> : <Layers className="h-3.5 w-3.5 mr-1" />}
+                        {hasPending ? `Review CC (${ccItems.length})` : `View CC (${ccItems.length})`}
+                      </Button>
+                    );
+                  })()}
+
+                  {/* PO Batch Button - only show when items are selected */}
+                  {(onCreatePO || onCreateBulkPO) && (() => {
+                    const poItems = items.filter(i => i.status === "ready_for_po");
+                    if (poItems.length === 0) return null;
+                    const groupSelectedPO = poItems.filter(i => isPOItemSelected(i._id));
+                    // Only show this button when at least 1 item is selected
+                    if (groupSelectedPO.length === 0) return null;
+
+                    // Do not show bulk Create PO button if selected items have different vendors
+                    if (groupSelectedPO.length > 1) {
+                      const firstVendor = groupSelectedPO[0].selectedVendorId;
+                      const hasDifferentVendors = groupSelectedPO.some(i => i.selectedVendorId !== firstVendor);
+                      if (hasDifferentVendors) return null;
+                    }
+
+                    return (
+                      <Button
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const ids = groupSelectedPO.map(i => i._id);
+                          if (onCreateBulkPO && ids.length > 1) {
+                            onCreateBulkPO(ids);
+                          } else {
+                            ids.forEach(id => onCreatePO!(id));
+                          }
+                          setSelectedPOItems(prev => prev.filter(id => !ids.map(x => x as string).includes(id)));
+                        }}
+                        className="h-8 px-2.5 text-[10px] font-bold bg-emerald-600 hover:bg-emerald-700 text-white ml-1 shadow-sm animate-in fade-in duration-150"
+                        title={`Create PO for ${groupSelectedPO.length} selected item(s)`}
+                      >
+                        <ShoppingCart className="h-3.5 w-3.5 mr-1" />
+                        Create PO ({groupSelectedPO.length})
+                      </Button>
+                    );
+                  })()}
 
                   {/* PO View Button */}
                   {onViewPDF && firstItem.poNumber && ["sign_pending", "sign_rejected", "pending_po", "ready_for_delivery"].includes(firstItem.status as string) && (
@@ -1239,6 +1330,7 @@ export function RequestsTable({
       {viewMode === "card" ? (
         <CardView />
       ) : (
+        <>
         <div className="rounded-xl border bg-card shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
             <Table>
@@ -1558,18 +1650,69 @@ export function RequestsTable({
                                     Check/Split
                                   </Button>
                                 )}
-                                {!isExpanded && firstItem.status === "ready_for_cc" && userRole !== "manager" && (
-                                  <Button
-                                    size="sm"
-                                    className="h-7 px-3 text-xs font-semibold bg-purple-600 hover:bg-purple-700 text-white shadow-sm mr-1"
-                                    onClick={(e) => { e.stopPropagation(); (onOpenCC || onCheck)?.(firstItem._id); }}
-                                    title="Create Cost Comparison"
-                                  >
-                                    <FileText className="h-3.5 w-3.5 mr-1.5" />
-                                    Create CC
-                                  </Button>
-                                )}
-                                {!isExpanded && userRole === "manager" && items.some(i => i.status === "cc_pending") && (
+                                {!isExpanded && firstItem.status === "ready_for_cc" && userRole !== "manager" && (() => {
+                                  // Count how many items from THIS group are selected
+                                  const groupSelectedCC = items.filter(i => selectedCCItems.has(i._id));
+                                  if (groupSelectedCC.length > 1) {
+                                    // Show merged CC button
+                                    return (
+                                      <Button
+                                        size="sm"
+                                        className="h-7 px-3 text-xs font-semibold bg-violet-600 hover:bg-violet-700 text-white shadow-sm mr-1 ring-2 ring-violet-400/40"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          const ids = groupSelectedCC.map(i => i._id);
+                                          onOpenCC?.(ids[0], ids);
+                                          setSelectedCCItems(prev => {
+                                            const next = new Set(prev);
+                                            ids.forEach(id => next.delete(id));
+                                            return next;
+                                          });
+                                        }}
+                                      >
+                                        <FileText className="h-3.5 w-3.5 mr-1.5" />
+                                        Create CC ({groupSelectedCC.length})
+                                      </Button>
+                                    );
+                                  }
+                                  return (
+                                    <Button
+                                      size="sm"
+                                      className="h-7 px-3 text-xs font-semibold bg-purple-600 hover:bg-purple-700 text-white shadow-sm mr-1"
+                                      onClick={(e) => { e.stopPropagation(); (onOpenCC || onCheck)?.(firstItem._id); }}
+                                      title="Create Cost Comparison"
+                                    >
+                                      <FileText className="h-3.5 w-3.5 mr-1.5" />
+                                      Create CC
+                                    </Button>
+                                  );
+                                })()}
+
+                                {/* When expanded and multiple CC items selected — show merged button on group header */}
+                                {isExpanded && userRole !== "manager" && (() => {
+                                  const groupSelectedCC = items.filter(i => selectedCCItems.has(i._id) && i.status === "ready_for_cc");
+                                  if (groupSelectedCC.length < 2) return null;
+                                  return (
+                                    <Button
+                                      size="sm"
+                                      className="h-7 px-3 text-xs font-semibold bg-violet-600 hover:bg-violet-700 text-white shadow-sm mr-1 ring-2 ring-violet-400/40"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        const ids = groupSelectedCC.map(i => i._id);
+                                        onOpenCC?.(ids[0], ids);
+                                        setSelectedCCItems(prev => {
+                                          const next = new Set(prev);
+                                          ids.forEach(id => next.delete(id));
+                                          return next;
+                                        });
+                                      }}
+                                    >
+                                      <FileText className="h-3.5 w-3.5 mr-1.5" />
+                                      Create CC ({groupSelectedCC.length})
+                                    </Button>
+                                  );
+                                })()}
+                                {userRole === "manager" && items.some(i => i.status === "cc_pending") && (
                                   <Button
                                     size="sm"
                                     className="h-7 px-3 text-xs font-semibold bg-purple-600 hover:bg-purple-700 text-white shadow-sm mr-1"
@@ -1583,7 +1726,7 @@ export function RequestsTable({
                                     title="Review Cost Comparison"
                                   >
                                     <CheckCircle2 className="h-3.5 w-3.5 mr-1.5" />
-                                    Review CC
+                                    Review CC {items.filter(i => i.status === "cc_pending").length > 1 ? `(${items.filter(i => i.status === "cc_pending").length})` : ''}
                                   </Button>
                                 )}
                                 {!isExpanded && userRole !== "manager" && items.some(i => i.status === "cc_rejected") && (
@@ -1603,23 +1746,64 @@ export function RequestsTable({
                                     Resubmit CC
                                   </Button>
                                 )}
-                                {/* View CC Button - Collapsed Row */}
-                                {!isExpanded && items.some(i => ["cc_pending", "cc_approved", "cc_rejected", "ready_for_po"].includes(i.status as string)) && (
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    className="h-7 px-3 text-xs font-semibold shadow-sm border-purple-200 text-purple-700 hover:bg-purple-50 mr-1 dark:border-purple-800 dark:text-purple-400 dark:hover:bg-purple-900/30"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      const ccItem = items.find(i => ["cc_pending", "cc_approved", "cc_rejected", "ready_for_po"].includes(i.status as string));
-                                      if (ccItem) (onOpenCC || onCheck)?.(ccItem._id);
-                                    }}
-                                    title="View Cost Comparison"
-                                  >
-                                    <Layers className="h-3 w-3 mr-1.5" />
-                                    View CC
-                                  </Button>
-                                )}
+                                {/* View CC Button - Collapsed Row - hide for merged CC (batch button handles it) */}
+                                {!isExpanded && (() => {
+                                  const ccItems = items.filter(i => ["cc_pending", "cc_approved", "cc_rejected", "ready_for_po"].includes(i.status as string));
+                                  if (ccItems.length === 0) return null;
+                                  // Merged CC: batch button already shown, skip this
+                                  if (ccItems.length > 1) return null;
+                                  // Single CC item: show View CC
+                                  return (
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      className="h-7 px-3 text-xs font-semibold shadow-sm border-purple-200 text-purple-700 hover:bg-purple-50 mr-1 dark:border-purple-800 dark:text-purple-400 dark:hover:bg-purple-900/30"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        onOpenCC?.(ccItems[0]._id) ?? onCheck?.(ccItems[0]._id);
+                                      }}
+                                      title="View Cost Comparison"
+                                    >
+                                      <Layers className="h-3 w-3 mr-1.5" />
+                                      View CC
+                                    </Button>
+                                  );
+                                })()}
+                                {/* PO Batch Button - Collapsed Row - only show when items selected */}
+                                {(onCreatePO || onCreateBulkPO) && items.some(i => i.status === "ready_for_po") && (() => {
+                                  const poItems = items.filter(i => i.status === "ready_for_po");
+                                  const groupSelectedPO = poItems.filter(i => isPOItemSelected(i._id));
+                                  // Only show when at least 1 item selected
+                                  if (groupSelectedPO.length === 0) return null;
+
+                                  // Do not show bulk Create PO button if selected items have different vendors
+                                  if (groupSelectedPO.length > 1) {
+                                    const firstVendor = groupSelectedPO[0].selectedVendorId;
+                                    const hasDifferentVendors = groupSelectedPO.some(i => i.selectedVendorId !== firstVendor);
+                                    if (hasDifferentVendors) return null;
+                                  }
+
+                                  return (
+                                    <Button
+                                      size="sm"
+                                      className="h-7 px-3 text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm mr-1 animate-in fade-in duration-150"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        const ids = groupSelectedPO.map(i => i._id);
+                                        if (onCreateBulkPO && ids.length > 1) {
+                                          onCreateBulkPO(ids);
+                                        } else {
+                                          ids.forEach(id => onCreatePO!(id));
+                                        }
+                                        setSelectedPOItems(prev => prev.filter(id => !ids.map(x => x as string).includes(id)));
+                                      }}
+                                      title={`Create PO for ${groupSelectedPO.length} selected`}
+                                    >
+                                      <ShoppingCart className="h-3 w-3 mr-1.5" />
+                                      Create PO ({groupSelectedPO.length})
+                                    </Button>
+                                  );
+                                })()}
                                 {/* View DC Button - Collapsed Row */}
                                 {!isExpanded && ["out_for_delivery", "delivery_processing", "delivery_stage", "delivered", "partially_processed", "ready_for_delivery"].includes(firstItem.status) && (
                                   <ViewDCFallbackButton item={firstItem} setViewDCId={setViewDCId} className="h-7 px-3 text-xs font-semibold bg-sky-600 hover:bg-sky-700 text-white shadow-sm mr-1" />
@@ -1661,20 +1845,23 @@ export function RequestsTable({
                                   </Button>
                                 )}
 
-                                {!isExpanded && onCreatePO && (firstItem.status === "ready_for_po" || (firstItem.status as string) === "sign_rejected") && (
-                                  <Button
-                                    size="sm"
-                                    className={cn(
-                                      "h-7 px-3 text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm mr-1",
-                                      (firstItem.status as string) === "sign_rejected" && "bg-rose-600 hover:bg-rose-700"
-                                    )}
-                                    onClick={(e) => { e.stopPropagation(); onCreatePO(firstItem._id); }}
-                                    title={(firstItem.status as string) === "sign_rejected" ? "Resubmit PO" : "Create PO"}
-                                  >
-                                    <ShoppingCart className="h-3 w-3 mr-1.5" />
-                                    {(firstItem.status as string) === "sign_rejected" ? "Resubmit PO" : "Create PO"}
-                                  </Button>
-                                )}
+                                {!isExpanded && onCreatePO && (firstItem.status === "ready_for_po" || (firstItem.status as string) === "sign_rejected") && (() => {
+                                  const poItems = items.filter(i => i.status === "ready_for_po");
+                                  const isSignRejected = (firstItem.status as string) === "sign_rejected";
+                                  // ready_for_po: batch button in header handles it — skip here
+                                  if (!isSignRejected) return null;
+                                  return (
+                                    <Button
+                                      size="sm"
+                                      className="h-7 px-3 text-xs font-semibold bg-rose-600 hover:bg-rose-700 text-white shadow-sm mr-1"
+                                      onClick={(e) => { e.stopPropagation(); onCreatePO(firstItem._id); }}
+                                      title="Resubmit PO"
+                                    >
+                                      <ShoppingCart className="h-3 w-3 mr-1.5" />
+                                      Resubmit PO
+                                    </Button>
+                                  );
+                                })()}
                                 {onViewPDF && firstItem.poNumber && ["sign_pending", "sign_rejected", "pending_po", "ready_for_delivery"].includes(firstItem.status as string) && (
                                   <Button
                                     variant="outline"
@@ -1721,14 +1908,48 @@ export function RequestsTable({
                                 <div
                                   key={item._id}
                                   className={cn(
-                                    "relative grid grid-cols-[50px_60px_2fr_100px_80px_320px] gap-4 items-center p-3 rounded-lg transition-all w-full mb-2 shadow-sm overflow-visible",
+                                    "relative grid grid-cols-[24px_50px_60px_2fr_100px_80px_320px] gap-4 items-center p-3 rounded-lg transition-all w-full mb-2 shadow-sm overflow-visible",
                                     "bg-white dark:bg-slate-950",
                                     getStatusBgColor(item.status),
-                                    "border border-border/50 hover:shadow-md h-auto min-h-[80px]"
+                                    "border border-border/50 hover:shadow-md h-auto min-h-[80px]",
+                                    selectedCCItems.has(item._id) && "ring-2 ring-violet-500/40",
+                                    isPOItemSelected(item._id) && "ring-2 ring-emerald-500/40 bg-emerald-50/30 dark:bg-emerald-950/20"
                                   )}
                                 >
                                   {/* Status Bar */}
                                   <div className={cn("absolute left-0 top-0 bottom-0 w-[6px] z-10", getStatusBarColor(item.status))} />
+
+                                  {/* CC / PO Checkbox */}
+                                  <div className="flex items-center justify-center pl-2">
+                                    {item.status === "ready_for_cc" && userRole !== "manager" && (
+                                      <input
+                                        type="checkbox"
+                                        checked={selectedCCItems.has(item._id)}
+                                        onChange={() => toggleCCItem(item._id)}
+                                        onClick={(e) => e.stopPropagation()}
+                                        className="h-4 w-4 rounded border-violet-400 accent-violet-600 cursor-pointer"
+                                      />
+                                    )}
+                                    {item.status === "ready_for_po" && items.filter(i => i.status === "ready_for_po").length > 1 && (
+                                      <button
+                                        type="button"
+                                        onClick={(e) => { e.stopPropagation(); togglePOItem(item._id); }}
+                                        className={cn(
+                                          "h-5 w-5 rounded border-2 flex items-center justify-center transition-all cursor-pointer",
+                                          isPOItemSelected(item._id)
+                                            ? "bg-emerald-600 border-emerald-600 text-white"
+                                            : "border-emerald-400 bg-white dark:bg-slate-900 hover:border-emerald-600"
+                                        )}
+                                        title="Select for PO creation"
+                                      >
+                                        {isPOItemSelected(item._id) && (
+                                          <svg className="h-3 w-3" viewBox="0 0 12 12" fill="none">
+                                            <path d="M2 6l3 3 5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                                          </svg>
+                                        )}
+                                      </button>
+                                    )}
+                                  </div>
 
                                   {/* Item Number */}
                                   <div className="text-center pb-1">
@@ -1850,8 +2071,8 @@ export function RequestsTable({
                                                 )}
                                               </div>
 
-                                              {/* Manager Review CC Button */}
-                                              {userRole === "manager" && item.status === "cc_pending" && (
+                                              {/* Manager Review CC Button - only show if NOT a merged CC (merged CC has batch button at top) */}
+                                              {userRole === "manager" && item.status === "cc_pending" && items.filter(i => i.status === "cc_pending").length <= 1 && (
                                                 <Button
                                                   size="sm"
                                                   onClick={() =>
@@ -1880,13 +2101,22 @@ export function RequestsTable({
                                                 </Button>
                                               )}
 
-                                              {/* View CC Button - Available anytime after CC is created */}
+                                              {/* View CC Button - hide per-item when merged CC (use top batch button instead) */}
                                               {["cc_pending", "cc_approved", "cc_rejected", "ready_for_po"].includes(item.status) &&
-                                                (onOpenCC || onCheck) && (
-                                                  <Button size="sm" variant="outline" onClick={(e) => { e.stopPropagation(); (onOpenCC || onCheck)?.(item._id); }} className="h-8 text-xs font-semibold shadow-sm flex-1 sm:flex-none px-4 border-purple-200 text-purple-700 hover:bg-purple-50 dark:border-purple-800 dark:text-purple-400 dark:hover:bg-purple-900/30">
-                                                    <Layers className="h-3.5 w-3.5 mr-2" /> View CC
-                                                  </Button>
-                                                )}
+                                                (onOpenCC || onCheck) && (() => {
+                                                  const ccSiblings = items.filter(i => ["cc_pending", "cc_approved", "cc_rejected", "ready_for_po"].includes(i.status as string));
+                                                  // If merged CC (>1 items), don't show per-item View CC — top button handles it
+                                                  if (ccSiblings.length > 1) return null;
+                                                  return (
+                                                    <Button size="sm" variant="outline" onClick={(e) => {
+                                                      e.stopPropagation();
+                                                      onOpenCC?.(item._id) ?? onCheck?.(item._id);
+                                                    }} className="h-8 text-xs font-semibold shadow-sm flex-1 sm:flex-none px-4 border-purple-200 text-purple-700 hover:bg-purple-50 dark:border-purple-800 dark:text-purple-400 dark:hover:bg-purple-900/30">
+                                                      <Layers className="h-3.5 w-3.5 mr-2" /> View CC
+                                                    </Button>
+                                                  );
+                                                })()
+                                              }
 
                                               {item.status === "ready_for_delivery" && userRole !== "manager" && (
                                                 <Button
@@ -1909,11 +2139,15 @@ export function RequestsTable({
                                                 </Button>
                                               )}
 
-                                              {item.status === "ready_for_po" && onCreatePO && (
-                                                <Button size="sm" onClick={() => onCreatePO(item._id)} className="h-8 text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white flex-1 sm:flex-none px-4 shadow-sm">
-                                                  <ShoppingCart className="h-3.5 w-3.5 mr-2" /> Create PO
-                                                </Button>
-                                              )}
+                                              {item.status === "ready_for_po" && onCreatePO && (() => {
+                                                const poSiblings = items.filter(i => i.status === "ready_for_po");
+                                                // Always show per-item Create PO button
+                                                return (
+                                                  <Button size="sm" onClick={() => onCreatePO(item._id)} className="h-8 text-xs font-semibold bg-emerald-600 hover:bg-emerald-700 text-white flex-1 sm:flex-none px-4 shadow-sm">
+                                                    <ShoppingCart className="h-3.5 w-3.5 mr-2" /> Create PO
+                                                  </Button>
+                                                );
+                                              })()}
 
                                               {/* View DC Button - For Out for Delivery / Delivered items */}
                                               {["out_for_delivery", "delivery_processing", "delivery_stage", "delivered"].includes(item.status) && item.deliveryId && (
@@ -1974,6 +2208,8 @@ export function RequestsTable({
             </Table>
           </div>
         </div>
+
+        </>
       )}
 
 

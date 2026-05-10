@@ -171,9 +171,16 @@ export function DirectActionsTable({
                   </div>
                 ) : (
                   <div className="flex items-center gap-1.5 min-w-0">
-                    <span className={cn("text-sm truncate flex-1", !item.customTitle && "text-muted-foreground italic")}>
-                      {item.customTitle || "No title"}
-                    </span>
+                    <div className="min-w-0 flex-1">
+                      <span className={cn("text-sm truncate block", !item.customTitle && "text-muted-foreground italic")}>
+                        {item.customTitle || "No title"}
+                      </span>
+                      {item.mergedCount && item.mergedCount > 1 && (
+                        <span className="text-[10px] text-purple-600 dark:text-purple-400 font-semibold">
+                          Merged · {item.mergedCount} items{item.mergedItemNames?.length ? `: ${item.mergedItemNames.join(", ")}` : ""}
+                        </span>
+                      )}
+                    </div>
                     <Button
                       size="icon"
                       variant="ghost"

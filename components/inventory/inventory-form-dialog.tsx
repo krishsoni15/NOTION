@@ -1,4 +1,4 @@
-"use client";
+  ;
 
 /**
  * Inventory Form Dialog
@@ -23,10 +23,18 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { UnitInput } from "./unit-input";
 import { CameraDialog } from "./camera-dialog";
 import { VendorSelector } from "./vendor-selector";
-import { Camera, Upload, X, Search, XIcon } from "lucide-react";
+import { CategoryCombobox } from "@/components/ui/category-combobox";
+import { Camera, Upload, X, Plus, Loader2 } from "lucide-react";
 import { ImageSlider } from "@/components/ui/image-slider";
 import { useUserRole } from "@/hooks/use-user-role";
 import { ROLES } from "@/lib/auth/roles";
@@ -41,14 +49,14 @@ interface InventoryFormDialogProps {
   initialData?: {
     itemName: string;
     description?: string;
-    specification?: string;
+    categoryId?: Id<"inventoryCategories">;
     hsnSacCode?: string;
     unit: string;
     centralStock: number;
     vendorId?: Id<"vendors">;
     vendorIds?: Id<"vendors">[];
   } | null;
-  mode?: "create" | "edit" | "add-image"; // add-image for Site Engineer
+  mode?: "create" | "edit" | "add-image";
 }
 
 export function InventoryFormDialog({
@@ -64,7 +72,6 @@ export function InventoryFormDialog({
   const updateItem = useMutation(api.inventory.updateInventoryItem);
   const addImage = useMutation(api.inventory.addImageToInventory);
 
-  // Determine if we're in add-image mode (needed before queries)
   const isAddImageMode = mode === "add-image";
 
   const currentItem = useQuery(
@@ -82,18 +89,15 @@ export function InventoryFormDialog({
   const [formImageSliderOpen, setFormImageSliderOpen] = useState(false);
   const [formImageSliderImages, setFormImageSliderImages] = useState<Array<{ imageUrl: string; imageKey: string }>>([]);
   const [formImageSliderInitialIndex, setFormImageSliderInitialIndex] = useState(0);
-  const [isDragOver, setIsDragOver] = useState(false);
   const uploadInputRef = useRef<HTMLInputElement>(null);
   const formInitializedRef = useRef(false);
 
-  const canEdit = (userRole === ROLES.PURCHASE_OFFICER || userRole === ROLES.MANAGER) && !isAddImageMode; // Purchase Officers and Managers can edit item details
-  // Purchase Officer can add images when creating or editing items
-  // Site Engineer can add images to existing items only
+  // Category inline-create state (now handled by CategoryCombobox)
+  const canEdit = (userRole === ROLES.PURCHASE_OFFICER || userRole === ROLES.MANAGER) && !isAddImageMode;
   const canAddImages =
     (userRole === ROLES.PURCHASE_OFFICER && !isAddImageMode) ||
     (userRole === ROLES.SITE_ENGINEER && itemId) ||
     isAddImageMode;
-  // Allow managing images (add/remove) when user can add images or is editing existing item
   const canManageImages = canAddImages || (canEdit && itemId);
 
   const openFormImageSlider = (images: Array<{ imageUrl: string; imageKey: string }>, initialIndex: number) => {
@@ -105,29 +109,26 @@ export function InventoryFormDialog({
   const [formData, setFormData] = useState({
     itemName: "",
     description: "",
-    specification: "",
+    categoryId: "" as Id<"inventoryCategories"> | "",
     hsnSacCode: "",
     unit: "",
     centralStock: "0",
     vendorIds: [] as Id<"vendors">[],
   });
 
-  // Reset initialized ref when dialog closes or itemId changes
   useEffect(() => {
     if (!open) {
       formInitializedRef.current = false;
     }
   }, [open, itemId]);
 
-  // Load initial data
   useEffect(() => {
-    // Only initialize form data once per session/item when open
     if (open && !formInitializedRef.current) {
       if (initialData) {
         setFormData({
           itemName: initialData.itemName,
           description: initialData.description || "",
-          specification: initialData.specification || "",
+          categoryId: (initialData as any).categoryId || "",
           hsnSacCode: initialData.hsnSacCode || "",
           unit: initialData.unit,
           centralStock: initialData.centralStock.toString(),
@@ -135,56 +136,38 @@ export function InventoryFormDialog({
         });
         formInitializedRef.current = true;
       } else if (currentItem) {
-        // Support both old vendorId and new vendorIds format
         const vendorIds = (currentItem as any).vendorIds ||
           (currentItem.vendorId ? [currentItem.vendorId] : []);
         setFormData({
           itemName: currentItem.itemName,
           description: currentItem.description || "",
-          specification: (currentItem as any).specification || "",
+          categoryId: (currentItem as any).categoryId || "",
           hsnSacCode: (currentItem as any).hsnSacCode || "",
           unit: currentItem.unit ?? "",
           centralStock: (currentItem.centralStock || 0).toString(),
-          vendorIds: vendorIds,
+          vendorIds,
         });
         formInitializedRef.current = true;
       } else if (!itemId && mode === "create") {
-        // Initialize empty for create mode if needed, though state default is empty
         formInitializedRef.current = true;
       }
     }
   }, [initialData, currentItem, open, itemId, mode]);
 
-  // Load images separately - allow updates from server to reflect (e.g. upload completion)
   useEffect(() => {
     if (currentItem && currentItem.images) {
       if (currentItem.images.length > 0) {
         setExistingImages(currentItem.images);
-        // Create preview URLs from existing images
-        const existingPreviews = currentItem.images.map((img: any) => img.imageUrl);
-        setImagePreviews(existingPreviews);
+        setImagePreviews(currentItem.images.map((img: any) => img.imageUrl));
       } else {
         setExistingImages([]);
       }
-    } else if (!currentItem?.images) {
-      // Only clear if we are sure we should? 
-      // If currentItem is loading, it might be undefined.
-      // But usually we want to respect the server state for images.
-      // For new items, this won't run as currentItem is null.
     }
   }, [currentItem, open]);
 
   const handleOpenChange = (newOpen: boolean) => {
     if (!newOpen) {
-      setFormData({
-        itemName: "",
-        description: "",
-        specification: "",
-        hsnSacCode: "",
-        unit: "",
-        centralStock: "0",
-        vendorIds: [],
-      });
+      setFormData({ itemName: "", description: "", categoryId: "", hsnSacCode: "", unit: "", centralStock: "0", vendorIds: [] });
       setSelectedImages([]);
       setImagePreviews([]);
       setExistingImages([]);
@@ -193,65 +176,28 @@ export function InventoryFormDialog({
     onOpenChange(newOpen);
   };
 
-
   const handleCameraCapture = (file: File) => {
-    const newImages = [...selectedImages, file];
-    setSelectedImages(newImages);
-
-    // Create preview
+    setSelectedImages((prev) => [...prev, file]);
     const reader = new FileReader();
     reader.onload = (e) => {
       const result = e.target?.result as string;
-      if (result) {
-        setImagePreviews((prev) => [...prev, result]);
-      }
+      if (result) setImagePreviews((prev) => [...prev, result]);
     };
     reader.readAsDataURL(file);
   };
 
   const handleImageSelect = (files: FileList | null) => {
     if (!files) return;
-
     const newFiles = Array.from(files);
     const validFiles = newFiles.filter((file) => file.type.startsWith("image/"));
-
-    if (validFiles.length === 0) {
-      toast.error("Please select image files only");
-      return;
-    }
-
-    if (validFiles.length !== newFiles.length) {
-      toast.warning(`${newFiles.length - validFiles.length} non-image files were skipped`);
-    }
-
+    if (validFiles.length === 0) { toast.error("Please select image files only"); return; }
+    if (validFiles.length !== newFiles.length) toast.warning(`${newFiles.length - validFiles.length} non-image files were skipped`);
     setSelectedImages((prev) => [...prev, ...validFiles]);
-
-    // Create previews
     validFiles.forEach((file) => {
       const reader = new FileReader();
-      reader.onloadend = () => {
-        setImagePreviews((prev) => [...prev, reader.result as string]);
-      };
+      reader.onloadend = () => setImagePreviews((prev) => [...prev, reader.result as string]);
       reader.readAsDataURL(file);
     });
-  };
-
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragOver(true);
-  };
-
-  const handleDragLeave = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragOver(false);
-  };
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragOver(false);
-
-    const files = e.dataTransfer.files;
-    handleImageSelect(files);
   };
 
   const removeNewImage = (index: number) => {
@@ -261,55 +207,31 @@ export function InventoryFormDialog({
 
   const removeExistingImage = async (imageKey: string, imageUrl: string) => {
     if (!itemId) return;
-
     try {
-      const response = await fetch(`/api/delete/image?key=${encodeURIComponent(imageKey)}`, {
-        method: 'DELETE',
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to delete image');
-      }
-
-      // Update local state
+      const response = await fetch(`/api/delete/image?key=${encodeURIComponent(imageKey)}`, { method: "DELETE" });
+      if (!response.ok) throw new Error("Failed to delete image");
       setExistingImages((prev) => prev.filter((img) => img.imageKey !== imageKey));
       setImagePreviews((prev) => prev.filter((url) => url !== imageUrl));
       toast.success("Image removed successfully");
-    } catch (error) {
-      console.error("Error removing image:", error);
+    } catch {
       toast.error("Failed to remove image");
     }
   };
 
   const uploadImages = async (itemId: string) => {
     const uploadPromises = selectedImages.map(async (file) => {
-      try {
-        const formData = new FormData();
-        formData.append("file", file);
-        formData.append("itemId", itemId);
-
-        const response = await fetch("/api/upload/image", {
-          method: "POST",
-          body: formData,
-        });
-
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({ error: "Upload failed" }));
-          throw new Error(errorData.error || "Failed to upload image");
-        }
-
-        const data = await response.json();
-        if (!data.imageUrl || !data.imageKey) {
-          throw new Error("Invalid response from upload API");
-        }
-
-        return { imageUrl: data.imageUrl, imageKey: data.imageKey };
-      } catch (error) {
-        console.error("Error uploading image:", error);
-        throw error;
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("itemId", itemId);
+      const response = await fetch("/api/upload/image", { method: "POST", body: formData });
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: "Upload failed" }));
+        throw new Error(errorData.error || "Failed to upload image");
       }
+      const data = await response.json();
+      if (!data.imageUrl || !data.imageKey) throw new Error("Invalid response from upload API");
+      return { imageUrl: data.imageUrl, imageKey: data.imageKey };
     });
-
     return Promise.all(uploadPromises);
   };
 
@@ -318,141 +240,80 @@ export function InventoryFormDialog({
     setError("");
     setIsLoading(true);
 
-    // Validate form data for create/edit modes
     if (!isAddImageMode && canEdit) {
-      if (!formData.itemName.trim()) {
-        setError("Item name is required");
-        setIsLoading(false);
-        return;
-      }
-      if (!formData.description.trim()) {
-        setError("Description is required");
-        setIsLoading(false);
-        return;
-      }
+      if (!formData.itemName.trim()) { setError("Item name is required"); setIsLoading(false); return; }
+      if (!formData.description.trim()) { setError("Description is required"); setIsLoading(false); return; }
       const stockValue = parseFloat(formData.centralStock);
-      if (isNaN(stockValue) || stockValue < 0) {
-        setError("Central stock is required and must be 0 or greater");
-        setIsLoading(false);
-        return;
-      }
-      if (!formData.hsnSacCode.trim()) {
-        setError("HSN / SAC Code is required");
-        setIsLoading(false);
-        return;
-      }
-      if (!formData.unit.trim()) {
-        setError("Unit is required");
-        setIsLoading(false);
-        return;
-      }
+      if (isNaN(stockValue) || stockValue < 0) { setError("Central stock must be 0 or greater"); setIsLoading(false); return; }
+      if (!formData.hsnSacCode.trim()) { setError("HSN / SAC Code is required"); setIsLoading(false); return; }
+      if (!formData.unit.trim()) { setError("Unit is required"); setIsLoading(false); return; }
     }
 
     try {
       if (isAddImageMode && itemId) {
-        // ... existing image upload logic ...
-        if (selectedImages.length === 0) {
-          setError("Please select at least one image");
-          setIsLoading(false);
-          return;
-        }
-
+        if (selectedImages.length === 0) { setError("Please select at least one image"); setIsLoading(false); return; }
         setIsUploading(true);
         try {
           const imageData = await uploadImages(itemId);
-
-          // Add each image to the inventory item in Convex
           for (const img of imageData) {
-            await addImage({
-              itemId,
-              imageUrl: img.imageUrl,
-              imageKey: img.imageKey,
-            });
+            await addImage({ itemId, imageUrl: img.imageUrl, imageKey: img.imageKey });
           }
-
           toast.success(`${imageData.length} image(s) added successfully`);
-          console.log('Images uploaded successfully:', imageData);
-
-          // Force a re-render by updating local state
           setSelectedImages([]);
           setImagePreviews([]);
           setExistingImages([]);
-
-          // Close dialog - the parent component will handle refresh via onOpenChange callback
           handleOpenChange(false);
         } catch (uploadError) {
-          console.error("Error uploading images:", uploadError);
           const errorMessage = uploadError instanceof Error ? uploadError.message : "Failed to upload images";
           setError(errorMessage);
           toast.error(errorMessage);
           setIsUploading(false);
         }
       } else if (itemId && canEdit) {
-        // ... existing update item logic ...
         await updateItem({
           itemId,
           itemName: formData.itemName,
           description: formData.description,
-          specification: formData.specification ? formData.specification : undefined,
+          categoryId: formData.categoryId ? formData.categoryId as Id<"inventoryCategories"> : undefined,
           hsnSacCode: formData.hsnSacCode,
           unit: formData.unit || undefined,
           centralStock: parseFloat(formData.centralStock),
           vendorIds: formData.vendorIds.length > 0 ? formData.vendorIds : undefined,
         });
-
-        // Upload images if any (after item is updated)
         if (selectedImages.length > 0) {
           setIsUploading(true);
           try {
             const imageData = await uploadImages(itemId);
-            // Add each image to the inventory item in Convex
             for (const img of imageData) {
-              await addImage({
-                itemId,
-                imageUrl: img.imageUrl,
-                imageKey: img.imageKey,
-              });
+              await addImage({ itemId, imageUrl: img.imageUrl, imageKey: img.imageKey });
             }
-          } catch (uploadError) {
-            console.error("Error uploading images:", uploadError);
+          } catch {
             toast.warning("Item updated but some images failed to upload");
           }
         }
-
         toast.success("Inventory item updated successfully");
         handleOpenChange(false);
       } else if (canEdit) {
-        // ... existing create item logic ...
         const newItemId = await createItem({
           itemName: formData.itemName,
           description: formData.description,
-          specification: formData.specification ? formData.specification : undefined,
+          categoryId: formData.categoryId ? formData.categoryId as Id<"inventoryCategories"> : undefined,
           hsnSacCode: formData.hsnSacCode,
           unit: formData.unit || undefined,
           centralStock: parseFloat(formData.centralStock),
           vendorIds: formData.vendorIds.length > 0 ? formData.vendorIds : undefined,
         });
-
-        // Upload images if any (after item is created)
         if (selectedImages.length > 0) {
           setIsUploading(true);
           try {
             const imageData = await uploadImages(newItemId);
-            // Add each image to the inventory item in Convex
             for (const img of imageData) {
-              await addImage({
-                itemId: newItemId,
-                imageUrl: img.imageUrl,
-                imageKey: img.imageKey,
-              });
+              await addImage({ itemId: newItemId, imageUrl: img.imageUrl, imageKey: img.imageKey });
             }
-          } catch (uploadError) {
-            console.error("Error uploading images:", uploadError);
-            // Item is already created, but images failed - show warning
+          } catch {
             toast.warning("Item created but some images failed to upload");
           }
         }
-
         toast.success("Inventory item created successfully");
         handleOpenChange(false);
       }
@@ -469,21 +330,16 @@ export function InventoryFormDialog({
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
-        <DialogHeader className="relative">
-
+        <DialogHeader>
           <DialogTitle>
-            {isAddImageMode
-              ? "Manage Images - Inventory Item"
-              : itemId
-                ? "Edit Inventory Item"
-                : "Add New Inventory Item"}
+            {isAddImageMode ? "Manage Images" : itemId ? "Edit Inventory Item" : "Add New Inventory Item"}
           </DialogTitle>
-
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-5 py-2">
           {!isAddImageMode && (
             <>
+              {/* Item Name + HSN */}
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="itemName">Item Name *</Label>
@@ -491,9 +347,7 @@ export function InventoryFormDialog({
                     id="itemName"
                     placeholder="Enter item name"
                     value={formData.itemName}
-                    onChange={(e) =>
-                      setFormData({ ...formData, itemName: e.target.value })
-                    }
+                    onChange={(e) => setFormData({ ...formData, itemName: e.target.value })}
                     required
                     disabled={isLoading || !canEdit}
                   />
@@ -504,87 +358,68 @@ export function InventoryFormDialog({
                     id="hsnSacCode"
                     placeholder="Enter HSN/SAC code"
                     value={formData.hsnSacCode}
-                    onChange={(e) =>
-                      setFormData({ ...formData, hsnSacCode: e.target.value })
-                    }
+                    onChange={(e) => setFormData({ ...formData, hsnSacCode: e.target.value })}
                     disabled={isLoading || !canEdit}
                     required
                   />
                 </div>
               </div>
 
+              {/* Category */}
+              <div className="space-y-2">
+                <Label>Category <span className="text-muted-foreground text-xs">(optional)</span></Label>
+                <CategoryCombobox
+                  value={formData.categoryId}
+                  onChange={(v) => setFormData({ ...formData, categoryId: v as Id<"inventoryCategories"> })}
+                  disabled={isLoading || !canEdit}
+                />
+              </div>
+
+              {/* Description */}
               <div className="space-y-2">
                 <Label htmlFor="description">Description *</Label>
-                <div className="relative">
-                  <textarea
-                    id="description"
-                    className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                    placeholder="Enter item description..."
-                    value={formData.description}
-                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                    required
-                    disabled={isLoading || !canEdit}
-                  />
-                </div>
+                <textarea
+                  id="description"
+                  className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                  placeholder="Enter item description..."
+                  value={formData.description}
+                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                  required
+                  disabled={isLoading || !canEdit}
+                />
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="specification">Specification / Model No <span className="text-muted-foreground text-xs">(optional)</span></Label>
-                <div className="relative">
-                  <textarea
-                    id="specification"
-                    className="flex min-h-[60px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                    placeholder="Enter specification or model no..."
-                    value={formData.specification}
-                    onChange={(e) => setFormData({ ...formData, specification: e.target.value })}
-                    disabled={isLoading || !canEdit}
-                  />
-                </div>
-              </div>
-
+              {/* Stock + Unit */}
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="centralStock">
-                    Central Stock *
-                  </Label>
+                  <Label htmlFor="centralStock">Central Stock *</Label>
                   <Input
                     id="centralStock"
                     type="number"
                     min="0"
                     step="any"
-                    placeholder="33"
+                    placeholder="0"
                     value={formData.centralStock}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        centralStock: e.target.value,
-                      })
-                    }
+                    onChange={(e) => setFormData({ ...formData, centralStock: e.target.value })}
                     disabled={isLoading || !canEdit}
                   />
                 </div>
-
                 <div className="space-y-2">
                   <UnitInput
                     id="unit"
                     value={formData.unit}
-                    onChange={(value) =>
-                      setFormData({ ...formData, unit: value })
-                    }
+                    onChange={(value) => setFormData({ ...formData, unit: value })}
                     disabled={isLoading || !canEdit}
                   />
                 </div>
               </div>
 
+              {/* Vendors */}
               <div className="space-y-2">
-                <Label htmlFor="vendors">
-                  Vendors <span className="text-muted-foreground text-xs">(optional)</span>
-                </Label>
+                <Label>Vendors <span className="text-muted-foreground text-xs">(optional)</span></Label>
                 <VendorSelector
                   selectedVendors={formData.vendorIds}
-                  onSelectionChange={(vendorIds) =>
-                    setFormData({ ...formData, vendorIds })
-                  }
+                  onSelectionChange={(vendorIds) => setFormData({ ...formData, vendorIds })}
                   disabled={isLoading || !canEdit}
                 />
               </div>
@@ -594,161 +429,51 @@ export function InventoryFormDialog({
           {/* Image Upload Section */}
           {(canAddImages || (canEdit && itemId)) && (
             <div className="space-y-2">
-              <Label>
-                {isAddImageMode ? "Manage Images" : itemId ? "Manage Images" : "Add Images to Inventory Item"}
+              <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                Item Photo <span className="normal-case font-normal text-muted-foreground">(optional)</span>
               </Label>
-              <p className="text-xs text-muted-foreground">
-                {isAddImageMode
-                  ? "Add new images or remove existing ones for this inventory item"
-                  : itemId
-                    ? "Add new images or remove existing ones for this inventory item"
-                    : "Upload images for this inventory item"
-                }
-              </p>
-              <div
-                className={`border-2 border-dashed rounded-lg p-4 transition-colors ${isDragOver
-                  ? 'border-primary bg-primary/5'
-                  : 'border-muted-foreground/25 hover:border-muted-foreground/50'
-                  }`}
-                onDragOver={handleDragOver}
-                onDragLeave={handleDragLeave}
-                onDrop={handleDrop}
-              >
-                <input
-                  ref={uploadInputRef}
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={(e) => handleImageSelect(e.target.files)}
-                  multiple
-                />
-                <div className="flex gap-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => setCameraOpen(true)}
-                    disabled={isLoading || isUploading}
-                    className="flex-1"
-                  >
-                    <Camera className="h-4 w-4 mr-2" />
-                    Camera
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={() => uploadInputRef.current?.click()}
-                    disabled={isLoading || isUploading}
-                    className="flex-1"
-                  >
-                    <Upload className="h-4 w-4 mr-2" />
-                    Browse Files
-                  </Button>
-                </div>
-                <p className="text-xs text-muted-foreground text-center mt-2">
-                  {isDragOver ? 'Drop images here' : 'Or drag and drop images here'}
-                </p>
+              <input ref={uploadInputRef} type="file" accept="image/*" className="hidden" onChange={(e) => handleImageSelect(e.target.files)} multiple />
+              <div className="flex gap-2">
+                <Button type="button" variant="outline" size="sm" onClick={() => setCameraOpen(true)} disabled={isLoading || isUploading} className="flex-1 h-9 text-xs gap-1.5">
+                  <Camera className="h-3.5 w-3.5" />Camera
+                </Button>
+                <Button type="button" variant="outline" size="sm" onClick={() => uploadInputRef.current?.click()} disabled={isLoading || isUploading} className="flex-1 h-9 text-xs gap-1.5">
+                  <Upload className="h-3.5 w-3.5" />Upload
+                </Button>
               </div>
 
-              {/* Image Previews */}
               {(existingImages.length > 0 || imagePreviews.length > 0) && (
-                <div className="space-y-3 mt-2">
-                  {/* Existing Images */}
-                  {existingImages.length > 0 && (
-                    <div>
-                      <p className="text-sm font-medium text-muted-foreground mb-2">
-                        Existing Images ({existingImages.length})
-                      </p>
-                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2">
-                        {existingImages.map((image, index) => (
-                          <div key={`existing-${image.imageKey}`} className="relative group">
-                            <button
-                              type="button"
-                              onClick={() => openFormImageSlider(existingImages, index)}
-                              className="block w-full"
-                            >
-                              <img
-                                src={image.imageUrl}
-                                alt={`Existing ${index + 1}`}
-                                className="w-full h-16 sm:h-18 object-cover rounded border border-green-300 hover:border-green-500 transition-colors"
-                              />
-                            </button>
-                            <div className="absolute top-1 left-1 bg-green-500 text-white text-xs px-1.5 py-0.5 rounded">
-                              ✓
-                            </div>
-                            {canManageImages && (
-                              <div className="absolute top-1 right-1 flex gap-1">
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    // TODO: Implement replace functionality
-                                    // For now, just remove and let user add new image
-                                    removeExistingImage(image.imageKey, image.imageUrl);
-                                  }}
-                                  className="bg-blue-500 text-white rounded-full p-1 hover:bg-blue-600 transition-colors"
-                                  title="Replace image"
-                                >
-                                  <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                                  </svg>
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    removeExistingImage(image.imageKey, image.imageUrl);
-                                  }}
-                                  className="bg-destructive text-destructive-foreground rounded-full p-1 hover:bg-destructive/90 transition-colors"
-                                  title="Remove image"
-                                >
-                                  <X className="h-3 w-3" />
-                                </button>
-                              </div>
-                            )}
-                          </div>
-                        ))}
-                      </div>
+                <div className="grid grid-cols-4 gap-1.5 mt-2">
+                  {existingImages.map((image, index) => (
+                    <div key={`existing-${image.imageKey}`} className="relative group aspect-square">
+                      <button type="button" onClick={() => openFormImageSlider(existingImages, index)} className="block w-full h-full">
+                        <img src={image.imageUrl} alt={`Existing ${index + 1}`} className="w-full h-full object-cover rounded-md border border-border" />
+                      </button>
+                      {canManageImages && (
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); removeExistingImage(image.imageKey, image.imageUrl); }}
+                          className="absolute top-0.5 right-0.5 bg-destructive text-destructive-foreground rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                        >
+                          <X className="h-2.5 w-2.5" />
+                        </button>
+                      )}
                     </div>
-                  )}
-
-                  {/* New Images to Upload */}
-                  {imagePreviews.length > existingImages.length && (
-                    <div>
-                      <p className="text-sm font-medium text-muted-foreground mb-2">
-                        New Images to Upload ({imagePreviews.length - existingImages.length})
-                      </p>
-                      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2">
-                        {imagePreviews.slice(existingImages.length).map((preview, index) => (
-                          <div key={`new-${index}`} className="relative group">
-                            <button
-                              type="button"
-                              onClick={() => openFormImageSlider(imagePreviews.map((url, i) => ({ imageUrl: url, imageKey: `preview-${i}` })), existingImages.length + index)}
-                              className="block w-full"
-                            >
-                              <img
-                                src={preview}
-                                alt={`New ${index + 1}`}
-                                className="w-full h-16 sm:h-18 object-cover rounded border border-blue-300 hover:border-blue-500 transition-colors"
-                              />
-                            </button>
-                            <div className="absolute top-1 left-1 bg-blue-500 text-white text-xs px-1.5 py-0.5 rounded">
-                              New
-                            </div>
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                removeNewImage(existingImages.length + index);
-                              }}
-                              className="absolute top-1 right-1 bg-destructive text-destructive-foreground rounded-full p-1 hover:bg-destructive/90 transition-colors"
-                            >
-                              <X className="h-3 w-3" />
-                            </button>
-                          </div>
-                        ))}
-                      </div>
+                  ))}
+                  {imagePreviews.slice(existingImages.length).map((preview, index) => (
+                    <div key={`new-${index}`} className="relative group aspect-square">
+                      <button type="button" onClick={() => openFormImageSlider(imagePreviews.map((url, i) => ({ imageUrl: url, imageKey: `preview-${i}` })), existingImages.length + index)} className="block w-full h-full">
+                        <img src={preview} alt={`New ${index + 1}`} className="w-full h-full object-cover rounded-md border border-border" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); removeNewImage(existingImages.length + index); }}
+                        className="absolute top-0.5 right-0.5 bg-destructive text-destructive-foreground rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                      >
+                        <X className="h-2.5 w-2.5" />
+                      </button>
                     </div>
-                  )}
+                  ))}
                 </div>
               )}
             </div>
@@ -762,51 +487,25 @@ export function InventoryFormDialog({
           )}
 
           <DialogFooter className="gap-2 sm:gap-0">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={() => handleOpenChange(false)}
-              disabled={isLoading || isUploading}
-            >
+            <Button type="button" variant="outline" onClick={() => handleOpenChange(false)} disabled={isLoading || isUploading}>
               Cancel
             </Button>
             <Button type="submit" disabled={isLoading || isUploading}>
               {isLoading || isUploading ? (
                 <>
-                  <span className="mr-2">
-                    {isUploading ? "Uploading..." : isAddImageMode ? "Adding..." : itemId ? "Updating..." : "Creating..."}
-                  </span>
+                  <span className="mr-2">{isUploading ? "Uploading..." : isAddImageMode ? "Adding..." : itemId ? "Updating..." : "Creating..."}</span>
                   <span className="h-4 w-4 border-2 border-primary-foreground/30 border-t-primary-foreground rounded-full animate-spin" />
                 </>
               ) : (
-                isAddImageMode
-                  ? "Update Images"
-                  : itemId
-                    ? "Update Item"
-                    : "Create Item"
+                isAddImageMode ? "Update Images" : itemId ? "Update Item" : "Create Item"
               )}
             </Button>
           </DialogFooter>
         </form>
 
-        {/* Camera Dialog */}
-        <CameraDialog
-          open={cameraOpen}
-          onOpenChange={setCameraOpen}
-          onCapture={handleCameraCapture}
-          multiple={true}
-        />
-
-        {/* Form Image Slider */}
-        <ImageSlider
-          images={formImageSliderImages}
-          initialIndex={formImageSliderInitialIndex}
-          open={formImageSliderOpen}
-          onOpenChange={setFormImageSliderOpen}
-          itemName="Form Images"
-        />
+        <CameraDialog open={cameraOpen} onOpenChange={setCameraOpen} onCapture={handleCameraCapture} multiple={true} />
+        <ImageSlider images={formImageSliderImages} initialIndex={formImageSliderInitialIndex} open={formImageSliderOpen} onOpenChange={setFormImageSliderOpen} itemName="Form Images" />
       </DialogContent>
     </Dialog>
   );
 }
-

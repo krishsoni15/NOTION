@@ -32,6 +32,38 @@ async function getCurrentUser(ctx: any) {
 }
 
 // ============================================================================
+// Category Queries & Mutations
+// ============================================================================
+
+export const getInventoryCategories = query({
+  handler: async (ctx) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) return [];
+    return await ctx.db.query("inventoryCategories").order("asc").collect();
+  },
+});
+
+export const createInventoryCategory = mutation({
+  args: { name: v.string() },
+  handler: async (ctx, args) => {
+    const currentUser = await getCurrentUser(ctx);
+    if (currentUser.role !== "purchase_officer" && currentUser.role !== "manager") {
+      throw new ConvexError("Unauthorized");
+    }
+    const existing = await ctx.db
+      .query("inventoryCategories")
+      .withIndex("by_name", (q: any) => q.eq("name", args.name.trim()))
+      .first();
+    if (existing) return existing._id;
+    return await ctx.db.insert("inventoryCategories", {
+      name: args.name.trim(),
+      createdBy: currentUser._id,
+      createdAt: Date.now(),
+    });
+  },
+});
+
+// ============================================================================
 // Queries
 // ============================================================================
 
@@ -59,7 +91,7 @@ export const getAllInventoryItems = query({
       .order("desc")
       .collect();
 
-    // Fetch vendor info for each item (support both old vendorId and new vendorIds)
+    // Fetch vendor info and category for each item
     const itemsWithVendors = await Promise.all(
       items.map(async (item) => {
         const vendorIds = (item as any).vendorIds || (item.vendorId ? [item.vendorId] : []);
@@ -79,12 +111,16 @@ export const getAllInventoryItems = query({
             };
           })
         );
-        // Filter out null vendors and return first vendor for backward compatibility
         const validVendors = vendors.filter((v) => v !== null);
+        // Fetch category name
+        const category = (item as any).categoryId
+          ? await ctx.db.get((item as any).categoryId)
+          : null;
         return {
           ...item,
-          vendor: validVendors.length > 0 ? validVendors[0] : null, // First vendor for backward compatibility
-          vendors: validVendors, // Array of all vendors
+          vendor: validVendors.length > 0 ? validVendors[0] : null,
+          vendors: validVendors,
+          categoryName: (category as any)?.name || null,
         };
       })
     );
@@ -288,7 +324,7 @@ export const createInventoryItem = mutation({
   args: {
     itemName: v.string(),
     description: v.string(),
-    specification: v.optional(v.string()),
+    categoryId: v.optional(v.id("inventoryCategories")),
     hsnSacCode: v.optional(v.string()),
     unit: v.optional(v.string()),
     centralStock: v.optional(v.number()),
@@ -337,11 +373,11 @@ export const createInventoryItem = mutation({
     const itemId = await ctx.db.insert("inventory", {
       itemName: args.itemName,
       description: args.description,
-      specification: args.specification,
+      categoryId: args.categoryId,
       hsnSacCode: args.hsnSacCode || "",
       unit: args.unit || "",
       centralStock: args.centralStock || 0,
-      vendorId: vendorIds.length === 1 ? vendorIds[0] : undefined, // Keep for backward compatibility
+      vendorId: vendorIds.length === 1 ? vendorIds[0] : undefined,
       vendorIds: vendorIds.length > 0 ? vendorIds : undefined,
       images: [],
       isActive: true,
@@ -362,7 +398,7 @@ export const updateInventoryItem = mutation({
     itemId: v.id("inventory"),
     itemName: v.string(),
     description: v.optional(v.string()),
-    specification: v.optional(v.string()),
+    categoryId: v.optional(v.id("inventoryCategories")),
     hsnSacCode: v.optional(v.string()),
     unit: v.optional(v.string()),
     centralStock: v.optional(v.number()),
@@ -400,11 +436,11 @@ export const updateInventoryItem = mutation({
     await ctx.db.patch(args.itemId, {
       itemName: args.itemName,
       description: args.description ?? item.description ?? "",
-      specification: args.specification ?? item.specification,
+      categoryId: args.categoryId ?? (item as any).categoryId,
       hsnSacCode: args.hsnSacCode ?? item.hsnSacCode ?? "",
       unit: args.unit ?? item.unit ?? "",
       centralStock: args.centralStock ?? item.centralStock ?? 0,
-      vendorId: vendorIds.length === 1 ? vendorIds[0] : undefined, // Keep for backward compatibility
+      vendorId: vendorIds.length === 1 ? vendorIds[0] : undefined,
       vendorIds: vendorIds.length > 0 ? vendorIds : undefined,
       updatedAt: Date.now(),
     });

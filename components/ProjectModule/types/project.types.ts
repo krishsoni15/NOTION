@@ -32,8 +32,9 @@ export type ProjectItem = Doc<"projectItems"> & { categoryName: string };
 export interface ProjectItemFormData {
   name: string;
   description: string;
-  categoryId: Id<"projectCategories"> | "";
-  make: string;
+  categoryId: Id<"inventoryCategories"> | Id<"projectCategories"> | "";
+  unit: string;
+  hsnSacCode: string;
   quantity: number | "";
   rate: number | "";
 }

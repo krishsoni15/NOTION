@@ -50,11 +50,13 @@ interface DirectDeliveryItem {
     quantityInput: string;
     rate: number;
     unit: string;
+    hsnSacCode: string;
+    discountPercent: number;
     total: number;
-    selectedItemFromInventory: { itemName: string; unit: string; centralStock?: number } | null;
+    selectedItemFromInventory: { itemName: string; unit: string; centralStock?: number; hsnSacCode?: string } | null;
     showItemSuggestions: boolean;
     showQuantitySuggestions: boolean;
-    deductFromInventory: boolean; // Auto-deduct from inventory on DC creation
+    deductFromInventory: boolean;
 }
 
 // ── RFQ-style Utility Functions ──────────────────────────────────────────
@@ -120,6 +122,8 @@ export function DirectDeliveryDialog({
             quantityInput: "",
             rate: 0,
             unit: "",
+            hsnSacCode: "",
+            discountPercent: 0,
             total: 0,
             selectedItemFromInventory: null,
             showItemSuggestions: false,
@@ -340,6 +344,8 @@ export function DirectDeliveryDialog({
                     quantityInput: "",
                     rate: 0,
                     unit: "",
+                    hsnSacCode: "",
+                    discountPercent: 0,
                     total: 0,
                     selectedItemFromInventory: null,
                     showItemSuggestions: false,
@@ -382,7 +388,9 @@ export function DirectDeliveryDialog({
                         quantityInput: `${item.quantity || 0} ${item.unit || ""}`.trim(),
                         rate: item.rate || 0,
                         unit: item.unit || "",
-                        total: (item.quantity || 0) * (item.rate || 0),
+                        hsnSacCode: item.hsnSacCode || "",
+                        discountPercent: item.discountPercent || 0,
+                        total: (item.quantity || 0) * (item.rate || 0) * (1 - (item.discountPercent || 0) / 100),
                         selectedItemFromInventory: null,
                         showItemSuggestions: false,
                         showQuantitySuggestions: false,
@@ -400,6 +408,8 @@ export function DirectDeliveryDialog({
                         quantityInput: "",
                         rate: 0,
                         unit: "",
+                        hsnSacCode: "",
+                        discountPercent: 0,
                         total: 0,
                         selectedItemFromInventory: null,
                         showItemSuggestions: false,
@@ -422,9 +432,10 @@ export function DirectDeliveryDialog({
 
                 const updated = { ...item, ...updates };
 
-                // Auto-calculate total if quantity or rate changed
-                if ('quantity' in updates || 'rate' in updates) {
-                    updated.total = updated.quantity * updated.rate;
+                // Auto-calculate total if quantity, rate, or discount changed
+                if ('quantity' in updates || 'rate' in updates || 'discountPercent' in updates) {
+                    const discount = updated.discountPercent || 0;
+                    updated.total = updated.quantity * updated.rate * (1 - discount / 100);
                 }
 
                 return updated;
@@ -433,7 +444,7 @@ export function DirectDeliveryDialog({
     };
 
     // Handle item selection from autocomplete (RFQ-style)
-    const handleItemSelect = (itemId: string, item: { itemName: string; unit?: string; centralStock?: number }) => {
+    const handleItemSelect = (itemId: string, item: { itemName: string; unit?: string; centralStock?: number; hsnSacCode?: string }) => {
         const cleanedUnit = item.unit?.replace(/\d+/g, '').trim() || "";
         updateItem(itemId, {
             itemName: item.itemName,
@@ -442,10 +453,12 @@ export function DirectDeliveryDialog({
                 itemName: item.itemName,
                 unit: cleanedUnit,
                 centralStock: item.centralStock || 0,
+                hsnSacCode: item.hsnSacCode || "",
             },
             showItemSuggestions: false,
             unit: cleanedUnit,
-            deductFromInventory: (item.centralStock || 0) > 0, // Auto-tick if stock available
+            hsnSacCode: item.hsnSacCode || "",
+            deductFromInventory: (item.centralStock || 0) > 0,
         });
         setSelectedItemIndex(prev => ({ ...prev, [itemId]: -1 }));
         itemRefs.current[itemId]?.blur();
@@ -520,9 +533,9 @@ export function DirectDeliveryDialog({
         quantityRefs.current[itemId]?.blur();
     };
 
-    // Calculate total for an item
-    const calculateTotal = (quantity: number, rate: number): number => {
-        return quantity * rate;
+    // Calculate total for an item (with discount)
+    const calculateTotal = (quantity: number, rate: number, discountPercent: number = 0): number => {
+        return quantity * rate * (1 - discountPercent / 100);
     };
 
     // Add new item row
@@ -539,6 +552,8 @@ export function DirectDeliveryDialog({
                 quantityInput: "",
                 rate: 0,
                 unit: "",
+                hsnSacCode: "",
+                discountPercent: 0,
                 total: 0,
                 selectedItemFromInventory: null,
                 showItemSuggestions: false,
@@ -686,6 +701,8 @@ export function DirectDeliveryDialog({
                         quantity: item.quantity,
                         rate: item.rate,
                         unit: item.unit,
+                        hsnSacCode: item.hsnSacCode || undefined,
+                        discountPercent: item.discountPercent || undefined,
                     })),
                     deliveryType: deliveryMode === "porter" ? "public" : deliveryMode === "private" ? "private" : "vendor",
                     deliveryPerson: deliveryMode === "transporter" ? transporterName : deliveryPersonName || undefined,
@@ -709,6 +726,8 @@ export function DirectDeliveryDialog({
                         quantity: item.quantity,
                         unit: item.unit,
                         rate: item.rate || 0,
+                        hsnSacCode: item.hsnSacCode || undefined,
+                        discountPercent: item.discountPercent || undefined,
                     })),
                     deliveryType: deliveryMode === "porter" ? "public" : deliveryMode === "private" ? "private" : "vendor",
                     deliveryPerson: deliveryMode === "transporter" ? transporterName : deliveryPersonName || undefined,
@@ -1134,7 +1153,25 @@ export function DirectDeliveryDialog({
                                                         />
                                                     </div>
 
-                                                    {/* Rate and Total */}
+                                                    {/* HSN Code */}
+                                                    <div className="space-y-2">
+                                                        <Label htmlFor={`hsn-${item.id}`} className="text-sm font-medium">
+                                                            HSN / SAC Code
+                                                        </Label>
+                                                        <Input
+                                                            id={`hsn-${item.id}`}
+                                                            type="text"
+                                                            value={item.hsnSacCode}
+                                                            onChange={(e) => updateItem(item.id, { hsnSacCode: e.target.value })}
+                                                            placeholder="e.g. 7214"
+                                                            className="font-mono"
+                                                        />
+                                                        {item.selectedItemFromInventory?.hsnSacCode && item.hsnSacCode === item.selectedItemFromInventory.hsnSacCode && (
+                                                            <p className="text-xs text-emerald-600 dark:text-emerald-400">✓ Auto-filled from inventory</p>
+                                                        )}
+                                                    </div>
+
+                                                    {/* Rate, Discount and Total */}
                                                     <div className="space-y-2">
                                                         <Label htmlFor={`rate-${item.id}`} className="text-sm font-medium">
                                                             Rate (₹)
@@ -1150,14 +1187,37 @@ export function DirectDeliveryDialog({
                                                                 step="0.01"
                                                                 className="flex-1"
                                                             />
+                                                            <div className="flex items-center gap-1 shrink-0">
+                                                                <Input
+                                                                    type="number"
+                                                                    value={item.discountPercent || ""}
+                                                                    onChange={(e) => updateItem(item.id, { discountPercent: parseFloat(e.target.value) || 0 })}
+                                                                    placeholder="0"
+                                                                    min="0"
+                                                                    max="100"
+                                                                    step="0.1"
+                                                                    className="w-20 text-center"
+                                                                    title="Discount %"
+                                                                />
+                                                                <span className="text-xs text-muted-foreground shrink-0">%</span>
+                                                            </div>
                                                             <div className="flex items-center px-3 py-2 bg-muted rounded-md border min-w-[100px]">
                                                                 <span className="text-sm font-semibold">
                                                                     ₹{item.total.toFixed(2)}
                                                                 </span>
                                                             </div>
                                                         </div>
-                                                        <div className="text-xs text-muted-foreground">
-                                                            Total = {item.quantity} × ₹{item.rate} = ₹{item.total.toFixed(2)}
+                                                        <div className="text-xs text-muted-foreground space-y-0.5">
+                                                            <div>
+                                                                {item.quantity} × ₹{item.rate}
+                                                                {item.discountPercent > 0 && (
+                                                                    <span className="text-orange-600 dark:text-orange-400 ml-1">
+                                                                        − {item.discountPercent}% (₹{(item.quantity * item.rate * item.discountPercent / 100).toFixed(2)})
+                                                                    </span>
+                                                                )}
+                                                                {" = "}
+                                                                <span className="font-semibold text-foreground">₹{item.total.toFixed(2)}</span>
+                                                            </div>
                                                         </div>
                                                     </div>
                                                 </div>
@@ -1168,8 +1228,15 @@ export function DirectDeliveryDialog({
 
                                 {/* Grand Total */}
                                 <div className="flex justify-end p-4 bg-muted/30 rounded-lg border">
-                                    <div className="text-xl font-bold text-primary">
-                                        Grand Total: ₹{grandTotal.toFixed(2)}
+                                    <div className="text-right space-y-1">
+                                        {items.some(i => i.discountPercent > 0) && (
+                                            <div className="text-sm text-orange-600 dark:text-orange-400">
+                                                Discount saved: ₹{items.reduce((sum, item) => sum + (item.quantity * item.rate * (item.discountPercent || 0) / 100), 0).toFixed(2)}
+                                            </div>
+                                        )}
+                                        <div className="text-xl font-bold text-primary">
+                                            Grand Total: ₹{grandTotal.toFixed(2)}
+                                        </div>
                                     </div>
                                 </div>
                             </div>

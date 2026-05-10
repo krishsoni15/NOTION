@@ -61,6 +61,7 @@ import { toast } from "sonner";
 import { normalizeSearchQuery, matchesSearchQuery, matchesAnySearchQuery } from "@/lib/utils";
 import { Separator } from "@/components/ui/separator";
 import { ItemInfoDialog } from "@/components/requests/item-info-dialog";
+import { CategoryCombobox } from "@/components/ui/category-combobox";
 import {
   Popover,
   PopoverContent,
@@ -88,18 +89,19 @@ interface MaterialRequestFormProps {
 
 interface RequestItem {
   id: string;
-  siteId: string; // Per-item site location (resolved from project)
-  projectId: string; // Per-item selected project
+  siteId: string;
+  projectId: string;
   itemName: string;
   itemSearchQuery: string;
   description: string;
   quantityInput: string;
   quantity: number;
   unit: string;
+  hsnSacCode: string;
   notes: string;
   images: File[];
   imagePreviews: string[];
-  selectedItemFromInventory: { itemName: string; unit: string; centralStock?: number } | null;
+  selectedItemFromInventory: { itemName: string; unit: string; centralStock?: number; hsnSacCode?: string; images?: { imageUrl: string; imageKey: string }[] } | null;
   showItemSuggestions: boolean;
   showQuantitySuggestions: boolean;
   isUrgent: boolean;
@@ -116,6 +118,8 @@ export function MaterialRequestForm({
   const saveAsDraft = useMutation(api.requests.saveMultipleMaterialRequestsAsDraft);
   const updateDraft = useMutation(api.requests.updateDraftRequest);
   const sendDraft = useMutation(api.requests.sendDraftRequest);
+  const createCategory = useMutation(api.inventory.createInventoryCategory);
+  const categories = useQuery(api.inventory.getInventoryCategories);
 
   // Get draft data if editing - using getUserRequests and filtering
   const allUserRequests = useQuery(api.requests.getUserRequests);
@@ -159,6 +163,33 @@ export function MaterialRequestForm({
   // State for Item Info Dialog
   const [expandedItemName, setExpandedItemName] = useState<string | null>(null);
 
+  // State for inventory image picker
+  const [invImagePicker, setInvImagePicker] = useState<{ itemId: string; images: { imageUrl: string; imageKey: string }[] } | null>(null);
+
+  // State for new category dialog
+  const [newCatDialogOpen, setNewCatDialogOpen] = useState(false);
+  const [newCatName, setNewCatName] = useState("");
+  const [isCreatingCat, setIsCreatingCat] = useState(false);
+  const [pendingCatItemId, setPendingCatItemId] = useState<string | null>(null);
+
+  const handleCreateCategory = async () => {
+    if (!newCatName.trim()) return;
+    setIsCreatingCat(true);
+    try {
+      const id = await createCategory({ name: newCatName.trim() });
+      if (pendingCatItemId) {
+        updateItem(pendingCatItemId, { categoryId: id } as any);
+      }
+      setNewCatName("");
+      setNewCatDialogOpen(false);
+      toast.success("Category created");
+    } catch {
+      toast.error("Failed to create category");
+    } finally {
+      setIsCreatingCat(false);
+    }
+  };
+
   // Shared form data (no more siteId here - moved to per-item)
   const [sharedFormData, setSharedFormData] = useState({
     requiredBy: null as Date | null,
@@ -183,6 +214,7 @@ export function MaterialRequestForm({
       selectedItemFromInventory: null,
       showItemSuggestions: false,
       showQuantitySuggestions: false,
+      hsnSacCode: "",
       isUrgent: false,
     },
   ]);
@@ -239,6 +271,7 @@ export function MaterialRequestForm({
               selectedItemFromInventory: null,
               showItemSuggestions: false,
               showQuantitySuggestions: false,
+              hsnSacCode: "",
               isUrgent: req.isUrgent,
             };
           });
@@ -266,7 +299,8 @@ export function MaterialRequestForm({
           selectedItemFromInventory: null,
           showItemSuggestions: false,
           showQuantitySuggestions: false,
-          isUrgent: false,
+          hsnSacCode: "",
+      isUrgent: false,
         }]);
       }
     }
@@ -296,7 +330,8 @@ export function MaterialRequestForm({
           selectedItemFromInventory: null,
           showItemSuggestions: false,
           showQuantitySuggestions: false,
-          isUrgent: false,
+          hsnSacCode: "",
+      isUrgent: false,
         },
       ]);
       setError("");
@@ -513,7 +548,8 @@ export function MaterialRequestForm({
         selectedItemFromInventory: null,
         showItemSuggestions: false,
         showQuantitySuggestions: false,
-        isUrgent: false,
+        hsnSacCode: "",
+      isUrgent: false,
       };
       // Add to end, sort by current ID, then renumber sequentially
       const updated = [...prev, newItem];
@@ -553,15 +589,18 @@ export function MaterialRequestForm({
   };
 
   // Handle item selection from autocomplete
-  const handleItemSelect = (itemId: string, item: { itemName: string; unit?: string; centralStock?: number }) => {
+  const handleItemSelect = (itemId: string, item: { itemName: string; unit?: string; centralStock?: number; hsnSacCode?: string; images?: { imageUrl: string; imageKey: string }[] }) => {
     const cleanedUnit = cleanUnit(item.unit || "");
     updateItem(itemId, {
       itemName: item.itemName,
       itemSearchQuery: item.itemName,
+      hsnSacCode: item.hsnSacCode || "",
       selectedItemFromInventory: {
         itemName: item.itemName,
         unit: cleanedUnit,
         centralStock: item.centralStock || 0,
+        hsnSacCode: item.hsnSacCode || "",
+        images: item.images || [],
       },
       showItemSuggestions: false,
     });
@@ -1613,7 +1652,7 @@ export function MaterialRequestForm({
 
                             {/* In Inventory Indicator - shown when item is selected from inventory */}
                             {item.selectedItemFromInventory && (
-                              <div className="flex items-center gap-2 mt-2">
+                              <div className="flex flex-wrap items-center gap-2 mt-2">
                                 <button
                                   type="button"
                                   onClick={() => item.selectedItemFromInventory && setExpandedItemName(item.selectedItemFromInventory.itemName)}
@@ -1863,6 +1902,46 @@ export function MaterialRequestForm({
                           </div>
                         </div>
 
+                        {/* Row 2: HSN Code + Category */}
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-5">
+                          {/* HSN / SAC Code */}
+                          <div className="space-y-2 sm:space-y-2.5">
+                            <Label className="text-xs sm:text-sm font-semibold flex items-center gap-1.5">
+                              <Hash className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground" />
+                              HSN / SAC Code
+                              <span className="text-xs text-muted-foreground font-normal">(optional)</span>
+                            </Label>
+                            <div className="relative">
+                              <Input
+                                type="text"
+                                value={item.hsnSacCode || ""}
+                                onChange={(e) => updateItem(item.id, { hsnSacCode: e.target.value })}
+                                placeholder="e.g. 7214, 995421"
+                                disabled={isLoading}
+                                className="w-full h-10 sm:h-11 text-sm font-mono border-2 hover:border-primary/30 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all duration-200"
+                              />
+                            </div>
+                            {item.selectedItemFromInventory?.hsnSacCode && item.hsnSacCode === item.selectedItemFromInventory.hsnSacCode && (
+                              <p className="text-[10px] text-emerald-600 dark:text-emerald-400">✓ Auto-filled from inventory</p>
+                            )}
+                          </div>
+
+                          {/* Category (optional) */}
+                          <div className="space-y-2 sm:space-y-2.5">
+                            <Label className="text-xs sm:text-sm font-semibold flex items-center gap-1.5">
+                              <Package className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground" />
+                              Category
+                              <span className="text-xs text-muted-foreground font-normal">(optional)</span>
+                            </Label>
+                            <CategoryCombobox
+                              value={(item as any).categoryId || ""}
+                              onChange={(v) => updateItem(item.id, { categoryId: v } as any)}
+                              disabled={isLoading}
+                              triggerClassName="h-10 sm:h-11 border-2 hover:border-primary/30"
+                            />
+                          </div>
+                        </div>
+
                         {/* Description - Full Width */}
                         <div className="w-full">
                           {/* Description */}
@@ -1987,11 +2066,27 @@ export function MaterialRequestForm({
                                 <Camera className="h-3.5 w-3.5 mr-1.5" />
                                 Camera
                               </Button>
+                              {item.selectedItemFromInventory?.images && item.selectedItemFromInventory.images.length > 0 && (
+                                <Button
+                                  type="button"
+                                  variant="outline"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setInvImagePicker({ itemId: item.id, images: item.selectedItemFromInventory!.images! });
+                                  }}
+                                  disabled={isLoading}
+                                  size="sm"
+                                  className="h-8 px-3 text-xs font-semibold border-2 border-violet-300 text-violet-700 dark:text-violet-300 bg-background hover:bg-violet-50 dark:hover:bg-violet-950 transition-all duration-200"
+                                >
+                                  <ImageIcon className="h-3.5 w-3.5 mr-1.5" />
+                                  From Inventory ({item.selectedItemFromInventory.images.length})
+                                </Button>
+                              )}
                             </div>
                           </div>
 
                           {/* Mobile Buttons */}
-                          <div className="flex md:hidden gap-2 sm:gap-3">
+                          <div className="flex md:hidden gap-2 sm:gap-3 flex-wrap">
                             <Button
                               type="button"
                               variant="outline"
@@ -2025,6 +2120,19 @@ export function MaterialRequestForm({
                               <Camera className="h-3.5 w-3.5 mr-1.5" />
                               Camera
                             </Button>
+                            {item.selectedItemFromInventory?.images && item.selectedItemFromInventory.images.length > 0 && (
+                              <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() => setInvImagePicker({ itemId: item.id, images: item.selectedItemFromInventory!.images! })}
+                                disabled={isLoading}
+                                size="sm"
+                                className="flex-1 text-xs h-9 font-semibold border-2 border-violet-300 text-violet-700 dark:text-violet-300 bg-background hover:bg-violet-50 dark:hover:bg-violet-950 transition-all duration-200"
+                              >
+                                <ImageIcon className="h-3.5 w-3.5 mr-1.5" />
+                                From Inventory
+                              </Button>
+                            )}
                           </div>
                           {item.imagePreviews.length > 0 && (
                             <div className="flex gap-3 sm:gap-4 mt-3 sm:mt-4 overflow-x-auto pb-2 scrollbar-thin scrollbar-thumb-muted-foreground/30 hover:scrollbar-thumb-muted-foreground/50">
@@ -2259,6 +2367,83 @@ export function MaterialRequestForm({
         onOpenChange={(open) => !open && setExpandedItemName(null)}
         itemName={expandedItemName}
       />
+
+      {/* Inventory Image Picker Dialog */}
+      {invImagePicker && (
+        <Dialog open={!!invImagePicker} onOpenChange={(open) => !open && setInvImagePicker(null)}>
+          <DialogContent className="sm:max-w-[520px]">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <ImageIcon className="h-5 w-5 text-primary" />
+                Use Image from Inventory
+              </DialogTitle>
+            </DialogHeader>
+            <p className="text-sm text-muted-foreground -mt-1">
+              Select an image to add to your request item.
+            </p>
+            <div className="grid grid-cols-3 sm:grid-cols-4 gap-3 max-h-[60vh] overflow-y-auto py-2">
+              {invImagePicker.images.map((img, idx) => (
+                <button
+                  key={idx}
+                  type="button"
+                  className="relative aspect-square rounded-lg overflow-hidden border-2 border-border hover:border-primary transition-colors group"
+                  onClick={() => {
+                    const targetItem = items.find((i) => i.id === invImagePicker.itemId);
+                    if (!targetItem) return;
+                    // Add the inventory image URL directly to imagePreviews (no File needed — it's already uploaded)
+                    updateItem(invImagePicker.itemId, {
+                      imagePreviews: [...targetItem.imagePreviews, img.imageUrl],
+                      // We don't add to images[] (File[]) since this is already a URL
+                    });
+                    setInvImagePicker(null);
+                  }}
+                >
+                  <img
+                    src={img.imageUrl}
+                    alt={`Inventory image ${idx + 1}`}
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
+                  />
+                  <div className="absolute inset-0 bg-primary/0 group-hover:bg-primary/10 transition-colors flex items-center justify-center">
+                    <div className="opacity-0 group-hover:opacity-100 transition-opacity bg-primary text-primary-foreground rounded-full p-1.5 shadow-lg">
+                      <Plus className="h-4 w-4" />
+                    </div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* New Category Dialog */}
+      <Dialog open={newCatDialogOpen} onOpenChange={(open) => { if (!isCreatingCat) setNewCatDialogOpen(open); }}>
+        <DialogContent className="sm:max-w-[360px]">
+          <DialogHeader>
+            <DialogTitle>New Category</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            <div className="space-y-2">
+              <Label>Category Name</Label>
+              <Input
+                placeholder="e.g. Civil, Electrical, Plumbing"
+                value={newCatName}
+                onChange={(e) => setNewCatName(e.target.value)}
+                autoFocus
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") { e.preventDefault(); handleCreateCategory(); }
+                  if (e.key === "Escape") setNewCatDialogOpen(false);
+                }}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setNewCatDialogOpen(false)} disabled={isCreatingCat}>Cancel</Button>
+            <Button type="button" onClick={handleCreateCategory} disabled={!newCatName.trim() || isCreatingCat}>
+              {isCreatingCat ? "Creating…" : "Create"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

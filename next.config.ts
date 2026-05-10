@@ -10,9 +10,7 @@ const withPWA = withPWAInit({
 });
 
 const nextConfig: NextConfig = {
-  turbopack: {
-    root: 'D:\\Notion Final\\NOTION_new',
-  },
+  turbopack: {},
   images: {
     qualities: [75, 100],
     remotePatterns: [

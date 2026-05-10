@@ -104,7 +104,7 @@ export function InventoryTable({ items, viewMode = "table", onRefresh }: Invento
     return {
       itemName: editingItem.itemName,
       description: editingItem.description,
-      specification: (editingItem as any).specification,
+      categoryId: (editingItem as any).categoryId,
       hsnSacCode: editingItem.hsnSacCode,
       unit: editingItem.unit ?? "",
       centralStock: editingItem.centralStock ?? 0,
@@ -194,6 +194,7 @@ export function InventoryTable({ items, viewMode = "table", onRefresh }: Invento
                   <TableHead className="w-[200px] font-semibold text-xs uppercase tracking-wider text-muted-foreground/80">Item Name</TableHead>
                   <TableHead className="w-[100px] font-semibold text-xs uppercase tracking-wider text-muted-foreground/80">Stock</TableHead>
                   <TableHead className="w-[80px] font-semibold text-xs uppercase tracking-wider text-muted-foreground/80">Unit</TableHead>
+                  <TableHead className="w-[110px] font-semibold text-xs uppercase tracking-wider text-muted-foreground/80">Category</TableHead>
                   <TableHead className="w-[120px] font-semibold text-xs uppercase tracking-wider text-muted-foreground/80">HSN/SAC</TableHead>
                   <TableHead className="min-w-[200px] font-semibold text-xs uppercase tracking-wider text-muted-foreground/80">Description</TableHead>
                   <TableHead className="w-[180px] font-semibold text-xs uppercase tracking-wider text-muted-foreground/80">Vendor</TableHead>
@@ -240,6 +241,13 @@ export function InventoryTable({ items, viewMode = "table", onRefresh }: Invento
                     <TableCell className="align-top py-4">
                       <Badge variant="outline" className="font-mono text-[10px] uppercase bg-background/50 backdrop-blur-sm">{item.unit}</Badge>
                     </TableCell>
+                    <TableCell className="align-top py-4">
+                      {(item as any).categoryName ? (
+                        <Badge variant="secondary" className="text-[10px] font-semibold">{(item as any).categoryName}</Badge>
+                      ) : (
+                        <span className="text-muted-foreground/30 text-xs">—</span>
+                      )}
+                    </TableCell>
                     <TableCell className="align-top py-4 text-sm text-muted-foreground font-medium">
                       {item.hsnSacCode || <span className="text-muted-foreground/30">—</span>}
                     </TableCell>
@@ -249,16 +257,6 @@ export function InventoryTable({ items, viewMode = "table", onRefresh }: Invento
                         className="text-sm text-foreground/80 leading-relaxed max-w-[250px]"
                         truncateLength={60}
                       />
-                      {(item as any).specification && (
-                        <div className="mt-2 pt-2 border-t border-border/40">
-                          <p className="text-[10px] uppercase font-bold text-muted-foreground/70 tracking-wider mb-1">Specification</p>
-                          <ReadMoreText
-                            text={(item as any).specification}
-                            className="text-xs text-foreground/70 leading-relaxed max-w-[250px]"
-                            truncateLength={40}
-                          />
-                        </div>
-                      )}
                     </TableCell>
                     <TableCell className="align-top py-4">
                       {((item as any).vendors && (item as any).vendors.length > 0) ? (
@@ -424,11 +422,7 @@ export function InventoryTable({ items, viewMode = "table", onRefresh }: Invento
                               </div>
                             )}
                           </div>
-                        ) : (
-                          <div className="h-10 w-10 rounded-md bg-muted/30 border border-transparent flex items-center justify-center text-muted-foreground/20">
-                            <ImageIcon className="h-4 w-4" />
-                          </div>
-                        )}
+                        ) : null}
                       </div>
                     </TableCell>
                     <TableCell className="text-muted-foreground/70 text-xs align-top py-4 font-normal">

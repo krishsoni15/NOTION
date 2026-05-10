@@ -7,7 +7,7 @@
  * Can be integrated into any dashboard layout
  */
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -58,6 +58,7 @@ export function DirectActionsSection({
   const [poPreviewOpen, setPoPreviewOpen] = useState(false);
   const [selectedPONumber, setSelectedPONumber] = useState<string | null>(null);
   const [selectedCCRequestId, setSelectedCCRequestId] = useState<Id<"requests"> | null>(null);
+  const [selectedCCRequestIds, setSelectedCCRequestIds] = useState<Id<"requests">[]>([]);
   const [resetEditingState, setResetEditingState] = useState<(() => void) | null>(null);
   const [dcPreviewOpen, setDCPreviewOpen] = useState(false);
   const [selectedDCId, setSelectedDCId] = useState<Id<"deliveries"> | null>(null);
@@ -94,15 +95,29 @@ export function DirectActionsSection({
 
   const isLoading = !costComparisons || !purchaseOrders || !deliveries;
 
+  // Pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const PAGE_SIZE = 10;
+  const totalPages = Math.ceil(filteredItems.length / PAGE_SIZE);
+  const paginatedItems = filteredItems.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+
+  // Reset to page 1 when filters change
+  const prevFiltersRef = useRef(filters);
+  if (prevFiltersRef.current !== filters) {
+    prevFiltersRef.current = filters;
+    if (currentPage !== 1) setCurrentPage(1);
+  }
+
   const handleEditItem = (item: DirectActionItem, resetCallback: () => void) => {
     setResetEditingState(() => resetCallback);
 
     switch (item.type) {
       case "cc": {
         // Use item.requestId first; fall back to rawData.requestId (for direct CCs)
-        const reqId = item.requestId ?? (item.rawData as any)?.requestId;
+        const reqId = item.mergedRequestIds?.[0] ?? item.requestId ?? (item.rawData as any)?.requestId;
         if (reqId) {
           setSelectedCCRequestId(reqId);
+          setSelectedCCRequestIds(item.mergedRequestIds ?? []);
           setCCDialogOpen(true);
         } else {
           // Truly direct CC with no request — open the DirectCC setup dialog
@@ -129,8 +144,14 @@ export function DirectActionsSection({
     switch (item.type) {
       case "cc":
         // Open CC in read-only viewer - use CostComparisonDialog in preview mode
-        if (item.requestId) {
+        if (item.mergedRequestIds && item.mergedRequestIds.length > 1) {
+          // Merged CC: open with all request IDs
+          setSelectedCCRequestId(item.mergedRequestIds[0]);
+          setSelectedCCRequestIds(item.mergedRequestIds);
+          setCCDialogOpen(true);
+        } else if (item.requestId) {
           setSelectedCCRequestId(item.requestId);
+          setSelectedCCRequestIds([]);
           setCCDialogOpen(true);
         }
         break;
@@ -245,7 +266,7 @@ export function DirectActionsSection({
 
           {/* Table */}
           <DirectActionsTable
-            items={filteredItems}
+            items={paginatedItems}
             isLoading={isLoading}
             onEdit={handleEditItem}
             onView={handleViewItem}
@@ -256,6 +277,59 @@ export function DirectActionsSection({
                 : "No records found"
             }
           />
+
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between pt-2 border-t">
+              <span className="text-xs text-muted-foreground">
+                {filteredItems.length} total · Page {currentPage} of {totalPages}
+              </span>
+              <div className="flex items-center gap-1">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 px-2 text-xs"
+                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                >
+                  ← Prev
+                </Button>
+                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                  // Show pages around current
+                  let page: number;
+                  if (totalPages <= 5) {
+                    page = i + 1;
+                  } else if (currentPage <= 3) {
+                    page = i + 1;
+                  } else if (currentPage >= totalPages - 2) {
+                    page = totalPages - 4 + i;
+                  } else {
+                    page = currentPage - 2 + i;
+                  }
+                  return (
+                    <Button
+                      key={page}
+                      variant={currentPage === page ? "default" : "outline"}
+                      size="sm"
+                      className="h-7 w-7 p-0 text-xs"
+                      onClick={() => setCurrentPage(page)}
+                    >
+                      {page}
+                    </Button>
+                  );
+                })}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 px-2 text-xs"
+                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                  disabled={currentPage === totalPages}
+                >
+                  Next →
+                </Button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -266,6 +340,7 @@ export function DirectActionsSection({
             open={ccDialogOpen}
             onOpenChange={handleCCDialogClose}
             requestId={selectedCCRequestId}
+            requestIds={selectedCCRequestIds.length > 1 ? selectedCCRequestIds : undefined}
           />
         )}
 

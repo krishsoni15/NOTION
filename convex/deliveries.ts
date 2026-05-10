@@ -17,9 +17,11 @@ export const createDelivery = mutation({
             requestId: v.optional(v.id("requests")),
             itemName: v.optional(v.string()),
             description: v.optional(v.string()),
-            quantity: v.number(), // Delivery quantity
+            quantity: v.number(),
             unit: v.optional(v.string()),
             rate: v.optional(v.number()),
+            hsnSacCode: v.optional(v.string()),
+            discountPercent: v.optional(v.number()),
         })),
 
         // Add status field
@@ -94,14 +96,14 @@ export const createDelivery = mutation({
         // Log the direct action with standardized ID
         let logRequestNumber: string;
         let logContent: string;
-        
+
         if (args.directDelivery || items.every(item => !item.requestId)) {
             // Generate standardized DC ID for logging
             const allDCs = await ctx.db.query("deliveries").collect();
             const sortedDCs = allDCs.sort((a, b) => a.createdAt - b.createdAt);
             const dcIndex = sortedDCs.findIndex(dc => dc._id === deliveryId);
             const standardizedId = `DC-${(dcIndex + 1).toString().padStart(3, '0')}`;
-            
+
             logRequestNumber = `DIRECT-${standardizedId}`;
             logContent = `Direct Delivery Challan ${standardizedId} created - ${args.receiverName}`;
         } else {
@@ -109,7 +111,7 @@ export const createDelivery = mutation({
             logRequestNumber = firstRequestId ? `REQ-${firstRequestId.slice(-6)}` : `DC-${deliveryIdStr}`;
             logContent = `Delivery Challan created: ${deliveryIdStr} for ${items.length} item(s)`;
         }
-        
+
         await ctx.db.insert("request_notes", {
             requestNumber: logRequestNumber,
             userId: officer._id,
@@ -274,7 +276,7 @@ export const getDeliveryWithItems = query({
 
         // CRITICAL: Check for direct items stored as JSON (for direct delivery edits)
         let items: any[] = [];
-        
+
         if ((delivery as any).directItems) {
             // Parse stored direct items
             try {
@@ -390,118 +392,120 @@ export const confirmDelivery = mutation({
  * CRITICAL: This mutation stores items as a JSON array in the delivery record
  */
 export const updateDelivery = mutation({
-  args: {
-    deliveryId: v.id("deliveries"),
-    items: v.array(v.object({
-      itemName: v.string(),
-      description: v.optional(v.string()),
-      quantity: v.number(),
-      rate: v.number(),
-      unit: v.string(),
-    })),
-    deliveryType: v.union(v.literal("private"), v.literal("public"), v.literal("vendor")),
-    deliveryPerson: v.optional(v.string()),
-    deliveryContact: v.string(),
-    vehicleNumber: v.optional(v.string()),
-    receiverName: v.string(),
-    status: v.optional(v.union(v.literal("pending"), v.literal("delivered"), v.literal("cancelled"))),
-    loadingPhoto: v.optional(v.object({
-      imageUrl: v.string(),
-      imageKey: v.string(),
-    })),
-    invoicePhoto: v.optional(v.object({
-      imageUrl: v.string(),
-      imageKey: v.string(),
-    })),
-  },
-  handler: async (ctx, args) => {
-    const user = await ctx.auth.getUserIdentity();
-    if (!user) {
-      throw new ConvexError("Not authenticated");
-    }
+    args: {
+        deliveryId: v.id("deliveries"),
+        items: v.array(v.object({
+            itemName: v.string(),
+            description: v.optional(v.string()),
+            quantity: v.number(),
+            rate: v.number(),
+            unit: v.string(),
+            hsnSacCode: v.optional(v.string()),
+            discountPercent: v.optional(v.number()),
+        })),
+        deliveryType: v.union(v.literal("private"), v.literal("public"), v.literal("vendor")),
+        deliveryPerson: v.optional(v.string()),
+        deliveryContact: v.string(),
+        vehicleNumber: v.optional(v.string()),
+        receiverName: v.string(),
+        status: v.optional(v.union(v.literal("pending"), v.literal("delivered"), v.literal("cancelled"))),
+        loadingPhoto: v.optional(v.object({
+            imageUrl: v.string(),
+            imageKey: v.string(),
+        })),
+        invoicePhoto: v.optional(v.object({
+            imageUrl: v.string(),
+            imageKey: v.string(),
+        })),
+    },
+    handler: async (ctx, args) => {
+        const user = await ctx.auth.getUserIdentity();
+        if (!user) {
+            throw new ConvexError("Not authenticated");
+        }
 
-    const currentUser = await ctx.db
-      .query("users")
-      .withIndex("by_clerk_user_id", (q) => q.eq("clerkUserId", user.subject))
-      .first();
+        const currentUser = await ctx.db
+            .query("users")
+            .withIndex("by_clerk_user_id", (q) => q.eq("clerkUserId", user.subject))
+            .first();
 
-    if (!currentUser) {
-      throw new ConvexError("User not found");
-    }
+        if (!currentUser) {
+            throw new ConvexError("User not found");
+        }
 
-    const delivery = await ctx.db.get(args.deliveryId);
-    if (!delivery) {
-      throw new ConvexError("Delivery not found");
-    }
+        const delivery = await ctx.db.get(args.deliveryId);
+        if (!delivery) {
+            throw new ConvexError("Delivery not found");
+        }
 
-    // Update delivery record with items stored as JSON
-    await ctx.db.patch(args.deliveryId, {
-      deliveryType: args.deliveryType,
-      deliveryPerson: args.deliveryPerson || undefined,
-      deliveryContact: args.deliveryContact,
-      vehicleNumber: args.vehicleNumber || undefined,
-      receiverName: args.receiverName,
-      loadingPhoto: args.loadingPhoto || undefined,
-      invoicePhoto: args.invoicePhoto || undefined,
-      status: args.status || "delivered", // Default to delivered (finalized)
-      // CRITICAL: Store items array as JSON to prevent data loss
-      directItems: JSON.stringify(args.items),
-      updatedAt: Date.now(),
-    });
+        // Update delivery record with items stored as JSON
+        await ctx.db.patch(args.deliveryId, {
+            deliveryType: args.deliveryType,
+            deliveryPerson: args.deliveryPerson || undefined,
+            deliveryContact: args.deliveryContact,
+            vehicleNumber: args.vehicleNumber || undefined,
+            receiverName: args.receiverName,
+            loadingPhoto: args.loadingPhoto || undefined,
+            invoicePhoto: args.invoicePhoto || undefined,
+            status: args.status || "delivered", // Default to delivered (finalized)
+            // CRITICAL: Store items array as JSON to prevent data loss
+            directItems: JSON.stringify(args.items),
+            updatedAt: Date.now(),
+        });
 
-    // Log the update
-    await ctx.db.insert("request_notes", {
-      requestNumber: `DIRECT-DC-${delivery.deliveryId}`,
-      userId: currentUser._id,
-      role: currentUser.role,
-      status: args.status || "delivered",
-      type: "log",
-      content: `Direct Delivery Challan updated - ${args.receiverName}. Items: ${args.items.length}. Status: ${args.status || 'delivered'}`,
-      createdAt: Date.now(),
-    });
+        // Log the update
+        await ctx.db.insert("request_notes", {
+            requestNumber: `DIRECT-DC-${delivery.deliveryId}`,
+            userId: currentUser._id,
+            role: currentUser.role,
+            status: args.status || "delivered",
+            type: "log",
+            content: `Direct Delivery Challan updated - ${args.receiverName}. Items: ${args.items.length}. Status: ${args.status || 'delivered'}`,
+            createdAt: Date.now(),
+        });
 
-    return { success: true };
-  },
+        return { success: true };
+    },
 });
 
 /**
  * Update delivery challan title
  */
 export const updateDeliveryTitle = mutation({
-  args: {
-    deliveryId: v.id("deliveries"),
-    title: v.string(),
-  },
-  handler: async (ctx, args) => {
-    const user = await ctx.auth.getUserIdentity();
-    if (!user) {
-      throw new ConvexError("Not authenticated");
-    }
+    args: {
+        deliveryId: v.id("deliveries"),
+        title: v.string(),
+    },
+    handler: async (ctx, args) => {
+        const user = await ctx.auth.getUserIdentity();
+        if (!user) {
+            throw new ConvexError("Not authenticated");
+        }
 
-    const currentUser = await ctx.db
-      .query("users")
-      .withIndex("by_clerk_user_id", (q) => q.eq("clerkUserId", user.subject))
-      .first();
+        const currentUser = await ctx.db
+            .query("users")
+            .withIndex("by_clerk_user_id", (q) => q.eq("clerkUserId", user.subject))
+            .first();
 
-    if (!currentUser) {
-      throw new ConvexError("User not found");
-    }
+        if (!currentUser) {
+            throw new ConvexError("User not found");
+        }
 
-    // Only purchase officers and managers can update titles
-    if (currentUser.role !== "purchase_officer" && currentUser.role !== "manager") {
-      throw new ConvexError("Unauthorized: Only purchase officers and managers can update titles");
-    }
+        // Only purchase officers and managers can update titles
+        if (currentUser.role !== "purchase_officer" && currentUser.role !== "manager") {
+            throw new ConvexError("Unauthorized: Only purchase officers and managers can update titles");
+        }
 
-    const delivery = await ctx.db.get(args.deliveryId);
-    if (!delivery) {
-      throw new ConvexError("Delivery not found");
-    }
+        const delivery = await ctx.db.get(args.deliveryId);
+        if (!delivery) {
+            throw new ConvexError("Delivery not found");
+        }
 
-    await ctx.db.patch(args.deliveryId, {
-      customTitle: args.title.trim() || undefined,
-      updatedAt: Date.now(),
-    });
+        await ctx.db.patch(args.deliveryId, {
+            customTitle: args.title.trim() || undefined,
+            updatedAt: Date.now(),
+        });
 
-    return { success: true };
-  },
+        return { success: true };
+    },
 });

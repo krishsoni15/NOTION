@@ -134,7 +134,7 @@ export function DeliveryChallanTemplate({ data }: { data: DCData }) {
                     <div className="flex border-b border-black flex-1">
                         <div className="w-1/2 border-r border-black p-1.5 flex flex-col">
                             <span className="text-[8px] text-gray-600">Reference No. & Date.</span>
-                            <span className="font-bold">{data.po?.poNumber || data.deliveryId}</span>
+                            <span className="font-bold">{dcDate} /{data.po?.poNumber || data.deliveryId}</span>
                         </div>
                         <div className="w-1/2 p-1.5 flex flex-col">
                             <span className="text-[8px] text-gray-600">Mode/Terms of Payment</span>

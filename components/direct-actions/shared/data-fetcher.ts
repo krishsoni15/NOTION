@@ -66,6 +66,7 @@ export function transformDC(dc: DeliveryChallan, allDCs?: DeliveryChallan[]): Di
 
 /**
  * Combine all entities into unified list with chronological IDs
+ * CCs sharing the same requestNumber are grouped into one merged entry
  */
 export function combineDirectActions(
   costComparisons: CostComparison[] = [],
@@ -74,8 +75,45 @@ export function combineDirectActions(
 ): DirectActionItem[] {
   const items: DirectActionItem[] = [];
 
-  // Add CCs with chronological IDs
+  // Group CCs by requestNumber to detect merged CCs
+  const ccByRequestNumber = new Map<string, CostComparison[]>();
+  const ungroupedCCs: CostComparison[] = [];
+
   costComparisons.forEach((cc) => {
+    const reqNum = (cc as any).request?.requestNumber;
+    if (reqNum) {
+      if (!ccByRequestNumber.has(reqNum)) ccByRequestNumber.set(reqNum, []);
+      ccByRequestNumber.get(reqNum)!.push(cc);
+    } else {
+      ungroupedCCs.push(cc);
+    }
+  });
+
+  // Add grouped CCs — merged groups become one entry, singles stay as-is
+  ccByRequestNumber.forEach((group) => {
+    if (group.length > 1) {
+      // Merged CC: use the first CC as the representative entry
+      const first = group[0];
+      const baseItem = transformCC(first, costComparisons);
+      const itemNames = group.map(cc => cc.request?.itemName || cc.itemName || "").filter(Boolean);
+      // Use the "worst" status (pending > rejected > approved > draft)
+      const statusPriority = ["cc_pending", "cc_rejected", "draft", "cc_approved"];
+      const worstStatus = statusPriority.find(s => group.some(cc => cc.status === s)) || first.status;
+      items.push({
+        ...baseItem,
+        customTitle: `${(first as any).request?.requestNumber} (${group.length} items)`,
+        status: worstStatus,
+        mergedRequestIds: group.map(cc => cc.requestId).filter(Boolean) as any[],
+        mergedCount: group.length,
+        mergedItemNames: itemNames,
+      });
+    } else {
+      items.push(transformCC(group[0], costComparisons));
+    }
+  });
+
+  // Add ungrouped CCs (direct CCs with no requestNumber)
+  ungroupedCCs.forEach((cc) => {
     items.push(transformCC(cc, costComparisons));
   });
 

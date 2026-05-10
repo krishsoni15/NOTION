@@ -87,6 +87,10 @@ export interface DirectActionItem {
   requestId?: Id<"requests">;
   isDirect: boolean; // Is this a direct action (not request-based)
   rawData: CostComparison | PurchaseOrder | DeliveryChallan;
+  // Merged CC support
+  mergedRequestIds?: Id<"requests">[]; // All request IDs in a merged CC group
+  mergedCount?: number; // Number of items in merged CC
+  mergedItemNames?: string[]; // Item names in merged CC
 }
 
 // Filter Options
